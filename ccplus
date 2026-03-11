@@ -1,0 +1,588 @@
+#!/usr/bin/env bash
+# ccplus CLI -- manage the cc+ server
+set -euo pipefail
+
+CCPLUS_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$CCPLUS_HOME/venv"
+LOG_PATH="$CCPLUS_HOME/logs/server.log"
+PID_FILE="$CCPLUS_HOME/data/ccplus.pid"
+DB_PATH="$CCPLUS_HOME/data/ccplus.db"
+ENV_FILE="$CCPLUS_HOME/.env"
+ENV_EXAMPLE="$CCPLUS_HOME/.env.example"
+PORT=3000
+VERSION="0.1.0"
+
+# ---------------------------------------------------------------------------
+# Colors (graceful degradation if tput unavailable)
+# ---------------------------------------------------------------------------
+if command -v tput >/dev/null 2>&1 && [ -t 1 ]; then
+    BOLD=$(tput bold)
+    DIM=$(tput dim)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    RED=$(tput setaf 1)
+    CYAN=$(tput setaf 6)
+    RESET=$(tput sgr0)
+else
+    BOLD="" DIM="" GREEN="" YELLOW="" RED="" CYAN="" RESET=""
+fi
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+info()  { echo "${GREEN}>>>${RESET} $*"; }
+warn()  { echo "${YELLOW}!!${RESET} $*"; }
+err()   { echo "${RED}ERROR:${RESET} $*" >&2; }
+step()  { echo ""; echo "${BOLD}${CYAN}--- $* ---${RESET}"; }
+dim()   { echo "${DIM}    $*${RESET}"; }
+
+server_pid() {
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid=$(cat "$PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid"
+            return
+        fi
+        # Stale PID file
+        rm -f "$PID_FILE"
+    fi
+    # Fallback: check port
+    lsof -ti:$PORT 2>/dev/null | head -1 || true
+}
+
+is_running() {
+    [ -n "$(server_pid)" ]
+}
+
+activate_venv() {
+    if [ ! -d "$VENV_DIR" ]; then
+        err "No venv found. Run 'ccplus setup' first."
+        exit 1
+    fi
+    # shellcheck disable=SC1091
+    source "$VENV_DIR/bin/activate"
+    export PYTHONPATH="$CCPLUS_HOME:${PYTHONPATH:-}"
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+cmd_start() {
+    if is_running; then
+        warn "Server already running (PID: $(server_pid)) on port $PORT"
+        dim "http://localhost:$PORT"
+        exit 0
+    fi
+
+    activate_venv
+    mkdir -p "$CCPLUS_HOME/logs" "$CCPLUS_HOME/data"
+
+    info "Starting server..."
+    nohup "$VENV_DIR/bin/python" "$CCPLUS_HOME/backend/server.py" \
+        > "$LOG_PATH" 2>&1 &
+    local pid=$!
+    echo "$pid" > "$PID_FILE"
+
+    # Wait for health check
+    local max_wait=15
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        local status
+        status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/health" 2>/dev/null || echo "000")
+        if [ "$status" = "200" ]; then
+            info "Server started (PID: $pid)"
+            dim "http://localhost:$PORT"
+
+            # Open browser (macOS)
+            if command -v open >/dev/null 2>&1; then
+                open "http://localhost:$PORT" 2>/dev/null || true
+            fi
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    err "Server failed health check after ${max_wait}s"
+    dim "Check logs: ccplus logs"
+    tail -10 "$LOG_PATH" 2>/dev/null || true
+    exit 1
+}
+
+cmd_stop() {
+    if ! is_running; then
+        info "Server is not running"
+        exit 0
+    fi
+
+    local pid
+    pid=$(server_pid)
+    info "Stopping server (PID: $pid)..."
+
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 2
+
+    # Force kill if still alive
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+
+    # Also kill anything on the port (child processes)
+    local port_pids
+    port_pids=$(lsof -ti:$PORT 2>/dev/null || true)
+    if [ -n "$port_pids" ]; then
+        echo "$port_pids" | xargs kill -9 2>/dev/null || true
+    fi
+
+    rm -f "$PID_FILE"
+    info "Stopped"
+}
+
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    cmd_start
+}
+
+cmd_status() {
+    echo ""
+    echo "${BOLD}cc+ Status${RESET}"
+    echo ""
+
+    if is_running; then
+        local pid
+        pid=$(server_pid)
+        echo "  Server:  ${GREEN}running${RESET} (PID: $pid) on port $PORT"
+
+        # Uptime from /health
+        local health
+        health=$(curl -s "http://localhost:$PORT/health" 2>/dev/null || echo "{}")
+        local uptime_s
+        uptime_s=$(echo "$health" | python3 -c "import sys,json; print(json.load(sys.stdin).get('uptime_seconds',0))" 2>/dev/null || echo "0")
+        local sessions
+        sessions=$(echo "$health" | python3 -c "import sys,json; print(json.load(sys.stdin).get('active_sessions',0))" 2>/dev/null || echo "0")
+        local clients
+        clients=$(echo "$health" | python3 -c "import sys,json; print(json.load(sys.stdin).get('connected_clients',0))" 2>/dev/null || echo "0")
+
+        # Format uptime
+        local hours=$((uptime_s / 3600))
+        local mins=$(( (uptime_s % 3600) / 60 ))
+        if [ "$hours" -gt 0 ]; then
+            echo "  Uptime:  ${hours}h ${mins}m"
+        else
+            echo "  Uptime:  ${mins}m"
+        fi
+        echo "  Sessions: $sessions active, $clients connected"
+    else
+        echo "  Server:  ${RED}stopped${RESET}"
+    fi
+
+    # Database stats
+    if [ -f "$DB_PATH" ]; then
+        local msg_count
+        msg_count=$(sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM messages;" 2>/dev/null || echo "?")
+        echo "  Messages: $msg_count total"
+    else
+        echo "  Database: ${DIM}not created yet${RESET}"
+    fi
+
+    echo ""
+}
+
+cmd_logs() {
+    if [ ! -f "$LOG_PATH" ]; then
+        err "No log file at $LOG_PATH"
+        dim "Start the server first: ccplus start"
+        exit 1
+    fi
+    tail -f "$LOG_PATH"
+}
+
+cmd_setup() {
+    echo ""
+    echo "${BOLD}cc+ Setup${RESET}"
+    echo "========="
+    echo ""
+
+    # --- Python version ---
+    step "Checking Python"
+    if ! command -v python3 >/dev/null 2>&1; then
+        err "python3 not found. Install Python 3.12+ and try again."
+        exit 1
+    fi
+    local py_version
+    py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    local py_major py_minor
+    py_major=$(echo "$py_version" | cut -d. -f1)
+    py_minor=$(echo "$py_version" | cut -d. -f2)
+    if [ "$py_major" -lt 3 ] || { [ "$py_major" -eq 3 ] && [ "$py_minor" -lt 12 ]; }; then
+        err "Python 3.12+ required (found $py_version)"
+        exit 1
+    fi
+    info "Python $py_version"
+
+    # --- Node.js version ---
+    step "Checking Node.js"
+    if command -v node >/dev/null 2>&1; then
+        local node_version
+        node_version=$(node --version | sed 's/^v//')
+        local node_major
+        node_major=$(echo "$node_version" | cut -d. -f1)
+        if [ "$node_major" -lt 18 ]; then
+            warn "Node 18+ required for frontend build (found $node_version)"
+            dim "Install from https://nodejs.org/"
+        else
+            info "Node $node_version"
+        fi
+    else
+        warn "Node.js not found. Required for frontend build."
+        dim "Install from https://nodejs.org/"
+    fi
+
+    # --- Virtual environment ---
+    step "Virtual environment"
+    if [ -d "$VENV_DIR" ]; then
+        info "Already exists at venv/"
+    else
+        info "Creating venv..."
+        python3 -m venv "$VENV_DIR"
+        info "Created"
+    fi
+    # shellcheck disable=SC1091
+    source "$VENV_DIR/bin/activate"
+
+    # --- Python dependencies ---
+    step "Installing Python dependencies"
+    pip install --upgrade pip --quiet
+    pip install -r "$CCPLUS_HOME/requirements.txt" --quiet
+    info "All packages installed"
+
+    # --- Frontend dependencies ---
+    step "Installing frontend dependencies"
+    if [ -d "$CCPLUS_HOME/frontend" ] && command -v npm >/dev/null 2>&1; then
+        (cd "$CCPLUS_HOME/frontend" && npm install --silent 2>/dev/null)
+        info "npm packages installed"
+    else
+        warn "Skipping frontend deps (no frontend/ or npm not found)"
+    fi
+
+    # --- Build frontend ---
+    step "Building frontend"
+    if [ -d "$CCPLUS_HOME/frontend" ] && command -v npm >/dev/null 2>&1; then
+        (cd "$CCPLUS_HOME/frontend" && npm run build --silent 2>/dev/null)
+        mkdir -p "$CCPLUS_HOME/static/chat"
+        rm -rf "$CCPLUS_HOME/static/chat/"*
+        cp -r "$CCPLUS_HOME/frontend/build/"* "$CCPLUS_HOME/static/chat/"
+        info "Frontend built and deployed to static/chat/"
+    else
+        warn "Skipping frontend build"
+    fi
+
+    # --- Environment file ---
+    step "Environment configuration"
+    if [ -f "$ENV_FILE" ]; then
+        info ".env already exists"
+        if grep -q "^ANTHROPIC_API_KEY=your-key-here" "$ENV_FILE" 2>/dev/null || \
+           grep -q "^ANTHROPIC_API_KEY=$" "$ENV_FILE" 2>/dev/null; then
+            warn "ANTHROPIC_API_KEY is not configured"
+            configure_env_interactive
+        else
+            dim "To reconfigure, edit .env directly"
+        fi
+    else
+        if [ -f "$ENV_EXAMPLE" ]; then
+            cp "$ENV_EXAMPLE" "$ENV_FILE"
+            info "Created .env from .env.example"
+        else
+            touch "$ENV_FILE"
+            info "Created empty .env"
+        fi
+        configure_env_interactive
+    fi
+
+    # --- Data and log directories ---
+    mkdir -p "$CCPLUS_HOME/data" "$CCPLUS_HOME/logs"
+
+    # --- Done ---
+    echo ""
+    echo "${BOLD}${GREEN}Setup complete.${RESET}"
+    echo ""
+    echo "  ${DIM}ccplus start    Start the server${RESET}"
+    echo "  ${DIM}ccplus stop     Stop the server${RESET}"
+    echo "  ${DIM}ccplus status   Check what's running${RESET}"
+    echo "  ${DIM}ccplus doctor   System health check${RESET}"
+    echo "  ${DIM}ccplus help     All commands${RESET}"
+    echo ""
+}
+
+configure_env_interactive() {
+    echo ""
+    echo -n "${BOLD}Anthropic API key${RESET} (sk-ant-...): "
+    read -r api_key
+    if [ -z "$api_key" ]; then
+        warn "API key cannot be empty. Set it later in .env"
+    else
+        if grep -q "^ANTHROPIC_API_KEY=" "$ENV_FILE" 2>/dev/null; then
+            sed -i.bak "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$api_key|" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+        else
+            echo "ANTHROPIC_API_KEY=$api_key" >> "$ENV_FILE"
+        fi
+        info "API key saved"
+    fi
+
+    chmod 600 "$ENV_FILE"
+}
+
+cmd_doctor() {
+    echo ""
+    echo "${BOLD}cc+ Doctor${RESET}"
+    echo "=========="
+    echo ""
+
+    local passed=0 warnings=0 failures=0
+    local col=28
+
+    doctor_ok() {
+        printf "  %-${col}s ${GREEN}%-10s ok${RESET}\n" "$1" "$2"
+        passed=$((passed + 1))
+    }
+
+    doctor_warn() {
+        printf "  %-${col}s ${YELLOW}%-10s warning${RESET}\n" "$1" "$2"
+        warnings=$((warnings + 1))
+    }
+
+    doctor_fail() {
+        printf "  %-${col}s ${RED}%-10s FAIL${RESET}\n" "$1" "$2"
+        failures=$((failures + 1))
+    }
+
+    # 1. Python version
+    if command -v python3 >/dev/null 2>&1; then
+        local py_ver
+        py_ver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")')
+        local py_major py_minor
+        py_major=$(echo "$py_ver" | cut -d. -f1)
+        py_minor=$(echo "$py_ver" | cut -d. -f2)
+        if [ "$py_major" -ge 3 ] && [ "$py_minor" -ge 12 ]; then
+            doctor_ok "Python version" "$py_ver"
+        else
+            doctor_fail "Python version" "$py_ver (<3.12)"
+        fi
+    else
+        doctor_fail "Python version" "not found"
+    fi
+
+    # 2. Node version
+    if command -v node >/dev/null 2>&1; then
+        local node_ver
+        node_ver=$(node --version | sed 's/^v//')
+        local node_major
+        node_major=$(echo "$node_ver" | cut -d. -f1)
+        if [ "$node_major" -ge 18 ]; then
+            doctor_ok "Node version" "$node_ver"
+        else
+            doctor_fail "Node version" "$node_ver (<18)"
+        fi
+    else
+        doctor_fail "Node version" "not found"
+    fi
+
+    # 3. Venv
+    if [ -d "$VENV_DIR" ] && [ -x "$VENV_DIR/bin/python" ]; then
+        local venv_py
+        venv_py=$("$VENV_DIR/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "?")
+        doctor_ok "Virtual environment" "py$venv_py"
+    else
+        doctor_fail "Virtual environment" "not found"
+    fi
+
+    # 4. Dependencies
+    if [ -x "$VENV_DIR/bin/pip" ]; then
+        local pip_out
+        pip_out=$("$VENV_DIR/bin/pip" check 2>&1) || true
+        if echo "$pip_out" | grep -q "No broken requirements found"; then
+            doctor_ok "Python dependencies" "clean"
+        else
+            local broken_count
+            broken_count=$(echo "$pip_out" | grep -c "has requirement" || echo "0")
+            doctor_warn "Python dependencies" "$broken_count broken"
+        fi
+    else
+        doctor_warn "Python dependencies" "no pip"
+    fi
+
+    # 5. .env file
+    if [ -f "$ENV_FILE" ]; then
+        local api_key_val
+        api_key_val=$(grep "^ANTHROPIC_API_KEY=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
+        if [ -n "$api_key_val" ] && [ "$api_key_val" != "your-key-here" ]; then
+            doctor_ok "Environment (.env)" "configured"
+        else
+            doctor_fail "Environment (.env)" "key missing"
+        fi
+    else
+        doctor_fail "Environment (.env)" "not found"
+    fi
+
+    # 6. Frontend build
+    if [ -d "$CCPLUS_HOME/static/chat" ] && [ "$(ls -A "$CCPLUS_HOME/static/chat/" 2>/dev/null)" ]; then
+        doctor_ok "Frontend build" "deployed"
+    else
+        doctor_fail "Frontend build" "not built"
+    fi
+
+    # 7. Database
+    if [ -f "$DB_PATH" ]; then
+        if sqlite3 "$DB_PATH" "SELECT 1;" >/dev/null 2>&1; then
+            doctor_ok "Database" "accessible"
+        else
+            doctor_fail "Database" "unreadable"
+        fi
+    else
+        doctor_warn "Database" "not created"
+    fi
+
+    # 8. Server reachable
+    if is_running; then
+        local health_resp
+        health_resp=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/health" 2>/dev/null || echo "000")
+        if [ "$health_resp" = "200" ]; then
+            doctor_ok "Server health" "running"
+        else
+            doctor_warn "Server health" "unhealthy"
+        fi
+    else
+        printf "  %-${col}s ${DIM}%-10s not running${RESET}\n" "Server health" ""
+        passed=$((passed + 1))
+    fi
+
+    # 9. Disk space
+    local free_bytes free_gb
+    free_bytes=$(df -k "$CCPLUS_HOME" | tail -1 | awk '{print $4}')
+    free_gb=$(( free_bytes / 1024 / 1024 ))
+    if [ "$free_gb" -gt 1 ]; then
+        doctor_ok "Disk space" "${free_gb}GB free"
+    else
+        doctor_fail "Disk space" "${free_gb}GB free"
+    fi
+
+    # Summary
+    echo ""
+    local summary="${passed} passed"
+    if [ "$warnings" -gt 0 ]; then
+        summary="${summary}, ${YELLOW}${warnings} warning(s)${RESET}"
+    fi
+    if [ "$failures" -gt 0 ]; then
+        summary="${summary}, ${RED}${failures} failure(s)${RESET}"
+    fi
+    echo "  $summary"
+    echo ""
+
+    if [ "$failures" -gt 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+cmd_build() {
+    step "Building frontend"
+
+    if [ ! -d "$CCPLUS_HOME/frontend" ]; then
+        err "No frontend/ directory found"
+        exit 1
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        err "npm not found. Install Node.js 18+ first."
+        exit 1
+    fi
+
+    cd "$CCPLUS_HOME/frontend"
+
+    if [ ! -d "node_modules" ]; then
+        info "Installing npm dependencies..."
+        npm install
+    fi
+
+    info "Building..."
+    npm run build
+
+    cd "$CCPLUS_HOME"
+
+    mkdir -p "$CCPLUS_HOME/static/chat"
+    rm -rf "$CCPLUS_HOME/static/chat/"*
+    cp -r "$CCPLUS_HOME/frontend/build/"* "$CCPLUS_HOME/static/chat/"
+
+    info "Frontend built and deployed to static/chat/"
+}
+
+cmd_deploy() {
+    cmd_build
+    cmd_restart
+}
+
+cmd_version() {
+    echo "cc+ $VERSION"
+}
+
+cmd_help() {
+    echo ""
+    echo "${BOLD}cc+${RESET} -- Claude Code, but with a face"
+    echo ""
+    echo "${BOLD}Usage:${RESET} ccplus <command>"
+    echo ""
+    echo "${BOLD}Core:${RESET}"
+    echo "  ${CYAN}start${RESET}       Start the server (opens browser)"
+    echo "  ${CYAN}stop${RESET}        Stop the server"
+    echo "  ${CYAN}restart${RESET}     Stop + start"
+    echo "  ${CYAN}status${RESET}      Show server status, uptime, sessions"
+    echo "  ${CYAN}logs${RESET}        Tail the server log"
+    echo ""
+    echo "${BOLD}Setup:${RESET}"
+    echo "  ${CYAN}setup${RESET}       Interactive setup (venv, deps, build, .env)"
+    echo "  ${CYAN}doctor${RESET}      Health checks (Python, Node, deps, env, ...)"
+    echo ""
+    echo "${BOLD}Build:${RESET}"
+    echo "  ${CYAN}build${RESET}       Build frontend and deploy to static/chat/"
+    echo "  ${CYAN}deploy${RESET}      Build + restart"
+    echo ""
+    echo "${BOLD}Utility:${RESET}"
+    echo "  ${CYAN}version${RESET}     Show version"
+    echo "  ${CYAN}help${RESET}        Show this message"
+    echo ""
+    echo "${BOLD}Examples:${RESET}"
+    echo "  ccplus setup          # First-time setup"
+    echo "  ccplus start          # Start and open browser"
+    echo "  ccplus deploy         # Rebuild frontend + restart"
+    echo "  ccplus doctor         # Check everything is wired up"
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+COMMAND="${1:-help}"
+shift || true
+
+case "$COMMAND" in
+    start)          cmd_start ;;
+    stop)           cmd_stop ;;
+    restart)        cmd_restart ;;
+    status)         cmd_status ;;
+    logs)           cmd_logs ;;
+    setup)          cmd_setup ;;
+    doctor)         cmd_doctor ;;
+    build)          cmd_build ;;
+    deploy)         cmd_deploy ;;
+    version|-v|--version) cmd_version ;;
+    help|-h|--help) cmd_help ;;
+    *)
+        err "Unknown command: $COMMAND"
+        cmd_help
+        exit 1
+        ;;
+esac
