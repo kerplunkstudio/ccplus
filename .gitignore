@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+data/
+logs/
+node_modules/
+frontend/build/
+static/chat/
+.DS_Store
+venv/
