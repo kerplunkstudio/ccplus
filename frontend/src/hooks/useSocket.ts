@@ -123,7 +123,7 @@ export function useSocket(token: string | null) {
 
     const sessionId = getSessionId();
     const newSocket = io(SOCKET_URL, {
-      auth: { token, session_id: sessionId },
+      query: { token, session_id: sessionId },
       transports: ['polling', 'websocket'],
     });
 
@@ -131,8 +131,8 @@ export function useSocket(token: string | null) {
     newSocket.on('disconnect', () => setConnected(false));
 
     // Streaming text deltas
-    newSocket.on('text_delta', (data: { delta: string; message_id?: string }) => {
-      streamingContentRef.current += data.delta;
+    newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
+      streamingContentRef.current += data.text;
       const currentContent = streamingContentRef.current;
       const msgId = streamingIdRef.current || `stream_${Date.now()}`;
 
@@ -225,7 +225,7 @@ export function useSocket(token: string | null) {
       };
       setMessages((prev) => [...prev, userMessage]);
       dispatchTree({ type: 'CLEAR' });
-      socket.emit('message', { message: content });
+      socket.emit('message', { content });
     },
     [socket, connected]
   );
