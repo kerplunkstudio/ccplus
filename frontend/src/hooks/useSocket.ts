@@ -299,7 +299,7 @@ export function useSocket(token: string | null) {
   }, [token]);
 
   const sendMessage = useCallback(
-    (content: string) => {
+    (content: string, workspace?: string) => {
       if (!socket || !connected) return;
 
       const userMessage: Message = {
@@ -310,7 +310,7 @@ export function useSocket(token: string | null) {
       };
       setMessages((prev) => [...prev, userMessage]);
       setStreaming(true);
-      socket.emit('message', { content });
+      socket.emit('message', { content, workspace });
     },
     [socket, connected]
   );
