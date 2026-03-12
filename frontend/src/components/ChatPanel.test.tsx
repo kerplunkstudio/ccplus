@@ -8,7 +8,9 @@ describe('ChatPanel', () => {
     messages: [] as Message[],
     connected: true,
     streaming: false,
+    selectedProject: null,
     onSendMessage: jest.fn(),
+    onSelectProject: jest.fn(),
     onCancel: jest.fn(),
   };
 
