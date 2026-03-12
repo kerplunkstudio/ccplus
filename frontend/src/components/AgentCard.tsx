@@ -31,7 +31,7 @@ const getStatusBadge = (status: string) => {
 };
 
 export const AgentCard: React.FC<AgentCardProps> = ({ node, depth, onSelect, children }) => {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const toggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
