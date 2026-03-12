@@ -4,14 +4,16 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: number;
   streaming?: boolean;
-  tool?: {
-    tool_name: string;
-    agent_type?: string;
-    parameters?: Record<string, unknown>;
-    status: string;
-    duration_ms?: number;
-    error?: string;
-  };
+  tool?: ToolEventMessage;
+}
+
+export interface ToolEventMessage {
+  tool_name: string;
+  agent_type?: string;
+  status: 'running' | 'completed' | 'failed';
+  duration_ms?: number;
+  error?: string;
+  parameters?: Record<string, unknown>;
 }
 
 export interface ToolEvent {
@@ -39,6 +41,7 @@ export interface AgentNode {
   status: 'running' | 'completed' | 'failed';
   duration_ms?: number;
   error?: string;
+  sequence?: number;
 }
 
 export interface ToolNode {
@@ -48,6 +51,7 @@ export interface ToolNode {
   status: 'running' | 'completed' | 'failed';
   duration_ms?: number;
   error?: string;
+  sequence?: number;
   parameters?: Record<string, unknown>;
   parent_agent_id: string | null;
 }

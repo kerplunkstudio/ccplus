@@ -93,6 +93,16 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
             />
           </div>
           <div className="project-selector-list">
+            <button
+              className={`project-selector-item ${selectedProject === null ? 'active' : ''}`}
+              onClick={() => {
+                onSelectProject('');
+                setOpen(false);
+                setFilter('');
+              }}
+            >
+              <span className="project-item-name">All projects</span>
+            </button>
             {filtered.map((project) => (
               <button
                 key={project.path}

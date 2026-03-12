@@ -18,17 +18,17 @@
 }
 
 .tool-row:hover {
-  background: rgba(22, 33, 62, 0.8);
+  background: var(--hover-bg-secondary);
   border-color: var(--border);
   transform: translateX(2px);
 }
 
 .tool-row-running {
-  border-color: rgba(0, 212, 255, 0.2);
+  border-color: var(--accent-border);
 }
 
 .tool-row-failed {
-  border-color: rgba(244, 67, 54, 0.2);
+  border-color: var(--error-border);
 }
 
 .tool-row-connector {
@@ -68,7 +68,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  background: rgba(160, 160, 160, 0.1);
+  background: var(--icon-bg);
   border-radius: 4px;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -76,7 +76,7 @@
 }
 
 .tool-row:hover .tool-row-icon {
-  background: rgba(0, 212, 255, 0.1);
+  background: var(--accent-bg);
   color: var(--accent);
 }
 
@@ -151,7 +151,7 @@
   margin-top: 4px;
   margin-left: 36px;
   padding: 6px 8px;
-  background: rgba(244, 67, 54, 0.08);
+  background: var(--error-bg-subtle);
   border-left: 2px solid var(--error);
   border-radius: 4px;
   display: flex;

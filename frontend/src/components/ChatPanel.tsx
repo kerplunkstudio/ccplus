@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message } from '../types';
+import { Message, ToolEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ProjectSelector } from './ProjectSelector';
 import { ModelSelector } from './ModelSelector';
@@ -9,24 +9,55 @@ interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
   streaming: boolean;
+  currentTool?: ToolEvent | null;
   selectedProject: string | null;
   selectedModel: string;
   onSendMessage: (content: string, workspace?: string, model?: string) => void;
   onSelectProject: (path: string) => void;
   onSelectModel: (model: string) => void;
   onCancel: () => void;
+  onThemePanelToggle?: (isOpen: boolean) => void;
+}
+
+function basename(path: string): string {
+  return path.split('/').pop() || path;
+}
+
+function formatToolLabel(event: ToolEvent): string {
+  const params = event.parameters || {};
+  switch (event.tool_name) {
+    case 'Read':
+      return `Reading ${basename(String(params.file_path || ''))}`;
+    case 'Write':
+      return `Writing ${basename(String(params.file_path || ''))}`;
+    case 'Edit':
+      return `Editing ${basename(String(params.file_path || ''))}`;
+    case 'Bash':
+      return `Running ${String(params.command || '').slice(0, 40)}`;
+    case 'Glob':
+      return `Searching ${String(params.pattern || '')}`;
+    case 'Grep':
+      return `Searching ${String(params.pattern || '')}`;
+    case 'Agent':
+    case 'Task':
+      return `Using ${event.agent_type || 'agent'}`;
+    default:
+      return `Using ${event.tool_name}`;
+  }
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
+  currentTool,
   selectedProject,
   selectedModel,
   onSendMessage,
   onSelectProject,
   onSelectModel,
   onCancel,
+  onThemePanelToggle,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -86,6 +117,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             selectedModel={selectedModel}
             onSelectModel={onSelectModel}
           />
+          <button
+            className="theme-toggle-btn"
+            onClick={() => onThemePanelToggle?.(true)}
+            aria-label="Theme settings"
+            title="Theme settings"
+          >
+            ⚙️
+          </button>
         </div>
       </div>
 
@@ -102,12 +141,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         ))}
         {streaming && !messages.some((m) => m.streaming) && (
           <div className="thinking-indicator">
-            <div className="thinking-content">
-              <span className="dot" />
-              <span className="dot" />
-              <span className="dot" />
-              <span className="thinking-text">Thinking...</span>
-            </div>
+            {currentTool ? (
+              <div className="tool-status">{formatToolLabel(currentTool)}</div>
+            ) : (
+              <div className="thinking-content">
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+                <span className="thinking-text">Thinking...</span>
+              </div>
+            )}
           </div>
         )}
         <div ref={messagesEndRef} />

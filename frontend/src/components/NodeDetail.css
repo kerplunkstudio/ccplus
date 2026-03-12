@@ -75,7 +75,7 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: rgba(0, 212, 255, 0.1);
+  background: var(--accent-bg);
   border-radius: 8px;
   color: var(--accent);
   flex-shrink: 0;
@@ -115,21 +115,21 @@
 }
 
 .detail-status-running {
-  background: rgba(0, 212, 255, 0.15);
+  background: var(--accent-bg);
   color: var(--accent);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  border: 1px solid var(--accent-border);
 }
 
 .detail-status-completed {
-  background: rgba(76, 175, 80, 0.15);
+  background: var(--success-bg);
   color: var(--success);
-  border: 1px solid rgba(76, 175, 80, 0.3);
+  border: 1px solid var(--success-border);
 }
 
 .detail-status-failed {
-  background: rgba(244, 67, 54, 0.15);
+  background: var(--error-bg);
   color: var(--error);
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  border: 1px solid var(--error-border);
 }
 
 .detail-section {
@@ -175,7 +175,7 @@
   align-items: center;
   font-size: 12px;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .detail-metadata-row:last-child {
@@ -288,7 +288,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: rgba(160, 160, 160, 0.1);
+  background: var(--icon-bg);
   border-radius: 4px;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -356,8 +356,8 @@
 }
 
 .detail-error {
-  background: rgba(244, 67, 54, 0.08);
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   border-radius: 6px;
   padding: 12px;
   font-size: 12px;

@@ -1,4 +1,12 @@
 :root {
+  --color-background: #1a1a2e;
+  --color-accent: #00d4ff;
+  --color-text: #e4e4e7;
+  --color-border: #404047;
+  --color-hover: #2a2a3e;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
   --bg-primary: #1a1a2e;
   --bg-secondary: #16213e;
   --bg-tertiary: #0f3460;
@@ -6,10 +14,35 @@
   --text-secondary: #a0a0a0;
   --accent: #00d4ff;
   --accent-dim: #0099cc;
+  --accent-light: #a5b4fc;
+  --accent-bg: rgba(0, 212, 255, 0.1);
+  --accent-border: rgba(0, 212, 255, 0.2);
+  --accent-shadow: rgba(0, 212, 255, 0.4);
+  --accent-shadow-fade: rgba(0, 212, 255, 0);
   --success: #4caf50;
+  --success-bg: rgba(76, 175, 80, 0.15);
+  --success-border: rgba(76, 175, 80, 0.3);
   --error: #f44336;
+  --error-bg: rgba(244, 67, 54, 0.15);
+  --error-bg-subtle: rgba(244, 67, 54, 0.08);
+  --error-border: rgba(244, 67, 54, 0.3);
   --warning: #ff9800;
   --border: #2a2a4a;
+  --border-subtle: rgba(255, 255, 255, 0.03);
+  --button-bg: rgba(255, 255, 255, 0.05);
+  --button-border: rgba(255, 255, 255, 0.12);
+  --button-text: rgba(255, 255, 255, 0.5);
+  --button-bg-hover: rgba(255, 255, 255, 0.08);
+  --button-border-hover: rgba(255, 255, 255, 0.2);
+  --button-text-hover: rgba(255, 255, 255, 0.7);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --hover-border: rgba(255, 255, 255, 0.08);
+  --hover-bg-secondary: rgba(22, 33, 62, 0.8);
+  --icon-bg: rgba(160, 160, 160, 0.1);
+  --code-bg: rgba(0, 0, 0, 0.3);
+  --code-header-bg: rgba(0, 0, 0, 0.5);
+  --dropdown-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow: rgba(0, 0, 0, 0.2);
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
@@ -23,7 +56,7 @@
 body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
-  color: var(--text-primary);
+  color: var(--color-text);
   overflow: hidden;
   height: 100vh;
   -webkit-font-smoothing: antialiased;

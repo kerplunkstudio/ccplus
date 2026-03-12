@@ -4,14 +4,22 @@ import { useSocket } from './hooks/useSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { SessionSwitcher } from './components/SessionSwitcher';
+import { ThemeProvider } from './theme';
+import { ThemePanel } from './components/ThemePanel';
 import './App.css';
 
-function App() {
-  const { token, loading } = useAuth();
+interface AppContentProps {
+  token: string | null;
+  loading: boolean;
+  onThemePanelToggle: (isOpen: boolean) => void;
+}
+
+function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
   const {
     connected,
     messages,
     streaming,
+    currentTool,
     activityTree,
     usageStats,
     sessionId,
@@ -63,18 +71,36 @@ function App() {
           messages={messages}
           connected={connected}
           streaming={streaming}
+          currentTool={currentTool}
           selectedProject={selectedProject}
           selectedModel={selectedModel}
           onSendMessage={sendMessage}
           onSelectProject={handleSelectProject}
           onSelectModel={handleSelectModel}
           onCancel={cancelQuery}
+          onThemePanelToggle={onThemePanelToggle}
         />
       </div>
       <div className="panel-activity">
         <ActivityTree tree={activityTree} usageStats={usageStats} />
       </div>
     </div>
+  );
+}
+
+function App() {
+  const { token, loading } = useAuth();
+  const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
+
+  return (
+    <ThemeProvider>
+      <AppContent
+        token={token}
+        loading={loading}
+        onThemePanelToggle={setIsThemePanelOpen}
+      />
+      <ThemePanel isOpen={isThemePanelOpen} onClose={() => setIsThemePanelOpen(false)} />
+    </ThemeProvider>
   );
 }
 

@@ -118,14 +118,12 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
           </div>
         ) : (
           sessions.map((session) => (
-            <div
+            <button
               key={session.session_id}
-              className={`session-item-wrapper ${session.session_id === currentSessionId ? 'active' : ''}`}
+              className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
+              onClick={() => onSwitchSession(session.session_id)}
             >
-              <button
-                className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
-                onClick={() => onSwitchSession(session.session_id)}
-              >
+              <div className="session-item-content">
                 <div className="session-item-preview">
                   {session.last_user_message || 'Empty session'}
                 </div>
@@ -133,7 +131,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
                   <span className="session-item-count">{session.message_count} msgs</span>
                   <span className="session-item-time">{formatTime(session.last_activity)}</span>
                 </div>
-              </button>
+              </div>
               <button
                 className="session-archive-btn"
                 onClick={(e) => handleArchive(e, session.session_id)}
@@ -145,7 +143,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
                   <path d="M10 12v5M14 12v5" />
                 </svg>
               </button>
-            </div>
+            </button>
           ))
         )}
       </div>

@@ -105,6 +105,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
     case 'LOAD_HISTORY': {
       // Reconstruct the activity tree from stored events
       let newNodes: ActivityNode[] = [];
+      let sequence = 0;
 
       for (const event of action.events) {
         if (event.type === 'agent_start') {
@@ -116,6 +117,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
             timestamp: event.timestamp,
             children: [],
             status: 'running',
+            sequence: ++sequence,
           };
           if (event.parent_agent_id) {
             newNodes = findAndInsert(newNodes, event.parent_agent_id, node);
@@ -130,6 +132,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
             status: 'running',
             parameters: event.parameters,
             parent_agent_id: event.parent_agent_id,
+            sequence: ++sequence,
           };
           if (event.parent_agent_id) {
             newNodes = findAndInsert(newNodes, event.parent_agent_id, node);
