@@ -5,10 +5,10 @@ import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, Usa
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
 const getSessionId = (): string => {
-  let sessionId = sessionStorage.getItem('ccplus_session_id');
+  let sessionId = localStorage.getItem('ccplus_session_id');
   if (!sessionId) {
     sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    sessionStorage.setItem('ccplus_session_id', sessionId);
+    localStorage.setItem('ccplus_session_id', sessionId);
   }
   return sessionId;
 };
@@ -16,11 +16,12 @@ const getSessionId = (): string => {
 // --- Activity Tree Reducer ---
 
 type TreeAction =
-  | { type: 'AGENT_START'; event: ToolEvent }
-  | { type: 'TOOL_START'; event: ToolEvent }
+  | { type: 'AGENT_START'; event: ToolEvent; sequence: number }
+  | { type: 'TOOL_START'; event: ToolEvent; sequence: number }
   | { type: 'TOOL_COMPLETE'; event: ToolEvent }
   | { type: 'AGENT_STOP'; event: ToolEvent }
-  | { type: 'CLEAR' };
+  | { type: 'CLEAR' }
+  | { type: 'LOAD_HISTORY'; events: ToolEvent[] };
 
 function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
   return nodes.map((node) => {
@@ -61,6 +62,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
         timestamp: action.event.timestamp,
         children: [],
         status: 'running',
+        sequence: action.sequence,
       };
       if (action.event.parent_agent_id) {
         return findAndInsert(state, action.event.parent_agent_id, newAgent);
@@ -76,6 +78,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
         status: 'running',
         parameters: action.event.parameters,
         parent_agent_id: action.event.parent_agent_id,
+        sequence: action.sequence,
       };
       if (action.event.parent_agent_id) {
         return findAndInsert(state, action.event.parent_agent_id, newTool);
@@ -124,6 +127,7 @@ export function useSocket(token: string | null) {
   });
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
+  const sequenceRef = useRef(0);
 
   useEffect(() => {
     if (!token) return;
@@ -201,12 +205,16 @@ export function useSocket(token: string | null) {
     // Tool/agent activity events
     newSocket.on('tool_event', (event: ToolEvent) => {
       switch (event.type) {
-        case 'agent_start':
-          dispatchTree({ type: 'AGENT_START', event });
+        case 'agent_start': {
+          const seq = ++sequenceRef.current;
+          dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           break;
-        case 'tool_start':
-          dispatchTree({ type: 'TOOL_START', event });
+        }
+        case 'tool_start': {
+          const seq = ++sequenceRef.current;
+          dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           break;
+        }
         case 'tool_complete':
           dispatchTree({ type: 'TOOL_COMPLETE', event });
           break;
@@ -237,6 +245,59 @@ export function useSocket(token: string | null) {
     };
   }, [token]);
 
+  // Restore session data from backend on mount
+  useEffect(() => {
+    if (!token) return;
+
+    const sessionId = getSessionId();
+
+    const restoreSession = async () => {
+      try {
+        // Fetch conversation history
+        const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
+        if (historyRes.ok) {
+          const { messages: dbMessages } = await historyRes.json();
+          if (dbMessages && dbMessages.length > 0) {
+            const restored: Message[] = dbMessages.map((m: any) => ({
+              id: `db_${m.id}`,
+              content: m.content,
+              role: m.role as 'user' | 'assistant',
+              timestamp: new Date(m.timestamp).getTime(),
+            }));
+            setMessages(restored);
+          }
+        }
+
+        // Fetch activity events
+        const activityRes = await fetch(`${SOCKET_URL}/api/activity/${sessionId}`);
+        if (activityRes.ok) {
+          const { events } = await activityRes.json();
+          if (events && events.length > 0) {
+            // Convert DB rows to ToolEvent format for the reducer
+            const toolEvents: ToolEvent[] = events.map((e: any) => ({
+              type: e.agent_type ? (e.success !== null ? 'agent_stop' : 'agent_start')
+                   : (e.success !== null ? 'tool_complete' : 'tool_start'),
+              tool_name: e.tool_name,
+              tool_use_id: e.tool_use_id,
+              parent_agent_id: e.parent_agent_id || null,
+              agent_type: e.agent_type,
+              timestamp: e.timestamp,
+              success: e.success,
+              error: e.error,
+              duration_ms: e.duration_ms,
+              parameters: e.parameters,
+            }));
+            dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore session:', err);
+      }
+    };
+
+    restoreSession();
+  }, [token]);
+
   const sendMessage = useCallback(
     (content: string) => {
       if (!socket || !connected) return;
@@ -248,7 +309,6 @@ export function useSocket(token: string | null) {
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, userMessage]);
-      dispatchTree({ type: 'CLEAR' });
       setStreaming(true);
       socket.emit('message', { content });
     },
