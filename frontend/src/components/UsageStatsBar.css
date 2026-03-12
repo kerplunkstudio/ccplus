@@ -1,0 +1,39 @@
+.usage-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.usage-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-right: 1px solid var(--border);
+}
+
+.usage-stat:last-child {
+  border-right: none;
+}
+
+.usage-stat:first-child {
+  padding-left: 0;
+}
+
+.usage-stat-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.usage-stat-value {
+  color: var(--accent);
+  font-weight: 500;
+}

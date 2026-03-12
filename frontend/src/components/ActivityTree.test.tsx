@@ -1,16 +1,24 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ActivityTree } from './ActivityTree';
-import { AgentNode, ToolNode, ActivityNode } from '../types';
+import { AgentNode, ToolNode, ActivityNode, UsageStats } from '../types';
+
+const mockStats: UsageStats = {
+  totalCost: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalDuration: 0,
+  queryCount: 0,
+};
 
 describe('ActivityTree', () => {
   it('renders empty state when no tree nodes', () => {
-    render(<ActivityTree tree={[]} />);
+    render(<ActivityTree tree={[]} usageStats={mockStats} />);
     expect(screen.getByText('No activity yet')).toBeInTheDocument();
   });
 
   it('renders the Observability header', () => {
-    render(<ActivityTree tree={[]} />);
+    render(<ActivityTree tree={[]} usageStats={mockStats} />);
     expect(screen.getByText('Observability')).toBeInTheDocument();
   });
 
@@ -23,7 +31,7 @@ describe('ActivityTree', () => {
       duration_ms: 150,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
     expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.getByText('150ms')).toBeInTheDocument();
   });
@@ -37,7 +45,7 @@ describe('ActivityTree', () => {
       children: [],
       status: 'running',
     };
-    render(<ActivityTree tree={[agent]} />);
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
     expect(screen.getByText('code_agent')).toBeInTheDocument();
   });
 
@@ -58,7 +66,7 @@ describe('ActivityTree', () => {
       children: [child],
       status: 'running',
     };
-    render(<ActivityTree tree={[agent]} />);
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
     expect(screen.getByText('research')).toBeInTheDocument();
     expect(screen.getByText('Write')).toBeInTheDocument();
   });
@@ -79,7 +87,7 @@ describe('ActivityTree', () => {
       children: [child],
       status: 'completed',
     };
-    render(<ActivityTree tree={[agent]} />);
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
     // Initially expanded
     expect(screen.getByText('Bash')).toBeInTheDocument();
     // Click toggle button to collapse
@@ -105,7 +113,7 @@ describe('ActivityTree', () => {
         parent_agent_id: null,
       } as ToolNode,
     ];
-    render(<ActivityTree tree={nodes} />);
+    render(<ActivityTree tree={nodes} usageStats={mockStats} />);
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
@@ -118,7 +126,7 @@ describe('ActivityTree', () => {
       duration_ms: 2500,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
     expect(screen.getByText('2.5s')).toBeInTheDocument();
   });
 
@@ -131,7 +139,7 @@ describe('ActivityTree', () => {
       duration_ms: 90000,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
     expect(screen.getByText('1.5m')).toBeInTheDocument();
   });
 
@@ -144,7 +152,7 @@ describe('ActivityTree', () => {
       error: 'Permission denied',
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
     expect(screen.getByText('Permission denied')).toBeInTheDocument();
   });
 
@@ -172,7 +180,7 @@ describe('ActivityTree', () => {
         parent_agent_id: null,
       } as ToolNode,
     ];
-    const { container } = render(<ActivityTree tree={nodes} />);
+    const { container } = render(<ActivityTree tree={nodes} usageStats={mockStats} />);
     expect(container.querySelector('.tool-status-running')).toBeInTheDocument();
     expect(container.querySelector('.tool-status-completed')).toBeInTheDocument();
     expect(container.querySelector('.tool-status-failed')).toBeInTheDocument();
@@ -187,7 +195,7 @@ describe('ActivityTree', () => {
       children: [],
       status: 'completed',
     };
-    render(<ActivityTree tree={[agent]} />);
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
     const agentCard = screen.getByText('code_agent').closest('.agent-card');
     fireEvent.click(agentCard!);
     expect(screen.getByText('Back')).toBeInTheDocument();
@@ -202,12 +210,33 @@ describe('ActivityTree', () => {
       children: [],
       status: 'completed',
     };
-    render(<ActivityTree tree={[agent]} />);
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
     const agentCard = screen.getByText('code_agent').closest('.agent-card');
     fireEvent.click(agentCard!);
     const backButton = screen.getByText('Back');
     fireEvent.click(backButton);
     expect(screen.queryByText('Back')).not.toBeInTheDocument();
     expect(screen.getByText('code_agent')).toBeInTheDocument();
+  });
+
+  it('renders usage stats bar with metrics', () => {
+    const stats: UsageStats = {
+      totalCost: 0.0123,
+      totalInputTokens: 1500,
+      totalOutputTokens: 2500,
+      totalDuration: 5432,
+      queryCount: 3,
+    };
+    render(<ActivityTree tree={[]} usageStats={stats} />);
+    expect(screen.getByText('$0.0123')).toBeInTheDocument();
+    expect(screen.getByText('1.5k↑ 2.5k↓')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('5.4s')).toBeInTheDocument();
+  });
+
+  it('renders usage stats bar with zero values', () => {
+    render(<ActivityTree tree={[]} usageStats={mockStats} />);
+    expect(screen.getByText('$0.0000')).toBeInTheDocument();
+    expect(screen.getByText('0↑ 0↓')).toBeInTheDocument();
   });
 });

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityNode, isAgentNode, AgentNode, ToolNode } from '../types';
+import { ActivityNode, isAgentNode, AgentNode, ToolNode, UsageStats } from '../types';
 import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
 import { NodeDetail } from './NodeDetail';
+import { UsageStatsBar } from './UsageStatsBar';
 import './ActivityTree.css';
 
 interface ActivityTreeProps {
   tree: ActivityNode[];
+  usageStats: UsageStats;
 }
 
 interface TreeNodeProps {
@@ -47,7 +49,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, onNodeSelect }) => {
   );
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
 
@@ -114,6 +116,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree }) => {
           </div>
         </>
       )}
+      <UsageStatsBar stats={usageStats} />
     </div>
   );
 };
