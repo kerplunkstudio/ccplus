@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Message } from '../types';
 import { MessageBubble } from './MessageBubble';
+import { ProjectSelector } from './ProjectSelector';
 import './ChatPanel.css';
 
 interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
   streaming: boolean;
-  onSendMessage: (content: string) => void;
+  selectedProject: string | null;
+  onSendMessage: (content: string, workspace?: string) => void;
+  onSelectProject: (path: string) => void;
   onCancel: () => void;
 }
 
@@ -15,7 +18,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
+  selectedProject,
   onSendMessage,
+  onSelectProject,
   onCancel,
 }) => {
   const [input, setInput] = useState('');
@@ -45,7 +50,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSubmit = () => {
     const trimmed = input.trim();
     if (!trimmed || !connected) return;
-    onSendMessage(trimmed);
+    onSendMessage(trimmed, selectedProject || undefined);
     setInput('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -67,6 +72,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <h1 className="chat-title">CC+</h1>
           <span className={`connection-dot ${connected ? 'online' : 'offline'}`} />
         </div>
+        <ProjectSelector
+          selectedProject={selectedProject}
+          onSelectProject={onSelectProject}
+        />
       </div>
 
       <div className="messages-container" ref={messagesContainerRef}>
@@ -81,10 +90,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <MessageBubble key={msg.id} message={msg} />
         ))}
         {streaming && !messages.some((m) => m.streaming) && (
-          <div className="typing-indicator">
-            <span className="dot" />
-            <span className="dot" />
-            <span className="dot" />
+          <div className="thinking-indicator">
+            <div className="thinking-content">
+              <span className="dot" />
+              <span className="dot" />
+              <span className="dot" />
+              <span className="thinking-text">Thinking...</span>
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />

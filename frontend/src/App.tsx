@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
 import { ChatPanel } from './components/ChatPanel';
@@ -9,6 +9,15 @@ function App() {
   const { token, loading } = useAuth();
   const { connected, messages, streaming, activityTree, usageStats, sendMessage, cancelQuery } =
     useSocket(token);
+
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => {
+    return localStorage.getItem('ccplus_selected_project');
+  });
+
+  const handleSelectProject = (path: string) => {
+    setSelectedProject(path);
+    localStorage.setItem('ccplus_selected_project', path);
+  };
 
   if (loading) {
     return (
@@ -29,7 +38,9 @@ function App() {
           messages={messages}
           connected={connected}
           streaming={streaming}
+          selectedProject={selectedProject}
           onSendMessage={sendMessage}
+          onSelectProject={handleSelectProject}
           onCancel={cancelQuery}
         />
       </div>
