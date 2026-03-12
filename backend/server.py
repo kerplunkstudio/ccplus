@@ -42,6 +42,7 @@ from backend.config import (
 from backend.database import (
     get_conversation_history,
     get_stats,
+    get_tool_events,
     record_message,
     record_tool_event,
 )
@@ -180,6 +181,17 @@ def get_history(session_id):
         return jsonify({"error": "Failed to load history"}), 500
 
 
+@app.route("/api/activity/<session_id>")
+def get_activity(session_id):
+    """Return tool usage events for a session (for activity tree reconstruction)."""
+    try:
+        events = get_tool_events(session_id)
+        return jsonify({"events": events})
+    except Exception as exc:
+        logger.error(f"Failed to fetch activity for {session_id}: {exc}")
+        return jsonify({"error": "Failed to load activity"}), 500
+
+
 @app.route("/api/stats")
 def stats():
     """Aggregate tool-usage and conversation statistics."""
@@ -188,6 +200,24 @@ def stats():
     except Exception as exc:
         logger.error(f"Failed to fetch stats: {exc}")
         return jsonify({"error": "Failed to load stats"}), 500
+
+
+@app.route("/api/projects")
+def list_projects():
+    """List available project directories in the workspace."""
+    try:
+        workspace = Path(WORKSPACE_PATH)
+        projects = []
+        for child in sorted(workspace.iterdir()):
+            if child.is_dir() and not child.name.startswith('.'):
+                projects.append({
+                    "name": child.name,
+                    "path": str(child),
+                })
+        return jsonify({"projects": projects, "workspace": WORKSPACE_PATH})
+    except Exception as exc:
+        logger.error(f"Failed to list projects: {exc}")
+        return jsonify({"error": "Failed to list projects"}), 500
 
 
 # =========================================================================
@@ -266,6 +296,7 @@ def handle_message(data):
     session_id = client["session_id"]
     user_id = client["user_id"]
     content = (data.get("content", "") if isinstance(data, dict) else "").strip()
+    workspace = (data.get("workspace", "") if isinstance(data, dict) else "") or WORKSPACE_PATH
 
     if not content:
         return
@@ -334,7 +365,7 @@ def handle_message(data):
     session_manager.submit_query(
         session_id=session_id,
         prompt=content,
-        workspace=WORKSPACE_PATH,
+        workspace=workspace,
         on_text=on_text,
         on_tool_event=on_tool_event,
         on_complete=on_complete,
