@@ -145,6 +145,42 @@ class TestHistory:
             assert resp.status_code == 500
 
 
+class TestActivity:
+    def test_returns_events(self, client):
+        fake_events = [
+            {
+                "tool_name": "Bash",
+                "tool_use_id": "tu-1",
+                "parent_agent_id": None,
+                "agent_type": None,
+                "success": True,
+                "duration_ms": 100.0,
+                "timestamp": "2026-03-12 10:00:00",
+            },
+            {
+                "tool_name": "Agent",
+                "tool_use_id": "tu-2",
+                "parent_agent_id": None,
+                "agent_type": "code_agent",
+                "success": True,
+                "duration_ms": 5000.0,
+                "timestamp": "2026-03-12 10:00:01",
+            },
+        ]
+        with patch("backend.server.get_tool_events", return_value=fake_events):
+            resp = client.get("/api/activity/sess-1")
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert len(data["events"]) == 2
+            assert data["events"][0]["tool_name"] == "Bash"
+            assert data["events"][1]["agent_type"] == "code_agent"
+
+    def test_handles_db_error(self, client):
+        with patch("backend.server.get_tool_events", side_effect=RuntimeError("boom")):
+            resp = client.get("/api/activity/sess-1")
+            assert resp.status_code == 500
+
+
 class TestStats:
     def test_returns_stats(self, client):
         fake_stats = {"total_conversations": 10, "total_tool_events": 50}
