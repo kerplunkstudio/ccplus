@@ -41,6 +41,7 @@ from backend.config import (
 )
 from backend.database import (
     get_conversation_history,
+    get_sessions_list,
     get_stats,
     get_tool_events,
     record_message,
@@ -218,6 +219,17 @@ def list_projects():
     except Exception as exc:
         logger.error(f"Failed to list projects: {exc}")
         return jsonify({"error": "Failed to list projects"}), 500
+
+
+@app.route("/api/sessions")
+def list_sessions():
+    """List available chat sessions with their last message preview."""
+    try:
+        sessions = get_sessions_list()
+        return jsonify({"sessions": sessions})
+    except Exception as exc:
+        logger.error(f"Failed to list sessions: {exc}")
+        return jsonify({"error": "Failed to list sessions"}), 500
 
 
 # =========================================================================

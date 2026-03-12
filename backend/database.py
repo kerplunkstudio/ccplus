@@ -169,6 +169,35 @@ def get_tool_events(session_id: str, limit: int = 200) -> list[dict]:
     return results
 
 
+def get_sessions_list(limit: int = 50) -> list[dict]:
+    """Return a list of sessions with metadata (last message preview, message count)."""
+    conn = _get_connection()
+    rows = conn.execute(
+        """
+        SELECT
+            session_id,
+            COUNT(*) as message_count,
+            MAX(timestamp) as last_activity,
+            (SELECT content FROM conversations c2
+             WHERE c2.session_id = c1.session_id AND c2.role = 'user'
+             ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message
+        FROM conversations c1
+        GROUP BY session_id
+        ORDER BY last_activity DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    results = []
+    for row in rows:
+        entry = dict(row)
+        # Truncate preview
+        if entry.get("last_user_message") and len(entry["last_user_message"]) > 80:
+            entry = {**entry, "last_user_message": entry["last_user_message"][:80] + "..."}
+        results.append(entry)
+    return results
+
+
 def get_stats() -> dict:
     """Return aggregate statistics across all sessions."""
     conn = _get_connection()
