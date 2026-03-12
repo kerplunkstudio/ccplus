@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
+import { useToolDisplayMode } from './hooks/useToolDisplayMode';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { SessionSwitcher } from './components/SessionSwitcher';
@@ -15,6 +16,8 @@ interface AppContentProps {
 }
 
 function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
+  const [toolDisplayMode, setToolDisplayMode] = useToolDisplayMode();
+
   const {
     connected,
     messages,
@@ -27,7 +30,7 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
     cancelQuery,
     switchSession,
     newSession,
-  } = useSocket(token);
+  } = useSocket(token, toolDisplayMode);
 
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
     return localStorage.getItem('ccplus_selected_project');
@@ -74,9 +77,11 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
           currentTool={currentTool}
           selectedProject={selectedProject}
           selectedModel={selectedModel}
+          toolDisplayMode={toolDisplayMode}
           onSendMessage={sendMessage}
           onSelectProject={handleSelectProject}
           onSelectModel={handleSelectModel}
+          onToolDisplayModeChange={setToolDisplayMode}
           onCancel={cancelQuery}
           onThemePanelToggle={onThemePanelToggle}
         />

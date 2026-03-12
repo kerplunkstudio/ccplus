@@ -1,0 +1,23 @@
+.tool-display-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-display-toggle:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.tool-display-toggle svg {
+  display: block;
+}

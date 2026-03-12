@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats } from '../types';
+import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats, ToolDisplayMode } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
@@ -159,7 +159,7 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
   }
 }
 
-export function useSocket(token: string | null) {
+export function useSocket(token: string | null, toolDisplayMode: ToolDisplayMode = 'minimal') {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -177,6 +177,11 @@ export function useSocket(token: string | null) {
   const sequenceRef = useRef(0);
   const [sessionId, setSessionId] = useState(getSessionId);
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
+  const toolDisplayModeRef = useRef<ToolDisplayMode>(toolDisplayMode);
+
+  useEffect(() => {
+    toolDisplayModeRef.current = toolDisplayMode;
+  }, [toolDisplayMode]);
 
   useEffect(() => {
     if (!token) return;
@@ -263,77 +268,85 @@ export function useSocket(token: string | null) {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           setCurrentTool(event);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: event.tool_use_id,
-              role: 'assistant',
-              timestamp: Date.now(),
-              tool: {
-                tool_name: event.tool_name,
-                agent_type: event.agent_type,
-                status: 'running',
+          if (toolDisplayModeRef.current === 'verbose') {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: event.tool_use_id,
+                role: 'assistant',
+                timestamp: Date.now(),
+                tool: {
+                  tool_name: event.tool_name,
+                  agent_type: event.agent_type,
+                  status: 'running',
+                },
               },
-            },
-          ]);
+            ]);
+          }
           break;
         }
         case 'tool_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           setCurrentTool(event);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: event.tool_use_id,
-              role: 'assistant',
-              timestamp: Date.now(),
-              tool: {
-                tool_name: event.tool_name,
-                parameters: event.parameters,
-                status: 'running',
+          if (toolDisplayModeRef.current === 'verbose') {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: event.tool_use_id,
+                role: 'assistant',
+                timestamp: Date.now(),
+                tool: {
+                  tool_name: event.tool_name,
+                  parameters: event.parameters,
+                  status: 'running',
+                },
               },
-            },
-          ]);
+            ]);
+          }
           break;
         }
         case 'tool_complete':
           dispatchTree({ type: 'TOOL_COMPLETE', event });
           setCurrentTool(null);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === event.tool_use_id && m.tool
-                ? {
-                    ...m,
-                    tool: {
-                      ...m.tool,
-                      status: event.success === false ? 'failed' : 'completed',
-                      duration_ms: event.duration_ms,
-                      error: event.error,
-                    },
-                  }
-                : m
-            )
-          );
+          if (toolDisplayModeRef.current === 'verbose') {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === event.tool_use_id && m.tool
+                  ? {
+                      ...m,
+                      tool: {
+                        ...m.tool,
+                        status: event.success === false ? 'failed' : 'completed',
+                        duration_ms: event.duration_ms,
+                        error: event.error,
+                      },
+                    }
+                  : m
+              )
+            );
+          }
           break;
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
           setCurrentTool(null);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === event.tool_use_id && m.tool
-                ? {
-                    ...m,
-                    tool: {
-                      ...m.tool,
-                      status: event.error ? 'failed' : 'completed',
-                      duration_ms: event.duration_ms,
-                      error: event.error,
-                    },
-                  }
-                : m
-            )
-          );
+          if (toolDisplayModeRef.current === 'verbose') {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === event.tool_use_id && m.tool
+                  ? {
+                      ...m,
+                      tool: {
+                        ...m.tool,
+                        status: event.error ? 'failed' : 'completed',
+                        duration_ms: event.duration_ms,
+                        error: event.error,
+                      },
+                    }
+                  : m
+              )
+            );
+          }
           break;
       }
     });

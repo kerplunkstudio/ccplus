@@ -81,3 +81,5 @@ export interface UsageStats {
   totalDuration: number;
   queryCount: number;
 }
+
+export type ToolDisplayMode = 'minimal' | 'verbose';
