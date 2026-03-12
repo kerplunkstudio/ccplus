@@ -171,6 +171,55 @@ class TestGetStats:
         assert stats["events_by_tool"]["Write"] == 1
 
 
+class TestGetSessionsList:
+    def test_empty_sessions(self, fresh_db):
+        sessions = db.get_sessions_list()
+        assert sessions == []
+
+    def test_returns_sessions_ordered_by_last_activity(self, fresh_db):
+        # Create messages in different sessions
+        db.record_message("sess1", "user1", "user", "first message")
+        db.record_message("sess2", "user1", "user", "second message")
+        db.record_message("sess1", "user1", "assistant", "response")
+
+        sessions = db.get_sessions_list()
+        assert len(sessions) == 2
+        # sess1 should be first (most recent activity)
+        assert sessions[0]["session_id"] == "sess1"
+        assert sessions[1]["session_id"] == "sess2"
+
+    def test_includes_message_count(self, fresh_db):
+        db.record_message("sess1", "user1", "user", "msg1")
+        db.record_message("sess1", "user1", "assistant", "msg2")
+        db.record_message("sess1", "user1", "user", "msg3")
+
+        sessions = db.get_sessions_list()
+        assert sessions[0]["message_count"] == 3
+
+    def test_includes_last_user_message(self, fresh_db):
+        db.record_message("sess1", "user1", "user", "first")
+        db.record_message("sess1", "user1", "assistant", "response")
+        db.record_message("sess1", "user1", "user", "latest user message")
+
+        sessions = db.get_sessions_list()
+        assert sessions[0]["last_user_message"] == "latest user message"
+
+    def test_truncates_long_messages(self, fresh_db):
+        long_message = "x" * 100
+        db.record_message("sess1", "user1", "user", long_message)
+
+        sessions = db.get_sessions_list()
+        assert len(sessions[0]["last_user_message"]) == 83  # 80 chars + "..."
+        assert sessions[0]["last_user_message"].endswith("...")
+
+    def test_respects_limit(self, fresh_db):
+        for i in range(10):
+            db.record_message(f"sess{i}", "user1", "user", f"message {i}")
+
+        sessions = db.get_sessions_list(limit=5)
+        assert len(sessions) == 5
+
+
 class TestImmutability:
     def test_record_message_returns_new_dict(self, fresh_db):
         result = db.record_message("sess1", "user1", "user", "hello")
