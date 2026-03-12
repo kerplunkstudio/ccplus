@@ -58,6 +58,21 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
     fetchSessions();
   }, [currentSessionId, selectedProject, fetchSessions]);
 
+  useEffect(() => {
+    // Listen for message_received events to refresh session list
+    const handleMessageReceived = () => {
+      fetchSessions();
+    };
+
+    // Create a simple event listener using the global object
+    const socketRefreshKey = 'ccplus_message_received';
+    window.addEventListener(socketRefreshKey, handleMessageReceived);
+
+    return () => {
+      window.removeEventListener(socketRefreshKey, handleMessageReceived);
+    };
+  }, [fetchSessions]);
+
   const projectName = selectedProject
     ? selectedProject.split('/').filter(Boolean).pop() ?? null
     : null;

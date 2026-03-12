@@ -102,6 +102,55 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
       }));
     }
 
+    case 'LOAD_HISTORY': {
+      // Reconstruct the activity tree from stored events
+      let newNodes: ActivityNode[] = [];
+      let sequence = 0;
+
+      for (const event of action.events) {
+        if (event.type === 'agent_start') {
+          const node: AgentNode = {
+            tool_use_id: event.tool_use_id,
+            agent_type: event.agent_type || 'agent',
+            tool_name: event.tool_name,
+            description: event.description,
+            timestamp: event.timestamp,
+            children: [],
+            status: 'running',
+            sequence: ++sequence,
+          };
+          if (event.parent_agent_id) {
+            newNodes = findAndInsert(newNodes, event.parent_agent_id, node);
+          } else {
+            newNodes.push(node);
+          }
+        } else if (event.type === 'tool_start') {
+          const node: ToolNode = {
+            tool_use_id: event.tool_use_id,
+            tool_name: event.tool_name,
+            timestamp: event.timestamp,
+            status: 'running',
+            parameters: event.parameters,
+            parent_agent_id: event.parent_agent_id,
+            sequence: ++sequence,
+          };
+          if (event.parent_agent_id) {
+            newNodes = findAndInsert(newNodes, event.parent_agent_id, node);
+          } else {
+            newNodes.push(node);
+          }
+        } else if (event.type === 'tool_complete' || event.type === 'agent_stop') {
+          newNodes = findAndUpdate(newNodes, event.tool_use_id, (node) => ({
+            ...node,
+            status: event.success === false ? 'failed' : 'completed',
+            duration_ms: event.duration_ms,
+            error: event.error,
+          }));
+        }
+      }
+      return newNodes;
+    }
+
     case 'CLEAR':
       return [];
 
@@ -127,6 +176,7 @@ export function useSocket(token: string | null) {
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
   const [sessionId, setSessionId] = useState(getSessionId);
+  const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -138,6 +188,11 @@ export function useSocket(token: string | null) {
 
     newSocket.on('connect', () => setConnected(true));
     newSocket.on('disconnect', () => setConnected(false));
+
+    // Message received acknowledgment — notify that new session should be refreshed
+    newSocket.on('message_received', () => {
+      window.dispatchEvent(new CustomEvent('ccplus_message_received'));
+    });
 
     // Streaming text deltas
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
@@ -198,6 +253,7 @@ export function useSocket(token: string | null) {
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       setStreaming(false);
+      setCurrentTool(null);
     });
 
     // Tool/agent activity events
@@ -206,18 +262,78 @@ export function useSocket(token: string | null) {
         case 'agent_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
+          setCurrentTool(event);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: event.tool_use_id,
+              role: 'assistant',
+              timestamp: Date.now(),
+              tool: {
+                tool_name: event.tool_name,
+                agent_type: event.agent_type,
+                status: 'running',
+              },
+            },
+          ]);
           break;
         }
         case 'tool_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
+          setCurrentTool(event);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: event.tool_use_id,
+              role: 'assistant',
+              timestamp: Date.now(),
+              tool: {
+                tool_name: event.tool_name,
+                parameters: event.parameters,
+                status: 'running',
+              },
+            },
+          ]);
           break;
         }
         case 'tool_complete':
           dispatchTree({ type: 'TOOL_COMPLETE', event });
+          setCurrentTool(null);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === event.tool_use_id && m.tool
+                ? {
+                    ...m,
+                    tool: {
+                      ...m.tool,
+                      status: event.success === false ? 'failed' : 'completed',
+                      duration_ms: event.duration_ms,
+                      error: event.error,
+                    },
+                  }
+                : m
+            )
+          );
           break;
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
+          setCurrentTool(null);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === event.tool_use_id && m.tool
+                ? {
+                    ...m,
+                    tool: {
+                      ...m.tool,
+                      status: event.error ? 'failed' : 'completed',
+                      duration_ms: event.duration_ms,
+                      error: event.error,
+                    },
+                  }
+                : m
+            )
+          );
           break;
       }
     });
@@ -234,6 +350,7 @@ export function useSocket(token: string | null) {
       setStreaming(false);
       streamingContentRef.current = '';
       streamingIdRef.current = null;
+      setCurrentTool(null);
     });
 
     setSocket(newSocket);
@@ -327,7 +444,15 @@ export function useSocket(token: string | null) {
     streamingContentRef.current = '';
     streamingIdRef.current = null;
     setStreaming(false);
+    setCurrentTool(null);
   }, [socket, connected]);
+
+  const resetStreamingState = useCallback(() => {
+    setStreaming(false);
+    streamingContentRef.current = '';
+    streamingIdRef.current = null;
+    setCurrentTool(null);
+  }, []);
 
   const switchSession = useCallback(
     (newSessionId: string) => {
@@ -335,6 +460,7 @@ export function useSocket(token: string | null) {
       setSessionId(newSessionId);
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
+      resetStreamingState();
       setUsageStats({
         totalCost: 0,
         totalInputTokens: 0,
@@ -343,7 +469,7 @@ export function useSocket(token: string | null) {
         queryCount: 0,
       });
     },
-    []
+    [resetStreamingState]
   );
 
   const newSession = useCallback(() => {
@@ -352,6 +478,7 @@ export function useSocket(token: string | null) {
     setSessionId(id);
     setMessages([]);
     dispatchTree({ type: 'CLEAR' });
+    resetStreamingState();
     setUsageStats({
       totalCost: 0,
       totalInputTokens: 0,
@@ -359,12 +486,13 @@ export function useSocket(token: string | null) {
       totalDuration: 0,
       queryCount: 0,
     });
-  }, []);
+  }, [resetStreamingState]);
 
   return {
     connected,
     messages,
     streaming,
+    currentTool,
     activityTree,
     usageStats,
     sessionId,

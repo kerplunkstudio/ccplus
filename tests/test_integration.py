@@ -236,5 +236,5 @@ class TestDatabaseIntegration:
         with patch("backend.server.record_message") as mock_rm:
             authed_client.emit("message", {"content": "hello"})
             mock_rm.assert_called_once_with(
-                "integration-sess", "test-user", "user", "hello"
+                "integration-sess", "test-user", "user", "hello", project_path=None
             )

@@ -341,8 +341,19 @@ def handle_message(data):
 
     # -- Streaming callbacks (all emit to the session room) ----------------
 
+    assistant_msg_id = None  # Track the assistant message for updates
+
     def on_text(text: str) -> None:
+        nonlocal assistant_msg_id
         socketio.emit("text_delta", {"text": text}, room=session_id)
+
+        # Record the first chunk as a new message to preserve it across refresh
+        if assistant_msg_id is None:
+            try:
+                msg = record_message(session_id, user_id, "assistant", text)
+                assistant_msg_id = msg.get("id")
+            except Exception as exc:
+                logger.error(f"Failed to record initial assistant message: {exc}")
 
     def on_tool_event(event: dict) -> None:
         socketio.emit("tool_event", event, room=session_id)
