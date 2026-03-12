@@ -21,6 +21,12 @@
   gap: 10px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chat-title {
   font-size: 18px;
   font-weight: 700;
