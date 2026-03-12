@@ -62,7 +62,6 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
         timestamp: action.event.timestamp,
         children: [],
         status: 'running',
-        sequence: action.sequence,
       };
       if (action.event.parent_agent_id) {
         return findAndInsert(state, action.event.parent_agent_id, newAgent);
@@ -78,7 +77,6 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
         status: 'running',
         parameters: action.event.parameters,
         parent_agent_id: action.event.parent_agent_id,
-        sequence: action.sequence,
       };
       if (action.event.parent_agent_id) {
         return findAndInsert(state, action.event.parent_agent_id, newTool);
