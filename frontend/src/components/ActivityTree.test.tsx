@@ -9,9 +9,9 @@ describe('ActivityTree', () => {
     expect(screen.getByText('No activity yet')).toBeInTheDocument();
   });
 
-  it('renders the Activity header', () => {
+  it('renders the Observability header', () => {
     render(<ActivityTree tree={[]} />);
-    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Observability')).toBeInTheDocument();
   });
 
   it('renders a tool node', () => {
@@ -63,7 +63,7 @@ describe('ActivityTree', () => {
     expect(screen.getByText('Write')).toBeInTheDocument();
   });
 
-  it('collapses agent children on click', () => {
+  it('collapses agent children when toggle button clicked', () => {
     const child: ToolNode = {
       tool_use_id: 'tool_3',
       tool_name: 'Bash',
@@ -82,8 +82,9 @@ describe('ActivityTree', () => {
     render(<ActivityTree tree={[agent]} />);
     // Initially expanded
     expect(screen.getByText('Bash')).toBeInTheDocument();
-    // Click to collapse
-    fireEvent.click(screen.getByText('frontend'));
+    // Click toggle button to collapse
+    const toggleButton = screen.getByLabelText('Collapse children');
+    fireEvent.click(toggleButton);
     expect(screen.queryByText('Bash')).not.toBeInTheDocument();
   });
 
@@ -172,8 +173,41 @@ describe('ActivityTree', () => {
       } as ToolNode,
     ];
     const { container } = render(<ActivityTree tree={nodes} />);
-    expect(container.querySelector('.status-icon.spinning')).toBeInTheDocument();
-    expect(container.querySelector('.status-icon.completed')).toBeInTheDocument();
-    expect(container.querySelector('.status-icon.failed')).toBeInTheDocument();
+    expect(container.querySelector('.tool-status-running')).toBeInTheDocument();
+    expect(container.querySelector('.tool-status-completed')).toBeInTheDocument();
+    expect(container.querySelector('.tool-status-failed')).toBeInTheDocument();
+  });
+
+  it('opens detail panel when agent card clicked', () => {
+    const agent: AgentNode = {
+      tool_use_id: 'agent_1',
+      agent_type: 'code_agent',
+      tool_name: 'Agent',
+      timestamp: '2025-01-01T00:00:00Z',
+      children: [],
+      status: 'completed',
+    };
+    render(<ActivityTree tree={[agent]} />);
+    const agentCard = screen.getByText('code_agent').closest('.agent-card');
+    fireEvent.click(agentCard!);
+    expect(screen.getByText('Back')).toBeInTheDocument();
+  });
+
+  it('closes detail panel when back button clicked', () => {
+    const agent: AgentNode = {
+      tool_use_id: 'agent_1',
+      agent_type: 'code_agent',
+      tool_name: 'Agent',
+      timestamp: '2025-01-01T00:00:00Z',
+      children: [],
+      status: 'completed',
+    };
+    render(<ActivityTree tree={[agent]} />);
+    const agentCard = screen.getByText('code_agent').closest('.agent-card');
+    fireEvent.click(agentCard!);
+    const backButton = screen.getByText('Back');
+    fireEvent.click(backButton);
+    expect(screen.queryByText('Back')).not.toBeInTheDocument();
+    expect(screen.getByText('code_agent')).toBeInTheDocument();
   });
 });
