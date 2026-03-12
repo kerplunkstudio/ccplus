@@ -97,6 +97,52 @@ class TestAutoLogin:
             assert resp.status_code == 500
 
 
+class TestModelParameter:
+    def test_message_with_model_parameter(self, socketio_client):
+        """Verify that model parameter is extracted and passed to submit_query."""
+        with patch.object(session_manager, "submit_query") as mock_submit:
+            socketio_client.emit("message", {
+                "content": "Test message",
+                "workspace": "/tmp/test",
+                "model": "opus",
+            })
+            time.sleep(0.1)  # Give it time to process
+
+            # Verify submit_query was called with model parameter
+            assert mock_submit.called
+            call_kwargs = mock_submit.call_args[1]
+            assert call_kwargs["model"] == "opus"
+            assert call_kwargs["prompt"] == "Test message"
+            assert call_kwargs["workspace"] == "/tmp/test"
+
+    def test_message_without_model_defaults_to_none(self, socketio_client):
+        """Verify that missing model parameter defaults to None."""
+        with patch.object(session_manager, "submit_query") as mock_submit:
+            socketio_client.emit("message", {
+                "content": "Test message",
+                "workspace": "/tmp/test",
+            })
+            time.sleep(0.1)
+
+            assert mock_submit.called
+            call_kwargs = mock_submit.call_args[1]
+            assert call_kwargs["model"] is None
+
+    def test_message_with_empty_model_defaults_to_none(self, socketio_client):
+        """Verify that empty model string defaults to None."""
+        with patch.object(session_manager, "submit_query") as mock_submit:
+            socketio_client.emit("message", {
+                "content": "Test message",
+                "workspace": "/tmp/test",
+                "model": "",
+            })
+            time.sleep(0.1)
+
+            assert mock_submit.called
+            call_kwargs = mock_submit.call_args[1]
+            assert call_kwargs["model"] is None
+
+
 class TestAuthVerify:
     def test_valid_token(self, client):
         with patch("backend.server.verify_token", return_value="user-42"):

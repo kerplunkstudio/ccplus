@@ -62,6 +62,7 @@ class PersistentSession:
     session_id: str
     client: Any  # ClaudeSDKClient instance
     workspace: Optional[str] = None  # cwd the client was spawned with
+    model: Optional[str] = None  # model the client was spawned with
     sdk_session_id: Optional[str] = None  # captured from ResultMessage
     query_active: bool = False
     cancel_requested: bool = False
@@ -106,6 +107,7 @@ class SessionManager:
         on_tool_event: Callable[[dict], None],
         on_complete: Callable[[dict], None],
         on_error: Callable[[str], None],
+        model: Optional[str] = None,
     ):
         self.cancel_query(session_id)
         return asyncio.run_coroutine_threadsafe(
@@ -113,6 +115,7 @@ class SessionManager:
                 session_id=session_id,
                 prompt=prompt,
                 workspace=workspace,
+                model=model,
                 on_text=on_text,
                 on_tool_event=on_tool_event,
                 on_complete=on_complete,
@@ -207,6 +210,7 @@ class SessionManager:
         self,
         session_id: str,
         workspace: str,
+        model: Optional[str] = None,
     ) -> PersistentSession:
         """Get or create a persistent ClaudeSDKClient for this session.
 
@@ -220,9 +224,9 @@ class SessionManager:
             ps = self._sessions.get(session_id)
 
         if ps and ps.client:
-            # If workspace changed, tear down old client and create fresh one
-            if ps.workspace and ps.workspace != workspace:
-                logger.info(f"Workspace changed for session {session_id}: {ps.workspace} -> {workspace}")
+            # If workspace or model changed, tear down old client and create fresh one
+            if (ps.workspace and ps.workspace != workspace) or (model and ps.model and ps.model != model):
+                logger.info(f"Workspace or model changed for session {session_id}: workspace={ps.workspace}->{workspace}, model={ps.model}->{model}")
                 await self._disconnect_session(session_id)
             else:
                 # Reuse existing connected client
@@ -242,6 +246,7 @@ class SessionManager:
             session_id=session_id,
             client=None,  # will be set below
             workspace=workspace,
+            model=model,
         )
 
         # Build hooks that reference ps (they'll read ps.tool_event_callback)
@@ -263,7 +268,7 @@ class SessionManager:
             env=clean_env,
             hooks=hooks,
             can_use_tool=auto_approve_tool,
-            model="haiku",
+            model=model or "sonnet",
             resume=resume_id or "",
         )
 
@@ -403,6 +408,7 @@ class SessionManager:
         on_tool_event: Callable[[dict], None],
         on_complete: Callable[[dict], None],
         on_error: Callable[[str], None],
+        model: Optional[str] = None,
     ) -> None:
         # Backward compat: maintain ActiveSession for old tests
         active = ActiveSession(session_id=session_id)
@@ -416,7 +422,7 @@ class SessionManager:
             logger.info(f"_stream_query started for session {session_id}, prompt: {prompt[:50]}...")
 
             # Get or create persistent client
-            ps = await self._get_or_create_client(session_id, workspace)
+            ps = await self._get_or_create_client(session_id, workspace, model)
             logger.info(f"Got persistent client for session {session_id}, client={ps.client}")
 
             # Update the tool event callback to the latest one for this query
