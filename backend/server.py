@@ -325,6 +325,7 @@ def handle_message(data):
     user_id = client["user_id"]
     content = (data.get("content", "") if isinstance(data, dict) else "").strip()
     workspace = (data.get("workspace", "") if isinstance(data, dict) else "") or WORKSPACE_PATH
+    model = (data.get("model", "") if isinstance(data, dict) else "") or None
     # Only record actual selected project in project_path, not the default workspace
     project_path = data.get("workspace", "") if isinstance(data, dict) else ""
 
@@ -408,6 +409,7 @@ def handle_message(data):
         session_id=session_id,
         prompt=content,
         workspace=workspace,
+        model=model,
         on_text=on_text,
         on_tool_event=on_tool_event,
         on_complete=on_complete,
