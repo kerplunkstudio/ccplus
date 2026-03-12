@@ -314,37 +314,38 @@ class SessionManager:
         agent_stack: list[str] = []  # stack of agent tool_use_ids
 
         async def pre_tool_use(
-            tool_input: dict[str, Any],
-            tool_name: str | None,
+            hook_input: dict[str, Any],
+            tool_use_id_param: str | None,
             context: HookContext,
         ) -> HookJSONOutput:
-            tool_use_id = tool_input.get("tool_use_id", f"tu_{time.monotonic()}")
+            actual_tool_name = hook_input.get("tool_name", "unknown")
+            tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", f"tu_{time.monotonic()}")
+            tool_params = hook_input.get("tool_input", {})
             tool_timers[tool_use_id] = time.monotonic()
 
-            is_agent = tool_name in ("Agent", "Task")
+            is_agent = actual_tool_name in ("Agent", "Task")
             parent_id = agent_stack[-1] if agent_stack else None
 
-            # Call the latest tool_event_callback from ps
             if ps.tool_event_callback:
                 if is_agent:
                     agent_stack.append(tool_use_id)
                     ps.tool_event_callback({
                         "type": "agent_start",
-                        "tool_name": tool_name or "Agent",
+                        "tool_name": actual_tool_name,
                         "tool_use_id": tool_use_id,
                         "parent_agent_id": parent_id,
-                        "agent_type": tool_input.get("subagent_type", "agent"),
-                        "description": tool_input.get("description", tool_input.get("prompt", "")[:100]),
+                        "agent_type": tool_params.get("subagent_type", "agent"),
+                        "description": tool_params.get("description", tool_params.get("prompt", "")[:100]),
                         "timestamp": datetime.now().isoformat(),
                         "session_id": session_id,
                     })
                 else:
                     ps.tool_event_callback({
                         "type": "tool_start",
-                        "tool_name": tool_name or "unknown",
+                        "tool_name": actual_tool_name,
                         "tool_use_id": tool_use_id,
                         "parent_agent_id": parent_id,
-                        "parameters": _safe_params(tool_input),
+                        "parameters": _safe_params(tool_params),
                         "timestamp": datetime.now().isoformat(),
                         "session_id": session_id,
                     })
@@ -352,24 +353,24 @@ class SessionManager:
             return HookJSONOutput()
 
         async def post_tool_use(
-            tool_input: dict[str, Any],
-            tool_name: str | None,
+            hook_input: dict[str, Any],
+            tool_use_id_param: str | None,
             context: HookContext,
         ) -> HookJSONOutput:
-            tool_use_id = tool_input.get("tool_use_id", "")
+            actual_tool_name = hook_input.get("tool_name", "unknown")
+            tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", "")
             start = tool_timers.pop(tool_use_id, None)
             duration_ms = (time.monotonic() - start) * 1000 if start else None
 
-            is_agent = tool_name in ("Agent", "Task")
+            is_agent = actual_tool_name in ("Agent", "Task")
 
-            # Call the latest tool_event_callback from ps
             if ps.tool_event_callback:
                 if is_agent:
                     if agent_stack and agent_stack[-1] == tool_use_id:
                         agent_stack.pop()
                     ps.tool_event_callback({
                         "type": "agent_stop",
-                        "tool_name": tool_name or "Agent",
+                        "tool_name": actual_tool_name,
                         "tool_use_id": tool_use_id,
                         "success": True,
                         "duration_ms": duration_ms,
@@ -379,7 +380,7 @@ class SessionManager:
                 else:
                     ps.tool_event_callback({
                         "type": "tool_complete",
-                        "tool_name": tool_name or "unknown",
+                        "tool_name": actual_tool_name,
                         "tool_use_id": tool_use_id,
                         "parent_agent_id": agent_stack[-1] if agent_stack else None,
                         "success": True,
@@ -464,6 +465,18 @@ class SessionManager:
                 if ps.cancel_requested or active.cancel_event.is_set():
                     logger.info(f"Query cancelled for session {session_id}")
                     await ps.client.interrupt()
+                    try:
+                        async for leftover in raw_iter:
+                            try:
+                                leftover_msg = sdk_parse_message(leftover)
+                                if isinstance(leftover_msg, ResultMessage):
+                                    got_result = True
+                                    ps.sdk_session_id = leftover_msg.session_id
+                                    break
+                            except MessageParseError:
+                                continue
+                    except Exception:
+                        pass
                     break
 
                 if isinstance(message, AssistantMessage):
