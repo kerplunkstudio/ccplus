@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
 import { ChatPanel } from './components/ChatPanel';
@@ -44,6 +44,7 @@ function App() {
       <div className="panel-sessions">
         <SessionSwitcher
           currentSessionId={sessionId}
+          selectedProject={selectedProject}
           onSwitchSession={switchSession}
           onNewSession={newSession}
         />

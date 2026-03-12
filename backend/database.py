@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    sdk_session_id TEXT
+    sdk_session_id TEXT,
+    project_path TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_conversations_session
     ON conversations(session_id, timestamp);
@@ -59,6 +60,11 @@ def _get_connection() -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA_SQL)
+        try:
+            conn.execute("ALTER TABLE conversations ADD COLUMN project_path TEXT")
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
         _local.connection = conn
     return conn
 
@@ -69,15 +75,16 @@ def record_message(
     role: str,
     content: str,
     sdk_session_id: Optional[str] = None,
+    project_path: Optional[str] = None,
 ) -> dict:
     """Insert a conversation message and return it as a dict."""
     conn = _get_connection()
     cursor = conn.execute(
         """
-        INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (session_id, user_id, role, content, sdk_session_id),
+        (session_id, user_id, role, content, sdk_session_id, project_path),
     )
     conn.commit()
     row = conn.execute(
@@ -169,29 +176,35 @@ def get_tool_events(session_id: str, limit: int = 200) -> list[dict]:
     return results
 
 
-def get_sessions_list(limit: int = 50) -> list[dict]:
+def get_sessions_list(limit: int = 50, project_path: Optional[str] = None) -> list[dict]:
     """Return a list of sessions with metadata (last message preview, message count)."""
     conn = _get_connection()
+    having_clause = "HAVING project_path = ?" if project_path else ""
+    params: list = [project_path, limit] if project_path else [limit]
     rows = conn.execute(
-        """
+        f"""
         SELECT
             session_id,
             COUNT(*) as message_count,
             MAX(timestamp) as last_activity,
             (SELECT content FROM conversations c2
              WHERE c2.session_id = c1.session_id AND c2.role = 'user'
-             ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message
+             ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message,
+            (SELECT project_path FROM conversations c3
+             WHERE c3.session_id = c1.session_id AND c3.role = 'user'
+             AND c3.project_path IS NOT NULL
+             ORDER BY c3.timestamp DESC LIMIT 1) as project_path
         FROM conversations c1
         GROUP BY session_id
+        {having_clause}
         ORDER BY last_activity DESC
         LIMIT ?
         """,
-        (limit,),
+        params,
     ).fetchall()
     results = []
     for row in rows:
         entry = dict(row)
-        # Truncate preview
         if entry.get("last_user_message") and len(entry["last_user_message"]) > 80:
             entry = {**entry, "last_user_message": entry["last_user_message"][:80] + "..."}
         results.append(entry)

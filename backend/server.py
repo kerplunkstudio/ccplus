@@ -225,7 +225,8 @@ def list_projects():
 def list_sessions():
     """List available chat sessions with their last message preview."""
     try:
-        sessions = get_sessions_list()
+        project = request.args.get("project") or None
+        sessions = get_sessions_list(project_path=project)
         return jsonify({"sessions": sessions})
     except Exception as exc:
         logger.error(f"Failed to list sessions: {exc}")
@@ -315,7 +316,7 @@ def handle_message(data):
 
     # Persist user message
     try:
-        record_message(session_id, user_id, "user", content)
+        record_message(session_id, user_id, "user", content, project_path=workspace)
     except Exception as exc:
         logger.error(f"Failed to record user message: {exc}")
 
