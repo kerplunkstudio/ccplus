@@ -1,9 +1,17 @@
 export interface Message {
   id: string;
-  content: string;
+  content?: string;
   role: 'user' | 'assistant';
   timestamp: number;
   streaming?: boolean;
+  tool?: {
+    tool_name: string;
+    agent_type?: string;
+    parameters?: Record<string, unknown>;
+    status: string;
+    duration_ms?: number;
+    error?: string;
+  };
 }
 
 export interface ToolEvent {

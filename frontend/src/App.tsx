@@ -25,9 +25,18 @@ function App() {
     return localStorage.getItem('ccplus_selected_project');
   });
 
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
+  });
+
   const handleSelectProject = (path: string) => {
     setSelectedProject(path);
     localStorage.setItem('ccplus_selected_project', path);
+  };
+
+  const handleSelectModel = (model: string) => {
+    setSelectedModel(model);
+    localStorage.setItem('ccplus_selected_model', model);
   };
 
   if (loading) {
@@ -55,8 +64,10 @@ function App() {
           connected={connected}
           streaming={streaming}
           selectedProject={selectedProject}
+          selectedModel={selectedModel}
           onSendMessage={sendMessage}
           onSelectProject={handleSelectProject}
+          onSelectModel={handleSelectModel}
           onCancel={cancelQuery}
         />
       </div>

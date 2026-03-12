@@ -9,8 +9,10 @@ describe('ChatPanel', () => {
     connected: true,
     streaming: false,
     selectedProject: null,
+    selectedModel: 'claude-sonnet-4-20250514',
     onSendMessage: jest.fn(),
     onSelectProject: jest.fn(),
+    onSelectModel: jest.fn(),
     onCancel: jest.fn(),
   };
 
@@ -55,7 +57,7 @@ describe('ChatPanel', () => {
     fireEvent.change(textarea, { target: { value: 'Test message' } });
     const sendBtn = screen.getByLabelText('Send');
     fireEvent.click(sendBtn);
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message');
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, 'claude-sonnet-4-20250514');
   });
 
   it('calls onSendMessage on Enter key', () => {
@@ -63,7 +65,7 @@ describe('ChatPanel', () => {
     const textarea = screen.getByPlaceholderText('Send a message...');
     fireEvent.change(textarea, { target: { value: 'Enter test' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test');
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test', undefined, 'claude-sonnet-4-20250514');
   });
 
   it('does not send on Shift+Enter', () => {

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Message } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ProjectSelector } from './ProjectSelector';
+import { ModelSelector } from './ModelSelector';
 import './ChatPanel.css';
 
 interface ChatPanelProps {
@@ -9,8 +10,10 @@ interface ChatPanelProps {
   connected: boolean;
   streaming: boolean;
   selectedProject: string | null;
-  onSendMessage: (content: string, workspace?: string) => void;
+  selectedModel: string;
+  onSendMessage: (content: string, workspace?: string, model?: string) => void;
   onSelectProject: (path: string) => void;
+  onSelectModel: (model: string) => void;
   onCancel: () => void;
 }
 
@@ -19,8 +22,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   connected,
   streaming,
   selectedProject,
+  selectedModel,
   onSendMessage,
   onSelectProject,
+  onSelectModel,
   onCancel,
 }) => {
   const [input, setInput] = useState('');
@@ -50,7 +55,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSubmit = () => {
     const trimmed = input.trim();
     if (!trimmed || !connected) return;
-    onSendMessage(trimmed, selectedProject || undefined);
+    onSendMessage(trimmed, selectedProject || undefined, selectedModel);
     setInput('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -72,10 +77,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <h1 className="chat-title">CC+</h1>
           <span className={`connection-dot ${connected ? 'online' : 'offline'}`} />
         </div>
-        <ProjectSelector
-          selectedProject={selectedProject}
-          onSelectProject={onSelectProject}
-        />
+        <div className="header-right">
+          <ProjectSelector
+            selectedProject={selectedProject}
+            onSelectProject={onSelectProject}
+          />
+          <ModelSelector
+            selectedModel={selectedModel}
+            onSelectModel={onSelectModel}
+          />
+        </div>
       </div>
 
       <div className="messages-container" ref={messagesContainerRef}>
