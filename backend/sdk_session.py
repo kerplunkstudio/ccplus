@@ -61,6 +61,7 @@ class PersistentSession:
     cancel_requested: bool = False
     started_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_activity: float = field(default_factory=time.monotonic)
+    tool_event_callback: Optional[Callable[[dict], None]] = None  # latest on_tool_event callback
 
 
 class SessionManager:
@@ -200,12 +201,14 @@ class SessionManager:
         self,
         session_id: str,
         workspace: str,
-        on_tool_event: Callable[[dict], None],
     ) -> PersistentSession:
         """Get or create a persistent ClaudeSDKClient for this session.
 
         If the session already has a connected client, reuse it.
         Otherwise, create a new client, connect it, and store it.
+
+        Note: The on_tool_event callback is updated separately in _stream_query
+        via ps.tool_event_callback before each query.
         """
         with self._lock:
             ps = self._sessions.get(session_id)
@@ -223,7 +226,14 @@ class SessionManager:
             if k != "CLAUDECODE"
         }
 
-        hooks = self._build_hooks(session_id, on_tool_event)
+        # Create a new PersistentSession instance first (needed for hooks)
+        ps = PersistentSession(
+            session_id=session_id,
+            client=None,  # will be set below
+        )
+
+        # Build hooks that reference ps (they'll read ps.tool_event_callback)
+        hooks = self._build_hooks(session_id, ps)
 
         options = ClaudeCodeOptions(
             max_turns=50,
@@ -237,10 +247,7 @@ class SessionManager:
         client = ClaudeSDKClient(options)
         await client.connect()  # spawns subprocess
 
-        ps = PersistentSession(
-            session_id=session_id,
-            client=client,
-        )
+        ps.client = client
 
         with self._lock:
             self._sessions[session_id] = ps
@@ -266,9 +273,15 @@ class SessionManager:
     def _build_hooks(
         self,
         session_id: str,
-        on_tool_event: Callable[[dict], None],
+        ps: PersistentSession,
     ) -> dict:
-        """Build SDK hook callbacks that forward tool events to the frontend."""
+        """Build SDK hook callbacks that forward tool events to the frontend.
+
+        The hooks close over the PersistentSession instance and call
+        ps.tool_event_callback, which is updated on each query to point to
+        the latest on_tool_event callback. This ensures hooks always use the
+        current callback even when the client is reused.
+        """
         tool_timers: dict[str, float] = {}
         agent_stack: list[str] = []  # stack of agent tool_use_ids
 
@@ -283,28 +296,30 @@ class SessionManager:
             is_agent = tool_name in ("Agent", "Task")
             parent_id = agent_stack[-1] if agent_stack else None
 
-            if is_agent:
-                agent_stack.append(tool_use_id)
-                on_tool_event({
-                    "type": "agent_start",
-                    "tool_name": tool_name or "Agent",
-                    "tool_use_id": tool_use_id,
-                    "parent_agent_id": parent_id,
-                    "agent_type": tool_input.get("subagent_type", "agent"),
-                    "description": tool_input.get("description", tool_input.get("prompt", "")[:100]),
-                    "timestamp": datetime.now().isoformat(),
-                    "session_id": session_id,
-                })
-            else:
-                on_tool_event({
-                    "type": "tool_start",
-                    "tool_name": tool_name or "unknown",
-                    "tool_use_id": tool_use_id,
-                    "parent_agent_id": parent_id,
-                    "parameters": _safe_params(tool_input),
-                    "timestamp": datetime.now().isoformat(),
-                    "session_id": session_id,
-                })
+            # Call the latest tool_event_callback from ps
+            if ps.tool_event_callback:
+                if is_agent:
+                    agent_stack.append(tool_use_id)
+                    ps.tool_event_callback({
+                        "type": "agent_start",
+                        "tool_name": tool_name or "Agent",
+                        "tool_use_id": tool_use_id,
+                        "parent_agent_id": parent_id,
+                        "agent_type": tool_input.get("subagent_type", "agent"),
+                        "description": tool_input.get("description", tool_input.get("prompt", "")[:100]),
+                        "timestamp": datetime.now().isoformat(),
+                        "session_id": session_id,
+                    })
+                else:
+                    ps.tool_event_callback({
+                        "type": "tool_start",
+                        "tool_name": tool_name or "unknown",
+                        "tool_use_id": tool_use_id,
+                        "parent_agent_id": parent_id,
+                        "parameters": _safe_params(tool_input),
+                        "timestamp": datetime.now().isoformat(),
+                        "session_id": session_id,
+                    })
 
             return HookJSONOutput()
 
@@ -319,29 +334,31 @@ class SessionManager:
 
             is_agent = tool_name in ("Agent", "Task")
 
-            if is_agent:
-                if agent_stack and agent_stack[-1] == tool_use_id:
-                    agent_stack.pop()
-                on_tool_event({
-                    "type": "agent_stop",
-                    "tool_name": tool_name or "Agent",
-                    "tool_use_id": tool_use_id,
-                    "success": True,
-                    "duration_ms": duration_ms,
-                    "timestamp": datetime.now().isoformat(),
-                    "session_id": session_id,
-                })
-            else:
-                on_tool_event({
-                    "type": "tool_complete",
-                    "tool_name": tool_name or "unknown",
-                    "tool_use_id": tool_use_id,
-                    "parent_agent_id": agent_stack[-1] if agent_stack else None,
-                    "success": True,
-                    "duration_ms": duration_ms,
-                    "timestamp": datetime.now().isoformat(),
-                    "session_id": session_id,
-                })
+            # Call the latest tool_event_callback from ps
+            if ps.tool_event_callback:
+                if is_agent:
+                    if agent_stack and agent_stack[-1] == tool_use_id:
+                        agent_stack.pop()
+                    ps.tool_event_callback({
+                        "type": "agent_stop",
+                        "tool_name": tool_name or "Agent",
+                        "tool_use_id": tool_use_id,
+                        "success": True,
+                        "duration_ms": duration_ms,
+                        "timestamp": datetime.now().isoformat(),
+                        "session_id": session_id,
+                    })
+                else:
+                    ps.tool_event_callback({
+                        "type": "tool_complete",
+                        "tool_name": tool_name or "unknown",
+                        "tool_use_id": tool_use_id,
+                        "parent_agent_id": agent_stack[-1] if agent_stack else None,
+                        "success": True,
+                        "duration_ms": duration_ms,
+                        "timestamp": datetime.now().isoformat(),
+                        "session_id": session_id,
+                    })
 
             return HookJSONOutput()
 
@@ -373,8 +390,14 @@ class SessionManager:
         got_result = False
 
         try:
+            logger.debug(f"_stream_query started for session {session_id}, prompt: {prompt[:50]}...")
+
             # Get or create persistent client
-            ps = await self._get_or_create_client(session_id, workspace, on_tool_event)
+            ps = await self._get_or_create_client(session_id, workspace)
+            logger.debug(f"Got persistent client for session {session_id}")
+
+            # Update the tool event callback to the latest one for this query
+            ps.tool_event_callback = on_tool_event
 
             # Mark query as active
             ps.query_active = True
@@ -383,9 +406,12 @@ class SessionManager:
 
             # Send query to persistent subprocess
             await ps.client.query(prompt, session_id=session_id)
+            logger.debug(f"Query sent to SDK for session {session_id}")
 
             # Stream response
             async for message in ps.client.receive_response():
+                logger.debug(f"Received message type: {type(message).__name__} for session {session_id}")
+
                 # Check for cancellation
                 if ps.cancel_requested or active.cancel_event.is_set():
                     logger.info(f"Query cancelled for session {session_id}")
@@ -427,13 +453,13 @@ class SessionManager:
 
         except Exception as e:
             error_str = str(e)
-            if "Unknown message type" in error_str:
-                logger.debug(f"Ignoring SDK parse error: {error_str}")
-            else:
-                logger.error(f"SDK query error: {session_id}: {e}", exc_info=True)
+            logger.error(f"SDK query error for session {session_id}: {e}", exc_info=True)
+            if "Unknown message type" not in error_str:
                 on_error(error_str)
 
         finally:
+            logger.debug(f"_stream_query cleanup for session {session_id}")
+
             # Mark query as inactive
             with self._lock:
                 ps = self._sessions.get(session_id)
