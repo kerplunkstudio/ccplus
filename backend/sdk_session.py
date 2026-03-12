@@ -19,12 +19,15 @@ from claude_code_sdk import (
     AssistantMessage,
     ClaudeCodeOptions,
     ClaudeSDKClient,
+    PermissionResultAllow,
     ResultMessage,
     SystemMessage,
     TextBlock,
     ToolUseBlock,
 )
 from claude_code_sdk.types import HookMatcher, HookContext, HookJSONOutput
+from claude_code_sdk._errors import MessageParseError
+from claude_code_sdk._internal.message_parser import parse_message as sdk_parse_message
 
 # These may not be exported from top-level
 try:
@@ -235,12 +238,17 @@ class SessionManager:
         # Build hooks that reference ps (they'll read ps.tool_event_callback)
         hooks = self._build_hooks(session_id, ps)
 
+        # Auto-approve callback for tool permission requests
+        async def auto_approve_tool(tool_name, tool_input, context):
+            return PermissionResultAllow()
+
         options = ClaudeCodeOptions(
             max_turns=50,
             cwd=workspace,
             permission_mode="bypassPermissions",
             env=clean_env,
             hooks=hooks,
+            can_use_tool=auto_approve_tool,
             model="haiku",
         )
 
@@ -390,11 +398,11 @@ class SessionManager:
         got_result = False
 
         try:
-            logger.debug(f"_stream_query started for session {session_id}, prompt: {prompt[:50]}...")
+            logger.info(f"_stream_query started for session {session_id}, prompt: {prompt[:50]}...")
 
             # Get or create persistent client
             ps = await self._get_or_create_client(session_id, workspace)
-            logger.debug(f"Got persistent client for session {session_id}")
+            logger.info(f"Got persistent client for session {session_id}, client={ps.client}")
 
             # Update the tool event callback to the latest one for this query
             ps.tool_event_callback = on_tool_event
@@ -405,12 +413,29 @@ class SessionManager:
             ps.last_activity = time.monotonic()
 
             # Send query to persistent subprocess
+            logger.info(f"Sending query to SDK for session {session_id}...")
             await ps.client.query(prompt, session_id=session_id)
-            logger.debug(f"Query sent to SDK for session {session_id}")
+            logger.info(f"Query sent to SDK for session {session_id}, starting receive loop")
 
-            # Stream response
-            async for message in ps.client.receive_response():
-                logger.debug(f"Received message type: {type(message).__name__} for session {session_id}")
+            # Stream response — access the raw message stream (pre-parsing) to implement
+            # error recovery. When parse_message() throws MessageParseError inside
+            # receive_messages(), the generator is permanently killed. By parsing ourselves,
+            # we can skip unparseable messages without breaking the stream.
+            raw_iter = ps.client._query.receive_messages().__aiter__()
+            while True:
+                try:
+                    raw_data = await raw_iter.__anext__()
+                except StopAsyncIteration:
+                    break
+
+                # Parse with error recovery
+                try:
+                    message = sdk_parse_message(raw_data)
+                except MessageParseError as mpe:
+                    logger.info(f"Skipping unparseable SDK message: {mpe}")
+                    continue
+
+                logger.info(f"Received message type: {type(message).__name__} for session {session_id}")
 
                 # Check for cancellation
                 if ps.cancel_requested or active.cancel_event.is_set():
@@ -444,6 +469,8 @@ class SessionManager:
                         "input_tokens": usage.get("input_tokens"),
                         "output_tokens": usage.get("output_tokens"),
                     })
+                    # ResultMessage means this query is done
+                    break
 
                 elif isinstance(message, (SystemMessage, StreamEvent, UserMessage)):
                     pass
@@ -452,13 +479,14 @@ class SessionManager:
                     logger.debug(f"Ignoring message: {type(message).__name__}")
 
         except Exception as e:
-            error_str = str(e)
             logger.error(f"SDK query error for session {session_id}: {e}", exc_info=True)
-            if "Unknown message type" not in error_str:
-                on_error(error_str)
+            on_error(str(e))
+
+            # Tear down the corrupted client so next query gets a fresh one
+            await self._disconnect_session(session_id)
 
         finally:
-            logger.debug(f"_stream_query cleanup for session {session_id}")
+            logger.info(f"_stream_query cleanup for session {session_id}")
 
             # Mark query as inactive
             with self._lock:
