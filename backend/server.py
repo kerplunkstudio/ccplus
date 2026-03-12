@@ -40,6 +40,7 @@ from backend.config import (
     WORKSPACE_PATH,
 )
 from backend.database import (
+    archive_session,
     get_conversation_history,
     get_sessions_list,
     get_stats,
@@ -233,6 +234,20 @@ def list_sessions():
         return jsonify({"error": "Failed to list sessions"}), 500
 
 
+@app.route("/api/sessions/<session_id>/archive", methods=["POST"])
+def archive_session_endpoint(session_id):
+    """Archive a chat session."""
+    try:
+        success = archive_session(session_id)
+        if success:
+            return jsonify({"status": "archived"})
+        else:
+            return jsonify({"error": "Failed to archive session"}), 500
+    except Exception as exc:
+        logger.error(f"Failed to archive session {session_id}: {exc}")
+        return jsonify({"error": "Failed to archive session"}), 500
+
+
 # =========================================================================
 # WebSocket Events
 # =========================================================================
@@ -310,13 +325,15 @@ def handle_message(data):
     user_id = client["user_id"]
     content = (data.get("content", "") if isinstance(data, dict) else "").strip()
     workspace = (data.get("workspace", "") if isinstance(data, dict) else "") or WORKSPACE_PATH
+    # Only record actual selected project in project_path, not the default workspace
+    project_path = data.get("workspace", "") if isinstance(data, dict) else ""
 
     if not content:
         return
 
     # Persist user message
     try:
-        record_message(session_id, user_id, "user", content, project_path=workspace)
+        record_message(session_id, user_id, "user", content, project_path=project_path or None)
     except Exception as exc:
         logger.error(f"Failed to record user message: {exc}")
 
@@ -348,7 +365,8 @@ def handle_message(data):
 
     def on_complete(result: dict) -> None:
         full_text = result.get("text", "")
-        if full_text:
+        # Only record message to database on final completion (when session_id is present)
+        if full_text and result.get("session_id"):
             try:
                 record_message(
                     session_id,
