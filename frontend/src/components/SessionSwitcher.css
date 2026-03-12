@@ -150,17 +150,6 @@
   white-space: nowrap;
 }
 
-.session-item-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-bottom: 4px;
-}
-
-.session-item {
-  flex: 1;
-}
-
 .session-archive-btn {
   display: flex;
   align-items: center;
@@ -177,14 +166,14 @@
   flex-shrink: 0;
 }
 
-.session-item-wrapper:hover .session-archive-btn {
+.session-item:hover .session-archive-btn {
   opacity: 1;
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
 .session-archive-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error);
 }

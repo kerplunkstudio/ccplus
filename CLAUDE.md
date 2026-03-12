@@ -589,6 +589,20 @@ The `HookManager` blocks certain Bash patterns before execution:
 
 Returns `{"decision": "block", "reason": "..."}` to prevent execution.
 
+## Claude Code Workflow
+
+### Auto-Deploy After Changes
+
+**After any frontend or backend changes, automatically run `./deploy.sh`** to:
+1. Build the frontend (TypeScript check, React build)
+2. Deploy to `static/chat/`
+3. Restart the server
+4. Verify health check passes
+
+This prevents the common pitfall of editing code but not deploying it, leading to stale browser views.
+
+**When to skip**: Only skip auto-deploy if the user explicitly says "don't deploy" or the change is in `tests/`, `docs/`, or `.env`.
+
 ## Never Commit
 
 - `.env` (secrets)
@@ -602,5 +616,5 @@ Returns `{"decision": "block", "reason": "..."}` to prevent execution.
 
 ---
 
-**Last Updated**: 2026-03-11
+**Last Updated**: 2026-03-12
 **Stack**: Python 3.12 / Claude Code SDK / Flask-SocketIO / React 19 + TypeScript / SQLite

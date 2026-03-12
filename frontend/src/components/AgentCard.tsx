@@ -61,7 +61,12 @@ export const AgentCard: React.FC<AgentCardProps> = ({ node, depth, onSelect, chi
               <ToolIcon toolName="Agent" size={16} />
             </div>
             <div className="agent-card-info">
-              <div className="agent-card-type">{node.agent_type}</div>
+              <div className="agent-card-type">
+                {node.sequence !== undefined && (
+                  <span className="node-sequence">#{node.sequence}</span>
+                )}{' '}
+                {node.agent_type}
+              </div>
               {node.description && (
                 <div className="agent-card-description">{node.description}</div>
               )}

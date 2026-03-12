@@ -1,7 +1,6 @@
 .message-bubble {
   display: flex;
   flex-direction: column;
-  margin-bottom: 16px;
   max-width: 85%;
   animation: fadeIn 0.2s ease-out;
 }
@@ -76,7 +75,7 @@
 }
 
 .inline-code {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--code-bg);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -96,7 +95,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--code-header-bg);
   font-size: 12px;
 }
 
@@ -155,4 +154,46 @@
   font-size: 11px;
   color: var(--text-secondary);
   opacity: 0.7;
+}
+
+.message-bubble.tool-message .message-bubble-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-icon {
+  font-size: 14px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.tool-name {
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.agent-type {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.tool-duration {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.tool-error {
+  font-size: 0.85em;
+  color: var(--error);
+  padding: 4px 0;
 }

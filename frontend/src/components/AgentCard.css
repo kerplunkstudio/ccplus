@@ -26,10 +26,10 @@
 }
 
 .agent-card:hover {
-  background: rgba(15, 52, 96, 0.8);
+  background: var(--hover-bg-secondary);
   border-color: var(--accent-dim);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px var(--shadow);
 }
 
 .agent-card::before {
@@ -63,11 +63,11 @@
 @keyframes pulse {
   0%, 100% {
     border-color: var(--accent);
-    box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 0 0 var(--accent-shadow);
   }
   50% {
     border-color: var(--accent-dim);
-    box-shadow: 0 0 0 4px rgba(0, 212, 255, 0);
+    box-shadow: 0 0 0 4px var(--accent-shadow-fade);
   }
 }
 
@@ -92,7 +92,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(0, 212, 255, 0.1);
+  background: var(--accent-bg);
   border-radius: 6px;
   color: var(--accent);
   flex-shrink: 0;
@@ -153,18 +153,18 @@
 }
 
 .status-running {
-  background: rgba(0, 212, 255, 0.15);
+  background: var(--accent-bg);
   color: var(--accent);
   animation: badgePulse 2s ease-in-out infinite;
 }
 
 .status-completed {
-  background: rgba(76, 175, 80, 0.15);
+  background: var(--success-bg);
   color: var(--success);
 }
 
 .status-failed {
-  background: rgba(244, 67, 54, 0.15);
+  background: var(--error-bg);
   color: var(--error);
 }
 
@@ -199,7 +199,7 @@
 }
 
 .agent-card-toggle:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
@@ -218,8 +218,8 @@
 .agent-card-error {
   margin-top: 10px;
   padding: 8px 10px;
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.3);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
   border-radius: 6px;
   display: flex;
   align-items: flex-start;

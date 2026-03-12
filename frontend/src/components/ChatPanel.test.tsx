@@ -8,7 +8,7 @@ describe('ChatPanel', () => {
     messages: [] as Message[],
     connected: true,
     streaming: false,
-    selectedProject: null,
+    selectedProject: null as string | null,
     selectedModel: 'claude-sonnet-4-20250514',
     onSendMessage: jest.fn(),
     onSelectProject: jest.fn(),

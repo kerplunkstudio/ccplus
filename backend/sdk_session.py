@@ -19,7 +19,6 @@ from claude_code_sdk import (
     AssistantMessage,
     ClaudeCodeOptions,
     ClaudeSDKClient,
-    PermissionResultAllow,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -252,10 +251,6 @@ class SessionManager:
         # Build hooks that reference ps (they'll read ps.tool_event_callback)
         hooks = self._build_hooks(session_id, ps)
 
-        # Auto-approve callback for tool permission requests
-        async def auto_approve_tool(tool_name, tool_input, context):
-            return PermissionResultAllow()
-
         # Look up previous SDK session ID for conversation resumption
         resume_id = get_last_sdk_session_id(session_id)
         if resume_id:
@@ -267,7 +262,6 @@ class SessionManager:
             permission_mode="bypassPermissions",
             env=clean_env,
             hooks=hooks,
-            can_use_tool=auto_approve_tool,
             model=model or "sonnet",
             resume=resume_id or "",
         )
@@ -446,6 +440,7 @@ class SessionManager:
             # receive_messages(), the generator is permanently killed. By parsing ourselves,
             # we can skip unparseable messages without breaking the stream.
             raw_iter = ps.client._query.receive_messages().__aiter__()
+            last_completion_data = {}
             while True:
                 try:
                     raw_data = await raw_iter.__anext__()
@@ -480,13 +475,29 @@ class SessionManager:
                     break
 
                 if isinstance(message, AssistantMessage):
+                    has_text = False
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             result_text.append(block.text)
                             on_text(block.text)
+                            has_text = True
                         elif isinstance(block, ToolUseBlock):
                             # Tool events come through hooks now
                             pass
+
+                    # After each AssistantMessage with text, signal completion so frontend
+                    # creates a new message bubble for the next response
+                    if has_text:
+                        on_complete({
+                            "text": "".join(result_text),
+                            "session_id": None,
+                            "cost": None,
+                            "duration_ms": None,
+                            "is_error": False,
+                            "num_turns": None,
+                            "input_tokens": None,
+                            "output_tokens": None,
+                        })
 
                 elif isinstance(message, ResultMessage):
                     got_result = True
@@ -495,7 +506,7 @@ class SessionManager:
                     # Capture SDK session ID for potential resume
                     ps.sdk_session_id = message.session_id
 
-                    on_complete({
+                    last_completion_data = {
                         "text": "".join(result_text),
                         "session_id": message.session_id,
                         "cost": message.total_cost_usd,
@@ -504,7 +515,7 @@ class SessionManager:
                         "num_turns": message.num_turns,
                         "input_tokens": usage.get("input_tokens"),
                         "output_tokens": usage.get("output_tokens"),
-                    })
+                    }
                     # ResultMessage means this query is done
                     break
 
@@ -513,6 +524,10 @@ class SessionManager:
 
                 else:
                     logger.debug(f"Ignoring message: {type(message).__name__}")
+
+            # Emit final completion with metadata if we got a result
+            if got_result and last_completion_data:
+                on_complete(last_completion_data)
 
         except Exception as e:
             logger.error(f"SDK query error for session {session_id}: {e}", exc_info=True)

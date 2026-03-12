@@ -74,7 +74,10 @@ const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
           </div>
           <div className="detail-metadata-row">
             <span className="detail-metadata-label">ID</span>
-            <span className="detail-metadata-value detail-mono">{node.tool_use_id}</span>
+            <span className="detail-metadata-value">
+              {node.sequence !== undefined && <span className="node-sequence">#{node.sequence}</span>}
+              <span className="detail-mono detail-uuid">{node.tool_use_id}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -171,7 +174,10 @@ const ToolDetail: React.FC<{ node: ToolNode }> = ({ node }) => {
           </div>
           <div className="detail-metadata-row">
             <span className="detail-metadata-label">ID</span>
-            <span className="detail-metadata-value detail-mono">{node.tool_use_id}</span>
+            <span className="detail-metadata-value">
+              {node.sequence !== undefined && <span className="node-sequence">#{node.sequence}</span>}
+              <span className="detail-mono detail-uuid">{node.tool_use_id}</span>
+            </span>
           </div>
         </div>
       </div>

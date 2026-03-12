@@ -56,6 +56,9 @@ export const ToolRow: React.FC<ToolRowProps> = ({ node, depth, onSelect }) => {
         </div>
 
         <div className="tool-row-info">
+          {node.sequence !== undefined && (
+            <span className="node-sequence">#{node.sequence}</span>
+          )}{' '}
           <span className="tool-row-name">{node.tool_name}</span>
         </div>
 

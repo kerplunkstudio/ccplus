@@ -52,6 +52,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, onNodeSelect }) => {
 export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
+  const [activeTab, setActiveTab] = useState<'agents' | 'tools'>('agents');
+
+  const agentNodes = tree.filter(isAgentNode);
+  const toolNodes = tree.filter((n) => !isAgentNode(n)) as ToolNode[];
+  const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
   // Auto-scroll to latest activity (only when not viewing details)
   useEffect(() => {
@@ -75,14 +80,24 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
       ) : (
         <>
           <div className="activity-header">
-            <h2 className="activity-title">Observability</h2>
-            {tree.length > 0 && (
-              <span className="activity-count">{tree.length}</span>
-            )}
+            <div className="activity-tabs">
+              <button
+                className={`activity-tab ${activeTab === 'agents' ? 'activity-tab-active' : ''}`}
+                onClick={() => setActiveTab('agents')}
+              >
+                Agents{agentNodes.length > 0 && <span className="activity-tab-count">{agentNodes.length}</span>}
+              </button>
+              <button
+                className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
+                onClick={() => setActiveTab('tools')}
+              >
+                Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count">{toolNodes.length}</span>}
+              </button>
+            </div>
           </div>
 
           <div className="activity-content" ref={containerRef}>
-            {tree.length === 0 ? (
+            {visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-icon">
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
@@ -103,7 +118,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
               </div>
             ) : (
               <div className="tree-root">
-                {tree.map((node) => (
+                {visibleNodes.map((node) => (
                   <TreeNode
                     key={node.tool_use_id}
                     node={node}
