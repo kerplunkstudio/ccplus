@@ -30,16 +30,16 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .session-new-btn:hover {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.4);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
   color: var(--accent);
 }
 
@@ -64,7 +64,8 @@
 
 .session-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
   padding: 10px;
   margin-bottom: 4px;
@@ -74,16 +75,24 @@
   cursor: pointer;
   text-align: left;
   transition: all 0.12s ease;
+  gap: 8px;
 }
 
 .session-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
+  border-color: var(--hover-border);
 }
 
 .session-item.active {
-  background: rgba(99, 102, 241, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.session-item-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .session-item-preview {
@@ -97,7 +106,7 @@
 }
 
 .session-item.active .session-item-preview {
-  color: #a5b4fc;
+  color: var(--accent-light);
 }
 
 .session-item-meta {
@@ -123,15 +132,15 @@
 
 .session-project-filter {
   padding: 4px 12px 8px;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border);
 }
 
 .session-project-filter-label {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  background: var(--accent-bg);
+  color: var(--accent);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 500;

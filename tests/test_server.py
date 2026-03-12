@@ -308,3 +308,38 @@ class TestWebSocketDisconnect:
             initial_count = len(connected_clients)
             tc.disconnect()
             assert len(connected_clients) < initial_count
+
+
+class TestStreamingMessagePersistence:
+    """Test that assistant messages are recorded when streaming starts (for refresh resilience)."""
+
+    def test_assistant_message_recorded_on_first_text_chunk(self, socketio_client):
+        """Verify that the first text_delta triggers an assistant message record."""
+        socketio_client.get_received()
+
+        # Mock record_message to track calls
+        with patch("backend.server.record_message") as mock_record:
+            mock_record.return_value = {"id": 1}
+            # Mock session_manager.submit_query to simulate text streaming
+            def mock_submit_query(session_id, prompt, workspace, on_text, **kwargs):
+                # Immediately call on_text callback to simulate streaming
+                on_text("This is the start ")
+                on_text("of the response")
+
+            with patch.object(session_manager, "submit_query", side_effect=mock_submit_query):
+                socketio_client.emit("message", {"content": "test question"})
+
+            # Verify record_message was called:
+            # 1. For the user message (role="user")
+            # 2. For the assistant message (role="assistant")
+            calls = mock_record.call_args_list
+            assert len(calls) >= 2
+
+            # First call should be for user message
+            user_call = calls[0]
+            assert user_call[0][2] == "user"  # role parameter
+
+            # Second call should be for assistant message with first chunk
+            assistant_call = calls[1]
+            assert assistant_call[0][2] == "assistant"  # role parameter
+            assert "This is the start" in assistant_call[0][3]  # content parameter
