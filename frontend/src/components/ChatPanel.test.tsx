@@ -10,9 +10,11 @@ describe('ChatPanel', () => {
     streaming: false,
     selectedProject: null as string | null,
     selectedModel: 'claude-sonnet-4-20250514',
+    toolDisplayMode: 'minimal' as const,
     onSendMessage: jest.fn(),
     onSelectProject: jest.fn(),
     onSelectModel: jest.fn(),
+    onToolDisplayModeChange: jest.fn(),
     onCancel: jest.fn(),
   };
 
