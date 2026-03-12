@@ -1,0 +1,88 @@
+import { Theme } from './themeTypes'
+
+export const THEME_PRESETS: Record<string, Theme> = {
+  default: {
+    name: 'Default',
+    presetId: 'default',
+    colors: {
+      background: '#1a1a2e',
+      accent: '#00d4ff',
+      text: '#e4e4e7',
+      border: '#404047',
+      hover: '#2a2a3e',
+      success: '#10b981',
+      warning: '#f59e0b',
+      error: '#ef4444',
+    },
+  },
+  matrix: {
+    name: 'Matrix',
+    presetId: 'matrix',
+    colors: {
+      background: '#0a0a0a',
+      accent: '#00ff41',
+      text: '#00ff41',
+      border: '#00ff41',
+      hover: '#003300',
+      success: '#00ff41',
+      warning: '#ffaa00',
+      error: '#ff4444',
+    },
+  },
+  friendly: {
+    name: 'Friendly',
+    presetId: 'friendly',
+    colors: {
+      background: '#1e1b2e',
+      accent: '#c084fc',
+      text: '#e4e4e7',
+      border: '#8b5cf6',
+      hover: '#2e1b4e',
+      success: '#34d399',
+      warning: '#fbbf24',
+      error: '#f87171',
+    },
+  },
+  light: {
+    name: 'Light',
+    presetId: 'light',
+    colors: {
+      background: '#f8f9fa',
+      accent: '#0066cc',
+      text: '#1f2937',
+      border: '#d1d5db',
+      hover: '#f3f4f6',
+      success: '#059669',
+      warning: '#d97706',
+      error: '#dc2626',
+    },
+  },
+  ocean: {
+    name: 'Ocean',
+    presetId: 'ocean',
+    colors: {
+      background: '#0a1628',
+      accent: '#38bdf8',
+      text: '#e0f2fe',
+      border: '#0e7490',
+      hover: '#164e63',
+      success: '#06b6d4',
+      warning: '#f59e0b',
+      error: '#f87171',
+    },
+  },
+  monokai: {
+    name: 'Monokai',
+    presetId: 'monokai',
+    colors: {
+      background: '#272822',
+      accent: '#a6e22e',
+      text: '#f8f8f2',
+      border: '#49483e',
+      hover: '#3e3d32',
+      success: '#a6e22e',
+      warning: '#e6db74',
+      error: '#f92672',
+    },
+  },
+}
