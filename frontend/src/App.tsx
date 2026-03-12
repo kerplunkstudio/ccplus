@@ -7,7 +7,7 @@ import './App.css';
 
 function App() {
   const { token, loading } = useAuth();
-  const { connected, messages, streaming, activityTree, sendMessage, cancelQuery } =
+  const { connected, messages, streaming, activityTree, usageStats, sendMessage, cancelQuery } =
     useSocket(token);
 
   if (loading) {
@@ -21,6 +21,9 @@ function App() {
 
   return (
     <div className="app-layout">
+      <div className="panel-activity">
+        <ActivityTree tree={activityTree} usageStats={usageStats} />
+      </div>
       <div className="panel-chat">
         <ChatPanel
           messages={messages}
@@ -29,9 +32,6 @@ function App() {
           onSendMessage={sendMessage}
           onCancel={cancelQuery}
         />
-      </div>
-      <div className="panel-activity">
-        <ActivityTree tree={activityTree} />
       </div>
     </div>
   );

@@ -61,3 +61,11 @@ export interface CompletionInfo {
   input_tokens?: number;
   output_tokens?: number;
 }
+
+export interface UsageStats {
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalDuration: number;
+  queryCount: number;
+}

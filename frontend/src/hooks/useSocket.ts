@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode } from '../types';
+import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
@@ -115,6 +115,13 @@ export function useSocket(token: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
+  const [usageStats, setUsageStats] = useState<UsageStats>({
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalDuration: 0,
+    queryCount: 0,
+  });
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
 
@@ -159,7 +166,14 @@ export function useSocket(token: string | null) {
     });
 
     // Response complete — finalize streaming message
-    newSocket.on('response_complete', (data: { message_id?: string; content?: string }) => {
+    newSocket.on('response_complete', (data: {
+      message_id?: string;
+      content?: string;
+      cost?: number;
+      duration_ms?: number;
+      input_tokens?: number;
+      output_tokens?: number;
+    }) => {
       const msgId = streamingIdRef.current;
       if (msgId) {
         const finalContent = data.content || streamingContentRef.current;
@@ -169,6 +183,16 @@ export function useSocket(token: string | null) {
           )
         );
       }
+
+      // Accumulate usage stats
+      setUsageStats((prev) => ({
+        totalCost: prev.totalCost + (data.cost || 0),
+        totalInputTokens: prev.totalInputTokens + (data.input_tokens || 0),
+        totalOutputTokens: prev.totalOutputTokens + (data.output_tokens || 0),
+        totalDuration: prev.totalDuration + (data.duration_ms || 0),
+        queryCount: prev.queryCount + 1,
+      }));
+
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       setStreaming(false);
@@ -225,6 +249,7 @@ export function useSocket(token: string | null) {
       };
       setMessages((prev) => [...prev, userMessage]);
       dispatchTree({ type: 'CLEAR' });
+      setStreaming(true);
       socket.emit('message', { content });
     },
     [socket, connected]
@@ -253,7 +278,10 @@ export function useSocket(token: string | null) {
     messages,
     streaming,
     activityTree,
+    usageStats,
     sendMessage,
     cancelQuery,
   };
 }
+
+export type { UsageStats };
