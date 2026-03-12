@@ -128,11 +128,11 @@ export function useSocket(token: string | null) {
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
+  const [sessionId, setSessionId] = useState(getSessionId);
 
   useEffect(() => {
     if (!token) return;
 
-    const sessionId = getSessionId();
     const newSocket = io(SOCKET_URL, {
       query: { token, session_id: sessionId },
       transports: ['polling', 'websocket'],
@@ -243,13 +243,11 @@ export function useSocket(token: string | null) {
     return () => {
       newSocket.close();
     };
-  }, [token]);
+  }, [token, sessionId]);
 
   // Restore session data from backend on mount
   useEffect(() => {
     if (!token) return;
-
-    const sessionId = getSessionId();
 
     const restoreSession = async () => {
       try {
@@ -296,7 +294,7 @@ export function useSocket(token: string | null) {
     };
 
     restoreSession();
-  }, [token]);
+  }, [token, sessionId]);
 
   const sendMessage = useCallback(
     (content: string, workspace?: string) => {
@@ -333,14 +331,49 @@ export function useSocket(token: string | null) {
     setStreaming(false);
   }, [socket, connected]);
 
+  const switchSession = useCallback(
+    (newSessionId: string) => {
+      localStorage.setItem('ccplus_session_id', newSessionId);
+      setSessionId(newSessionId);
+      setMessages([]);
+      dispatchTree({ type: 'CLEAR' });
+      setUsageStats({
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalDuration: 0,
+        queryCount: 0,
+      });
+    },
+    []
+  );
+
+  const newSession = useCallback(() => {
+    const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('ccplus_session_id', id);
+    setSessionId(id);
+    setMessages([]);
+    dispatchTree({ type: 'CLEAR' });
+    setUsageStats({
+      totalCost: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalDuration: 0,
+      queryCount: 0,
+    });
+  }, []);
+
   return {
     connected,
     messages,
     streaming,
     activityTree,
     usageStats,
+    sessionId,
     sendMessage,
     cancelQuery,
+    switchSession,
+    newSession,
   };
 }
 

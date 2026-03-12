@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useSocket } from './hooks/useSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
+import { SessionSwitcher } from './components/SessionSwitcher';
 import './App.css';
 
 function App() {
   const { token, loading } = useAuth();
-  const { connected, messages, streaming, activityTree, usageStats, sendMessage, cancelQuery } =
-    useSocket(token);
+  const {
+    connected,
+    messages,
+    streaming,
+    activityTree,
+    usageStats,
+    sessionId,
+    sendMessage,
+    cancelQuery,
+    switchSession,
+    newSession,
+  } = useSocket(token);
 
   const [selectedProject, setSelectedProject] = useState<string | null>(() => {
     return localStorage.getItem('ccplus_selected_project');
@@ -30,8 +41,12 @@ function App() {
 
   return (
     <div className="app-layout">
-      <div className="panel-activity">
-        <ActivityTree tree={activityTree} usageStats={usageStats} />
+      <div className="panel-sessions">
+        <SessionSwitcher
+          currentSessionId={sessionId}
+          onSwitchSession={switchSession}
+          onNewSession={newSession}
+        />
       </div>
       <div className="panel-chat">
         <ChatPanel
@@ -43,6 +58,9 @@ function App() {
           onSelectProject={handleSelectProject}
           onCancel={cancelQuery}
         />
+      </div>
+      <div className="panel-activity">
+        <ActivityTree tree={activityTree} usageStats={usageStats} />
       </div>
     </div>
   );
