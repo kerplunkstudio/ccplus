@@ -31,7 +31,7 @@ describe('App', () => {
 
   it('renders the activity panel', () => {
     render(<App />);
-    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Observability')).toBeInTheDocument();
   });
 
   it('renders the two-panel layout', () => {
