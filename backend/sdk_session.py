@@ -29,6 +29,8 @@ from claude_code_sdk.types import HookMatcher, HookContext, HookJSONOutput
 from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk._internal.message_parser import parse_message as sdk_parse_message
 
+from backend.database import get_last_sdk_session_id
+
 # These may not be exported from top-level
 try:
     from claude_code_sdk import StreamEvent, UserMessage
@@ -59,6 +61,7 @@ class PersistentSession:
     """
     session_id: str
     client: Any  # ClaudeSDKClient instance
+    workspace: Optional[str] = None  # cwd the client was spawned with
     sdk_session_id: Optional[str] = None  # captured from ResultMessage
     query_active: bool = False
     cancel_requested: bool = False
@@ -217,9 +220,14 @@ class SessionManager:
             ps = self._sessions.get(session_id)
 
         if ps and ps.client:
-            # Reuse existing connected client
-            logger.debug(f"Reusing persistent client for session {session_id}")
-            return ps
+            # If workspace changed, tear down old client and create fresh one
+            if ps.workspace and ps.workspace != workspace:
+                logger.info(f"Workspace changed for session {session_id}: {ps.workspace} -> {workspace}")
+                await self._disconnect_session(session_id)
+            else:
+                # Reuse existing connected client
+                logger.debug(f"Reusing persistent client for session {session_id}")
+                return ps
 
         # Create new client
         logger.info(f"Creating new persistent client for session {session_id}")
@@ -233,6 +241,7 @@ class SessionManager:
         ps = PersistentSession(
             session_id=session_id,
             client=None,  # will be set below
+            workspace=workspace,
         )
 
         # Build hooks that reference ps (they'll read ps.tool_event_callback)
@@ -242,6 +251,11 @@ class SessionManager:
         async def auto_approve_tool(tool_name, tool_input, context):
             return PermissionResultAllow()
 
+        # Look up previous SDK session ID for conversation resumption
+        resume_id = get_last_sdk_session_id(session_id)
+        if resume_id:
+            logger.info(f"Resuming SDK session {resume_id} for {session_id}")
+
         options = ClaudeCodeOptions(
             max_turns=50,
             cwd=workspace,
@@ -250,6 +264,7 @@ class SessionManager:
             hooks=hooks,
             can_use_tool=auto_approve_tool,
             model="haiku",
+            resume=resume_id or "",
         )
 
         client = ClaudeSDKClient(options)
@@ -413,8 +428,10 @@ class SessionManager:
             ps.last_activity = time.monotonic()
 
             # Send query to persistent subprocess
-            logger.info(f"Sending query to SDK for session {session_id}...")
-            await ps.client.query(prompt, session_id=session_id)
+            # Use SDK session ID for conversation continuity, fall back to browser session ID
+            query_session_id = ps.sdk_session_id or session_id
+            logger.info(f"Sending query to SDK for session {session_id} (query_session_id={query_session_id})...")
+            await ps.client.query(prompt, session_id=query_session_id)
             logger.info(f"Query sent to SDK for session {session_id}, starting receive loop")
 
             # Stream response — access the raw message stream (pre-parsing) to implement

@@ -220,6 +220,45 @@ class TestGetSessionsList:
         assert len(sessions) == 5
 
 
+class TestGetLastSdkSessionId:
+    def test_no_sdk_sessions(self, fresh_db):
+        db.record_message("sess1", "user1", "user", "hello")
+        result = db.get_last_sdk_session_id("sess1")
+        assert result is None
+
+    def test_returns_most_recent_sdk_session_id(self, fresh_db):
+        db.record_message("sess1", "user1", "user", "first")
+        db.record_message("sess1", "user1", "assistant", "response1", sdk_session_id="sdk-old")
+        db.record_message("sess1", "user1", "user", "second")
+        db.record_message("sess1", "user1", "assistant", "response2", sdk_session_id="sdk-new")
+
+        result = db.get_last_sdk_session_id("sess1")
+        assert result == "sdk-new"
+
+    def test_ignores_null_sdk_session_ids(self, fresh_db):
+        db.record_message("sess1", "user1", "user", "first")
+        db.record_message("sess1", "user1", "assistant", "response1", sdk_session_id="sdk-123")
+        db.record_message("sess1", "user1", "user", "second")
+        db.record_message("sess1", "user1", "assistant", "response2")  # No SDK session ID
+
+        result = db.get_last_sdk_session_id("sess1")
+        assert result == "sdk-123"
+
+    def test_session_isolation(self, fresh_db):
+        db.record_message("sess1", "user1", "assistant", "msg1", sdk_session_id="sdk-sess1")
+        db.record_message("sess2", "user1", "assistant", "msg2", sdk_session_id="sdk-sess2")
+
+        result1 = db.get_last_sdk_session_id("sess1")
+        result2 = db.get_last_sdk_session_id("sess2")
+
+        assert result1 == "sdk-sess1"
+        assert result2 == "sdk-sess2"
+
+    def test_nonexistent_session(self, fresh_db):
+        result = db.get_last_sdk_session_id("nonexistent")
+        assert result is None
+
+
 class TestImmutability:
     def test_record_message_returns_new_dict(self, fresh_db):
         result = db.record_message("sess1", "user1", "user", "hello")

@@ -198,6 +198,21 @@ def get_sessions_list(limit: int = 50) -> list[dict]:
     return results
 
 
+def get_last_sdk_session_id(session_id: str) -> Optional[str]:
+    """Return the most recent SDK session ID for a browser session, if any."""
+    conn = _get_connection()
+    row = conn.execute(
+        """
+        SELECT sdk_session_id FROM conversations
+        WHERE session_id = ? AND sdk_session_id IS NOT NULL
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """,
+        (session_id,),
+    ).fetchone()
+    return row["sdk_session_id"] if row else None
+
+
 def get_stats() -> dict:
     """Return aggregate statistics across all sessions."""
     conn = _get_connection()
