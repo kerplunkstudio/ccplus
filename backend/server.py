@@ -18,6 +18,10 @@ import sys
 import time
 from pathlib import Path
 
+# Remove CLAUDECODE env var to allow SDK subprocess spawning
+# (otherwise Claude Code detects "nested session" and refuses to start)
+os.environ.pop("CLAUDECODE", None)
+
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room
@@ -221,13 +225,19 @@ def handle_connect():
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    """Clean up client tracking on disconnect."""
+    """Clean up client tracking on disconnect.
+
+    Disconnects the persistent SDK client to free resources.
+    """
     client = connected_clients.pop(request.sid, None)
     if client:
+        session_id = client['session_id']
         logger.info(
             f"Client disconnected: user={client['user_id']} "
-            f"session={client['session_id']}"
+            f"session={session_id}"
         )
+        # Disconnect persistent subprocess
+        session_manager.disconnect_session(session_id)
 
 
 @socketio.on("message")
