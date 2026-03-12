@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     content TEXT NOT NULL,
     timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     sdk_session_id TEXT,
-    project_path TEXT
+    project_path TEXT,
+    archived BOOLEAN DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_conversations_session
     ON conversations(session_id, timestamp);
@@ -66,6 +67,12 @@ def _get_connection() -> sqlite3.Connection:
         except Exception:
             pass  # Column already exists
         _local.connection = conn
+        # Ensure archived column exists (migration for existing DBs)
+        try:
+            conn.execute("ALTER TABLE conversations ADD COLUMN archived BOOLEAN DEFAULT 0")
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
     return conn
 
 
@@ -176,10 +183,14 @@ def get_tool_events(session_id: str, limit: int = 200) -> list[dict]:
     return results
 
 
-def get_sessions_list(limit: int = 50, project_path: Optional[str] = None) -> list[dict]:
-    """Return a list of sessions with metadata (last message preview, message count)."""
+def get_sessions_list(limit: int = 50, project_path: Optional[str] = None, include_archived: bool = False) -> list[dict]:
+    """Return a list of sessions with metadata (last message preview, message count).
+
+    By default, archived sessions are excluded. Set include_archived=True to include them.
+    """
     conn = _get_connection()
     having_clause = "HAVING project_path = ?" if project_path else ""
+    archived_clause = "" if include_archived else "AND (c1.archived = 0 OR c1.archived IS NULL)"
     params: list = [project_path, limit] if project_path else [limit]
     rows = conn.execute(
         f"""
@@ -195,6 +206,7 @@ def get_sessions_list(limit: int = 50, project_path: Optional[str] = None) -> li
              AND c3.project_path IS NOT NULL
              ORDER BY c3.timestamp DESC LIMIT 1) as project_path
         FROM conversations c1
+        WHERE 1=1 {archived_clause}
         GROUP BY session_id
         {having_clause}
         ORDER BY last_activity DESC
@@ -224,6 +236,20 @@ def get_last_sdk_session_id(session_id: str) -> Optional[str]:
         (session_id,),
     ).fetchone()
     return row["sdk_session_id"] if row else None
+
+
+def archive_session(session_id: str) -> bool:
+    """Mark a session as archived. Returns True if successful."""
+    conn = _get_connection()
+    try:
+        conn.execute(
+            "UPDATE conversations SET archived = 1 WHERE session_id = ?",
+            (session_id,),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
 
 
 def get_stats() -> dict:

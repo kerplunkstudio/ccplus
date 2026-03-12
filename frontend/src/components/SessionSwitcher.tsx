@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './SessionSwitcher.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
@@ -39,7 +39,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
 }) => {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
       const url = selectedProject
         ? `${SOCKET_URL}/api/sessions?project=${encodeURIComponent(selectedProject)}`
@@ -52,15 +52,27 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
     } catch {
       // silently fail
     }
-  };
+  }, [selectedProject]);
 
   useEffect(() => {
     fetchSessions();
-  }, [currentSessionId, selectedProject]);
+  }, [currentSessionId, selectedProject, fetchSessions]);
 
   const projectName = selectedProject
     ? selectedProject.split('/').filter(Boolean).pop() ?? null
     : null;
+
+  const handleArchive = (e: React.MouseEvent<HTMLButtonElement>, sessionId: string) => {
+    e.stopPropagation();
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+    fetch(`${SOCKET_URL}/api/sessions/${sessionId}/archive`, {
+      method: 'POST',
+    }).then(() => {
+      fetchSessions();
+    }).catch((err) => {
+      console.error('Failed to archive session:', err);
+    });
+  };
 
   return (
     <div className="session-switcher">
@@ -91,19 +103,34 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
           </div>
         ) : (
           sessions.map((session) => (
-            <button
+            <div
               key={session.session_id}
-              className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
-              onClick={() => onSwitchSession(session.session_id)}
+              className={`session-item-wrapper ${session.session_id === currentSessionId ? 'active' : ''}`}
             >
-              <div className="session-item-preview">
-                {session.last_user_message || 'Empty session'}
-              </div>
-              <div className="session-item-meta">
-                <span className="session-item-count">{session.message_count} msgs</span>
-                <span className="session-item-time">{formatTime(session.last_activity)}</span>
-              </div>
-            </button>
+              <button
+                className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
+                onClick={() => onSwitchSession(session.session_id)}
+              >
+                <div className="session-item-preview">
+                  {session.last_user_message || 'Empty session'}
+                </div>
+                <div className="session-item-meta">
+                  <span className="session-item-count">{session.message_count} msgs</span>
+                  <span className="session-item-time">{formatTime(session.last_activity)}</span>
+                </div>
+              </button>
+              <button
+                className="session-archive-btn"
+                onClick={(e) => handleArchive(e, session.session_id)}
+                title="Archive session"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="21 8 21 21 3 21 3 8" />
+                  <line x1="1" y1="3" x2="23" y2="3" />
+                  <path d="M10 12v5M14 12v5" />
+                </svg>
+              </button>
+            </div>
           ))
         )}
       </div>
