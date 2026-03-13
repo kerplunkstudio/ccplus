@@ -46,7 +46,6 @@ from backend.database import (
     get_stats,
     get_tool_events,
     record_message,
-    update_message,
 )
 from backend.sdk_session import SessionManager
 
@@ -278,6 +277,41 @@ def handle_connect():
     }
     join_room(session_id)
 
+    # Check if this session has an active query in the worker
+    if session_manager.is_active(session_id):
+        # Re-register streaming callbacks for this session
+        # (handles the case where Flask restarted while worker was mid-query)
+        def on_text_reconnect(text: str) -> None:
+            socketio.emit("text_delta", {"text": text}, room=session_id)
+
+        def on_tool_event_reconnect(event: dict) -> None:
+            socketio.emit("tool_event", event, room=session_id)
+
+        def on_complete_reconnect(result: dict) -> None:
+            socketio.emit(
+                "response_complete",
+                {
+                    "cost": result.get("cost"),
+                    "duration_ms": result.get("duration_ms"),
+                    "input_tokens": result.get("input_tokens"),
+                    "output_tokens": result.get("output_tokens"),
+                    "model": result.get("model"),
+                },
+                room=session_id,
+            )
+
+        def on_error_reconnect(error_msg: str) -> None:
+            socketio.emit("error", {"message": error_msg}, room=session_id)
+
+        session_manager.register_streaming_callbacks(
+            session_id,
+            on_text=on_text_reconnect,
+            on_tool_event=on_tool_event_reconnect,
+            on_complete=on_complete_reconnect,
+            on_error=on_error_reconnect,
+        )
+        logger.info(f"Re-registered callbacks for active session {session_id}")
+
     logger.info(f"Client connected: user={user_id} session={session_id}")
     emit("connected", {"session_id": session_id})
 
@@ -343,42 +377,13 @@ def handle_message(data):
 
     # -- Streaming callbacks (all emit to the session room) ----------------
 
-    assistant_msg_id = None  # Track the assistant message for updates
-
     def on_text(text: str) -> None:
-        nonlocal assistant_msg_id
         socketio.emit("text_delta", {"text": text}, room=session_id)
-
-        # Record the first chunk as a new message to preserve it across refresh
-        if assistant_msg_id is None:
-            try:
-                msg = record_message(session_id, user_id, "assistant", text)
-                assistant_msg_id = msg.get("id")
-            except Exception as exc:
-                logger.error(f"Failed to record initial assistant message: {exc}")
 
     def on_tool_event(event: dict) -> None:
         socketio.emit("tool_event", event, room=session_id)
 
     def on_complete(result: dict) -> None:
-        full_text = result.get("text", "")
-        # Only record message to database on final completion (when sdk_session_id is present)
-        if full_text and result.get("sdk_session_id"):
-            try:
-                if assistant_msg_id:
-                    # Update the early-recorded message with full content
-                    update_message(assistant_msg_id, full_text, sdk_session_id=result.get("sdk_session_id"))
-                else:
-                    record_message(
-                        session_id,
-                        "assistant",
-                        "assistant",
-                        full_text,
-                        sdk_session_id=result.get("sdk_session_id"),
-                    )
-            except Exception as exc:
-                logger.error(f"Failed to record assistant message: {exc}")
-
         socketio.emit(
             "response_complete",
             {

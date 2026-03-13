@@ -65,6 +65,24 @@ class SessionManager:
 
         self._client.submit_query(session_id, prompt, workspace, model)
 
+    def register_streaming_callbacks(
+        self,
+        session_id: str,
+        on_text: Callable[[str], None],
+        on_tool_event: Callable[[dict], None],
+        on_complete: Callable[[dict], None],
+        on_error: Callable[[str], None],
+    ):
+        """Register callbacks for an already-active session (e.g., after Flask restart)."""
+        with self._lock:
+            self._callbacks[session_id] = {
+                "on_text": on_text,
+                "on_tool_event": on_tool_event,
+                "on_complete": on_complete,
+                "on_error": on_error,
+            }
+            self._active_sessions.add(session_id)
+
     def cancel_query(self, session_id: str) -> None:
         """Cancel the active query for a session."""
         self._client.cancel_query(session_id)

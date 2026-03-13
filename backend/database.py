@@ -116,6 +116,26 @@ def update_message(message_id: int, content: str, sdk_session_id: Optional[str] 
     conn.commit()
 
 
+def update_tool_event(
+    session_id: str,
+    tool_use_id: str,
+    success: Optional[bool] = None,
+    error: Optional[str] = None,
+    duration_ms: Optional[float] = None,
+) -> None:
+    """Update an existing tool event (e.g., mark as completed)."""
+    conn = _get_connection()
+    conn.execute(
+        """
+        UPDATE tool_usage
+        SET success = ?, error = ?, duration_ms = ?
+        WHERE session_id = ? AND tool_use_id = ?
+        """,
+        (success, error, duration_ms, session_id, tool_use_id),
+    )
+    conn.commit()
+
+
 def get_conversation_history(session_id: str, limit: int = 50) -> list[dict]:
     """Return conversation messages for a session, oldest first."""
     conn = _get_connection()

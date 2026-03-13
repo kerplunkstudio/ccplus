@@ -72,7 +72,7 @@ try:
 except ImportError:
     from claude_code_sdk.types import StreamEvent, UserMessage
 
-from backend.database import get_last_sdk_session_id, record_tool_event
+from backend.database import get_last_sdk_session_id, record_tool_event, update_tool_event, record_message, update_message
 import backend.config as config
 
 # Configure logging
@@ -425,6 +425,22 @@ class SDKWorker:
                 "event": event,
             })
 
+            # Record start event to database (success=None means "running")
+            try:
+                record_tool_event(
+                    session_id=session_id,
+                    tool_name=actual_tool_name,
+                    tool_use_id=tool_use_id,
+                    parent_agent_id=parent_id,
+                    agent_type=tool_params.get("subagent_type") if is_agent else None,
+                    success=None,  # Running
+                    error=None,
+                    duration_ms=None,
+                    parameters=_safe_params(tool_params) if not is_agent else None,
+                )
+            except Exception as e:
+                logger.error(f"Database write failed (pre_tool_use): {e}")
+
             return HookJSONOutput()
 
         async def post_tool_use(
@@ -471,21 +487,17 @@ class SDKWorker:
                 "event": event,
             })
 
-            # Record to database
+            # Update existing DB record
             try:
-                record_tool_event(
+                update_tool_event(
                     session_id=session_id,
-                    tool_name=actual_tool_name,
                     tool_use_id=tool_use_id,
-                    parent_agent_id=agent_stack[-1] if (not is_agent and agent_stack) else None,
-                    agent_type=tool_params.get("subagent_type") if is_agent else None,
                     success=True,
                     error=None,
                     duration_ms=duration_ms,
-                    parameters=_safe_params(tool_params),
                 )
             except Exception as e:
-                logger.error(f"Database write failed: {e}")
+                logger.error(f"Database write failed (post_tool_use): {e}")
 
             return HookJSONOutput()
 
@@ -504,6 +516,7 @@ class SDKWorker:
         """Stream a query to the SDK and emit events to Flask."""
         result_text: list[str] = []
         got_result = False
+        assistant_msg_id = None
 
         try:
             logger.info(f"stream_query started for session {session_id}, prompt: {prompt[:50]}...")
@@ -574,6 +587,20 @@ class SDKWorker:
                         elif isinstance(block, ToolUseBlock):
                             pass
 
+                    # Persist to DB (worker is the authority for message persistence)
+                    if has_text:
+                        if assistant_msg_id is None:
+                            try:
+                                msg = record_message(session_id, "assistant", "assistant", "".join(result_text))
+                                assistant_msg_id = msg.get("id")
+                            except Exception as e:
+                                logger.error(f"Failed to record assistant message: {e}")
+                        else:
+                            try:
+                                update_message(assistant_msg_id, "".join(result_text))
+                            except Exception as e:
+                                logger.error(f"Failed to update assistant message: {e}")
+
                     # After each AssistantMessage with text, signal intermediate completion
                     if has_text:
                         await self.send_event({
@@ -608,6 +635,18 @@ class SDKWorker:
                         "output_tokens": usage.get("output_tokens"),
                         "model": ps.model,
                     }
+
+                    # Finalize assistant message with sdk_session_id
+                    if assistant_msg_id and message.session_id:
+                        try:
+                            update_message(
+                                assistant_msg_id,
+                                "".join(result_text),
+                                sdk_session_id=message.session_id,
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to finalize assistant message: {e}")
+
                     break
 
                 elif isinstance(message, (SystemMessage, StreamEvent, UserMessage)):
