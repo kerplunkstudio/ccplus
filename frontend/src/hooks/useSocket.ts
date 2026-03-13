@@ -20,7 +20,6 @@ type TreeAction =
   | { type: 'TOOL_START'; event: ToolEvent; sequence: number }
   | { type: 'TOOL_COMPLETE'; event: ToolEvent }
   | { type: 'AGENT_STOP'; event: ToolEvent }
-  | { type: 'MARK_INTERRUPTED' }
   | { type: 'CLEAR' }
   | { type: 'LOAD_HISTORY'; events: ToolEvent[] };
 
@@ -52,21 +51,6 @@ function findAndUpdate(
   });
 }
 
-function markAllRunningAsInterrupted(nodes: ActivityNode[]): ActivityNode[] {
-  return nodes.map((node) => {
-    if (isAgentNode(node)) {
-      const updatedChildren = markAllRunningAsInterrupted(node.children);
-      if (node.status === 'running') {
-        return { ...node, children: updatedChildren, status: 'failed' as const, error: 'Server restarted' };
-      }
-      return { ...node, children: updatedChildren };
-    }
-    if (node.status === 'running') {
-      return { ...node, status: 'failed' as const, error: 'Server restarted' };
-    }
-    return node;
-  });
-}
 
 function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] {
   switch (action.type) {
@@ -168,10 +152,6 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
       return newNodes;
     }
 
-    case 'MARK_INTERRUPTED': {
-      return markAllRunningAsInterrupted(state);
-    }
-
     case 'CLEAR':
       return [];
 
@@ -212,7 +192,6 @@ export function useSocket(token: string | null) {
     newSocket.on('connect', () => setConnected(true));
     newSocket.on('disconnect', () => {
       setConnected(false);
-      dispatchTree({ type: 'MARK_INTERRUPTED' });
       // If we were streaming when the server went down, finalize the message
       if (streamingIdRef.current) {
         const msgId = streamingIdRef.current;
