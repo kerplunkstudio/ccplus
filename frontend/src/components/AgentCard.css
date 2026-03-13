@@ -45,7 +45,7 @@
 
 .agent-card-running {
   border-color: var(--accent);
-  animation: pulse 2s ease-in-out infinite;
+  animation: agentPulse 2s ease-in-out infinite;
 }
 
 .agent-card-running::before {
@@ -60,14 +60,12 @@
   background: var(--error);
 }
 
-@keyframes pulse {
+@keyframes agentPulse {
   0%, 100% {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0 var(--accent-shadow);
+    opacity: 1;
   }
   50% {
-    border-color: var(--accent-dim);
-    box-shadow: 0 0 0 4px var(--accent-shadow-fade);
+    opacity: 0.7;
   }
 }
 
@@ -235,20 +233,23 @@
   margin-top: 2px;
 }
 
-.agent-card-children {
-  margin-top: 12px;
-  padding-left: 20px;
-  border-left: 2px solid var(--border);
-  animation: expandChildren 0.2s ease-out;
+.agent-card-children-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease-out;
 }
 
-@keyframes expandChildren {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 1000px;
-  }
+.agent-card-children-wrapper.expanded {
+  grid-template-rows: 1fr;
+}
+
+.agent-card-children {
+  overflow: hidden;
+  margin-top: 0;
+  padding-left: 20px;
+  border-left: 2px solid var(--border);
+}
+
+.agent-card-children-wrapper.expanded .agent-card-children {
+  margin-top: 12px;
 }

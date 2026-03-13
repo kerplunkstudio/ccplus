@@ -110,8 +110,10 @@ export const AgentCard: React.FC<AgentCardProps> = ({ node, depth, onSelect, chi
         )}
       </div>
 
-      {expanded && childCount > 0 && (
-        <div className="agent-card-children">{children}</div>
+      {childCount > 0 && (
+        <div className={`agent-card-children-wrapper ${expanded ? 'expanded' : ''}`}>
+          <div className="agent-card-children">{children}</div>
+        </div>
       )}
     </div>
   );
