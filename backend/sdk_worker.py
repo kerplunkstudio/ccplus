@@ -580,6 +580,7 @@ class SDKWorker:
                             "type": "response_complete",
                             "session_id": session_id,
                             "text": "".join(result_text),
+                            "sdk_session_id": None,
                             "cost": None,
                             "duration_ms": None,
                             "is_error": False,
@@ -597,7 +598,7 @@ class SDKWorker:
 
                     last_completion_data = {
                         "text": "".join(result_text),
-                        "session_id": message.session_id,
+                        "sdk_session_id": message.session_id,
                         "cost": message.total_cost_usd,
                         "duration_ms": message.duration_ms,
                         "is_error": message.is_error,
@@ -647,6 +648,7 @@ class SDKWorker:
                     "type": "response_complete",
                     "session_id": session_id,
                     "text": "".join(result_text),
+                    "sdk_session_id": None,
                     "cost": None,
                     "duration_ms": None,
                     "is_error": False,
