@@ -74,39 +74,3 @@ export interface UsageStats {
   contextWindowSize: number;
   model: string;
 }
-
-export interface PluginAuthor {
-  name: string;
-  url?: string;
-}
-
-export interface Plugin {
-  name: string;
-  version: string;
-  description: string;
-  author: PluginAuthor;
-  repository: string;
-  installed: boolean;
-  install_path?: string;
-  installed_at?: string;
-  homepage?: string;
-  license?: string;
-  keywords?: string[];
-  agents?: string[];
-  skills?: string[];
-  commands?: string[];
-}
-
-export interface PluginInstallResult {
-  success: boolean;
-  plugin?: string;
-  version?: string;
-  install_path?: string;
-  error?: string;
-}
-
-export interface PluginUninstallResult {
-  success: boolean;
-  plugin?: string;
-  error?: string;
-}

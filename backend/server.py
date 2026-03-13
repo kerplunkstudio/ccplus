@@ -47,7 +47,6 @@ from backend.database import (
     get_tool_events,
     record_message,
 )
-from backend.plugins import PluginManager
 from backend.sdk_session import SessionManager
 
 # ---------------------------------------------------------------------------
@@ -82,7 +81,6 @@ socketio = SocketIO(
 )
 
 session_manager = SessionManager()
-plugin_manager = PluginManager()
 
 START_TIME = time.time()
 
@@ -250,133 +248,6 @@ def archive_session_endpoint(session_id):
         return jsonify({"error": "Failed to archive session"}), 500
 
 
-# -- Plugins --------------------------------------------------------------
-
-
-@app.route("/api/plugins")
-def list_plugins():
-    """List installed Claude Code plugins."""
-    try:
-        plugins = plugin_manager.list_installed()
-        return jsonify({
-            "plugins": [
-                {
-                    "name": p.name,
-                    "version": p.version,
-                    "description": p.description,
-                    "author": p.author,
-                    "repository": p.repository,
-                    "installed": p.installed,
-                    "install_path": p.install_path,
-                    "installed_at": p.installed_at,
-                    "homepage": p.homepage,
-                    "license": p.license,
-                    "keywords": p.keywords,
-                    "agents": p.agents,
-                    "skills": p.skills,
-                    "commands": p.commands,
-                }
-                for p in plugins
-            ]
-        })
-    except Exception as exc:
-        logger.error(f"Failed to list plugins: {exc}")
-        return jsonify({"error": "Failed to list plugins"}), 500
-
-
-@app.route("/api/plugins/marketplace")
-def list_marketplace_plugins():
-    """List available plugins from marketplaces."""
-    try:
-        search = request.args.get("search")
-        plugins = plugin_manager.list_marketplace(search=search)
-        return jsonify({
-            "plugins": [
-                {
-                    "name": p.name,
-                    "version": p.version,
-                    "description": p.description,
-                    "author": p.author,
-                    "repository": p.repository,
-                    "installed": p.installed,
-                    "homepage": p.homepage,
-                    "license": p.license,
-                    "keywords": p.keywords,
-                    "agents": p.agents,
-                    "skills": p.skills,
-                    "commands": p.commands,
-                }
-                for p in plugins
-            ]
-        })
-    except Exception as exc:
-        logger.error(f"Failed to list marketplace plugins: {exc}")
-        return jsonify({"error": "Failed to list marketplace plugins"}), 500
-
-
-@app.route("/api/plugins/install", methods=["POST"])
-def install_plugin():
-    """Install a plugin from GitHub or marketplace."""
-    try:
-        body = request.get_json(silent=True) or {}
-        identifier = body.get("identifier", "").strip()
-
-        if not identifier:
-            return jsonify({"error": "Missing plugin identifier"}), 400
-
-        result = plugin_manager.install_plugin(identifier)
-        if result.get("success"):
-            return jsonify(result)
-        else:
-            return jsonify(result), 400
-    except Exception as exc:
-        logger.error(f"Plugin installation failed: {exc}")
-        return jsonify({"error": str(exc)}), 500
-
-
-@app.route("/api/plugins/<name>", methods=["DELETE"])
-def uninstall_plugin(name):
-    """Uninstall a plugin."""
-    try:
-        result = plugin_manager.uninstall_plugin(name)
-        if result.get("success"):
-            return jsonify(result)
-        else:
-            return jsonify(result), 400
-    except Exception as exc:
-        logger.error(f"Plugin uninstallation failed: {exc}")
-        return jsonify({"error": str(exc)}), 500
-
-
-@app.route("/api/plugins/<name>")
-def get_plugin_details_endpoint(name):
-    """Get details for a specific plugin."""
-    try:
-        plugin = plugin_manager.get_plugin_details(name)
-        if not plugin:
-            return jsonify({"error": "Plugin not found"}), 404
-
-        return jsonify({
-            "name": plugin.name,
-            "version": plugin.version,
-            "description": plugin.description,
-            "author": plugin.author,
-            "repository": plugin.repository,
-            "installed": plugin.installed,
-            "install_path": plugin.install_path,
-            "installed_at": plugin.installed_at,
-            "homepage": plugin.homepage,
-            "license": plugin.license,
-            "keywords": plugin.keywords,
-            "agents": plugin.agents,
-            "skills": plugin.skills,
-            "commands": plugin.commands,
-        })
-    except Exception as exc:
-        logger.error(f"Failed to get plugin details: {exc}")
-        return jsonify({"error": "Failed to get plugin details"}), 500
-
-
 # =========================================================================
 # WebSocket Events
 # =========================================================================
@@ -440,9 +311,6 @@ def handle_connect():
             on_error=on_error_reconnect,
         )
         logger.info(f"Re-registered callbacks for active session {session_id}")
-
-        # Tell frontend this session has an active stream
-        emit("stream_active", {"session_id": session_id})
 
     logger.info(f"Client connected: user={user_id} session={session_id}")
     emit("connected", {"session_id": session_id})
