@@ -312,6 +312,7 @@ class PluginManager:
             return {
                 **plugin_data,
                 "name": plugin_data.get("id", "").split("@")[0],
+                "author": {"name": "Unknown"},
                 "skills": [],
                 "agents": [],
                 "commands": [],
@@ -323,6 +324,7 @@ class PluginManager:
             return {
                 **plugin_data,
                 "name": plugin_data.get("id", "").split("@")[0],
+                "author": {"name": "Unknown"},
                 "skills": [],
                 "agents": [],
                 "commands": [],
@@ -368,6 +370,7 @@ class PluginManager:
             return {
                 **plugin_data,
                 "name": plugin_data.get("id", "").split("@")[0],
+                "author": {"name": "Unknown"},
                 "skills": [],
                 "agents": [],
                 "commands": [],

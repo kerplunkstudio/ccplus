@@ -6,7 +6,15 @@ import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
+import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
+import { useSkills } from '../hooks/useSkills';
+import {
+  parseSlashCommand,
+  shouldShowAutocomplete,
+  filterSkills,
+  getAllSuggestions,
+} from '../utils/slashCommands';
 import './ChatPanel.css';
 
 const THINKING_MESSAGES = [
@@ -58,6 +66,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
   const [pluginModalOpen, setPluginModalOpen] = useState(false);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteIndex, setAutocompleteIndex] = useState(0);
+  const { skills } = useSkills();
 
   const examplePrompts = [
     'Watch agents work in parallel on a feature',
@@ -109,12 +120,77 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     if (!trimmed || !connected) return;
     onSendMessage(trimmed, selectedProject || undefined, selectedModel);
     setInput('');
+    setShowAutocomplete(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   };
 
+  // Get filtered autocomplete suggestions
+  const getAutocompleteSuggestions = () => {
+    const command = parseSlashCommand(input);
+    if (!command) return [];
+
+    const allSuggestions = getAllSuggestions(skills);
+    return filterSkills(allSuggestions, command.command);
+  };
+
+  const autocompleteSuggestions = getAutocompleteSuggestions();
+
+  // Handle input changes for autocomplete
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setInput(newValue);
+
+    const cursorPosition = e.target.selectionStart || 0;
+    const shouldShow = shouldShowAutocomplete(newValue, cursorPosition);
+
+    if (shouldShow && newValue.startsWith('/')) {
+      setShowAutocomplete(true);
+      setAutocompleteIndex(0);
+    } else {
+      setShowAutocomplete(false);
+    }
+  };
+
+  // Handle autocomplete selection
+  const handleAutocompleteSelect = (suggestion: { name: string }) => {
+    setInput(`/${suggestion.name} `);
+    setShowAutocomplete(false);
+    textareaRef.current?.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle autocomplete navigation
+    if (showAutocomplete && autocompleteSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAutocompleteIndex((prev) =>
+          prev < autocompleteSuggestions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAutocompleteIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const selected = autocompleteSuggestions[autocompleteIndex];
+        if (selected) {
+          handleAutocompleteSelect(selected);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowAutocomplete(false);
+        return;
+      }
+    }
+
+    // Normal message sending
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (streaming) return;
@@ -258,14 +334,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
 
         <div className="input-container">
+          {showAutocomplete && autocompleteSuggestions.length > 0 && (
+            <SlashCommandAutocomplete
+              suggestions={autocompleteSuggestions}
+              selectedIndex={autocompleteIndex}
+              onSelect={handleAutocompleteSelect}
+              onClose={() => setShowAutocomplete(false)}
+              inputRef={textareaRef}
+            />
+          )}
           <div className="input-wrapper">
             <textarea
               ref={textareaRef}
               className="message-input"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={connected ? 'Send a message...' : 'Reconnecting — hang tight...'}
+              placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
               disabled={!connected}
               rows={1}
             />

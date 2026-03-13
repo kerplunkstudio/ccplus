@@ -82,7 +82,7 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
 
         <div className="plugin-footer">
           <span className="plugin-author">
-            by {plugin.author.name}
+            by {plugin.author?.name || 'Unknown'}
           </span>
 
           <button
@@ -135,16 +135,16 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
         <div className="plugin-meta">
           <div className="meta-item">
             <strong>Author:</strong>{' '}
-            {selectedPlugin.author.url ? (
+            {selectedPlugin.author?.url ? (
               <a
                 href={selectedPlugin.author.url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {selectedPlugin.author.name}
+                {selectedPlugin.author?.name || 'Unknown'}
               </a>
             ) : (
-              selectedPlugin.author.name
+              selectedPlugin.author?.name || 'Unknown'
             )}
           </div>
 

@@ -49,6 +49,7 @@ from backend.database import (
 )
 from backend.plugins import PluginManager
 from backend.sdk_session import SessionManager
+from backend.skills import SkillExecutor
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -83,6 +84,7 @@ socketio = SocketIO(
 
 session_manager = SessionManager()
 plugin_manager = PluginManager()
+skill_executor = SkillExecutor()
 
 START_TIME = time.time()
 
@@ -342,6 +344,33 @@ def get_all_skills():
         return jsonify({"error": "Failed to get skills"}), 500
 
 
+@app.route("/api/skills/execute", methods=["POST"])
+def execute_skill():
+    """Execute a skill with optional arguments."""
+    try:
+        body = request.get_json(silent=True) or {}
+        skill_name = body.get("skill", "").strip()
+        arguments = body.get("arguments", "").strip()
+        workspace = body.get("workspace", "")
+
+        if not skill_name:
+            return jsonify({"error": "Skill name required"}), 400
+
+        result = skill_executor.execute_skill(
+            skill_name=skill_name,
+            arguments=arguments,
+            workspace=workspace or None,
+        )
+
+        if not result.get("success"):
+            return jsonify(result), 500
+
+        return jsonify(result)
+    except Exception as exc:
+        logger.error(f"Failed to execute skill: {exc}")
+        return jsonify({"error": "Failed to execute skill"}), 500
+
+
 # =========================================================================
 # WebSocket Events
 # =========================================================================
@@ -468,6 +497,84 @@ def handle_message(data):
         logger.error(f"Failed to record user message: {exc}")
 
     emit("message_received", {"status": "ok"})
+
+    # Check if this is a slash command
+    if content.startswith("/"):
+        parts = content[1:].split(None, 1)  # Split on first whitespace
+        command = parts[0].lower()
+        arguments = parts[1] if len(parts) > 1 else ""
+
+        # Handle built-in commands
+        if command == "help":
+            help_text = """**Available Commands:**
+
+- `/help` - Show this help message
+- `/skills` - List all available skills
+- `/[skill-name]` - Execute a skill (e.g., `/polish`, `/distill`)
+- `/[skill-name] [args]` - Execute a skill with arguments
+
+**Available Skills:**
+Use `/skills` to see all installed skills from your plugins.
+"""
+            socketio.emit("text_delta", {"text": help_text}, room=session_id)
+            socketio.emit("response_complete", {"cost": 0, "duration_ms": 0}, room=session_id)
+            try:
+                record_message(session_id, user_id, "assistant", help_text, project_path=project_path or None)
+            except Exception as exc:
+                logger.error(f"Failed to record help response: {exc}")
+            return
+
+        elif command == "skills":
+            # List all available skills
+            result = plugin_manager.get_all_skills()
+            if result.get("success"):
+                skills = result.get("skills", [])
+                if skills:
+                    skills_text = "**Available Skills:**\n\n"
+                    for skill in skills:
+                        skills_text += f"- `/{skill['name']}` — {skill.get('plugin', 'unknown plugin')}\n"
+                else:
+                    skills_text = "No skills installed. Install plugins from the marketplace to get skills."
+            else:
+                skills_text = f"Error loading skills: {result.get('error', 'Unknown error')}"
+
+            socketio.emit("text_delta", {"text": skills_text}, room=session_id)
+            socketio.emit("response_complete", {"cost": 0, "duration_ms": 0}, room=session_id)
+            try:
+                record_message(session_id, user_id, "assistant", skills_text, project_path=project_path or None)
+            except Exception as exc:
+                logger.error(f"Failed to record skills response: {exc}")
+            return
+
+        else:
+            # Try to execute as a skill
+            skill_name = command
+            logger.info(f"Attempting to execute skill: {skill_name} with args: {arguments}")
+
+            # Emit skill execution start
+            socketio.emit("text_delta", {"text": f"Executing skill `{skill_name}`...\n\n"}, room=session_id)
+
+            result = skill_executor.execute_skill(
+                skill_name=skill_name,
+                arguments=arguments,
+                workspace=workspace,
+            )
+
+            if result.get("success"):
+                output = result.get("output", "")
+                response_text = f"**Skill Output:**\n\n```\n{output}\n```"
+            else:
+                error = result.get("error", "Unknown error")
+                response_text = f"**Error executing skill `{skill_name}`:**\n\n{error}"
+
+            socketio.emit("text_delta", {"text": response_text}, room=session_id)
+            socketio.emit("response_complete", {"cost": 0, "duration_ms": 0}, room=session_id)
+            try:
+                full_response = f"Executing skill `{skill_name}`...\n\n{response_text}"
+                record_message(session_id, user_id, "assistant", full_response, project_path=project_path or None)
+            except Exception as exc:
+                logger.error(f"Failed to record skill response: {exc}")
+            return
 
     # -- Streaming callbacks (all emit to the session room) ----------------
 
