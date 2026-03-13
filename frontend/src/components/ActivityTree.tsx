@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ActivityNode, isAgentNode, AgentNode, ToolNode, UsageStats } from '../types';
 import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
@@ -17,7 +17,7 @@ interface TreeNodeProps {
   onNodeSelect: (node: ActivityNode) => void;
 }
 
-const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, onNodeSelect }) => {
+const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelect }) => {
   const isAgent = isAgentNode(node);
 
   if (isAgent) {
@@ -47,15 +47,15 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, depth, onNodeSelect }) => {
       onSelect={onNodeSelect}
     />
   );
-};
+});
 
 export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'tools'>('agents');
 
-  const agentNodes = tree.filter(isAgentNode);
-  const toolNodes = tree.filter((n) => !isAgentNode(n)) as ToolNode[];
+  const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
+  const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
   const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
   // Auto-scroll to latest activity (only when not viewing details)
@@ -65,9 +65,9 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
     }
   }, [tree, selectedNode]);
 
-  const handleNodeSelect = (node: ActivityNode) => {
+  const handleNodeSelect = useCallback((node: ActivityNode) => {
     setSelectedNode(node);
-  };
+  }, []);
 
   const handleCloseDetail = () => {
     setSelectedNode(null);
