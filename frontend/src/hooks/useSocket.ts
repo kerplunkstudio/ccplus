@@ -557,7 +557,7 @@ export function useSocket(token: string | null) {
           }
         }
       } catch (err) {
-        console.error('Failed to restore session:', err);
+        // Restore failed silently — new session will start
       }
     };
 

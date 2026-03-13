@@ -3,6 +3,7 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  position: relative;
 }
 
 .panel-sessions {
@@ -55,21 +56,19 @@
   }
 }
 
-/* Responsive: stack panels on narrow screens */
+/* Mobile overlay (hidden on desktop) */
 
-@media (max-width: 900px) {
-  .panel-sessions {
-    display: none;
-  }
-
-  .panel-activity {
-    display: none;
-  }
-
-  .panel-chat {
-    flex: 1;
-  }
+.mobile-overlay {
+  display: none;
 }
+
+/* Mobile drawer toggle buttons in header (hidden on desktop) */
+
+.mobile-drawer-btn {
+  display: none;
+}
+
+/* Medium screens */
 
 @media (max-width: 1200px) and (min-width: 901px) {
   .panel-sessions {
@@ -78,5 +77,86 @@
 
   .panel-activity {
     flex: 0 0 240px;
+  }
+}
+
+/* Mobile: panels become slide-over drawers */
+
+@media (max-width: 900px) {
+  .mobile-drawer-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: var(--button-bg);
+    border: 1px solid var(--button-border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .mobile-drawer-btn:hover {
+    background: var(--button-bg-hover);
+    border-color: var(--button-border-hover);
+    color: var(--text-primary);
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 200;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .panel-sessions {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: 1px solid var(--border);
+    box-shadow: 4px 0 20px var(--shadow);
+  }
+
+  .panel-sessions.mobile-open {
+    transform: translateX(0);
+  }
+
+  .panel-activity {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 300px;
+    z-index: 300;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 20px var(--shadow);
+  }
+
+  .panel-activity.mobile-open {
+    transform: translateX(0);
+  }
+
+  .panel-chat {
+    flex: 1;
   }
 }

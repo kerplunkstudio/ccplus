@@ -334,3 +334,30 @@
   opacity: 0.6;
   font-size: 11px;
 }
+
+@media (max-width: 900px) {
+  .chat-panel-header {
+    padding: 10px 12px;
+  }
+
+  .messages-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .input-container {
+    padding: 8px 12px 12px;
+  }
+
+  .message-input {
+    font-size: 16px; /* Prevents iOS zoom on input focus */
+  }
+
+  .empty-icon {
+    font-size: 36px;
+  }
+
+  .empty-title {
+    font-size: 16px;
+  }
+}

@@ -201,3 +201,24 @@
   border-color: var(--error-border);
   color: var(--error);
 }
+
+@media (max-width: 900px) {
+  .session-switcher {
+    height: 100%;
+  }
+
+  .session-new-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .session-archive-btn {
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+  }
+
+  .session-item {
+    padding: 12px;
+  }
+}
