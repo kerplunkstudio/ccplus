@@ -24,7 +24,7 @@ const getStatusBadge = (status: string) => {
   }
 };
 
-export const AgentCard: React.FC<AgentCardProps> = ({ node, depth, onSelect, children }) => {
+export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, onSelect, children }) => {
   const [expanded, setExpanded] = useState(false);
 
   const toggleExpand = (e: React.MouseEvent) => {
@@ -117,4 +117,4 @@ export const AgentCard: React.FC<AgentCardProps> = ({ node, depth, onSelect, chi
       )}
     </div>
   );
-};
+});

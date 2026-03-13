@@ -23,7 +23,7 @@ const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
   }
 };
 
-export const ToolRow: React.FC<ToolRowProps> = ({ node, depth, onSelect }) => {
+export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSelect }) => {
   const handleClick = () => {
     onSelect(node);
   };
@@ -74,4 +74,4 @@ export const ToolRow: React.FC<ToolRowProps> = ({ node, depth, onSelect }) => {
       )}
     </div>
   );
-};
+});

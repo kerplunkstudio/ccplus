@@ -13,6 +13,16 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
+const INITIAL_USAGE_STATS: UsageStats = {
+  totalCost: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalDuration: 0,
+  queryCount: 0,
+  contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+  model: '',
+};
+
 const getSessionId = (): string => {
   let sessionId = localStorage.getItem('ccplus_session_id');
   if (!sessionId) {
@@ -175,15 +185,7 @@ export function useSocket(token: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
-  const [usageStats, setUsageStats] = useState<UsageStats>({
-    totalCost: 0,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalDuration: 0,
-    queryCount: 0,
-    contextWindowSize: DEFAULT_CONTEXT_WINDOW,
-    model: '',
-  });
+  const [usageStats, setUsageStats] = useState<UsageStats>(INITIAL_USAGE_STATS);
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
@@ -617,15 +619,7 @@ export function useSocket(token: string | null) {
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
       resetStreamingState();
-      setUsageStats({
-        totalCost: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        totalDuration: 0,
-        queryCount: 0,
-        contextWindowSize: DEFAULT_CONTEXT_WINDOW,
-        model: '',
-      });
+      setUsageStats(INITIAL_USAGE_STATS);
     },
     [resetStreamingState]
   );
@@ -637,15 +631,7 @@ export function useSocket(token: string | null) {
     setMessages([]);
     dispatchTree({ type: 'CLEAR' });
     resetStreamingState();
-    setUsageStats({
-      totalCost: 0,
-      totalInputTokens: 0,
-      totalOutputTokens: 0,
-      totalDuration: 0,
-      queryCount: 0,
-      contextWindowSize: DEFAULT_CONTEXT_WINDOW,
-      model: '',
-    });
+    setUsageStats(INITIAL_USAGE_STATS);
   }, [resetStreamingState]);
 
   return {
