@@ -33,15 +33,7 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
   const handleInstall = async (plugin: Plugin) => {
     setInstalling(plugin.name);
     try {
-      const result = await installPlugin(plugin.repository || plugin.name);
-      if (result.success) {
-        console.log(`Installed ${plugin.name}`);
-      } else {
-        console.error(`Failed to install ${plugin.name}:`, result.error);
-        alert(`Installation failed: ${result.error}`);
-      }
-    } catch (err) {
-      console.error('Installation error:', err);
+      await installPlugin(plugin.repository || plugin.name);
     } finally {
       setInstalling(null);
     }
@@ -54,15 +46,7 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
 
     setInstalling(plugin.name);
     try {
-      const result = await uninstallPlugin(plugin.name);
-      if (result.success) {
-        console.log(`Uninstalled ${plugin.name}`);
-      } else {
-        console.error(`Failed to uninstall ${plugin.name}:`, result.error);
-        alert(`Uninstallation failed: ${result.error}`);
-      }
-    } catch (err) {
-      console.error('Uninstallation error:', err);
+      await uninstallPlugin(plugin.name);
     } finally {
       setInstalling(null);
     }

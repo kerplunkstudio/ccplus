@@ -38,7 +38,6 @@ export function usePlugins(): UsePluginsReturn {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
-      console.error('Failed to load installed plugins:', err);
     } finally {
       setLoading(false);
     }
@@ -61,7 +60,6 @@ export function usePlugins(): UsePluginsReturn {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
-      console.error('Failed to load marketplace plugins:', err);
     } finally {
       setLoading(false);
     }
@@ -150,7 +148,6 @@ export function usePlugins(): UsePluginsReturn {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         setError(errorMsg);
-        console.error('Failed to get plugin details:', err);
         return null;
       } finally {
         setLoading(false);

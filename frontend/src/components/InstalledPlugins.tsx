@@ -29,15 +29,7 @@ export const InstalledPlugins: React.FC<InstalledPluginsProps> = ({ onClose }) =
 
     setUninstalling(plugin.name);
     try {
-      const result = await uninstallPlugin(plugin.name);
-      if (result.success) {
-        console.log(`Uninstalled ${plugin.name}`);
-      } else {
-        console.error(`Failed to uninstall ${plugin.name}:`, result.error);
-        alert(`Uninstallation failed: ${result.error}`);
-      }
-    } catch (err) {
-      console.error('Uninstallation error:', err);
+      await uninstallPlugin(plugin.name);
     } finally {
       setUninstalling(null);
     }
