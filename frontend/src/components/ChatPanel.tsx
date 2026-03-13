@@ -91,7 +91,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div className="chat-panel-header">
           <div className="header-left">
             <h1 className="chat-title">CC+</h1>
-            <span className={`connection-dot ${connected ? 'online' : 'offline'}`} />
+            <span className={`connection-dot ${connected ? 'online' : 'offline'}`} role="status" aria-label={connected ? 'Connected' : 'Disconnected'} />
           </div>
           <div className="header-right">
             <ProjectSelector
@@ -105,7 +105,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         </div>
 
-        <div className="messages-container" ref={messagesContainerRef}>
+        <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
           {messages.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">{'>'}_</div>
@@ -128,7 +128,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   <span className="dot" />
                   <span className="dot" />
                   <span className="dot" />
-                  <span className="thinking-text">Thinking...</span>
+                  <span className="thinking-text" role="status">Thinking...</span>
                 </div>
               )}
             </div>

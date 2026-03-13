@@ -17,16 +17,18 @@ export const InstalledPlugins: React.FC<InstalledPluginsProps> = ({ onClose }) =
   } = usePlugins();
 
   const [uninstalling, setUninstalling] = React.useState<string | null>(null);
+  const [confirmUninstall, setConfirmUninstall] = React.useState<string | null>(null);
 
   useEffect(() => {
     loadInstalled();
   }, [loadInstalled]);
 
-  const handleUninstall = async (plugin: Plugin) => {
-    if (!window.confirm(`Uninstall ${plugin.name}? This will remove all agents, skills, and commands provided by this plugin.`)) {
-      return;
-    }
+  const handleUninstallClick = (plugin: Plugin) => {
+    setConfirmUninstall(plugin.name);
+  };
 
+  const handleUninstallConfirm = async (plugin: Plugin) => {
+    setConfirmUninstall(null);
     setUninstalling(plugin.name);
     try {
       await uninstallPlugin(plugin.name);
@@ -67,11 +69,18 @@ export const InstalledPlugins: React.FC<InstalledPluginsProps> = ({ onClose }) =
         </td>
         <td className="plugin-actions">
           <button
-            className="uninstall-btn"
-            onClick={() => handleUninstall(plugin)}
+            className={`uninstall-btn ${confirmUninstall === plugin.name ? 'confirming' : ''}`}
+            onClick={() => {
+              if (confirmUninstall === plugin.name) {
+                handleUninstallConfirm(plugin);
+              } else {
+                handleUninstallClick(plugin);
+              }
+            }}
+            onBlur={() => setConfirmUninstall(null)}
             disabled={isUninstalling || loading}
           >
-            {isUninstalling ? 'Uninstalling...' : 'Uninstall'}
+            {isUninstalling ? 'Uninstalling...' : confirmUninstall === plugin.name ? 'Confirm?' : 'Uninstall'}
           </button>
         </td>
       </tr>

@@ -80,23 +80,29 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
       ) : (
         <>
           <div className="activity-header">
-            <div className="activity-tabs">
+            <div className="activity-tabs" role="tablist" aria-label="Activity views">
               <button
                 className={`activity-tab ${activeTab === 'agents' ? 'activity-tab-active' : ''}`}
                 onClick={() => setActiveTab('agents')}
+                role="tab"
+                aria-selected={activeTab === 'agents'}
+                aria-controls="activity-panel-agents"
               >
                 Agents{agentNodes.length > 0 && <span className="activity-tab-count">{agentNodes.length}</span>}
               </button>
               <button
                 className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
                 onClick={() => setActiveTab('tools')}
+                role="tab"
+                aria-selected={activeTab === 'tools'}
+                aria-controls="activity-panel-tools"
               >
                 Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count">{toolNodes.length}</span>}
               </button>
             </div>
           </div>
 
-          <div className="activity-content" ref={containerRef}>
+          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-label={activeTab === 'agents' ? 'Agent activity' : 'Tool logs'}>
             {visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-icon">

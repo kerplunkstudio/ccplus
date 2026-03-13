@@ -5,6 +5,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { SessionSwitcher } from './components/SessionSwitcher';
 import { ThemeProvider } from './theme';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './App.css';
 
 interface AppContentProps {
@@ -92,9 +93,11 @@ function App() {
   const { token, loading } = useAuth();
 
   return (
-    <ThemeProvider>
-      <AppContent token={token} loading={loading} />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppContent token={token} loading={loading} />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
