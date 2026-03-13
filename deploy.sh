@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PORT=3000
+PORT="${PORT:-4000}"
 
 # Colors (graceful degradation for non-interactive terminals)
 if [ -t 1 ] && command -v tput >/dev/null 2>&1; then

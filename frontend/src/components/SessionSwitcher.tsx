@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './SessionSwitcher.css';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface SessionInfo {
   session_id: string;
@@ -129,7 +129,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
 
   const handleArchive = (e: React.MouseEvent<HTMLButtonElement>, sessionId: string) => {
     e.stopPropagation();
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
     fetch(`${SOCKET_URL}/api/sessions/${sessionId}/archive`, {
       method: 'POST',
     }).then(() => {

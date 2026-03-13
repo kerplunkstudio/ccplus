@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats } from '../types';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'opus': 200_000,
