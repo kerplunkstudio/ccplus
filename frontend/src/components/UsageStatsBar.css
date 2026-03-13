@@ -1,7 +1,7 @@
 .usage-stats-bar {
   display: flex;
   align-items: center;
-  gap: 0;
+  flex-wrap: wrap;
   padding: 8px 12px;
   background: var(--bg-primary);
   border-top: 1px solid var(--border);
@@ -14,8 +14,9 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-right: 1px solid var(--border);
+  min-width: 0;
 }
 
 .usage-stat:last-child {
@@ -36,4 +37,7 @@
 .usage-stat-value {
   color: var(--accent);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
