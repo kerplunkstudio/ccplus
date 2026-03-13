@@ -124,6 +124,29 @@
   border-color: var(--accent-dim);
 }
 
+.copy-code-btn.copied {
+  color: var(--success);
+  border-color: var(--success);
+  gap: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.copy-check-icon {
+  animation: checkDraw 0.3s ease-out;
+}
+
+@keyframes checkDraw {
+  from {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 0;
+  }
+}
+
 .streaming-cursor {
   display: inline-block;
   width: 2px;
@@ -131,12 +154,12 @@
   background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
-  animation: blink 1s step-end infinite;
+  animation: blink 1.2s ease-in-out infinite;
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
 }
 
 .message-meta {
