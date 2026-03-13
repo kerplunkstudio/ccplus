@@ -10,7 +10,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.4;
   color: var(--text-secondary);
