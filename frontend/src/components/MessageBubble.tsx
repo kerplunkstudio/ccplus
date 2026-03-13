@@ -28,38 +28,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     });
   };
 
-  if (message.tool) {
-    const statusEmoji =
-      message.tool.status === 'running'
-        ? '⏳'
-        : message.tool.status === 'completed'
-          ? '✓'
-          : '✗';
-
-    return (
-      <div className={`message-bubble ${message.role} tool-message`}>
-        <div className="message-bubble-inner">
-          <div className="tool-status">
-            <span className="tool-icon">{statusEmoji}</span>
-            <span className="tool-name">{message.tool.tool_name}</span>
-            {message.tool.agent_type && (
-              <span className="agent-type">({message.tool.agent_type})</span>
-            )}
-          </div>
-          {message.tool.duration_ms && (
-            <div className="tool-duration">
-              {(message.tool.duration_ms / 1000).toFixed(2)}s
-            </div>
-          )}
-          {message.tool.error && <div className="tool-error">{message.tool.error}</div>}
-        </div>
-        <div className="message-meta">
-          <span className="message-time">{formatTime(message.timestamp)}</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={`message-bubble ${message.role}`}>
       <div className="message-bubble-inner">

@@ -4,16 +4,6 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: number;
   streaming?: boolean;
-  tool?: ToolEventMessage;
-}
-
-export interface ToolEventMessage {
-  tool_name: string;
-  agent_type?: string;
-  status: 'running' | 'completed' | 'failed';
-  duration_ms?: number;
-  error?: string;
-  parameters?: Record<string, unknown>;
 }
 
 export interface ToolEvent {
@@ -81,5 +71,3 @@ export interface UsageStats {
   totalDuration: number;
   queryCount: number;
 }
-
-export type ToolDisplayMode = 'minimal' | 'verbose';
