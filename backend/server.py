@@ -46,7 +46,6 @@ from backend.database import (
     get_stats,
     get_tool_events,
     record_message,
-    record_tool_event,
 )
 from backend.sdk_session import SessionManager
 
@@ -123,6 +122,7 @@ def health():
         "uptime_seconds": int(time.time() - START_TIME),
         "active_sessions": len(session_manager.get_active_sessions()),
         "connected_clients": len(connected_clients),
+        "worker_connected": session_manager.worker_connected,
         "db": db_stats,
     })
 
@@ -358,22 +358,6 @@ def handle_message(data):
 
     def on_tool_event(event: dict) -> None:
         socketio.emit("tool_event", event, room=session_id)
-
-        # Persist tool event to database
-        try:
-            record_tool_event(
-                session_id=session_id,
-                tool_name=event.get("tool_name", "unknown"),
-                tool_use_id=event.get("tool_use_id", ""),
-                parent_agent_id=event.get("parent_agent_id"),
-                agent_type=event.get("agent_type"),
-                success=event.get("success"),
-                error=event.get("error"),
-                duration_ms=event.get("duration_ms"),
-                parameters=event.get("parameters"),
-            )
-        except Exception as exc:
-            logger.error(f"Failed to record tool event: {exc}")
 
     def on_complete(result: dict) -> None:
         full_text = result.get("text", "")

@@ -20,3 +20,8 @@ LOCAL_MODE = os.environ.get("CCPLUS_AUTH", "local") == "local"
 SECRET_KEY = os.environ.get("SECRET_KEY", "ccplus-dev-secret-change-me")
 MAX_CONVERSATION_HISTORY = 50
 MAX_ACTIVITY_EVENTS = 200
+
+# Worker process paths
+WORKER_SOCKET_PATH = str(DATA_DIR / "sdk_worker.sock")
+WORKER_PID_PATH = str(DATA_DIR / "sdk_worker.pid")
+WORKER_LOG = str(LOG_DIR / "worker.log")
