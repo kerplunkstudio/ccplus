@@ -57,10 +57,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
 
   const examplePrompts = [
-    'Explain how the auth system works',
-    'Find and fix any TypeScript errors',
-    'Refactor this file for readability',
-    'Write tests for the API endpoints',
+    'Watch agents work in parallel on a feature',
+    'Fix a bug and trace every tool call live',
+    'Refactor something complex — show me the full tool trace',
+    'Run tests and observe what Claude reads and changes',
   ];
 
   const scrollToBottom = useCallback(() => {

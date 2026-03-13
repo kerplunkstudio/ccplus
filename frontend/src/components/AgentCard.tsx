@@ -51,9 +51,6 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
       >
         <div className="agent-card-header">
           <div className="agent-card-title-area">
-            <div className="agent-card-icon">
-              <ToolIcon toolName="Agent" size={16} />
-            </div>
             <div className="agent-card-info">
               <div className="agent-card-type">
                 {node.sequence !== undefined && (

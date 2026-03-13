@@ -85,19 +85,6 @@
   min-width: 0;
 }
 
-.agent-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: var(--accent-bg);
-  border-radius: 8px;
-  color: var(--accent);
-  flex-shrink: 0;
-  border: 1px solid var(--accent-border);
-}
-
 .agent-card-info {
   flex: 1;
   min-width: 0;
