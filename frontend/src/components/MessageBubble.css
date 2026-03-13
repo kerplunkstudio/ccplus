@@ -2,12 +2,12 @@
   display: flex;
   flex-direction: column;
   max-width: 85%;
-  animation: fadeIn 0.2s ease-out;
+  animation: messageIn 0.25s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes messageIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .message-bubble.user {
@@ -28,12 +28,14 @@
 .message-bubble.user .message-bubble-inner {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
+  border-right: 3px solid var(--accent);
   color: var(--text-primary);
 }
 
 .message-bubble.assistant .message-bubble-inner {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--text-secondary);
   color: var(--text-primary);
 }
 
@@ -94,17 +96,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 12px;
+  padding: 8px 12px;
   background: var(--code-header-bg);
   font-size: 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 .code-language {
-  color: var(--text-secondary);
+  color: var(--accent);
   font-family: var(--font-mono);
   text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 .copy-code-btn {
@@ -149,12 +153,14 @@
 
 .streaming-cursor {
   display: inline-block;
-  width: 2px;
-  height: 1em;
+  width: 3px;
+  height: 1.1em;
   background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
+  border-radius: 1px;
   animation: blink 1.2s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
 }
 
 @keyframes blink {
