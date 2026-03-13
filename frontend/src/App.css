@@ -1,7 +1,53 @@
 .app-layout {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
+  overflow: hidden;
+}
+
+.app-header {
+  flex: 0 0 auto;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1rem;
+}
+
+.app-tab {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.app-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.app-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.app-layout-chat {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-view-full {
+  flex: 1;
   overflow: hidden;
 }
 

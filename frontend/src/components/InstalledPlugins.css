@@ -1,0 +1,163 @@
+.installed-plugins {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.installed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #333;
+}
+
+.installed-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.installed-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.plugins-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.plugins-table thead {
+  position: sticky;
+  top: 0;
+  background: #252526;
+  z-index: 1;
+}
+
+.plugins-table th {
+  text-align: left;
+  padding: 1rem;
+  border-bottom: 2px solid #333;
+  font-weight: 600;
+  color: #d4d4d4;
+  font-size: 0.9rem;
+}
+
+.plugins-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #2a2a2a;
+  vertical-align: top;
+}
+
+.plugins-table tbody tr {
+  transition: background 0.2s;
+}
+
+.plugins-table tbody tr:hover {
+  background: #2a2a2a;
+}
+
+.plugins-table tbody tr.uninstalling {
+  opacity: 0.5;
+}
+
+.plugin-name-cell {
+  max-width: 400px;
+}
+
+.plugin-name {
+  font-weight: 600;
+  color: #d4d4d4;
+  margin-bottom: 0.25rem;
+}
+
+.plugin-description {
+  font-size: 0.85rem;
+  color: #888;
+  line-height: 1.4;
+}
+
+.plugin-version {
+  color: #888;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.plugin-author {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.resources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.resource-badge {
+  padding: 0.25rem 0.5rem;
+  background: #3c3c3c;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.plugin-actions {
+  white-space: nowrap;
+}
+
+.uninstall-btn {
+  padding: 0.5rem 1rem;
+  background: #c74440;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.uninstall-btn:hover:not(:disabled) {
+  background: #a33632;
+}
+
+.uninstall-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading,
+.no-plugins {
+  text-align: center;
+  padding: 3rem;
+  color: #888;
+}
+
+.no-plugins p {
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 900px) {
+  .plugins-table {
+    font-size: 0.9rem;
+  }
+
+  .plugins-table th,
+  .plugins-table td {
+    padding: 0.75rem;
+  }
+
+  .plugin-name-cell {
+    max-width: 250px;
+  }
+
+  .resource-badge {
+    font-size: 0.7rem;
+  }
+}
