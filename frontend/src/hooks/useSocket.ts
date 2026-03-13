@@ -243,19 +243,39 @@ export function useSocket(token: string | null) {
           if (activityRes.ok) {
             const { events } = await activityRes.json();
             if (events && events.length > 0) {
-              const toolEvents: ToolEvent[] = events.map((e: any) => ({
-                type: e.agent_type ? (e.success !== null ? 'agent_stop' : 'agent_start')
-                     : (e.success !== null ? 'tool_complete' : 'tool_start'),
-                tool_name: e.tool_name,
-                tool_use_id: e.tool_use_id,
-                parent_agent_id: e.parent_agent_id || null,
-                agent_type: e.agent_type,
-                timestamp: e.timestamp,
-                success: e.success,
-                error: e.error,
-                duration_ms: e.duration_ms,
-                parameters: e.parameters,
-              }));
+              const toolEvents: ToolEvent[] = [];
+              for (const e of events) {
+                const isAgent = !!e.agent_type;
+                // Always emit start event first
+                toolEvents.push({
+                  type: isAgent ? 'agent_start' : 'tool_start',
+                  tool_name: e.tool_name,
+                  tool_use_id: e.tool_use_id,
+                  parent_agent_id: e.parent_agent_id || null,
+                  agent_type: e.agent_type,
+                  timestamp: e.timestamp,
+                  success: undefined,
+                  error: undefined,
+                  duration_ms: undefined,
+                  parameters: e.parameters,
+                  description: e.description,
+                } as ToolEvent);
+                // If completed, also emit complete event
+                if (e.success !== null && e.success !== undefined) {
+                  toolEvents.push({
+                    type: isAgent ? 'agent_stop' : 'tool_complete',
+                    tool_name: e.tool_name,
+                    tool_use_id: e.tool_use_id,
+                    parent_agent_id: e.parent_agent_id || null,
+                    agent_type: e.agent_type,
+                    timestamp: e.timestamp,
+                    success: e.success,
+                    error: e.error,
+                    duration_ms: e.duration_ms,
+                    parameters: e.parameters,
+                  } as ToolEvent);
+                }
+              }
               dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
             }
           }
@@ -439,19 +459,39 @@ export function useSocket(token: string | null) {
           const { events } = await activityRes.json();
           if (events && events.length > 0) {
             // Convert DB rows to ToolEvent format for the reducer
-            const toolEvents: ToolEvent[] = events.map((e: any) => ({
-              type: e.agent_type ? (e.success !== null ? 'agent_stop' : 'agent_start')
-                   : (e.success !== null ? 'tool_complete' : 'tool_start'),
-              tool_name: e.tool_name,
-              tool_use_id: e.tool_use_id,
-              parent_agent_id: e.parent_agent_id || null,
-              agent_type: e.agent_type,
-              timestamp: e.timestamp,
-              success: e.success,
-              error: e.error,
-              duration_ms: e.duration_ms,
-              parameters: e.parameters,
-            }));
+            const toolEvents: ToolEvent[] = [];
+            for (const e of events) {
+              const isAgent = !!e.agent_type;
+              // Always emit start event first
+              toolEvents.push({
+                type: isAgent ? 'agent_start' : 'tool_start',
+                tool_name: e.tool_name,
+                tool_use_id: e.tool_use_id,
+                parent_agent_id: e.parent_agent_id || null,
+                agent_type: e.agent_type,
+                timestamp: e.timestamp,
+                success: undefined,
+                error: undefined,
+                duration_ms: undefined,
+                parameters: e.parameters,
+                description: e.description,
+              } as ToolEvent);
+              // If completed, also emit complete event
+              if (e.success !== null && e.success !== undefined) {
+                toolEvents.push({
+                  type: isAgent ? 'agent_stop' : 'tool_complete',
+                  tool_name: e.tool_name,
+                  tool_use_id: e.tool_use_id,
+                  parent_agent_id: e.parent_agent_id || null,
+                  agent_type: e.agent_type,
+                  timestamp: e.timestamp,
+                  success: e.success,
+                  error: e.error,
+                  duration_ms: e.duration_ms,
+                  parameters: e.parameters,
+                } as ToolEvent);
+              }
+            }
             dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
           }
         }
