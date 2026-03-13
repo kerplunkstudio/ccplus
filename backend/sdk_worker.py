@@ -46,6 +46,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+# Remove CLAUDECODE env var to allow SDK subprocess spawning
+# (otherwise Claude Code detects "nested session" and refuses to start)
+os.environ.pop("CLAUDECODE", None)
+
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
