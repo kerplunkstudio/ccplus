@@ -1,19 +1,13 @@
 import React from 'react';
 import { ActivityNode, isAgentNode, AgentNode, ToolNode } from '../types';
 import { ToolIcon } from './ToolIcon';
+import { formatDuration } from '../utils/formatDuration';
 import './NodeDetail.css';
 
 interface NodeDetailProps {
   node: ActivityNode;
   onClose: () => void;
 }
-
-const formatDuration = (ms?: number): string => {
-  if (ms === undefined) return 'N/A';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 const formatTimestamp = (timestamp: string): string => {
   const date = new Date(timestamp);

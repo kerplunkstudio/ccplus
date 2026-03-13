@@ -28,8 +28,8 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
   const contextRemaining = Math.max(0, stats.contextWindowSize - totalTokens);
 
   const getContextBarColor = (): string => {
-    if (contextPercent > 80) return '#F44336';
-    if (contextPercent > 60) return '#FFC107';
+    if (contextPercent > 80) return 'var(--error)';
+    if (contextPercent > 60) return 'var(--warning)';
     return 'var(--accent)';
   };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AgentNode } from '../types';
 import { ToolIcon } from './ToolIcon';
+import { formatDuration } from '../utils/formatDuration';
 import './AgentCard.css';
 
 interface AgentCardProps {
@@ -9,13 +10,6 @@ interface AgentCardProps {
   onSelect: (node: AgentNode) => void;
   children?: React.ReactNode;
 }
-
-const formatDuration = (ms?: number): string => {
-  if (ms === undefined) return '';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-};
 
 const getStatusBadge = (status: string) => {
   switch (status) {
