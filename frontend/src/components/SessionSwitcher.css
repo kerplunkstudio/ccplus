@@ -76,6 +76,29 @@
   text-align: left;
   transition: all 0.12s ease;
   gap: 8px;
+  position: relative;
+}
+
+.session-unread-dot {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: pulse-unread 2s ease-in-out infinite;
+}
+
+@keyframes pulse-unread {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .session-item:hover {
@@ -93,6 +116,7 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  padding-left: 8px;
 }
 
 .session-item-preview {
