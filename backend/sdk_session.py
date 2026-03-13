@@ -118,8 +118,8 @@ class SessionManager:
     def _handle_response_complete(self, session_id: str, data: dict) -> None:
         with self._lock:
             cbs = self._callbacks.get(session_id)
-            # Only remove from active if this is a final completion (has session_id in data = ResultMessage)
-            if data.get("session_id"):
+            # Only remove from active if this is a final completion (has sdk_session_id in data = ResultMessage)
+            if data.get("sdk_session_id"):
                 self._active_sessions.discard(session_id)
         if cbs and cbs.get("on_complete"):
             try:

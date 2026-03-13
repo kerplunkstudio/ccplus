@@ -362,19 +362,19 @@ def handle_message(data):
 
     def on_complete(result: dict) -> None:
         full_text = result.get("text", "")
-        # Only record message to database on final completion (when session_id is present)
-        if full_text and result.get("session_id"):
+        # Only record message to database on final completion (when sdk_session_id is present)
+        if full_text and result.get("sdk_session_id"):
             try:
                 if assistant_msg_id:
                     # Update the early-recorded message with full content
-                    update_message(assistant_msg_id, full_text, sdk_session_id=result.get("session_id"))
+                    update_message(assistant_msg_id, full_text, sdk_session_id=result.get("sdk_session_id"))
                 else:
                     record_message(
                         session_id,
                         "assistant",
                         "assistant",
                         full_text,
-                        sdk_session_id=result.get("session_id"),
+                        sdk_session_id=result.get("sdk_session_id"),
                     )
             except Exception as exc:
                 logger.error(f"Failed to record assistant message: {exc}")
