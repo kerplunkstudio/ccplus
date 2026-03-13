@@ -44,7 +44,18 @@
 
 .connection-dot.online {
   background: var(--success);
-  box-shadow: 0 0 6px var(--success);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    box-shadow: 0 0 4px var(--success);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 8px var(--success);
+    opacity: 0.7;
+  }
 }
 
 .connection-dot.offline {
@@ -85,7 +96,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  opacity: 0.6;
+  gap: 2px;
 }
 
 .empty-icon {
@@ -105,6 +116,39 @@
 .empty-subtitle {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.empty-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  max-width: 480px;
+  justify-content: center;
+}
+
+.empty-prompt-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+}
+
+.empty-prompt-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-dim);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.empty-prompt-btn:active {
+  transform: translateY(0);
 }
 
 .thinking-indicator {
@@ -224,7 +268,13 @@
 
 .send-btn:hover:not(:disabled) {
   background: var(--accent-dim);
-  transform: scale(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.3);
+}
+
+.send-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .send-btn:disabled {
@@ -239,7 +289,11 @@
 
 .cancel-btn:hover {
   opacity: 0.85;
-  transform: scale(1.05);
+  transform: translateY(-1px);
+}
+
+.cancel-btn:active {
+  transform: translateY(1px);
 }
 
 .tool-indicator {
@@ -288,6 +342,27 @@
     opacity: 1;
     transform: scale(1.1);
   }
+}
+
+.input-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 16px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .tool-log {
@@ -359,5 +434,14 @@
 
   .empty-title {
     font-size: 16px;
+  }
+
+  .empty-prompts {
+    max-width: 100%;
+  }
+
+  .empty-prompt-btn {
+    font-size: 12px;
+    padding: 6px 10px;
   }
 }

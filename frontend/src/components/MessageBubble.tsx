@@ -58,11 +58,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
           <div className="code-block-header">
             <span className="code-language">{language || 'code'}</span>
             <button
-              className="copy-code-btn"
+              className={`copy-code-btn ${copiedId === blockId ? 'copied' : ''}`}
               onClick={() => copyToClipboard(codeString, blockId)}
               aria-label="Copy code"
             >
-              {copiedId === blockId ? 'Copied' : 'Copy'}
+              {copiedId === blockId ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="copy-check-icon">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copied
+                </>
+              ) : 'Copy'}
             </button>
           </div>
           <SyntaxHighlighter

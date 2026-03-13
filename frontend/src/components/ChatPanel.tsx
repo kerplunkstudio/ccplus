@@ -45,6 +45,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  const getGreeting = (): string => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const examplePrompts = [
+    'Explain how the auth system works',
+    'Find and fix any TypeScript errors',
+    'Refactor this file for readability',
+    'Write tests for the API endpoints',
+  ];
+
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -144,8 +158,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           {messages.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon">{'>'}_</div>
-              <p className="empty-title">Start a conversation</p>
-              <p className="empty-subtitle">Ask anything or request a coding task</p>
+              <p className="empty-title">{getGreeting()}</p>
+              <p className="empty-subtitle">What are you working on?</p>
+              <div className="empty-prompts">
+                {examplePrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    className="empty-prompt-btn"
+                    onClick={() => {
+                      setInput(prompt);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((msg) => (
@@ -210,6 +238,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             )}
           </div>
+          {!streaming && input.trim() && (
+            <div className="input-hint">
+              <kbd className="kbd">Enter</kbd> to send, <kbd className="kbd">Shift+Enter</kbd> for new line
+            </div>
+          )}
         </div>
       </div>
     </>
