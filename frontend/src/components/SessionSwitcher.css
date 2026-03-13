@@ -192,8 +192,8 @@
 
 .session-item:hover .session-archive-btn {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--button-bg-hover);
+  border-color: var(--button-border);
 }
 
 .session-archive-btn:hover {
