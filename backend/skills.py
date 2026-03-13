@@ -1,11 +1,13 @@
 """
 Skill execution module for ccplus.
 
-Wraps Claude CLI skill commands to enable slash command execution
-from the chat interface. Provides functionality for:
-- Executing skills with arguments
-- Parsing skill metadata
-- Handling skill errors
+DEPRECATED: Direct skill execution via CLI is deprecated.
+Slash commands should be sent directly to the Claude Code SDK,
+which handles skill execution natively in context.
+
+This module is kept for backward compatibility but is no longer used
+by the main server. Skills now work better because the SDK can access
+file state, maintain conversation context, and use tool results.
 """
 
 import json
@@ -68,11 +70,16 @@ class SkillExecutor:
             cmd = [self.claude_bin] + args
             logger.info(f"Running command: {' '.join(cmd)}")
 
+            # Ensure subprocess inherits the full environment including PATH
+            import os
+            env = os.environ.copy()
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env=env,
             )
 
             if result.returncode != 0:
@@ -115,10 +122,11 @@ class SkillExecutor:
             # Append arguments after --
             cmd_args.extend(["--", arguments])
 
-        # Execute with workspace if provided
-        env = None
+        # Execute with workspace if provided, ensuring full environment inheritance
+        import os
+        env = os.environ.copy()
         if workspace:
-            env = {"PWD": workspace}
+            env["PWD"] = workspace
 
         try:
             cmd = [self.claude_bin] + cmd_args
