@@ -31,6 +31,39 @@ const formatTime = (timestamp: string): string => {
   return `${diffDays}d ago`;
 };
 
+const SEEN_COUNTS_KEY = 'ccplus_seen_counts';
+
+const getSeenCounts = (): Record<string, number> => {
+  try {
+    const stored = localStorage.getItem(SEEN_COUNTS_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
+const updateSeenCount = (sessionId: string, count: number): void => {
+  try {
+    const seenCounts = getSeenCounts();
+    const updated = { ...seenCounts, [sessionId]: count };
+    localStorage.setItem(SEEN_COUNTS_KEY, JSON.stringify(updated));
+  } catch {
+    // silently fail
+  }
+};
+
+const hasUnreadMessages = (session: SessionInfo, currentSessionId: string): boolean => {
+  if (session.session_id === currentSessionId) {
+    return false;
+  }
+  const seenCounts = getSeenCounts();
+  const seenCount = seenCounts[session.session_id];
+  if (seenCount === undefined) {
+    return session.message_count > 0;
+  }
+  return session.message_count > seenCount;
+};
+
 export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
   currentSessionId,
   selectedProject,
@@ -47,16 +80,33 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setSessions(data.sessions || []);
+        const fetchedSessions = data.sessions || [];
+        setSessions(fetchedSessions);
+
+        // Mark current session as seen
+        const currentSession = fetchedSessions.find(
+          (s: SessionInfo) => s.session_id === currentSessionId
+        );
+        if (currentSession) {
+          updateSeenCount(currentSessionId, currentSession.message_count);
+        }
       }
     } catch {
       // silently fail
     }
-  }, [selectedProject]);
+  }, [selectedProject, currentSessionId]);
 
   useEffect(() => {
     fetchSessions();
-  }, [currentSessionId, selectedProject, fetchSessions]);
+  }, [fetchSessions]);
+
+  // Mark current session as seen when it changes
+  useEffect(() => {
+    const currentSession = sessions.find(s => s.session_id === currentSessionId);
+    if (currentSession) {
+      updateSeenCount(currentSessionId, currentSession.message_count);
+    }
+  }, [currentSessionId, sessions]);
 
   useEffect(() => {
     // Listen for message_received events to refresh session list
@@ -117,34 +167,38 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
             {projectName ? `No sessions for ${projectName}` : 'No sessions yet'}
           </div>
         ) : (
-          sessions.map((session) => (
-            <button
-              key={session.session_id}
-              className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
-              onClick={() => onSwitchSession(session.session_id)}
-            >
-              <div className="session-item-content">
-                <div className="session-item-preview">
-                  {session.last_user_message || 'Empty session'}
-                </div>
-                <div className="session-item-meta">
-                  <span className="session-item-count">{session.message_count} msgs</span>
-                  <span className="session-item-time">{formatTime(session.last_activity)}</span>
-                </div>
-              </div>
+          sessions.map((session) => {
+            const isUnread = hasUnreadMessages(session, currentSessionId);
+            return (
               <button
-                className="session-archive-btn"
-                onClick={(e) => handleArchive(e, session.session_id)}
-                title="Archive session"
+                key={session.session_id}
+                className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
+                onClick={() => onSwitchSession(session.session_id)}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="21 8 21 21 3 21 3 8" />
-                  <line x1="1" y1="3" x2="23" y2="3" />
-                  <path d="M10 12v5M14 12v5" />
-                </svg>
+                {isUnread && <div className="session-unread-dot" />}
+                <div className="session-item-content">
+                  <div className="session-item-preview">
+                    {session.last_user_message || 'Empty session'}
+                  </div>
+                  <div className="session-item-meta">
+                    <span className="session-item-count">{session.message_count} msgs</span>
+                    <span className="session-item-time">{formatTime(session.last_activity)}</span>
+                  </div>
+                </div>
+                <button
+                  className="session-archive-btn"
+                  onClick={(e) => handleArchive(e, session.session_id)}
+                  title="Archive session"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="21 8 21 21 3 21 3 8" />
+                    <line x1="1" y1="3" x2="23" y2="3" />
+                    <path d="M10 12v5M14 12v5" />
+                  </svg>
+                </button>
               </button>
-            </button>
-          ))
+            );
+          })
         )}
       </div>
     </div>
