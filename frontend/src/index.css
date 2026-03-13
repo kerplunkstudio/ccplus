@@ -1,40 +1,41 @@
 :root {
   /* === Base palette (overridden by theme) === */
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0a0;
-  --accent: #00d4ff;
-  --accent-dim: #0099cc;
-  --accent-light: #a5b4fc;
-  --border: #2a2a4a;
-  --success: #4caf50;
-  --warning: #ff9800;
-  --error: #f44336;
+  --bg-primary: #18181B;
+  --bg-secondary: #27272A;
+  --bg-tertiary: #232326;
+  --text-primary: #E4E4E7;
+  --text-secondary: #A1A1AA;
+  --accent: #22D3EE;
+  --accent-dim: #06B6D4;
+  --accent-light: #67E8F9;
+  --border: #3F3F46;
+  --success: #86EFAC;
+  --warning: #FCD34D;
+  --error: #FCA5A5;
 
   /* === Derived from base (also overridden by theme) === */
-  --accent-bg: rgba(136, 192, 208, 0.1);
-  --accent-border: rgba(136, 192, 208, 0.2);
-  --accent-shadow: rgba(136, 192, 208, 0.4);
-  --accent-shadow-fade: rgba(136, 192, 208, 0);
-  --success-bg: rgba(76, 175, 80, 0.15);
-  --success-border: rgba(76, 175, 80, 0.3);
-  --error-bg: rgba(244, 67, 54, 0.15);
-  --error-bg-subtle: rgba(244, 67, 54, 0.08);
-  --error-border: rgba(244, 67, 54, 0.3);
-  --border-subtle: rgba(255, 255, 255, 0.03);
+  --accent-bg: rgba(34, 211, 238, 0.1);
+  --accent-border: rgba(34, 211, 238, 0.2);
+  --accent-shadow: rgba(34, 211, 238, 0.4);
+  --accent-shadow-fade: rgba(34, 211, 238, 0);
+  --accent-rgb: 34, 211, 238;
+  --success-bg: rgba(134, 239, 172, 0.15);
+  --success-border: rgba(134, 239, 172, 0.3);
+  --error-bg: rgba(252, 165, 165, 0.15);
+  --error-bg-subtle: rgba(252, 165, 165, 0.08);
+  --error-border: rgba(252, 165, 165, 0.3);
+  --border-subtle: rgba(228, 228, 231, 0.03);
 
   /* === Interactive elements === */
-  --button-bg: rgba(255, 255, 255, 0.05);
-  --button-border: rgba(255, 255, 255, 0.12);
-  --button-text: rgba(255, 255, 255, 0.5);
-  --button-bg-hover: rgba(255, 255, 255, 0.08);
-  --button-border-hover: rgba(255, 255, 255, 0.2);
-  --button-text-hover: rgba(255, 255, 255, 0.7);
-  --hover-bg: rgba(255, 255, 255, 0.05);
-  --hover-border: rgba(255, 255, 255, 0.08);
-  --hover-bg-secondary: rgba(22, 33, 62, 0.8);
+  --button-bg: rgba(228, 228, 231, 0.05);
+  --button-border: rgba(228, 228, 231, 0.12);
+  --button-text: rgba(228, 228, 231, 0.5);
+  --button-bg-hover: rgba(228, 228, 231, 0.08);
+  --button-border-hover: rgba(228, 228, 231, 0.2);
+  --button-text-hover: rgba(228, 228, 231, 0.7);
+  --hover-bg: rgba(228, 228, 231, 0.05);
+  --hover-border: rgba(228, 228, 231, 0.08);
+  --hover-bg-secondary: rgba(39, 39, 42, 0.8);
 
   /* === Surfaces === */
   --icon-bg: rgba(160, 160, 160, 0.1);

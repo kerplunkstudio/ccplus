@@ -13,7 +13,7 @@ interface MessageBubbleProps {
 const codeBlockStyle = {
   margin: 0,
   borderRadius: '0 0 8px 8px',
-  background: 'rgba(0, 0, 0, 0.4)',
+  background: 'rgba(0, 0, 0, 0.3)',
   fontSize: '13px',
 };
 
