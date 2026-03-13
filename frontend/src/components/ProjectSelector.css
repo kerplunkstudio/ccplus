@@ -73,12 +73,17 @@
   border-radius: 4px;
   color: var(--text-primary);
   font-size: 12px;
-  outline: none;
   box-sizing: border-box;
 }
 
-.project-selector-search input:focus {
-  border-color: var(--accent-border);
+.project-selector-search input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+
+.project-selector-search input:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .project-selector-search input::placeholder {
