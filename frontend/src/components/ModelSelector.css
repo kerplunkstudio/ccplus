@@ -66,6 +66,11 @@
   background: var(--button-bg-hover);
 }
 
+.model-selector-item.focused {
+  background: var(--button-bg-hover);
+  outline: 1px solid var(--accent-border);
+}
+
 .model-selector-item.active {
   background: var(--accent-bg);
 }
