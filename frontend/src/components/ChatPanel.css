@@ -337,7 +337,7 @@
 
 .cancel-btn {
   background: var(--error);
-  color: white;
+  color: var(--bg-primary);
 }
 
 .cancel-btn:hover {
