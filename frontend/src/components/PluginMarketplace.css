@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .marketplace-header {
@@ -11,7 +11,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .marketplace-header h1 {
@@ -23,7 +23,7 @@
 .close-btn {
   background: none;
   border: none;
-  color: #888;
+  color: var(--text-secondary);
   font-size: 2rem;
   cursor: pointer;
   padding: 0;
@@ -36,34 +36,34 @@
 }
 
 .close-btn:hover {
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .search-bar {
   padding: 1rem 2rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .search-input {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  color: #d4d4d4;
+  color: var(--text-primary);
   font-size: 0.95rem;
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #007acc;
+  border-color: var(--accent);
 }
 
 .error-message {
   padding: 1rem 2rem;
-  background: #5a1d1d;
-  color: #f48771;
-  border-bottom: 1px solid #333;
+  background: var(--error-bg);
+  color: var(--error);
+  border-bottom: 1px solid var(--border);
 }
 
 .marketplace-content {
@@ -83,8 +83,8 @@
 }
 
 .plugin-card {
-  background: #252526;
-  border: 1px solid #333;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1.25rem;
   cursor: pointer;
@@ -95,13 +95,13 @@
 }
 
 .plugin-card:hover {
-  border-color: #007acc;
-  background: #2a2a2a;
+  border-color: var(--accent);
+  background: var(--bg-secondary);
 }
 
 .plugin-card.selected {
-  border-color: #007acc;
-  background: #2d2d30;
+  border-color: var(--accent);
+  background: var(--hover-bg-secondary);
 }
 
 .plugin-header {
@@ -115,7 +115,7 @@
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #d4d4d4;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -123,14 +123,14 @@
 
 .plugin-version {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
 .plugin-description {
   margin: 0;
   font-size: 0.9rem;
-  color: #999;
+  color: var(--text-secondary);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -147,10 +147,10 @@
 
 .keyword {
   padding: 0.25rem 0.5rem;
-  background: #3c3c3c;
+  background: var(--button-bg);
   border-radius: 3px;
   font-size: 0.75rem;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 .plugin-footer {
@@ -159,12 +159,12 @@
   align-items: center;
   margin-top: auto;
   padding-top: 0.75rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
 }
 
 .plugin-author {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .plugin-action-btn {
@@ -178,21 +178,21 @@
 }
 
 .plugin-action-btn.install {
-  background: #007acc;
-  color: white;
+  background: var(--accent);
+  color: var(--text-primary);
 }
 
 .plugin-action-btn.install:hover:not(:disabled) {
-  background: #005a9e;
+  background: var(--accent-dim);
 }
 
 .plugin-action-btn.uninstall {
-  background: #c74440;
-  color: white;
+  background: var(--error);
+  color: var(--text-primary);
 }
 
 .plugin-action-btn.uninstall:hover:not(:disabled) {
-  background: #a33632;
+  background: var(--accent-dim);
 }
 
 .plugin-action-btn:disabled {
@@ -202,9 +202,9 @@
 
 .plugin-details-panel {
   width: 400px;
-  border-left: 1px solid #333;
+  border-left: 1px solid var(--border);
   overflow-y: auto;
-  background: #252526;
+  background: var(--bg-tertiary);
 }
 
 .plugin-details {
@@ -219,14 +219,14 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .plugin-details-header {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 1rem;
 }
 
@@ -234,13 +234,13 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .plugin-description-full {
   margin: 0;
   font-size: 0.95rem;
-  color: #999;
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
@@ -252,16 +252,16 @@
 
 .meta-item {
   font-size: 0.9rem;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 .meta-item strong {
-  color: #d4d4d4;
+  color: var(--text-primary);
   margin-right: 0.5rem;
 }
 
 .meta-item a {
-  color: #007acc;
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -276,7 +276,7 @@
 }
 
 .plugin-keywords-full strong {
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .keywords-list {
@@ -292,13 +292,13 @@
 }
 
 .plugin-content-section strong {
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .plugin-content-section ul {
   margin: 0;
   padding-left: 1.5rem;
-  color: #aaa;
+  color: var(--text-secondary);
 }
 
 .plugin-content-section li {
@@ -310,7 +310,7 @@
   display: flex;
   gap: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
 }
 
 .plugin-actions .plugin-action-btn {
@@ -324,7 +324,7 @@
   grid-column: 1 / -1;
   text-align: center;
   padding: 3rem;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 1200px) {
@@ -341,7 +341,7 @@
   .plugin-details-panel {
     width: 100%;
     border-left: none;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border);
     max-height: 40%;
   }
 

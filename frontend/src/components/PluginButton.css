@@ -5,18 +5,18 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--button-bg);
+  border: 1px solid var(--button-border);
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--button-text-hover);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .plugin-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--button-bg-hover);
+  border-color: var(--button-border-hover);
+  color: var(--text-primary);
 }
 
 .plugin-button svg {

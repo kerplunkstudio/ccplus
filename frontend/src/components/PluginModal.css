@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--overlay-bg);
   backdrop-filter: blur(4px);
   z-index: 1000;
   display: flex;
@@ -30,7 +30,7 @@
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px var(--shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -76,12 +76,12 @@
 
 .plugin-modal-tab:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--button-bg);
 }
 
 .plugin-modal-tab.active {
   color: var(--accent);
-  background: rgba(99, 102, 241, 0.15);
+  background: var(--accent-bg);
 }
 
 .plugin-modal-close {
@@ -101,7 +101,7 @@
 
 .plugin-modal-close:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--button-bg);
 }
 
 .plugin-modal-content {
