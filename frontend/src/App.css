@@ -80,25 +80,3 @@
     flex: 0 0 240px;
   }
 }
-
-/* Theme toggle button */
-
-.theme-toggle-btn {
-  background: var(--color-button-bg, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--color-button-border, rgba(255, 255, 255, 0.12));
-  color: var(--color-text);
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.theme-toggle-btn:hover {
-  background: var(--color-button-bg-hover, rgba(255, 255, 255, 0.08));
-  border-color: var(--color-button-border-hover, rgba(255, 255, 255, 0.2));
-  color: var(--color-accent);
-}

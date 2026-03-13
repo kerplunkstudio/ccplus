@@ -5,16 +5,14 @@ import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { SessionSwitcher } from './components/SessionSwitcher';
 import { ThemeProvider } from './theme';
-import { ThemePanel } from './components/ThemePanel';
 import './App.css';
 
 interface AppContentProps {
   token: string | null;
   loading: boolean;
-  onThemePanelToggle: (isOpen: boolean) => void;
 }
 
-function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
+function AppContent({ token, loading }: AppContentProps) {
   const {
     connected,
     messages,
@@ -80,7 +78,6 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
           onSelectProject={handleSelectProject}
           onSelectModel={handleSelectModel}
           onCancel={cancelQuery}
-          onThemePanelToggle={onThemePanelToggle}
         />
       </div>
       <div className="panel-activity">
@@ -92,16 +89,10 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
 
 function App() {
   const { token, loading } = useAuth();
-  const [isThemePanelOpen, setIsThemePanelOpen] = useState(false);
 
   return (
     <ThemeProvider>
-      <AppContent
-        token={token}
-        loading={loading}
-        onThemePanelToggle={setIsThemePanelOpen}
-      />
-      <ThemePanel isOpen={isThemePanelOpen} onClose={() => setIsThemePanelOpen(false)} />
+      <AppContent token={token} loading={loading} />
     </ThemeProvider>
   );
 }
