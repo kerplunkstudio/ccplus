@@ -23,6 +23,7 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
     activityTree,
     usageStats,
     sessionId,
+    toolLog,
     sendMessage,
     cancelQuery,
     switchSession,
@@ -72,6 +73,7 @@ function AppContent({ token, loading, onThemePanelToggle }: AppContentProps) {
           connected={connected}
           streaming={streaming}
           currentTool={currentTool}
+          toolLog={toolLog}
           selectedProject={selectedProject}
           selectedModel={selectedModel}
           onSendMessage={sendMessage}

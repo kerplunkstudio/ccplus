@@ -10,6 +10,7 @@ interface ChatPanelProps {
   connected: boolean;
   streaming: boolean;
   currentTool?: ToolEvent | null;
+  toolLog: ToolEvent[];
   selectedProject: string | null;
   selectedModel: string;
   onSendMessage: (content: string, workspace?: string, model?: string) => void;
@@ -46,11 +47,60 @@ function formatToolLabel(event: ToolEvent): string {
   }
 }
 
+function formatToolLabelCompact(event: ToolEvent): string {
+  const params = event.parameters || {};
+  switch (event.tool_name) {
+    case 'Read':
+      return `Read ${basename(String(params.file_path || ''))}`;
+    case 'Write':
+      return `Write ${basename(String(params.file_path || ''))}`;
+    case 'Edit':
+      return `Edit ${basename(String(params.file_path || ''))}`;
+    case 'Bash': {
+      const cmd = String(params.command || '');
+      return `Bash ${cmd.slice(0, 30)}${cmd.length > 30 ? '...' : ''}`;
+    }
+    case 'Glob':
+      return `Glob ${String(params.pattern || '')}`;
+    case 'Grep':
+      return `Grep ${String(params.pattern || '')}`;
+    case 'Agent':
+    case 'Task':
+      return event.agent_type || 'agent';
+    default:
+      return event.tool_name;
+  }
+}
+
+function ToolLogEntry({ event }: { event: ToolEvent }) {
+  const isRunning = event.type === 'tool_start' || event.type === 'agent_start';
+  const isFailed = event.success === false || event.error != null;
+  const isCompleted = (event.type === 'tool_complete' || event.type === 'agent_stop') && !isFailed;
+
+  let dotClass = 'tool-log-dot';
+  if (isRunning) dotClass += ' running';
+  else if (isFailed) dotClass += ' failed';
+  else if (isCompleted) dotClass += ' completed';
+
+  const durationStr = event.duration_ms != null
+    ? `${(event.duration_ms / 1000).toFixed(1)}s`
+    : null;
+
+  return (
+    <div className="tool-log-entry">
+      <span className={dotClass} />
+      <span>{formatToolLabelCompact(event)}</span>
+      {durationStr && <span className="tool-log-duration">{durationStr}</span>}
+    </div>
+  );
+}
+
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
   currentTool,
+  toolLog,
   selectedProject,
   selectedModel,
   onSendMessage,
@@ -140,8 +190,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <React.Fragment key={msg.id}>
+            {msg.toolLog && msg.toolLog.length > 0 && (
+              <div className="tool-log">
+                {msg.toolLog.map((event) => (
+                  <ToolLogEntry key={event.tool_use_id} event={event} />
+                ))}
+              </div>
+            )}
+            <MessageBubble message={msg} />
+          </React.Fragment>
         ))}
+        {streaming && toolLog.length > 0 && (
+          <div className="tool-log">
+            {toolLog.map((event) => (
+              <ToolLogEntry key={event.tool_use_id} event={event} />
+            ))}
+          </div>
+        )}
         {streaming && !messages.some((m) => m.streaming) && (
           <div className="thinking-indicator">
             {currentTool ? (

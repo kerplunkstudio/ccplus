@@ -282,3 +282,48 @@
     transform: scale(1.1);
   }
 }
+
+.tool-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+  align-self: flex-start;
+}
+
+.tool-log-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  padding: 1px 0;
+  line-height: 1.4;
+}
+
+.tool-log-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tool-log-dot.completed {
+  background: var(--success);
+}
+
+.tool-log-dot.failed {
+  background: var(--error);
+}
+
+.tool-log-dot.running {
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.tool-log-duration {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-size: 11px;
+}

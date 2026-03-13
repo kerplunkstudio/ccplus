@@ -177,6 +177,8 @@ export function useSocket(token: string | null) {
   const sequenceRef = useRef(0);
   const [sessionId, setSessionId] = useState(getSessionId);
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
+  const toolLogRef = useRef<ToolEvent[]>([]);
+  const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
 
   useEffect(() => {
     if (!token) return;
@@ -187,7 +189,71 @@ export function useSocket(token: string | null) {
     });
 
     newSocket.on('connect', () => setConnected(true));
-    newSocket.on('disconnect', () => setConnected(false));
+    newSocket.on('disconnect', () => {
+      setConnected(false);
+      // If we were streaming when the server went down, finalize the message
+      if (streamingIdRef.current) {
+        const msgId = streamingIdRef.current;
+        const finalContent = streamingContentRef.current;
+        if (finalContent) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, content: finalContent, streaming: false } : m
+            )
+          );
+        }
+        streamingContentRef.current = '';
+        streamingIdRef.current = null;
+        setStreaming(false);
+        setCurrentTool(null);
+      }
+    });
+
+    newSocket.io.on('reconnect', () => {
+      // Re-fetch conversation history and activity tree after server restart
+      const restoreAfterReconnect = async () => {
+        try {
+          const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
+          if (historyRes.ok) {
+            const { messages: dbMessages } = await historyRes.json();
+            if (dbMessages && dbMessages.length > 0) {
+              const restored: Message[] = dbMessages.map((m: any) => ({
+                id: `db_${m.id}`,
+                content: m.content,
+                role: m.role as 'user' | 'assistant',
+                timestamp: new Date(m.timestamp).getTime(),
+              }));
+              setMessages(restored);
+            }
+          }
+
+          const activityRes = await fetch(`${SOCKET_URL}/api/activity/${sessionId}`);
+          if (activityRes.ok) {
+            const { events } = await activityRes.json();
+            if (events && events.length > 0) {
+              const toolEvents: ToolEvent[] = events.map((e: any) => ({
+                type: e.agent_type ? (e.success !== null ? 'agent_stop' : 'agent_start')
+                     : (e.success !== null ? 'tool_complete' : 'tool_start'),
+                tool_name: e.tool_name,
+                tool_use_id: e.tool_use_id,
+                parent_agent_id: e.parent_agent_id || null,
+                agent_type: e.agent_type,
+                timestamp: e.timestamp,
+                success: e.success,
+                error: e.error,
+                duration_ms: e.duration_ms,
+                parameters: e.parameters,
+              }));
+              dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+            }
+          }
+        } catch (err) {
+          // Server may still be starting up, socket.io will retry
+        }
+      };
+
+      restoreAfterReconnect();
+    });
 
     // Message received acknowledgment — notify that new session should be refreshed
     newSocket.on('message_received', () => {
@@ -236,7 +302,7 @@ export function useSocket(token: string | null) {
         const finalContent = data.content || streamingContentRef.current;
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === msgId ? { ...m, content: finalContent, streaming: false } : m
+            m.id === msgId ? { ...m, content: finalContent, streaming: false, toolLog: [...toolLogRef.current] } : m
           )
         );
       }
@@ -254,6 +320,8 @@ export function useSocket(token: string | null) {
       streamingIdRef.current = null;
       setStreaming(false);
       setCurrentTool(null);
+      toolLogRef.current = [];
+      setToolLog([]);
     });
 
     // Tool/agent activity events
@@ -263,21 +331,43 @@ export function useSocket(token: string | null) {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           setCurrentTool(event);
+          // Add to tool log
+          const newEntry = { ...event };
+          toolLogRef.current = [...toolLogRef.current, newEntry];
+          setToolLog([...toolLogRef.current]);
           break;
         }
         case 'tool_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           setCurrentTool(event);
+          // Add to tool log
+          const newEntry = { ...event };
+          toolLogRef.current = [...toolLogRef.current, newEntry];
+          setToolLog([...toolLogRef.current]);
           break;
         }
         case 'tool_complete':
           dispatchTree({ type: 'TOOL_COMPLETE', event });
           setCurrentTool(null);
+          // Update existing entry in tool log
+          toolLogRef.current = toolLogRef.current.map((t) =>
+            t.tool_use_id === event.tool_use_id
+              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
+              : t
+          );
+          setToolLog([...toolLogRef.current]);
           break;
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
           setCurrentTool(null);
+          // Update existing entry in tool log
+          toolLogRef.current = toolLogRef.current.map((t) =>
+            t.tool_use_id === event.tool_use_id
+              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
+              : t
+          );
+          setToolLog([...toolLogRef.current]);
           break;
       }
     });
@@ -367,6 +457,8 @@ export function useSocket(token: string | null) {
       };
       setMessages((prev) => [...prev, userMessage]);
       setStreaming(true);
+      toolLogRef.current = [];
+      setToolLog([]);
       socket.emit('message', { content, workspace, model });
     },
     [socket, connected]
@@ -440,6 +532,7 @@ export function useSocket(token: string | null) {
     activityTree,
     usageStats,
     sessionId,
+    toolLog,
     sendMessage,
     cancelQuery,
     switchSession,
