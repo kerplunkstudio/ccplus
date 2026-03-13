@@ -59,7 +59,7 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
           <div
             className="context-bar-fill"
             style={{
-              width: `${contextPercent}%`,
+              transform: `scaleX(${contextPercent / 100})`,
               backgroundColor: getContextBarColor(),
             }}
           />
