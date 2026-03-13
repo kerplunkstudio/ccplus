@@ -1,16 +1,16 @@
 import { Theme } from './themeTypes'
 
 export const THEME: Theme = {
-  name: 'Warm Zinc',
-  presetId: 'warm-zinc',
+  name: 'Electric Ember',
+  presetId: 'electric-ember',
   colors: {
-    background: '#18181B',
-    accent: '#22D3EE',
-    text: '#E4E4E7',
-    border: '#3F3F46',
-    hover: '#27272A',
-    success: '#86EFAC',
-    warning: '#FCD34D',
-    error: '#FCA5A5',
+    background: '#141316',
+    accent: '#F07B3F',
+    text: '#E8E4DF',
+    border: '#332F2C',
+    hover: '#1E1D20',
+    success: '#A3D977',
+    warning: '#F0C246',
+    error: '#F25C5C',
   },
 }

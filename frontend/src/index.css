@@ -1,44 +1,44 @@
 :root {
   /* === Base palette (overridden by theme) === */
-  --bg-primary: #18181B;
-  --bg-secondary: #27272A;
-  --bg-tertiary: #232326;
-  --text-primary: #E4E4E7;
-  --text-secondary: #A1A1AA;
-  --accent: #22D3EE;
-  --accent-dim: #06B6D4;
-  --accent-light: #67E8F9;
-  --border: #3F3F46;
-  --success: #86EFAC;
-  --warning: #FCD34D;
-  --error: #FCA5A5;
+  --bg-primary: #141316;
+  --bg-secondary: #1E1D20;
+  --bg-tertiary: #232226;
+  --text-primary: #E8E4DF;
+  --text-secondary: #9B9590;
+  --accent: #F07B3F;
+  --accent-dim: #D4662E;
+  --accent-light: #F5954F;
+  --border: #332F2C;
+  --success: #A3D977;
+  --warning: #F0C246;
+  --error: #F25C5C;
 
   /* === Derived from base (also overridden by theme) === */
-  --accent-bg: rgba(34, 211, 238, 0.1);
-  --accent-border: rgba(34, 211, 238, 0.2);
-  --accent-shadow: rgba(34, 211, 238, 0.4);
-  --accent-shadow-fade: rgba(34, 211, 238, 0);
-  --accent-rgb: 34, 211, 238;
-  --success-bg: rgba(134, 239, 172, 0.15);
-  --success-border: rgba(134, 239, 172, 0.3);
-  --error-bg: rgba(252, 165, 165, 0.15);
-  --error-bg-subtle: rgba(252, 165, 165, 0.08);
-  --error-border: rgba(252, 165, 165, 0.3);
-  --border-subtle: rgba(228, 228, 231, 0.03);
+  --accent-bg: rgba(240, 123, 63, 0.1);
+  --accent-border: rgba(240, 123, 63, 0.2);
+  --accent-shadow: rgba(240, 123, 63, 0.4);
+  --accent-shadow-fade: rgba(240, 123, 63, 0);
+  --accent-rgb: 240, 123, 63;
+  --success-bg: rgba(163, 217, 119, 0.15);
+  --success-border: rgba(163, 217, 119, 0.3);
+  --error-bg: rgba(242, 92, 92, 0.15);
+  --error-bg-subtle: rgba(242, 92, 92, 0.08);
+  --error-border: rgba(242, 92, 92, 0.3);
+  --border-subtle: rgba(232, 228, 223, 0.03);
 
   /* === Interactive elements === */
-  --button-bg: rgba(228, 228, 231, 0.05);
-  --button-border: rgba(228, 228, 231, 0.12);
-  --button-text: rgba(228, 228, 231, 0.5);
-  --button-bg-hover: rgba(228, 228, 231, 0.08);
-  --button-border-hover: rgba(228, 228, 231, 0.2);
-  --button-text-hover: rgba(228, 228, 231, 0.7);
-  --hover-bg: rgba(228, 228, 231, 0.05);
-  --hover-border: rgba(228, 228, 231, 0.08);
-  --hover-bg-secondary: rgba(39, 39, 42, 0.8);
+  --button-bg: rgba(232, 228, 223, 0.05);
+  --button-border: rgba(232, 228, 223, 0.12);
+  --button-text: rgba(232, 228, 223, 0.5);
+  --button-bg-hover: rgba(232, 228, 223, 0.08);
+  --button-border-hover: rgba(232, 228, 223, 0.2);
+  --button-text-hover: rgba(232, 228, 223, 0.7);
+  --hover-bg: rgba(232, 228, 223, 0.05);
+  --hover-border: rgba(232, 228, 223, 0.08);
+  --hover-bg-secondary: rgba(30, 29, 32, 0.8);
 
   /* === Surfaces === */
-  --icon-bg: rgba(160, 160, 160, 0.1);
+  --icon-bg: rgba(155, 149, 144, 0.1);
   --code-bg: rgba(0, 0, 0, 0.3);
   --code-header-bg: rgba(0, 0, 0, 0.5);
   --overlay-bg: rgba(0, 0, 0, 0.7);
@@ -72,7 +72,7 @@ body {
 
 ::selection {
   background: var(--accent-dim);
-  color: white;
+  color: var(--bg-primary);
 }
 
 code {
