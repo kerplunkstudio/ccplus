@@ -4,8 +4,6 @@ import { useSocket } from './hooks/useSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { SessionSwitcher } from './components/SessionSwitcher';
-import { PluginMarketplace } from './components/PluginMarketplace';
-import { InstalledPlugins } from './components/InstalledPlugins';
 import { ThemeProvider } from './theme';
 import './App.css';
 
@@ -13,8 +11,6 @@ interface AppContentProps {
   token: string | null;
   loading: boolean;
 }
-
-type ViewMode = 'chat' | 'marketplace' | 'installed';
 
 function AppContent({ token, loading }: AppContentProps) {
   const {
@@ -40,8 +36,6 @@ function AppContent({ token, loading }: AppContentProps) {
     return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
   });
 
-  const [viewMode, setViewMode] = useState<ViewMode>('chat');
-
   const handleSelectProject = (path: string) => {
     setSelectedProject(path);
     localStorage.setItem('ccplus_selected_project', path);
@@ -63,72 +57,33 @@ function AppContent({ token, loading }: AppContentProps) {
 
   return (
     <div className="app-layout">
-      <div className="app-header">
-        <div className="app-tabs">
-          <button
-            className={`app-tab ${viewMode === 'chat' ? 'active' : ''}`}
-            onClick={() => setViewMode('chat')}
-          >
-            Chat
-          </button>
-          <button
-            className={`app-tab ${viewMode === 'marketplace' ? 'active' : ''}`}
-            onClick={() => setViewMode('marketplace')}
-          >
-            Plugin Marketplace
-          </button>
-          <button
-            className={`app-tab ${viewMode === 'installed' ? 'active' : ''}`}
-            onClick={() => setViewMode('installed')}
-          >
-            Installed Plugins
-          </button>
-        </div>
+      <div className="panel-sessions">
+        <SessionSwitcher
+          currentSessionId={sessionId}
+          selectedProject={selectedProject}
+          onSwitchSession={switchSession}
+          onNewSession={newSession}
+        />
       </div>
-
-      {viewMode === 'chat' && (
-        <div className="app-layout-chat">
-          <div className="panel-sessions">
-            <SessionSwitcher
-              currentSessionId={sessionId}
-              selectedProject={selectedProject}
-              onSwitchSession={switchSession}
-              onNewSession={newSession}
-            />
-          </div>
-          <div className="panel-chat">
-            <ChatPanel
-              messages={messages}
-              connected={connected}
-              streaming={streaming}
-              sessionId={sessionId}
-              currentTool={currentTool}
-              toolLog={toolLog}
-              selectedProject={selectedProject}
-              selectedModel={selectedModel}
-              onSendMessage={sendMessage}
-              onSelectProject={handleSelectProject}
-              onSelectModel={handleSelectModel}
-              onCancel={cancelQuery}
-            />
-          </div>
-          <div className="panel-activity">
-            <ActivityTree tree={activityTree} usageStats={usageStats} />
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'marketplace' && (
-        <div className="app-view-full">
-          <PluginMarketplace />
-        </div>
-      )}
-
-      {viewMode === 'installed' && (
-        <div className="app-view-full">
-          <InstalledPlugins />
-        </div>
-      )}
+      <div className="panel-chat">
+        <ChatPanel
+          messages={messages}
+          connected={connected}
+          streaming={streaming}
+          sessionId={sessionId}
+          currentTool={currentTool}
+          toolLog={toolLog}
+          selectedProject={selectedProject}
+          selectedModel={selectedModel}
+          onSendMessage={sendMessage}
+          onSelectProject={handleSelectProject}
+          onSelectModel={handleSelectModel}
+          onCancel={cancelQuery}
+        />
+      </div>
+      <div className="panel-activity">
+        <ActivityTree tree={activityTree} usageStats={usageStats} />
+      </div>
     </div>
   );
 }
