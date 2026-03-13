@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message, ToolEvent, ToolDisplayMode } from '../types';
+import { Message, ToolEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ProjectSelector } from './ProjectSelector';
 import { ModelSelector } from './ModelSelector';
-import { ToolDisplayToggle } from './ToolDisplayToggle';
 import './ChatPanel.css';
 
 interface ChatPanelProps {
@@ -13,11 +12,9 @@ interface ChatPanelProps {
   currentTool?: ToolEvent | null;
   selectedProject: string | null;
   selectedModel: string;
-  toolDisplayMode: ToolDisplayMode;
   onSendMessage: (content: string, workspace?: string, model?: string) => void;
   onSelectProject: (path: string) => void;
   onSelectModel: (model: string) => void;
-  onToolDisplayModeChange: (mode: ToolDisplayMode) => void;
   onCancel: () => void;
   onThemePanelToggle?: (isOpen: boolean) => void;
 }
@@ -56,11 +53,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   currentTool,
   selectedProject,
   selectedModel,
-  toolDisplayMode,
   onSendMessage,
   onSelectProject,
   onSelectModel,
-  onToolDisplayModeChange,
   onCancel,
   onThemePanelToggle,
 }) => {
@@ -122,10 +117,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             selectedModel={selectedModel}
             onSelectModel={onSelectModel}
           />
-          <ToolDisplayToggle
-            mode={toolDisplayMode}
-            onToggle={onToolDisplayModeChange}
-          />
           <button
             className="theme-toggle-btn"
             onClick={() => onThemePanelToggle?.(true)}
@@ -145,11 +136,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <p className="empty-subtitle">Ask anything or request a coding task</p>
           </div>
         )}
-        {messages
-          .filter((m) => toolDisplayMode === 'verbose' || !m.tool)
-          .map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))}
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} message={msg} />
+        ))}
         {streaming && !messages.some((m) => m.streaming) && (
           <div className="thinking-indicator">
             {currentTool ? (
@@ -167,7 +156,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {toolDisplayMode === 'minimal' && streaming && currentTool && (
+      {streaming && currentTool && (
         <div className="minimal-tool-indicator">
           <span className="pulsing-dot" />
           {formatToolLabel(currentTool)}
