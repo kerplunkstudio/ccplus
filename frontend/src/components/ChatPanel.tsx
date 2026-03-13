@@ -56,13 +56,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
 
-  const getGreeting = (): string => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
-
   const examplePrompts = [
     'Explain how the auth system works',
     'Find and fix any TypeScript errors',
@@ -180,9 +173,39 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
           {messages.length === 0 && (
             <div className="empty-state">
-              <div className="empty-icon">{'>'}_</div>
-              <p className="empty-title">{getGreeting()}</p>
-              <p className="empty-subtitle">What are you working on?</p>
+              <div className="ghost-activity">
+                <div className="ghost-node ghost-agent">
+                  <div className="ghost-bar ghost-bar-accent" />
+                  <div className="ghost-content">
+                    <div className="ghost-label">Agent</div>
+                    <div className="ghost-line ghost-line-long" />
+                  </div>
+                  <div className="ghost-children">
+                    <div className="ghost-node ghost-tool">
+                      <div className="ghost-bar ghost-bar-success" />
+                      <div className="ghost-content">
+                        <div className="ghost-label">Read</div>
+                        <div className="ghost-line ghost-line-medium" />
+                      </div>
+                    </div>
+                    <div className="ghost-node ghost-tool">
+                      <div className="ghost-bar ghost-bar-success" />
+                      <div className="ghost-content">
+                        <div className="ghost-label">Edit</div>
+                        <div className="ghost-line ghost-line-short" />
+                      </div>
+                    </div>
+                    <div className="ghost-node ghost-tool">
+                      <div className="ghost-bar ghost-bar-running" />
+                      <div className="ghost-content">
+                        <div className="ghost-label">Bash</div>
+                        <div className="ghost-line ghost-line-medium ghost-line-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="empty-subtitle">Watch every tool call, agent spawn, and decision — live</p>
               <div className="empty-prompts">
                 {examplePrompts.map((prompt) => (
                   <button
