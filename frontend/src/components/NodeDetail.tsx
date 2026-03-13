@@ -32,9 +32,6 @@ const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
   return (
     <div className="node-detail-content">
       <div className="detail-header">
-        <div className="detail-header-icon">
-          <ToolIcon toolName="Agent" size={24} />
-        </div>
         <div className="detail-header-info">
           <div className="detail-header-label">Agent</div>
           <div className="detail-header-title">{node.agent_type}</div>
@@ -80,19 +77,9 @@ const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
         <div className="detail-section">
           <div className="detail-section-title">Operations</div>
           <div className="detail-section-content">
-            <div className="detail-stats">
-              <div className="detail-stat">
-                <div className="detail-stat-value">{toolCount}</div>
-                <div className="detail-stat-label">Tool{toolCount !== 1 ? 's' : ''}</div>
-              </div>
-              <div className="detail-stat">
-                <div className="detail-stat-value">{agentCount}</div>
-                <div className="detail-stat-label">Agent{agentCount !== 1 ? 's' : ''}</div>
-              </div>
-              <div className="detail-stat">
-                <div className="detail-stat-value">{node.children.length}</div>
-                <div className="detail-stat-label">Total</div>
-              </div>
+            <div className="detail-ops-summary">
+              {node.children.length} operation{node.children.length !== 1 ? 's' : ''}
+              {toolCount > 0 && agentCount > 0 && ` · ${toolCount} tool${toolCount !== 1 ? 's' : ''}, ${agentCount} agent${agentCount !== 1 ? 's' : ''}`}
             </div>
 
             <div className="detail-timeline">
@@ -141,9 +128,6 @@ const ToolDetail: React.FC<{ node: ToolNode }> = ({ node }) => {
   return (
     <div className="node-detail-content">
       <div className="detail-header">
-        <div className="detail-header-icon">
-          <ToolIcon toolName={node.tool_name} size={24} />
-        </div>
         <div className="detail-header-info">
           <div className="detail-header-label">Tool</div>
           <div className="detail-header-title">{node.tool_name}</div>

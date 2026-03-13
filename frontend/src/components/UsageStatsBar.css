@@ -30,8 +30,7 @@
 .usage-stat-label {
   color: var(--text-secondary);
   font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
 }
 
 .usage-stat-value {
