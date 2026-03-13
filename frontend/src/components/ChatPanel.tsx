@@ -7,6 +7,16 @@ import { ToolLog } from './ToolLog';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import './ChatPanel.css';
 
+const THINKING_MESSAGES = [
+  'Thinking...',
+  'Reasoning...',
+  'Exploring the codebase...',
+  'Reading the code...',
+  'Analyzing patterns...',
+  'Considering options...',
+  'Connecting the dots...',
+];
+
 interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
@@ -44,6 +54,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
 
   const getGreeting = (): string => {
     const hour = new Date().getHours();
@@ -84,6 +95,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       textareaRef.current.style.height = `${newHeight}px`;
     }
   }, [input]);
+
+  // Rotate thinking messages
+  useEffect(() => {
+    if (!streaming) {
+      setThinkingMsgIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setThinkingMsgIndex((prev) => (prev + 1) % THINKING_MESSAGES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [streaming]);
 
   const handleSubmit = () => {
     const trimmed = input.trim();
@@ -191,7 +214,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   <span className="dot" />
                   <span className="dot" />
                   <span className="dot" />
-                  <span className="thinking-text" role="status">Thinking...</span>
+                  <span className="thinking-text" role="status">{THINKING_MESSAGES[thinkingMsgIndex]}</span>
                 </div>
               )}
             </div>
@@ -214,7 +237,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={connected ? 'Send a message...' : 'Connecting...'}
+              placeholder={connected ? 'Send a message...' : 'Reconnecting — hang tight...'}
               disabled={!connected}
               rows={1}
             />
