@@ -164,7 +164,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
       <div className="session-list" role="list" aria-label="Chat sessions">
         {sessions.length === 0 ? (
           <div className="session-empty">
-            {projectName ? `No sessions for ${projectName}` : 'No sessions yet'}
+            {projectName ? `No sessions for ${projectName}` : 'Fresh start — create a session'}
           </div>
         ) : (
           sessions.map((session) => {

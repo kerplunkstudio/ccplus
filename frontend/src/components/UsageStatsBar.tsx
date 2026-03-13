@@ -64,7 +64,11 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
             }}
           />
         </div>
-        <span className="context-bar-label">{formatTokens(contextRemaining)} left</span>
+        <span className={`context-bar-label ${contextPercent > 80 ? 'context-warning' : ''}`}>
+          {contextPercent > 80
+            ? `${Math.round(contextPercent)}% — getting tight`
+            : `${formatTokens(contextRemaining)} left`}
+        </span>
       </div>
     </div>
   );

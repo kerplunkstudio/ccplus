@@ -74,6 +74,11 @@
   white-space: nowrap;
 }
 
+.context-bar-label.context-warning {
+  color: var(--error);
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .usage-stats-bar {
     gap: 4px;

@@ -34,6 +34,12 @@
   font-family: var(--font-mono);
   letter-spacing: 2px;
   text-transform: uppercase;
+  cursor: default;
+  transition: text-shadow 0.3s ease;
+}
+
+.chat-title:hover {
+  text-shadow: 0 0 20px rgba(var(--accent-rgb), 0.6), 0 0 40px rgba(var(--accent-rgb), 0.3);
 }
 
 .connection-dot {
@@ -108,6 +114,7 @@
   font-weight: 800;
   text-shadow: 0 0 40px rgba(var(--accent-rgb), 0.3);
   letter-spacing: 4px;
+  animation: emptyFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) backwards;
 }
 
 .empty-title {
@@ -115,12 +122,25 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.5px;
+  animation: emptyFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) 0.05s backwards;
 }
 
 .empty-subtitle {
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 4px;
+  animation: emptyFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) 0.1s backwards;
+}
+
+@keyframes emptyFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .empty-prompts {
@@ -154,6 +174,26 @@
   color: var(--text-primary);
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.15);
+}
+
+.empty-prompt-btn {
+  animation: promptFadeIn 0.4s cubic-bezier(0.25, 1, 0.5, 1) backwards;
+}
+
+.empty-prompt-btn:nth-child(1) { animation-delay: 0.1s; }
+.empty-prompt-btn:nth-child(2) { animation-delay: 0.2s; }
+.empty-prompt-btn:nth-child(3) { animation-delay: 0.3s; }
+.empty-prompt-btn:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes promptFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .empty-prompt-btn:active {
@@ -197,6 +237,8 @@
   color: var(--text-secondary);
   margin-left: 4px;
   font-style: italic;
+  transition: opacity 0.3s ease;
+  min-width: 140px;
 }
 
 @keyframes typingPulse {
