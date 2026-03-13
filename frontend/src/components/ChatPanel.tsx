@@ -11,6 +11,7 @@ interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
   streaming: boolean;
+  sessionId: string;
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
   selectedProject: string | null;
@@ -25,6 +26,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
+  sessionId,
   currentTool,
   toolLog,
   selectedProject,
@@ -49,13 +51,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Autofocus textarea on mount and when starting a new chat
-  const isEmpty = messages.length === 0;
+  // Autofocus textarea on mount, new chat, or session switch
   useEffect(() => {
     if (textareaRef.current && !streaming) {
       textareaRef.current.focus();
     }
-  }, [isEmpty, streaming]);
+  }, [sessionId, streaming]);
 
   // Auto-resize textarea
   useEffect(() => {

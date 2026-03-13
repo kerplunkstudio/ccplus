@@ -70,6 +70,7 @@ function AppContent({ token, loading }: AppContentProps) {
           messages={messages}
           connected={connected}
           streaming={streaming}
+          sessionId={sessionId}
           currentTool={currentTool}
           toolLog={toolLog}
           selectedProject={selectedProject}
