@@ -1,5 +1,4 @@
 export * from './themeTypes'
-export * from './themePresets'
-export * from './themeStorage'
+export { THEME } from './themePresets'
 export * from './applyTheme'
-export { ThemeProvider, useTheme } from './ThemeContext'
+export { ThemeProvider } from './ThemeContext'
