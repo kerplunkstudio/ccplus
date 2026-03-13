@@ -3,6 +3,8 @@ import { Message, ToolEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ProjectSelector } from './ProjectSelector';
 import { ModelSelector } from './ModelSelector';
+import { PluginButton } from './PluginButton';
+import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import './ChatPanel.css';
@@ -55,6 +57,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
+  const [pluginModalOpen, setPluginModalOpen] = useState(false);
 
   const examplePrompts = [
     'Watch agents work in parallel on a feature',
@@ -121,6 +124,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <>
+      <PluginModal isOpen={pluginModalOpen} onClose={() => setPluginModalOpen(false)} />
       <div className="chat-panel">
         <div className="chat-panel-header">
           <div className="header-left">
@@ -150,6 +154,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               selectedModel={selectedModel}
               onSelectModel={onSelectModel}
             />
+            <PluginButton onClick={() => setPluginModalOpen(true)} />
             {onToggleActivity && (
               <button
                 className="mobile-drawer-btn"

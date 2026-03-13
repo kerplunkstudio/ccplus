@@ -47,6 +47,7 @@ from backend.database import (
     get_tool_events,
     record_message,
 )
+from backend.plugins import PluginManager
 from backend.sdk_session import SessionManager
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,7 @@ socketio = SocketIO(
 )
 
 session_manager = SessionManager()
+plugin_manager = PluginManager()
 
 START_TIME = time.time()
 
@@ -246,6 +248,98 @@ def archive_session_endpoint(session_id):
     except Exception as exc:
         logger.error(f"Failed to archive session {session_id}: {exc}")
         return jsonify({"error": "Failed to archive session"}), 500
+
+
+# -- Plugins --------------------------------------------------------------
+
+
+@app.route("/api/plugins")
+def get_plugins():
+    """List all installed plugins."""
+    try:
+        result = plugin_manager.list_installed()
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Failed to list plugins")}), 500
+        return jsonify({"plugins": result.get("data", [])})
+    except Exception as exc:
+        logger.error(f"Failed to list plugins: {exc}")
+        return jsonify({"error": "Failed to list plugins"}), 500
+
+
+@app.route("/api/plugins/marketplace")
+def get_marketplace_plugins():
+    """List all available plugins from marketplaces."""
+    try:
+        search = request.args.get("search")
+        result = plugin_manager.list_marketplace_plugins(search)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Failed to load marketplace")}), 500
+        return jsonify({"plugins": result.get("data", [])})
+    except Exception as exc:
+        logger.error(f"Failed to load marketplace: {exc}")
+        return jsonify({"error": "Failed to load marketplace"}), 500
+
+
+@app.route("/api/plugins/install", methods=["POST"])
+def install_plugin():
+    """Install a plugin from a marketplace."""
+    try:
+        body = request.get_json(silent=True) or {}
+        identifier = body.get("identifier", "").strip()
+
+        if not identifier:
+            return jsonify({"error": "Plugin identifier required"}), 400
+
+        result = plugin_manager.install_plugin(identifier)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Installation failed")}), 500
+
+        return jsonify(result)
+    except Exception as exc:
+        logger.error(f"Failed to install plugin: {exc}")
+        return jsonify({"error": "Failed to install plugin"}), 500
+
+
+@app.route("/api/plugins/<plugin_name>", methods=["DELETE"])
+def uninstall_plugin(plugin_name):
+    """Uninstall an installed plugin."""
+    try:
+        result = plugin_manager.uninstall_plugin(plugin_name)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Uninstallation failed")}), 500
+
+        return jsonify(result)
+    except Exception as exc:
+        logger.error(f"Failed to uninstall plugin: {exc}")
+        return jsonify({"error": "Failed to uninstall plugin"}), 500
+
+
+@app.route("/api/plugins/<plugin_name>/skills")
+def get_plugin_skills(plugin_name):
+    """Get all skills provided by a specific plugin."""
+    try:
+        result = plugin_manager.get_plugin_skills(plugin_name)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Failed to get skills")}), 404
+
+        return jsonify({"skills": result.get("skills", [])})
+    except Exception as exc:
+        logger.error(f"Failed to get plugin skills: {exc}")
+        return jsonify({"error": "Failed to get plugin skills"}), 500
+
+
+@app.route("/api/skills")
+def get_all_skills():
+    """Get all skills from all installed plugins."""
+    try:
+        result = plugin_manager.get_all_skills()
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Failed to get skills")}), 500
+
+        return jsonify({"skills": result.get("skills", [])})
+    except Exception as exc:
+        logger.error(f"Failed to get skills: {exc}")
+        return jsonify({"error": "Failed to get skills"}), 500
 
 
 # =========================================================================
