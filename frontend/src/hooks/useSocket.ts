@@ -191,6 +191,8 @@ export function useSocket(token: string | null) {
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
   const toolLogRef = useRef<ToolEvent[]>([]);
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
+  // Tracks whether this session has an active stream (set by server on connect)
+  const streamActiveRef = useRef(false);
 
   useEffect(() => {
     if (!token) return;
@@ -235,7 +237,24 @@ export function useSocket(token: string | null) {
                 role: m.role as 'user' | 'assistant',
                 timestamp: new Date(m.timestamp).getTime(),
               }));
-              setMessages(restored);
+
+              // If stream_active was received, set up streaming from last assistant msg
+              if (streamActiveRef.current) {
+                streamActiveRef.current = false;
+                const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
+                if (lastAssistant) {
+                  streamingIdRef.current = lastAssistant.id;
+                  streamingContentRef.current = lastAssistant.content || '';
+                  setStreaming(true);
+                  setMessages(restored.map((m) =>
+                    m.id === lastAssistant.id ? { ...m, streaming: true } : m
+                  ));
+                } else {
+                  setMessages(restored);
+                }
+              } else {
+                setMessages(restored);
+              }
             }
           }
 
@@ -292,25 +311,49 @@ export function useSocket(token: string | null) {
       window.dispatchEvent(new CustomEvent('ccplus_message_received'));
     });
 
+    // Server tells us this session has an active stream (e.g., after session switch)
+    newSocket.on('stream_active', () => {
+      streamActiveRef.current = true;
+      setStreaming(true);
+    });
+
     // Streaming text deltas
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
-      streamingContentRef.current += data.text;
-      const currentContent = streamingContentRef.current;
-      const msgId = streamingIdRef.current || `stream_${Date.now()}`;
-
       if (!streamingIdRef.current) {
-        streamingIdRef.current = msgId;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: msgId,
-            content: currentContent,
-            role: 'assistant',
-            timestamp: Date.now(),
-            streaming: true,
-          },
-        ]);
+        // Starting fresh or resuming after session switch.
+        // Check if the last message is an existing assistant message (from DB restore)
+        // and continue from it rather than creating a duplicate.
+        setMessages((prev) => {
+          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
+          if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.streaming) {
+            // Resume from DB-restored assistant message
+            streamingContentRef.current = lastMsg.content + data.text;
+            streamingIdRef.current = lastMsg.id;
+            return prev.map((m) =>
+              m.id === lastMsg.id
+                ? { ...m, content: streamingContentRef.current, streaming: true }
+                : m
+            );
+          }
+          // No existing assistant message to resume from — create new
+          const msgId = `stream_${Date.now()}`;
+          streamingContentRef.current = data.text;
+          streamingIdRef.current = msgId;
+          return [
+            ...prev,
+            {
+              id: msgId,
+              content: data.text,
+              role: 'assistant' as const,
+              timestamp: Date.now(),
+              streaming: true,
+            },
+          ];
+        });
       } else {
+        streamingContentRef.current += data.text;
+        const currentContent = streamingContentRef.current;
+        const msgId = streamingIdRef.current;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === msgId ? { ...m, content: currentContent } : m
@@ -449,7 +492,25 @@ export function useSocket(token: string | null) {
               role: m.role as 'user' | 'assistant',
               timestamp: new Date(m.timestamp).getTime(),
             }));
-            setMessages(restored);
+
+            // If stream_active was received before restore completed,
+            // set up streaming state from the last assistant message
+            if (streamActiveRef.current) {
+              streamActiveRef.current = false;
+              const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
+              if (lastAssistant) {
+                streamingIdRef.current = lastAssistant.id;
+                streamingContentRef.current = lastAssistant.content || '';
+                setStreaming(true);
+                setMessages(restored.map((m) =>
+                  m.id === lastAssistant.id ? { ...m, streaming: true } : m
+                ));
+              } else {
+                setMessages(restored);
+              }
+            } else {
+              setMessages(restored);
+            }
           }
         }
 
@@ -545,6 +606,7 @@ export function useSocket(token: string | null) {
     setStreaming(false);
     streamingContentRef.current = '';
     streamingIdRef.current = null;
+    streamActiveRef.current = false;
     setCurrentTool(null);
   }, []);
 

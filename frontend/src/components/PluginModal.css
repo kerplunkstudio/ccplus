@@ -1,0 +1,156 @@
+.plugin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.plugin-modal-container {
+  width: 100%;
+  max-width: 1200px;
+  max-height: 90vh;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.plugin-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.plugin-modal-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.plugin-modal-tab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.plugin-modal-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.plugin-modal-tab.active {
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.plugin-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.plugin-modal-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.plugin-modal-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hide the close button in child components */
+.plugin-modal-content .marketplace-header .close-btn,
+.plugin-modal-content .installed-header .close-btn {
+  display: none;
+}
+
+/* Adjust marketplace and installed components to fit in modal */
+.plugin-modal-content .plugin-marketplace,
+.plugin-modal-content .installed-plugins {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.plugin-modal-content .marketplace-header,
+.plugin-modal-content .installed-header {
+  padding: 20px 20px 16px;
+  border-bottom: none;
+}
+
+.plugin-modal-content .marketplace-header h1,
+.plugin-modal-content .installed-header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.plugin-modal-content .marketplace-content,
+.plugin-modal-content .installed-content {
+  flex: 1;
+  overflow: auto;
+}
+
+@media (max-width: 768px) {
+  .plugin-modal-overlay {
+    padding: 0;
+  }
+
+  .plugin-modal-container {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}

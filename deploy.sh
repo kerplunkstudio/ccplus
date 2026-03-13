@@ -241,6 +241,10 @@ COMPONENT="${1:-all}"
 
 case "$COMPONENT" in
     all)
+        # Always restart worker on full deploy to pick up code changes
+        if worker_running; then
+            stop_worker
+        fi
         start_worker
         build_frontend
         deploy_static
@@ -256,6 +260,10 @@ case "$COMPONENT" in
         echo ""
         ;;
     server)
+        # Restart worker to pick up backend code changes
+        if worker_running; then
+            stop_worker
+        fi
         start_worker
         kill_server
         start_server

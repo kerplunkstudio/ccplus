@@ -75,6 +75,40 @@ except ImportError:
 from backend.database import get_last_sdk_session_id, record_tool_event, update_tool_event, record_message, update_message
 import backend.config as config
 
+# ---------------------------------------------------------------------------
+# System prompt appended to every SDK session.
+# Forces immediate delegation to subagents so the main conversation stays
+# responsive and the user can keep chatting or switch sessions.
+# ---------------------------------------------------------------------------
+CCPLUS_SYSTEM_PROMPT = """
+# cc+ Delegation Rules
+
+You are running inside cc+, a multi-session web UI.
+
+## Small tasks (handle directly)
+Questions, reading files, explaining code, searching, quick single-file edits, small bug fixes — handle these yourself using any tools you need.
+
+## Large tasks (delegate to a subagent)
+Tasks that involve reading or writing MANY files, implementing features across multiple modules, large refactors, or multi-step implementation work — delegate these to a subagent.
+
+How to delegate:
+1. Say ONE short sentence (e.g., "Delegating to an agent.").
+2. Call the Agent tool ONCE with:
+   - `subagent_type`: "code_agent"
+   - `prompt`: The user's full request, followed by:
+
+```
+You have full autonomy to complete this task end-to-end. Steps:
+1. Explore the codebase to understand the project structure and relevant files.
+2. Implement all changes needed.
+3. Run tests if applicable.
+4. Commit your changes when done.
+Do NOT ask for clarification. Make reasonable assumptions and proceed.
+```
+
+3. STOP after the Agent call. Do not continue working.
+""".strip()
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -352,6 +386,7 @@ class SDKWorker:
             hooks=hooks,
             model=model or "sonnet",
             resume=resume_id or "",
+            append_system_prompt=CCPLUS_SYSTEM_PROMPT,
         )
 
         client = ClaudeSDKClient(options)
