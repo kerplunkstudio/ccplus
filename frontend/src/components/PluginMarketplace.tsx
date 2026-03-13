@@ -20,6 +20,7 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPlugin, setSelectedPlugin] = useState<Plugin | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
+  const [confirmUninstall, setConfirmUninstall] = useState<string | null>(null);
 
   useEffect(() => {
     loadMarketplace();
@@ -39,11 +40,12 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
     }
   };
 
-  const handleUninstall = async (plugin: Plugin) => {
-    if (!window.confirm(`Uninstall ${plugin.name}?`)) {
-      return;
-    }
+  const handleUninstallClick = (plugin: Plugin) => {
+    setConfirmUninstall(plugin.name);
+  };
 
+  const handleUninstallConfirm = async (plugin: Plugin) => {
+    setConfirmUninstall(null);
     setInstalling(plugin.name);
     try {
       await uninstallPlugin(plugin.name);
@@ -88,7 +90,11 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
             onClick={(e) => {
               e.stopPropagation();
               if (plugin.installed) {
-                handleUninstall(plugin);
+                if (confirmUninstall === plugin.name) {
+                  handleUninstallConfirm(plugin);
+                } else {
+                  handleUninstallClick(plugin);
+                }
               } else {
                 handleInstall(plugin);
               }
@@ -97,6 +103,8 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
           >
             {isInstalling
               ? 'Processing...'
+              : confirmUninstall === plugin.name
+              ? 'Confirm?'
               : plugin.installed
               ? 'Uninstall'
               : 'Install'}
@@ -224,7 +232,11 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
             className={`plugin-action-btn ${selectedPlugin.installed ? 'uninstall' : 'install'}`}
             onClick={() => {
               if (selectedPlugin.installed) {
-                handleUninstall(selectedPlugin);
+                if (confirmUninstall === selectedPlugin.name) {
+                  handleUninstallConfirm(selectedPlugin);
+                } else {
+                  handleUninstallClick(selectedPlugin);
+                }
               } else {
                 handleInstall(selectedPlugin);
               }
@@ -233,6 +245,8 @@ export const PluginMarketplace: React.FC<PluginMarketplaceProps> = ({ onClose })
           >
             {installing === selectedPlugin.name
               ? 'Processing...'
+              : confirmUninstall === selectedPlugin.name
+              ? 'Confirm Uninstall?'
               : selectedPlugin.installed
               ? 'Uninstall Plugin'
               : 'Install Plugin'}

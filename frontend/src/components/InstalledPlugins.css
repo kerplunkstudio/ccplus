@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .installed-header {
@@ -11,7 +11,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .installed-header h1 {
@@ -34,22 +34,22 @@
 .plugins-table thead {
   position: sticky;
   top: 0;
-  background: #252526;
+  background: var(--bg-tertiary);
   z-index: 1;
 }
 
 .plugins-table th {
   text-align: left;
   padding: 1rem;
-  border-bottom: 2px solid #333;
+  border-bottom: 2px solid var(--border);
   font-weight: 600;
-  color: #d4d4d4;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
 .plugins-table td {
   padding: 1rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--bg-secondary);
   vertical-align: top;
 }
 
@@ -58,7 +58,7 @@
 }
 
 .plugins-table tbody tr:hover {
-  background: #2a2a2a;
+  background: var(--bg-secondary);
 }
 
 .plugins-table tbody tr.uninstalling {
@@ -71,24 +71,24 @@
 
 .plugin-name {
   font-weight: 600;
-  color: #d4d4d4;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .plugin-description {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .plugin-version {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   white-space: nowrap;
 }
 
 .plugin-author {
-  color: #aaa;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -100,10 +100,10 @@
 
 .resource-badge {
   padding: 0.25rem 0.5rem;
-  background: #3c3c3c;
+  background: var(--button-bg);
   border-radius: 3px;
   font-size: 0.75rem;
-  color: #aaa;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -113,8 +113,8 @@
 
 .uninstall-btn {
   padding: 0.5rem 1rem;
-  background: #c74440;
-  color: white;
+  background: var(--error);
+  color: var(--text-primary);
   border: none;
   border-radius: 4px;
   font-size: 0.85rem;
@@ -124,7 +124,7 @@
 }
 
 .uninstall-btn:hover:not(:disabled) {
-  background: #a33632;
+  background: var(--accent-dim);
 }
 
 .uninstall-btn:disabled {
@@ -132,11 +132,21 @@
   cursor: not-allowed;
 }
 
+.uninstall-btn.confirming {
+  background: var(--warning);
+  animation: pulse-confirm 1s ease-in-out infinite;
+}
+
+@keyframes pulse-confirm {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
 .loading,
 .no-plugins {
   text-align: center;
   padding: 3rem;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .no-plugins p {

@@ -134,8 +134,8 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
       method: 'POST',
     }).then(() => {
       fetchSessions();
-    }).catch((err) => {
-      console.error('Failed to archive session:', err);
+    }).catch(() => {
+      // Archive failed silently
     });
   };
 
@@ -161,7 +161,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
         </div>
       )}
 
-      <div className="session-list">
+      <div className="session-list" role="list" aria-label="Chat sessions">
         {sessions.length === 0 ? (
           <div className="session-empty">
             {projectName ? `No sessions for ${projectName}` : 'No sessions yet'}
@@ -174,6 +174,9 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
                 key={session.session_id}
                 className={`session-item ${session.session_id === currentSessionId ? 'active' : ''}`}
                 onClick={() => onSwitchSession(session.session_id)}
+                role="listitem"
+                aria-current={session.session_id === currentSessionId ? 'true' : undefined}
+                aria-label={`${session.last_user_message || 'Empty session'}, ${session.message_count} messages, ${formatTime(session.last_activity)}`}
               >
                 {isUnread && <div className="session-unread-dot" />}
                 <div className="session-item-content">
@@ -189,6 +192,7 @@ export const SessionSwitcher: React.FC<SessionSwitcherProps> = ({
                   className="session-archive-btn"
                   onClick={(e) => handleArchive(e, session.session_id)}
                   title="Archive session"
+                  aria-label={`Archive session: ${session.last_user_message || 'Empty session'}`}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="21 8 21 21 3 21 3 8" />
