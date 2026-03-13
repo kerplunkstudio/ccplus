@@ -286,17 +286,17 @@ def handle_connect():
 def handle_disconnect():
     """Clean up client tracking on disconnect.
 
-    Disconnects the persistent SDK client to free resources.
+    Does NOT disconnect the SDK session -- the worker keeps it alive
+    so queries complete even when the user switches sessions or
+    refreshes the browser. Callbacks remain registered so DB writes
+    continue and SocketIO emits to the dead room are harmlessly dropped.
     """
     client = connected_clients.pop(request.sid, None)
     if client:
-        session_id = client['session_id']
         logger.info(
             f"Client disconnected: user={client['user_id']} "
-            f"session={session_id}"
+            f"session={client['session_id']}"
         )
-        # Disconnect persistent subprocess
-        session_manager.disconnect_session(session_id)
 
 
 @socketio.on("message")
