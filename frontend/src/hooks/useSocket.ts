@@ -4,6 +4,15 @@ import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, Usa
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
+const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'opus': 200_000,
+  'sonnet': 200_000,
+  'haiku': 200_000,
+  'claude-sonnet-4-5-20250514': 200_000,
+  'claude-opus-4-5-20250514': 200_000,
+};
+const DEFAULT_CONTEXT_WINDOW = 200_000;
+
 const getSessionId = (): string => {
   let sessionId = localStorage.getItem('ccplus_session_id');
   if (!sessionId) {
@@ -172,6 +181,8 @@ export function useSocket(token: string | null) {
     totalOutputTokens: 0,
     totalDuration: 0,
     queryCount: 0,
+    contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+    model: '',
   });
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
@@ -297,6 +308,7 @@ export function useSocket(token: string | null) {
       duration_ms?: number;
       input_tokens?: number;
       output_tokens?: number;
+      model?: string;
     }) => {
       const msgId = streamingIdRef.current;
       if (msgId) {
@@ -309,12 +321,17 @@ export function useSocket(token: string | null) {
       }
 
       // Accumulate usage stats
+      const model = data.model || '';
+      const contextWindowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
+
       setUsageStats((prev) => ({
         totalCost: prev.totalCost + (data.cost || 0),
         totalInputTokens: prev.totalInputTokens + (data.input_tokens || 0),
         totalOutputTokens: prev.totalOutputTokens + (data.output_tokens || 0),
         totalDuration: prev.totalDuration + (data.duration_ms || 0),
         queryCount: prev.queryCount + 1,
+        contextWindowSize,
+        model,
       }));
 
       streamingContentRef.current = '';
@@ -504,6 +521,8 @@ export function useSocket(token: string | null) {
         totalOutputTokens: 0,
         totalDuration: 0,
         queryCount: 0,
+        contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+        model: '',
       });
     },
     [resetStreamingState]
@@ -522,6 +541,8 @@ export function useSocket(token: string | null) {
       totalOutputTokens: 0,
       totalDuration: 0,
       queryCount: 0,
+      contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+      model: '',
     });
   }, [resetStreamingState]);
 

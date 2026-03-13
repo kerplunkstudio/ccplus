@@ -386,6 +386,7 @@ def handle_message(data):
                 "duration_ms": result.get("duration_ms"),
                 "input_tokens": result.get("input_tokens"),
                 "output_tokens": result.get("output_tokens"),
+                "model": result.get("model"),
             },
             room=session_id,
         )

@@ -23,6 +23,16 @@ const formatTotalDuration = (ms: number): string => {
 };
 
 export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
+  const totalTokens = stats.totalInputTokens + stats.totalOutputTokens;
+  const contextPercent = Math.min(100, (totalTokens / stats.contextWindowSize) * 100);
+  const contextRemaining = Math.max(0, stats.contextWindowSize - totalTokens);
+
+  const getContextBarColor = (): string => {
+    if (contextPercent > 80) return '#F44336';
+    if (contextPercent > 60) return '#FFC107';
+    return 'var(--accent)';
+  };
+
   return (
     <div className="usage-stats-bar">
       <div className="usage-stat">
@@ -42,6 +52,19 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
       <div className="usage-stat">
         <span className="usage-stat-label">Time</span>
         <span className="usage-stat-value">{formatTotalDuration(stats.totalDuration)}</span>
+      </div>
+      <div className="usage-stat context-bar-container">
+        <span className="usage-stat-label">Context</span>
+        <div className="context-bar">
+          <div
+            className="context-bar-fill"
+            style={{
+              width: `${contextPercent}%`,
+              backgroundColor: getContextBarColor(),
+            }}
+          />
+        </div>
+        <span className="context-bar-label">{formatTokens(contextRemaining)} left</span>
       </div>
     </div>
   );
