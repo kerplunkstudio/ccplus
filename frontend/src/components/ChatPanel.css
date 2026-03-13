@@ -287,6 +287,16 @@
   opacity: 0.5;
 }
 
+/* Slash command styling */
+.input-wrapper:has(.message-input[value^="/"]) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.input-container {
+  position: relative;
+}
+
 .send-btn,
 .cancel-btn {
   display: flex;

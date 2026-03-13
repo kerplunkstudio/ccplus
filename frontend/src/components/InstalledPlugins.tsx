@@ -47,7 +47,7 @@ export const InstalledPlugins: React.FC<InstalledPluginsProps> = ({ onClose }) =
           <div className="plugin-description">{plugin.description}</div>
         </td>
         <td className="plugin-version">{plugin.version}</td>
-        <td className="plugin-author">{plugin.author.name}</td>
+        <td className="plugin-author">{plugin.author?.name || 'Unknown'}</td>
         <td className="plugin-resources">
           <div className="resources-list">
             {plugin.agents && plugin.agents.length > 0 && (

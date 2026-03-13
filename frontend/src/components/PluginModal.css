@@ -123,6 +123,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* Allow flex children to shrink below content size */
 }
 
 .plugin-modal-content .marketplace-header,
@@ -140,7 +141,23 @@
 .plugin-modal-content .marketplace-content,
 .plugin-modal-content .installed-content {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
+}
+
+/* Ensure the grid containers can scroll */
+.plugin-modal-content .plugins-grid {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.plugin-modal-content .plugin-details-panel {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Ensure marketplace content area gets proper constraints */
+.plugin-modal-content .marketplace-content {
+  min-height: 0; /* Critical for flex child to respect overflow */
 }
 
 @media (max-width: 768px) {
