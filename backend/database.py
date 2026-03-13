@@ -189,7 +189,7 @@ def get_sessions_list(limit: int = 50, project_path: Optional[str] = None, inclu
     By default, archived sessions are excluded. Set include_archived=True to include them.
     """
     conn = _get_connection()
-    having_clause = "HAVING project_path = ?" if project_path else ""
+    having_clause = "HAVING (project_path = ? OR project_path IS NULL)" if project_path else ""
     archived_clause = "" if include_archived else "AND (c1.archived = 0 OR c1.archived IS NULL)"
     params: list = [project_path, limit] if project_path else [limit]
     rows = conn.execute(
