@@ -95,20 +95,13 @@ export function filterSkills(
 
 /**
  * Get built-in commands
+ *
+ * Note: All slash commands (including built-in ones) are now handled
+ * directly by the Claude Code SDK. This function is kept for autocomplete
+ * suggestions only.
  */
 export function getBuiltInCommands(): SkillSuggestion[] {
-  return [
-    {
-      name: 'help',
-      plugin: 'built-in',
-      description: 'Show available commands and skills',
-    },
-    {
-      name: 'skills',
-      plugin: 'built-in',
-      description: 'List all installed skills',
-    },
-  ];
+  return [];
 }
 
 /**
