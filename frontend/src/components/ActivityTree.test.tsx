@@ -9,6 +9,8 @@ const mockStats: UsageStats = {
   totalOutputTokens: 0,
   totalDuration: 0,
   queryCount: 0,
+  contextWindowSize: 200000,
+  model: '',
 };
 
 describe('ActivityTree', () => {
@@ -226,6 +228,8 @@ describe('ActivityTree', () => {
       totalOutputTokens: 2500,
       totalDuration: 5432,
       queryCount: 3,
+      contextWindowSize: 200000,
+      model: 'sonnet',
     };
     render(<ActivityTree tree={[]} usageStats={stats} />);
     expect(screen.getByText('$0.0123')).toBeInTheDocument();

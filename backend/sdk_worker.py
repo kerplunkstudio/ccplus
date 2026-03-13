@@ -587,6 +587,7 @@ class SDKWorker:
                             "num_turns": None,
                             "input_tokens": None,
                             "output_tokens": None,
+                            "model": ps.model,
                         })
 
                 elif isinstance(message, ResultMessage):
@@ -605,6 +606,7 @@ class SDKWorker:
                         "num_turns": message.num_turns,
                         "input_tokens": usage.get("input_tokens"),
                         "output_tokens": usage.get("output_tokens"),
+                        "model": ps.model,
                     }
                     break
 
@@ -655,6 +657,7 @@ class SDKWorker:
                     "num_turns": None,
                     "input_tokens": None,
                     "output_tokens": None,
+                    "model": ps.model if ps else None,
                 })
 
 

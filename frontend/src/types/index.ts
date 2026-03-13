@@ -71,4 +71,6 @@ export interface UsageStats {
   totalOutputTokens: number;
   totalDuration: number;
   queryCount: number;
+  contextWindowSize: number;
+  model: string;
 }

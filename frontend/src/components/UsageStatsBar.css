@@ -41,3 +41,32 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.context-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  min-width: 120px;
+}
+
+.context-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.context-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.context-bar-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
