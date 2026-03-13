@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './ProjectSelector.css';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface Project {
   name: string;
