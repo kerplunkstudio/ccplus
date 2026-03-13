@@ -11,6 +11,8 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--text-primary', c.text)
   root.style.setProperty('--text-secondary', adjustBrightness(c.text, -40))
   root.style.setProperty('--accent', c.accent)
+  const accentRgb = hexToRgb(c.accent)
+  root.style.setProperty('--accent-rgb', `${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}`)
   root.style.setProperty('--accent-dim', adjustBrightness(c.accent, -40))
   root.style.setProperty('--accent-light', adjustBrightness(c.accent, 40))
   root.style.setProperty('--border', c.border)

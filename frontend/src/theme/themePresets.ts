@@ -1,16 +1,16 @@
 import { Theme } from './themeTypes'
 
 export const THEME: Theme = {
-  name: 'Nord Deep',
-  presetId: 'nord-dark',
+  name: 'Warm Zinc',
+  presetId: 'warm-zinc',
   colors: {
-    background: '#1a1e26',
-    accent: '#88c0d0',
-    text: '#eceff4',
-    border: '#2e3440',
-    hover: '#262c36',
-    success: '#a3be8c',
-    warning: '#ebcb8b',
-    error: '#bf616a',
+    background: '#18181B',
+    accent: '#22D3EE',
+    text: '#E4E4E7',
+    border: '#3F3F46',
+    hover: '#27272A',
+    success: '#86EFAC',
+    warning: '#FCD34D',
+    error: '#FCA5A5',
   },
 }
