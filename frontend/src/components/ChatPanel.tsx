@@ -3,6 +3,8 @@ import { Message, ToolEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ProjectSelector } from './ProjectSelector';
 import { ModelSelector } from './ModelSelector';
+import { ToolLog } from './ToolLog';
+import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import './ChatPanel.css';
 
 interface ChatPanelProps {
@@ -18,81 +20,6 @@ interface ChatPanelProps {
   onSelectModel: (model: string) => void;
   onCancel: () => void;
   onThemePanelToggle?: (isOpen: boolean) => void;
-}
-
-function basename(path: string): string {
-  return path.split('/').pop() || path;
-}
-
-function formatToolLabel(event: ToolEvent): string {
-  const params = event.parameters || {};
-  switch (event.tool_name) {
-    case 'Read':
-      return `Reading ${basename(String(params.file_path || ''))}`;
-    case 'Write':
-      return `Writing ${basename(String(params.file_path || ''))}`;
-    case 'Edit':
-      return `Editing ${basename(String(params.file_path || ''))}`;
-    case 'Bash':
-      return `Running ${String(params.command || '').slice(0, 40)}`;
-    case 'Glob':
-      return `Searching ${String(params.pattern || '')}`;
-    case 'Grep':
-      return `Searching ${String(params.pattern || '')}`;
-    case 'Agent':
-    case 'Task':
-      return `Using ${event.agent_type || 'agent'}`;
-    default:
-      return `Using ${event.tool_name}`;
-  }
-}
-
-function formatToolLabelCompact(event: ToolEvent): string {
-  const params = event.parameters || {};
-  switch (event.tool_name) {
-    case 'Read':
-      return `Read ${basename(String(params.file_path || ''))}`;
-    case 'Write':
-      return `Write ${basename(String(params.file_path || ''))}`;
-    case 'Edit':
-      return `Edit ${basename(String(params.file_path || ''))}`;
-    case 'Bash': {
-      const cmd = String(params.command || '');
-      return `Bash ${cmd.slice(0, 30)}${cmd.length > 30 ? '...' : ''}`;
-    }
-    case 'Glob':
-      return `Glob ${String(params.pattern || '')}`;
-    case 'Grep':
-      return `Grep ${String(params.pattern || '')}`;
-    case 'Agent':
-    case 'Task':
-      return event.agent_type || 'agent';
-    default:
-      return event.tool_name;
-  }
-}
-
-function ToolLogEntry({ event }: { event: ToolEvent }) {
-  const isRunning = event.type === 'tool_start' || event.type === 'agent_start';
-  const isFailed = event.success === false || event.error != null;
-  const isCompleted = (event.type === 'tool_complete' || event.type === 'agent_stop') && !isFailed;
-
-  let dotClass = 'tool-log-dot';
-  if (isRunning) dotClass += ' running';
-  else if (isFailed) dotClass += ' failed';
-  else if (isCompleted) dotClass += ' completed';
-
-  const durationStr = event.duration_ms != null
-    ? `${(event.duration_ms / 1000).toFixed(1)}s`
-    : null;
-
-  return (
-    <div className="tool-log-entry">
-      <span className={dotClass} />
-      <span>{formatToolLabelCompact(event)}</span>
-      {durationStr && <span className="tool-log-duration">{durationStr}</span>}
-    </div>
-  );
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -190,28 +117,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         )}
         {messages.map((msg) => (
-          <React.Fragment key={msg.id}>
-            {msg.toolLog && msg.toolLog.length > 0 && (
-              <div className="tool-log">
-                {msg.toolLog.map((event) => (
-                  <ToolLogEntry key={event.tool_use_id} event={event} />
-                ))}
-              </div>
-            )}
-            <MessageBubble message={msg} />
-          </React.Fragment>
+          <MessageBubble key={msg.id} message={msg} />
         ))}
         {streaming && toolLog.length > 0 && (
-          <div className="tool-log">
-            {toolLog.map((event) => (
-              <ToolLogEntry key={event.tool_use_id} event={event} />
-            ))}
-          </div>
+          <ToolLog events={toolLog} />
         )}
         {streaming && !messages.some((m) => m.streaming) && (
           <div className="thinking-indicator">
             {currentTool ? (
-              <div className="tool-status">{formatToolLabel(currentTool)}</div>
+              <div className="tool-status">{formatToolLabelVerbose(currentTool)}</div>
             ) : (
               <div className="thinking-content">
                 <span className="dot" />
@@ -228,7 +142,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       {streaming && currentTool && (
         <div className="minimal-tool-indicator">
           <span className="pulsing-dot" />
-          {formatToolLabel(currentTool)}
+          {formatToolLabelVerbose(currentTool)}
         </div>
       )}
 
