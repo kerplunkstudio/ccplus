@@ -148,12 +148,14 @@ show_usage() {
     echo "Usage: ./deploy.sh [component]"
     echo ""
     echo "Components:"
-    echo "  (none)   Full deploy: build frontend + deploy + restart server"
-    echo "  server   Skip frontend build, just restart server"
+    echo "  (none)     Full deploy: build frontend + deploy + restart server"
+    echo "  frontend   Build + deploy frontend only (no server restart, preserves sessions)"
+    echo "  server     Skip frontend build, just restart server"
     echo ""
     echo "Examples:"
-    echo "  ./deploy.sh          # Full deploy"
-    echo "  ./deploy.sh server   # Restart server only"
+    echo "  ./deploy.sh            # Full deploy"
+    echo "  ./deploy.sh frontend   # Frontend only, keeps sessions alive"
+    echo "  ./deploy.sh server     # Restart server only"
 }
 
 # Main
@@ -165,6 +167,14 @@ case "$COMPONENT" in
         deploy_static
         kill_server
         start_server
+        ;;
+    frontend)
+        build_frontend
+        deploy_static
+        ok "Frontend deployed (server not restarted)"
+        echo ""
+        echo "  ${BOLD}Hard refresh your browser (Cmd+Shift+R) to load new assets${RESET}"
+        echo ""
         ;;
     server)
         kill_server
