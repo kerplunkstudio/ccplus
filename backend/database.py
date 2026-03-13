@@ -100,6 +100,22 @@ def record_message(
     return dict(row)
 
 
+def update_message(message_id: int, content: str, sdk_session_id: Optional[str] = None) -> None:
+    """Update an existing conversation message's content."""
+    conn = _get_connection()
+    if sdk_session_id:
+        conn.execute(
+            "UPDATE conversations SET content = ?, sdk_session_id = ? WHERE id = ?",
+            (content, sdk_session_id, message_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE conversations SET content = ? WHERE id = ?",
+            (content, message_id),
+        )
+    conn.commit()
+
+
 def get_conversation_history(session_id: str, limit: int = 50) -> list[dict]:
     """Return conversation messages for a session, oldest first."""
     conn = _get_connection()
