@@ -46,6 +46,7 @@ from backend.database import (
     get_stats,
     get_tool_events,
     record_message,
+    update_message,
 )
 from backend.sdk_session import SessionManager
 
@@ -364,13 +365,17 @@ def handle_message(data):
         # Only record message to database on final completion (when session_id is present)
         if full_text and result.get("session_id"):
             try:
-                record_message(
-                    session_id,
-                    "assistant",
-                    "assistant",
-                    full_text,
-                    sdk_session_id=result.get("session_id"),
-                )
+                if assistant_msg_id:
+                    # Update the early-recorded message with full content
+                    update_message(assistant_msg_id, full_text, sdk_session_id=result.get("session_id"))
+                else:
+                    record_message(
+                        session_id,
+                        "assistant",
+                        "assistant",
+                        full_text,
+                        sdk_session_id=result.get("session_id"),
+                    )
             except Exception as exc:
                 logger.error(f"Failed to record assistant message: {exc}")
 
