@@ -105,10 +105,8 @@
 .code-language {
   color: var(--accent);
   font-family: var(--font-mono);
-  text-transform: uppercase;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1px;
 }
 
 .copy-code-btn {
@@ -160,7 +158,6 @@
   vertical-align: text-bottom;
   border-radius: 1px;
   animation: blink 1.2s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.5);
 }
 
 @keyframes blink {
