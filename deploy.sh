@@ -45,6 +45,80 @@ detect_python() {
     fi
 }
 
+# Worker PID file
+WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
+
+# Check if worker is running
+worker_running() {
+    if [ -f "$WORKER_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$WORKER_PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Start worker if not already running
+start_worker() {
+    header "Checking SDK worker"
+
+    if worker_running; then
+        local pid
+        pid=$(cat "$WORKER_PID_FILE")
+        ok "SDK worker already running (PID: $pid)"
+        return 0
+    fi
+
+    info "Starting SDK worker..."
+    detect_python
+    mkdir -p "$SCRIPT_DIR/logs" "$SCRIPT_DIR/data"
+
+    export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
+    nohup "$PYTHON" "$SCRIPT_DIR/backend/sdk_worker.py" > "$SCRIPT_DIR/logs/worker.log" 2>&1 &
+
+    # Wait for socket to appear
+    local max_wait=10
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        if [ -S "$SCRIPT_DIR/data/sdk_worker.sock" ]; then
+            ok "SDK worker started (PID: $(cat "$WORKER_PID_FILE" 2>/dev/null))"
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    error "SDK worker failed to start after ${max_wait}s"
+    tail -20 "$SCRIPT_DIR/logs/worker.log" 2>/dev/null || true
+    exit 1
+}
+
+# Stop the worker
+stop_worker() {
+    header "Stopping SDK worker"
+
+    if ! worker_running; then
+        ok "SDK worker not running"
+        return 0
+    fi
+
+    local pid
+    pid=$(cat "$WORKER_PID_FILE")
+    info "Stopping SDK worker (PID: $pid)..."
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 2
+
+    if kill -0 "$pid" 2>/dev/null; then
+        warn "Force killing worker..."
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+
+    rm -f "$WORKER_PID_FILE" "$SCRIPT_DIR/data/sdk_worker.sock"
+    ok "SDK worker stopped"
+}
+
 # Build React frontend
 build_frontend() {
     header "Building frontend"
@@ -148,14 +222,18 @@ show_usage() {
     echo "Usage: ./deploy.sh [component]"
     echo ""
     echo "Components:"
-    echo "  (none)     Full deploy: build frontend + deploy + restart server"
+    echo "  (none)     Full deploy: start worker + build frontend + deploy + restart server"
     echo "  frontend   Build + deploy frontend only (no server restart, preserves sessions)"
-    echo "  server     Skip frontend build, just restart server"
+    echo "  server     Start worker if needed + restart Flask server only"
+    echo "  worker     Restart the SDK worker (kills all active SDK sessions)"
+    echo "  stop       Stop both Flask server and SDK worker"
     echo ""
     echo "Examples:"
-    echo "  ./deploy.sh            # Full deploy"
-    echo "  ./deploy.sh frontend   # Frontend only, keeps sessions alive"
-    echo "  ./deploy.sh server     # Restart server only"
+    echo "  ./deploy.sh            # Full deploy (sessions preserved)"
+    echo "  ./deploy.sh frontend   # Frontend only, keeps everything alive"
+    echo "  ./deploy.sh server     # Restart Flask only, SDK sessions survive"
+    echo "  ./deploy.sh worker     # Restart worker (drops active sessions)"
+    echo "  ./deploy.sh stop       # Stop everything"
 }
 
 # Main
@@ -163,6 +241,7 @@ COMPONENT="${1:-all}"
 
 case "$COMPONENT" in
     all)
+        start_worker
         build_frontend
         deploy_static
         kill_server
@@ -177,8 +256,17 @@ case "$COMPONENT" in
         echo ""
         ;;
     server)
+        start_worker
         kill_server
         start_server
+        ;;
+    worker)
+        stop_worker
+        start_worker
+        ;;
+    stop)
+        kill_server
+        stop_worker
         ;;
     -h|--help)
         show_usage
