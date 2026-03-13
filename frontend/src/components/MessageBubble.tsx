@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message } from '../types';
+import { ToolLog } from './ToolLog';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -30,6 +31,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   return (
     <div className={`message-bubble ${message.role}`}>
+      {message.toolLog && message.toolLog.length > 0 && (
+        <ToolLog events={message.toolLog} />
+      )}
       <div className="message-bubble-inner">
         {message.role === 'assistant' ? (
           <div className="message-markdown">
