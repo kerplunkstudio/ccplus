@@ -4,6 +4,7 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: number;
   streaming?: boolean;
+  toolLog?: ToolEvent[];
 }
 
 export interface ToolEvent {
