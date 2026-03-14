@@ -8,7 +8,15 @@ import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { TabState } from './types';
 import './App.css';
+
+const ensureMruOrder = (tabs: TabState[], mruOrder?: string[]): string[] => {
+  const tabIds = new Set(tabs.map(t => t.sessionId));
+  const valid = (mruOrder || []).filter(id => tabIds.has(id));
+  const missing = tabs.filter(t => !valid.includes(t.sessionId)).map(t => t.sessionId);
+  return [...valid, ...missing];
+};
 
 // Console easter egg
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
@@ -113,6 +121,10 @@ function AppContent({ token, loading }: AppContentProps) {
   }, []);
 
   const lastLabeledSessionRef = useRef<string | null>(null);
+  const mruCycleIndexRef = useRef<number>(0);
+  const isCyclingRef = useRef<boolean>(false);
+  const mruSnapshotRef = useRef<string[]>([]);
+  const mruSnapshotProjectRef = useRef<string>('');
 
   useEffect(() => {
     if (!activeProject || !activeTab || messages.length === 0) return;
@@ -139,7 +151,7 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
-  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Escape cancel, Ctrl+Tab switch tabs)
+  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Escape cancel, Ctrl+Tab MRU tab switching)
   useEffect(() => {
     if (!activeProject) return;
 
@@ -154,7 +166,7 @@ function AppContent({ token, loading }: AppContentProps) {
       // Cmd+W / Ctrl+W: Close current tab
       if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault();
-        if (activeProject.tabs.length > 1 && activeTab) {
+        if (activeTab) {
           handleCloseTabInActiveProject(activeTab.sessionId);
         }
         return;
@@ -167,24 +179,66 @@ function AppContent({ token, loading }: AppContentProps) {
         return;
       }
 
-      // Ctrl+Tab / Ctrl+Shift+Tab: Switch tabs
+      // Ctrl+Tab / Ctrl+Shift+Tab: MRU tab switching (cycles through tabs by recency, then crosses projects)
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
 
-        const tabs = activeProject.tabs;
-        if (tabs.length <= 1) return;
+        const projects = workspace.state.projects;
+        if (projects.length === 0) return;
 
-        const currentIndex = tabs.findIndex(tab => tab.sessionId === activeProject.activeTabId);
-        if (currentIndex === -1) return;
+        const forward = !e.shiftKey;
 
-        let nextIndex: number;
-        if (e.shiftKey) {
-          nextIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
-        } else {
-          nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
+        if (!isCyclingRef.current) {
+          // Start new cycle: snapshot current project's MRU order
+          isCyclingRef.current = true;
+          mruCycleIndexRef.current = 0;
+          const mru = ensureMruOrder(activeProject.tabs, activeProject.tabMruOrder);
+          mruSnapshotRef.current = mru;
+          mruSnapshotProjectRef.current = activeProject.path;
         }
 
-        handleSelectTabInActiveProject(tabs[nextIndex].sessionId);
+        // If we switched projects during cycling, snapshot that project's MRU
+        if (mruSnapshotProjectRef.current !== activeProject.path) {
+          const mru = ensureMruOrder(activeProject.tabs, activeProject.tabMruOrder);
+          mruSnapshotRef.current = mru;
+          mruSnapshotProjectRef.current = activeProject.path;
+          mruCycleIndexRef.current = forward ? 0 : mru.length - 1;
+        }
+
+        const snapshot = mruSnapshotRef.current;
+        const nextIndex = forward
+          ? mruCycleIndexRef.current + 1
+          : mruCycleIndexRef.current - 1;
+
+        if (nextIndex >= 0 && nextIndex < snapshot.length) {
+          // Still within current project's MRU
+          mruCycleIndexRef.current = nextIndex;
+          handleSelectTabInActiveProject(snapshot[nextIndex]);
+        } else {
+          // Cross to next/previous project
+          const projectIndex = projects.findIndex(p => p.path === activeProject.path);
+          const nextProjectIndex = forward
+            ? (projectIndex + 1) % projects.length
+            : (projectIndex - 1 + projects.length) % projects.length;
+          const nextProject = projects[nextProjectIndex];
+          const nextMru = ensureMruOrder(nextProject.tabs, nextProject.tabMruOrder);
+          if (nextMru.length > 0) {
+            const targetIdx = forward ? 0 : nextMru.length - 1;
+            mruSnapshotRef.current = nextMru;
+            mruSnapshotProjectRef.current = nextProject.path;
+            mruCycleIndexRef.current = targetIdx;
+            handleSelectTab(nextProject.path, nextMru[targetIdx]);
+          }
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control' && isCyclingRef.current) {
+        isCyclingRef.current = false;
+        mruCycleIndexRef.current = 0;
+        mruSnapshotRef.current = [];
+        mruSnapshotProjectRef.current = '';
       }
     };
 
@@ -192,7 +246,7 @@ function AppContent({ token, loading }: AppContentProps) {
     const electronAPI = (window as any).electronAPI;
     const handleMenuAction = (_event: any, action: string) => {
       if (action === 'new-tab') handleNewTab();
-      if (action === 'close-tab' && activeProject.tabs.length > 1 && activeTab) {
+      if (action === 'close-tab' && activeTab) {
         handleCloseTabInActiveProject(activeTab.sessionId);
       }
     };
@@ -201,13 +255,15 @@ function AppContent({ token, loading }: AppContentProps) {
     }
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       if (electronAPI?.removeMenuActionListener) {
         electronAPI.removeMenuActionListener(handleMenuAction);
       }
     };
-  }, [activeProject, activeTab, handleSelectTabInActiveProject, handleNewTab, handleCloseTabInActiveProject, streaming, cancelQuery]);
+  }, [activeProject, activeTab, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTab, handleNewTab, handleCloseTabInActiveProject, streaming, cancelQuery]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
