@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate CC+ app icon with bold typographic design.
+Generate CC+ app icon with stacked C's and overlaid + design.
 
-Creates a rounded rectangle icon with "CC+" monogram in a refined color scheme.
+Creates a rounded rectangle icon with two vertically stacked C characters
+(back C dimmer for depth) and a bold + accent overlaid in the center-right.
 Outputs PNGs at all required sizes and prepares an .iconset for macOS.
 """
 
@@ -105,42 +106,62 @@ def generate_icon(size):
 
     draw = ImageDraw.Draw(img)
 
-    # Calculate font sizes (empirically tuned for good proportions)
-    cc_font_size = int(size * 0.35)
-    plus_font_size = int(size * 0.42)  # Slightly larger
+    # Calculate font sizes for stacked C's and overlaid +
+    c_font_size = int(size * 0.40)  # Large, bold C's
+    plus_font_size = int(size * 0.35)  # Bold + accent
 
     # Load fonts
-    cc_font = find_system_font(cc_font_size)
+    c_font = find_system_font(c_font_size)
     plus_font = find_system_font(plus_font_size)
 
-    # Calculate vertical center with slight upward adjustment for visual balance
-    center_y = size // 2 - int(size * 0.02)
+    # Measure single "C" character
+    c_bbox = draw.textbbox((0, 0), "C", font=c_font)
+    c_width = c_bbox[2] - c_bbox[0]
+    c_height = c_bbox[3] - c_bbox[1]
 
-    # Measure "CC" text
-    cc_bbox = draw.textbbox((0, 0), "CC", font=cc_font)
-    cc_width = cc_bbox[2] - cc_bbox[0]
+    # Calculate vertical spacing for stacked C's (tight overlap)
+    vertical_spacing = int(c_height * 0.75)  # Tight vertical stack
+    total_height = c_height + vertical_spacing
 
-    # Measure "+" text
-    plus_bbox = draw.textbbox((0, 0), "+", font=plus_font)
+    # Center the stacked C's vertically
+    center_x = size // 2
+    start_y = (size - total_height) // 2
+
+    # Position for back C (top, slightly transparent for depth)
+    back_c_y = start_y + c_height // 2
+
+    # Position for front C (bottom)
+    front_c_y = start_y + vertical_spacing + c_height // 2
+
+    # Draw back C (dimmer, creates depth)
+    back_c_color = hex_to_rgb(TEXT_COLOR) + (180,)  # 70% opacity
+    img_with_alpha = img.convert('RGBA')
+    draw_alpha = ImageDraw.Draw(img_with_alpha)
+
+    # Draw back C with transparency
+    back_c_x = center_x - c_width // 2
+    back_c_draw_y = back_c_y - c_height // 2
+    draw_alpha.text((back_c_x, back_c_draw_y), "C", font=c_font, fill=back_c_color)
+
+    # Draw front C (full opacity)
+    front_c_x = center_x - c_width // 2
+    front_c_draw_y = front_c_y - c_height // 2
+    front_c_color = hex_to_rgb(TEXT_COLOR) + (255,)
+    draw_alpha.text((front_c_x, front_c_draw_y), "C", font=c_font, fill=front_c_color)
+
+    # Position + in center-right area (where C's opening faces)
+    plus_bbox = draw_alpha.textbbox((0, 0), "+", font=plus_font)
     plus_width = plus_bbox[2] - plus_bbox[0]
+    plus_height = plus_bbox[3] - plus_bbox[1]
 
-    # Calculate spacing (tight tracking)
-    spacing = int(size * 0.03)
-    total_width = cc_width + spacing + plus_width
+    # Place + to the right of center, vertically centered on the composition
+    plus_x = center_x + int(c_width * 0.15)  # Slightly right of center
+    plus_y = size // 2 - plus_height // 2
 
-    # Starting X position to center everything
-    start_x = (size - total_width) // 2
+    plus_color = hex_to_rgb(PLUS_COLOR) + (255,)
+    draw_alpha.text((plus_x, plus_y), "+", font=plus_font, fill=plus_color)
 
-    # Draw "CC"
-    cc_x = start_x + cc_width // 2
-    draw_text_centered(draw, "CC", cc_font, (cc_x, center_y), TEXT_COLOR)
-
-    # Draw "+" (with slight offset for visual balance)
-    plus_x = start_x + cc_width + spacing + plus_width // 2
-    plus_y = center_y - int(size * 0.01)  # Tiny upward nudge
-    draw_text_centered(draw, "+", plus_font, (plus_x, plus_y), PLUS_COLOR)
-
-    return img
+    return img_with_alpha
 
 
 def main():
