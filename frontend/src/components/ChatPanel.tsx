@@ -7,7 +7,6 @@ import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { ExpertEmptyState } from './ExpertEmptyState';
-import { AccountLimits } from './AccountLimits';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
 import {
@@ -462,7 +461,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 />
               ) : (
                 <div className="empty-state">
-                  <AccountLimits />
                   <div className="ghost-activity">
                     <div className="ghost-node ghost-agent">
                       <div className="ghost-bar ghost-bar-accent" />
