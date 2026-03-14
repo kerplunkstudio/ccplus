@@ -224,3 +224,43 @@ class TestWorkspaceAPI:
         assert "projects" in data
         assert "activeProjectPath" in data
         assert isinstance(data["projects"], list)
+
+    def test_post_workspace_sendbeacon(self, client):
+        """POST /api/workspace accepts sendBeacon requests (page unload)."""
+        test_state = {
+            "projects": [
+                {
+                    "path": "/test/beacon",
+                    "name": "Beacon Test",
+                    "tabs": [
+                        {
+                            "sessionId": "session_beacon",
+                            "label": "Before Unload",
+                            "isStreaming": False,
+                            "hasRunningAgent": False,
+                            "createdAt": 9999999,
+                        }
+                    ],
+                    "activeTabId": "session_beacon",
+                }
+            ],
+            "activeProjectPath": "/test/beacon",
+        }
+
+        # Simulate sendBeacon POST request
+        response = client.post(
+            "/api/workspace",
+            data=json.dumps(test_state),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        save_data = json.loads(response.data)
+        assert save_data["status"] == "ok"
+
+        # Verify state was persisted
+        response = client.get("/api/workspace")
+        assert response.status_code == 200
+
+        retrieved = json.loads(response.data)
+        assert retrieved["activeProjectPath"] == "/test/beacon"
+        assert retrieved["projects"][0]["name"] == "Beacon Test"

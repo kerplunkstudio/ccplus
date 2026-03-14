@@ -515,9 +515,12 @@ def get_workspace():
     return jsonify(state)
 
 
-@app.route("/api/workspace", methods=["PUT"])
+@app.route("/api/workspace", methods=["PUT", "POST"])
 def save_workspace():
-    """Persist workspace state for the current user."""
+    """Persist workspace state for the current user.
+
+    Accepts both PUT (normal saves) and POST (sendBeacon during page unload).
+    """
     user_id = "local"
     state = request.get_json()
     if not state:
