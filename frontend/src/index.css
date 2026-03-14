@@ -1,50 +1,50 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  /* === Editorial Magazine Palette === */
-  --bg-primary: #faf9f7;
-  --bg-secondary: #f5f4f2;
+  /* === Quieter Editorial Palette === */
+  --bg-primary: #fafaf9;
+  --bg-secondary: #f6f5f4;
   --bg-tertiary: #ffffff;
-  --text-primary: #1a1917;
-  --text-secondary: #6b6862;
-  --text-tertiary: #a09b93;
-  --accent: #c5282f;
-  --accent-dim: #9e1f25;
-  --accent-light: #e0353d;
-  --border: #e8e6e3;
-  --border-heavy: #d4d1cc;
-  --success: #2d5a3d;
-  --warning: #8b4513;
-  --error: #c5282f;
+  --text-primary: #1c1b1a;
+  --text-secondary: #7c7873;
+  --text-tertiary: #aba8a3;
+  --accent: #8a7066;
+  --accent-dim: #766358;
+  --accent-light: #9d8279;
+  --border: #ececea;
+  --border-heavy: #e0dedb;
+  --success: #5d7a68;
+  --warning: #8a7066;
+  --error: #8a7066;
 
   /* === Derived colors === */
-  --accent-bg: rgba(197, 40, 47, 0.06);
-  --accent-border: rgba(197, 40, 47, 0.15);
-  --accent-shadow: rgba(197, 40, 47, 0.2);
-  --success-bg: rgba(45, 90, 61, 0.08);
-  --success-border: rgba(45, 90, 61, 0.2);
-  --error-bg: rgba(197, 40, 47, 0.08);
-  --error-border: rgba(197, 40, 47, 0.2);
-  --warning-bg: rgba(139, 69, 19, 0.08);
-  --warning-border: rgba(139, 69, 19, 0.2);
+  --accent-bg: rgba(138, 112, 102, 0.03);
+  --accent-border: rgba(138, 112, 102, 0.08);
+  --accent-shadow: rgba(138, 112, 102, 0.10);
+  --success-bg: rgba(93, 122, 104, 0.04);
+  --success-border: rgba(93, 122, 104, 0.10);
+  --error-bg: rgba(138, 112, 102, 0.04);
+  --error-border: rgba(138, 112, 102, 0.10);
+  --warning-bg: rgba(138, 112, 102, 0.04);
+  --warning-border: rgba(138, 112, 102, 0.10);
 
   /* === Interactive elements === */
-  --button-bg: rgba(26, 25, 23, 0.04);
-  --button-border: rgba(26, 25, 23, 0.1);
+  --button-bg: rgba(28, 27, 26, 0.02);
+  --button-border: rgba(28, 27, 26, 0.06);
   --button-text: var(--text-secondary);
-  --button-bg-hover: rgba(26, 25, 23, 0.08);
-  --button-border-hover: rgba(26, 25, 23, 0.2);
+  --button-bg-hover: rgba(28, 27, 26, 0.04);
+  --button-border-hover: rgba(28, 27, 26, 0.10);
   --button-text-hover: var(--text-primary);
-  --hover-bg: rgba(26, 25, 23, 0.03);
-  --hover-border: rgba(26, 25, 23, 0.06);
+  --hover-bg: rgba(28, 27, 26, 0.018);
+  --hover-border: rgba(28, 27, 26, 0.03);
 
   /* === Surfaces === */
-  --code-bg: #f8f6f3;
+  --code-bg: #f8f7f6;
   --code-border: var(--border);
-  --overlay-bg: rgba(26, 25, 23, 0.4);
-  --dropdown-shadow: 0 2px 20px rgba(26, 25, 23, 0.1);
-  --shadow: rgba(26, 25, 23, 0.08);
-  --shadow-heavy: rgba(26, 25, 23, 0.15);
+  --overlay-bg: rgba(28, 27, 26, 0.25);
+  --dropdown-shadow: 0 2px 12px rgba(28, 27, 26, 0.06);
+  --shadow: rgba(28, 27, 26, 0.04);
+  --shadow-heavy: rgba(28, 27, 26, 0.08);
 
   /* === Editorial Typography === */
   --font-serif: 'Crimson Pro', 'Times New Roman', serif;

@@ -25,6 +25,8 @@ const INITIAL_USAGE_STATS: UsageStats = {
   queryCount: 0,
   contextWindowSize: DEFAULT_CONTEXT_WINDOW,
   model: '',
+  linesOfCode: 0,
+  totalSessions: 1,
 };
 
 type TreeAction =
@@ -210,6 +212,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       streamingIdRef.current = null;
       streamActiveRef.current = false;
       sequenceRef.current = 0;
+      setPendingQuestion(null);
     }
   }, [sessionId]);
 
@@ -390,6 +393,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
         queryCount: prev.queryCount + 1,
         contextWindowSize,
         model,
+        linesOfCode: prev.linesOfCode,
+        totalSessions: prev.totalSessions,
       }));
 
       streamingContentRef.current = '';
@@ -420,7 +425,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
           setToolLog([...toolLogRef.current]);
           break;
         }
-        case 'tool_complete':
+        case 'tool_complete': {
           dispatchTree({ type: 'TOOL_COMPLETE', event });
           setCurrentTool(null);
           toolLogRef.current = toolLogRef.current.map((t) =>
@@ -429,7 +434,19 @@ export function useTabSocket(token: string | null, sessionId: string) {
               : t
           );
           setToolLog([...toolLogRef.current]);
+
+          // Track lines of code from Write and Edit tools
+          if (event.tool_name === 'Write' || event.tool_name === 'Edit') {
+            const params = event.parameters as { content?: string; new_string?: string } | undefined;
+            const content = params?.content || params?.new_string || '';
+            const lines = content.split('\n').length;
+            setUsageStats((prev) => ({
+              ...prev,
+              linesOfCode: prev.linesOfCode + lines,
+            }));
+          }
           break;
+        }
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
           setCurrentTool(null);

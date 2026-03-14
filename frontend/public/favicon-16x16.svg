@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#0f1629"/>
+      <stop offset="100%" stop-color="#0a0f1c"/>
+    </radialGradient>
+    <radialGradient id="centerGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="16" height="16" rx="3" fill="url(#bgGrad)" stroke="#1a2332" stroke-width="0.25"/>
+
+  <!-- Simplified tree structure for small size -->
+  <!-- Root -->
+  <circle cx="8" cy="13" r="0.8" fill="#4fc3f7" opacity="0.8"/>
+
+  <!-- Main branches -->
+  <line x1="8" y1="12.2" x2="6" y2="9" stroke="#4fc3f7" stroke-width="0.5" opacity="0.6"/>
+  <line x1="8" y1="12.2" x2="10" y2="9" stroke="#4fc3f7" stroke-width="0.5" opacity="0.6"/>
+
+  <!-- Branch nodes -->
+  <circle cx="6" cy="9" r="0.5" fill="#29b6f6" opacity="0.7"/>
+  <circle cx="10" cy="9" r="0.5" fill="#29b6f6" opacity="0.7"/>
+
+  <!-- Leaf connections -->
+  <line x1="6" y1="9" x2="4" y2="6" stroke="#29b6f6" stroke-width="0.3" opacity="0.5"/>
+  <line x1="10" y1="9" x2="12" y2="6" stroke="#29b6f6" stroke-width="0.3" opacity="0.5"/>
+
+  <!-- Leaf nodes -->
+  <circle cx="4" cy="6" r="0.4" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="12" cy="6" r="0.4" fill="#81d4fa" opacity="0.6"/>
+
+  <!-- Central enhancement node -->
+  <circle cx="8" cy="8" r="1.5" fill="url(#centerGrad)" stroke="#ffffff" stroke-width="0.15" opacity="0.95"/>
+
+  <!-- Plus symbol -->
+  <line x1="8" y1="6.8" x2="8" y2="9.2" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round"/>
+  <line x1="6.8" y1="8" x2="9.2" y2="8" stroke="#ffffff" stroke-width="0.6" stroke-linecap="round"/>
+
+  <!-- Pulse indicator -->
+  <circle cx="8" cy="4.5" r="0.3" fill="#00e5ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Connection to pulse -->
+  <line x1="8" y1="6.5" x2="8" y2="4.8" stroke="#00e5ff" stroke-width="0.5" opacity="0.8" stroke-dasharray="0.25,0.25"/>
+</svg>

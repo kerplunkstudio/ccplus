@@ -37,7 +37,7 @@
 .message-bubble.user .message-bubble-inner {
   color: var(--text-secondary);
   font-style: italic;
-  border-left: 3px solid var(--accent);
+  border-left: 2px solid var(--accent);
   padding-left: var(--space-md);
   font-size: var(--text-base);
 }
@@ -46,8 +46,9 @@
   content: "◊";
   color: var(--accent);
   font-style: normal;
-  font-weight: 600;
+  font-weight: 500;
   margin-right: var(--space-xs);
+  opacity: 0.8;
 }
 
 .message-bubble.assistant .message-bubble-inner {
@@ -95,10 +96,11 @@
 .inline-code {
   background: var(--code-bg);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   font-family: var(--font-mono);
   font-size: 0.9em;
-  color: var(--accent);
+  color: var(--text-primary);
+  opacity: 0.9;
 }
 
 .code-block-wrapper {
@@ -119,10 +121,10 @@
 }
 
 .code-language {
-  color: var(--accent);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .copy-code-btn {
@@ -167,18 +169,23 @@
 
 .streaming-cursor {
   display: inline-block;
-  width: 3px;
+  width: 2px;
   height: 1.1em;
   background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
   border-radius: 1px;
-  animation: blink 1.2s ease-in-out infinite;
+  animation: blink 1.4s ease-in-out infinite;
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .message-meta {

@@ -1,4 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="4" fill="#1a1a2e"/>
-  <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="monospace" font-size="12" font-weight="bold" fill="#00d4ff">cc+</text>
+  <defs>
+    <radialGradient id="bgGradient" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#0f1629"/>
+      <stop offset="100%" stop-color="#0a0f1c"/>
+    </radialGradient>
+    <radialGradient id="nodeGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="url(#bgGradient)" stroke="#1a2332" stroke-width="0.5"/>
+
+  <!-- Activity Tree Network -->
+  <!-- Root node (bottom) -->
+  <circle cx="16" cy="26" r="1.5" fill="#4fc3f7" opacity="0.8"/>
+
+  <!-- Primary branches -->
+  <line x1="16" y1="24.5" x2="12" y2="18" stroke="#4fc3f7" stroke-width="0.8" opacity="0.6"/>
+  <line x1="16" y1="24.5" x2="20" y2="18" stroke="#4fc3f7" stroke-width="0.8" opacity="0.6"/>
+
+  <!-- Secondary branches -->
+  <line x1="12" y1="18" x2="8" y2="12" stroke="#29b6f6" stroke-width="0.6" opacity="0.5"/>
+  <line x1="12" y1="18" x2="14" y2="12" stroke="#29b6f6" stroke-width="0.6" opacity="0.5"/>
+  <line x1="20" y1="18" x2="18" y2="12" stroke="#29b6f6" stroke-width="0.6" opacity="0.5"/>
+  <line x1="20" y1="18" x2="24" y2="12" stroke="#29b6f6" stroke-width="0.6" opacity="0.5"/>
+
+  <!-- Branch nodes -->
+  <circle cx="12" cy="18" r="1" fill="#29b6f6" opacity="0.7"/>
+  <circle cx="20" cy="18" r="1" fill="#29b6f6" opacity="0.7"/>
+
+  <!-- Leaf nodes -->
+  <circle cx="8" cy="12" r="0.8" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="14" cy="12" r="0.8" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="18" cy="12" r="0.8" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="24" cy="12" r="0.8" fill="#81d4fa" opacity="0.6"/>
+
+  <!-- Central enhancement node (the "+") -->
+  <circle cx="16" cy="16" r="3" fill="url(#nodeGradient)" stroke="#ffffff" stroke-width="0.3" opacity="0.95"/>
+
+  <!-- Plus symbol inside central node -->
+  <line x1="16" y1="13.5" x2="16" y2="18.5" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="13.5" y1="16" x2="18.5" y2="16" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Enhancement connections from central node -->
+  <line x1="16" y1="13" x2="16" y2="9" stroke="#00e5ff" stroke-width="1" opacity="0.8" stroke-dasharray="0.5,0.5"/>
+  <line x1="19" y1="16" x2="23" y2="16" stroke="#00e5ff" stroke-width="1" opacity="0.8" stroke-dasharray="0.5,0.5"/>
+  <line x1="13" y1="16" x2="9" y2="16" stroke="#00e5ff" stroke-width="1" opacity="0.8" stroke-dasharray="0.5,0.5"/>
+
+  <!-- Active pulse indicators (small dots) -->
+  <circle cx="16" cy="9" r="0.6" fill="#00e5ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="23" cy="16" r="0.6" fill="#00e5ff" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="9" cy="16" r="0.6" fill="#00e5ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+  </circle>
 </svg>

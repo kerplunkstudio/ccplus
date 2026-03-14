@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <radialGradient id="bgGradient" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#0f1629"/>
+      <stop offset="100%" stop-color="#0a0f1c"/>
+    </radialGradient>
+    <radialGradient id="nodeGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </radialGradient>
+    <linearGradient id="branchGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="50%" stop-color="#29b6f6"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background with subtle texture -->
+  <rect width="180" height="180" rx="35" fill="url(#bgGradient)" stroke="#1a2332" stroke-width="2"/>
+
+  <!-- Background pattern (subtle grid) -->
+  <defs>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1a2332" stroke-width="0.3" opacity="0.3"/>
+    </pattern>
+  </defs>
+  <rect width="180" height="180" rx="35" fill="url(#grid)" opacity="0.1"/>
+
+  <!-- Main Activity Tree Network -->
+
+  <!-- Root node (bottom center) -->
+  <circle cx="90" cy="150" r="8" fill="#4fc3f7" opacity="0.9"/>
+
+  <!-- Primary trunk -->
+  <line x1="90" y1="142" x2="90" y2="120" stroke="url(#branchGradient)" stroke-width="6" opacity="0.8" stroke-linecap="round"/>
+
+  <!-- Main branches from center -->
+  <line x1="90" y1="120" x2="60" y2="90" stroke="url(#branchGradient)" stroke-width="5" opacity="0.7" stroke-linecap="round"/>
+  <line x1="90" y1="120" x2="120" y2="90" stroke="url(#branchGradient)" stroke-width="5" opacity="0.7" stroke-linecap="round"/>
+  <line x1="90" y1="120" x2="75" y2="85" stroke="url(#branchGradient)" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+  <line x1="90" y1="120" x2="105" y2="85" stroke="url(#branchGradient)" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+
+  <!-- Secondary branches -->
+  <line x1="60" y1="90" x2="35" y2="60" stroke="#29b6f6" stroke-width="3.5" opacity="0.6" stroke-linecap="round"/>
+  <line x1="60" y1="90" x2="50" y2="65" stroke="#29b6f6" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+  <line x1="120" y1="90" x2="145" y2="60" stroke="#29b6f6" stroke-width="3.5" opacity="0.6" stroke-linecap="round"/>
+  <line x1="120" y1="90" x2="130" y2="65" stroke="#29b6f6" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+  <line x1="75" y1="85" x2="65" y2="55" stroke="#29b6f6" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+  <line x1="105" y1="85" x2="115" y2="55" stroke="#29b6f6" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+
+  <!-- Tertiary branches -->
+  <line x1="35" y1="60" x2="25" y2="40" stroke="#81d4fa" stroke-width="2" opacity="0.4" stroke-linecap="round"/>
+  <line x1="35" y1="60" x2="40" y2="40" stroke="#81d4fa" stroke-width="2" opacity="0.4" stroke-linecap="round"/>
+  <line x1="145" y1="60" x2="155" y2="40" stroke="#81d4fa" stroke-width="2" opacity="0.4" stroke-linecap="round"/>
+  <line x1="145" y1="60" x2="140" y2="40" stroke="#81d4fa" stroke-width="2" opacity="0.4" stroke-linecap="round"/>
+
+  <!-- Branch nodes -->
+  <circle cx="60" cy="90" r="5" fill="#29b6f6" opacity="0.8"/>
+  <circle cx="120" cy="90" r="5" fill="#29b6f6" opacity="0.8"/>
+  <circle cx="75" cy="85" r="4" fill="#29b6f6" opacity="0.7"/>
+  <circle cx="105" cy="85" r="4" fill="#29b6f6" opacity="0.7"/>
+
+  <!-- Secondary nodes -->
+  <circle cx="35" cy="60" r="4" fill="#4fc3f7" opacity="0.7"/>
+  <circle cx="50" cy="65" r="3.5" fill="#4fc3f7" opacity="0.6"/>
+  <circle cx="145" cy="60" r="4" fill="#4fc3f7" opacity="0.7"/>
+  <circle cx="130" cy="65" r="3.5" fill="#4fc3f7" opacity="0.6"/>
+  <circle cx="65" cy="55" r="3" fill="#4fc3f7" opacity="0.6"/>
+  <circle cx="115" cy="55" r="3" fill="#4fc3f7" opacity="0.6"/>
+
+  <!-- Leaf nodes -->
+  <circle cx="25" cy="40" r="3" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="40" cy="40" r="3" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="155" cy="40" r="3" fill="#81d4fa" opacity="0.6"/>
+  <circle cx="140" cy="40" r="3" fill="#81d4fa" opacity="0.6"/>
+
+  <!-- Central Enhancement Node (the "+") -->
+  <circle cx="90" cy="90" r="18" fill="url(#nodeGradient)" stroke="#ffffff" stroke-width="2" opacity="0.95"/>
+  <circle cx="90" cy="90" r="15" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- Plus symbol inside central node -->
+  <line x1="90" y1="78" x2="90" y2="102" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <line x1="78" y1="90" x2="102" y2="90" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Enhancement radiations -->
+  <line x1="90" y1="72" x2="90" y2="55" stroke="#00e5ff" stroke-width="4" opacity="0.7" stroke-dasharray="3,2" stroke-linecap="round"/>
+  <line x1="108" y1="90" x2="125" y2="90" stroke="#00e5ff" stroke-width="4" opacity="0.7" stroke-dasharray="3,2" stroke-linecap="round"/>
+  <line x1="72" y1="90" x2="55" y2="90" stroke="#00e5ff" stroke-width="4" opacity="0.7" stroke-dasharray="3,2" stroke-linecap="round"/>
+  <line x1="104" y1="76" x2="115" y2="65" stroke="#00e5ff" stroke-width="3" opacity="0.6" stroke-dasharray="2,1" stroke-linecap="round"/>
+  <line x1="76" y1="76" x2="65" y2="65" stroke="#00e5ff" stroke-width="3" opacity="0.6" stroke-dasharray="2,1" stroke-linecap="round"/>
+
+  <!-- Active indicators -->
+  <circle cx="90" cy="55" r="4" fill="#00e5ff" opacity="0.9"/>
+  <circle cx="125" cy="90" r="4" fill="#00e5ff" opacity="0.8"/>
+  <circle cx="55" cy="90" r="4" fill="#00e5ff" opacity="0.8"/>
+  <circle cx="115" cy="65" r="3" fill="#81d4fa" opacity="0.7"/>
+  <circle cx="65" cy="65" r="3" fill="#81d4fa" opacity="0.7"/>
+
+  <!-- Subtle glow effect -->
+  <circle cx="90" cy="90" r="22" fill="none" stroke="#00e5ff" stroke-width="1" opacity="0.1"/>
+  <circle cx="90" cy="90" r="25" fill="none" stroke="#00e5ff" stroke-width="0.5" opacity="0.05"/>
+
+</svg>
