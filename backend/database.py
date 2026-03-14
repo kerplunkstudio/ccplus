@@ -74,6 +74,18 @@ CREATE INDEX IF NOT EXISTS idx_tool_usage_session
     ON tool_usage(session_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_tool_usage_parent
     ON tool_usage(parent_agent_id);
+
+CREATE TABLE IF NOT EXISTS user_stats (
+    user_id TEXT PRIMARY KEY,
+    total_sessions INTEGER NOT NULL DEFAULT 0,
+    total_queries INTEGER NOT NULL DEFAULT 0,
+    total_duration_ms REAL NOT NULL DEFAULT 0,
+    total_cost REAL NOT NULL DEFAULT 0,
+    total_input_tokens INTEGER NOT NULL DEFAULT 0,
+    total_output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_lines_of_code INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 """
 
 
@@ -431,3 +443,47 @@ def mark_orphaned_tool_events() -> int:
     )
     conn.commit()
     return cursor.rowcount
+
+
+def get_user_stats(user_id: str) -> dict:
+    """Return accumulated stats for a user. Creates row if missing."""
+    conn = _get_connection()
+    row = conn.execute("SELECT * FROM user_stats WHERE user_id = ?", (user_id,)).fetchone()
+    if not row:
+        conn.execute("INSERT INTO user_stats (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        row = conn.execute("SELECT * FROM user_stats WHERE user_id = ?", (user_id,)).fetchone()
+    return dict(row)
+
+
+def increment_user_stats(
+    user_id: str,
+    sessions: int = 0,
+    queries: int = 0,
+    duration_ms: float = 0,
+    cost: float = 0,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    lines_of_code: int = 0,
+) -> None:
+    """Atomically increment user stats counters."""
+    conn = _get_connection()
+    conn.execute(
+        """
+        INSERT INTO user_stats (user_id, total_sessions, total_queries, total_duration_ms,
+                                total_cost, total_input_tokens, total_output_tokens,
+                                total_lines_of_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            total_sessions = total_sessions + excluded.total_sessions,
+            total_queries = total_queries + excluded.total_queries,
+            total_duration_ms = total_duration_ms + excluded.total_duration_ms,
+            total_cost = total_cost + excluded.total_cost,
+            total_input_tokens = total_input_tokens + excluded.total_input_tokens,
+            total_output_tokens = total_output_tokens + excluded.total_output_tokens,
+            total_lines_of_code = total_lines_of_code + excluded.total_lines_of_code,
+            updated_at = datetime('now', 'localtime')
+        """,
+        (user_id, sessions, queries, duration_ms, cost, input_tokens, output_tokens, lines_of_code),
+    )
+    conn.commit()
