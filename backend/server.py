@@ -47,6 +47,8 @@ from backend.database import (
     get_sessions_list,
     get_stats,
     get_tool_events,
+    get_user_stats,
+    increment_user_stats,
     mark_orphaned_tool_events,
     record_message,
     store_image,
@@ -108,8 +110,32 @@ def _handle_worker_reconnect(session_id: str):
 
     def on_tool_event(event: dict) -> None:
         socketio.emit("tool_event", event, room=session_id)
+        # Count lines of code from Write and Edit tools
+        if event.get("type") == "tool_complete" and event.get("tool_name") in ("Write", "Edit"):
+            params = event.get("parameters", {})
+            content = ""
+            if isinstance(params, dict):
+                content = params.get("content", "") or params.get("new_string", "")
+            if content:
+                lines = content.count("\n") + 1
+                try:
+                    increment_user_stats(user_id="local", lines_of_code=lines)
+                except Exception as e:
+                    logger.error(f"Failed to increment LOC: {e}")
 
     def on_complete(result: dict) -> None:
+        try:
+            increment_user_stats(
+                user_id="local",
+                queries=1,
+                duration_ms=result.get("duration_ms") or 0,
+                cost=result.get("cost") or 0,
+                input_tokens=result.get("input_tokens") or 0,
+                output_tokens=result.get("output_tokens") or 0,
+            )
+        except Exception as e:
+            logger.error(f"Failed to increment user stats: {e}")
+
         socketio.emit(
             "response_complete",
             {
@@ -299,6 +325,19 @@ def stats():
     except Exception as exc:
         logger.error(f"Failed to fetch stats: {exc}")
         return jsonify({"error": "Failed to load stats"}), 500
+
+
+@app.route("/api/stats/user")
+def get_user_stats_endpoint():
+    """Return accumulated usage stats for the current user."""
+    # In local mode, user_id is always "local"
+    user_id = "local"
+    try:
+        stats = get_user_stats(user_id)
+        return jsonify(stats)
+    except Exception as exc:
+        logger.error(f"Failed to fetch user stats: {exc}")
+        return jsonify({"error": "Failed to load user stats"}), 500
 
 
 @app.route("/api/account/limits")
@@ -587,8 +626,32 @@ def handle_connect():
 
         def on_tool_event_reconnect(event: dict) -> None:
             socketio.emit("tool_event", event, room=session_id)
+            # Count lines of code from Write and Edit tools
+            if event.get("type") == "tool_complete" and event.get("tool_name") in ("Write", "Edit"):
+                params = event.get("parameters", {})
+                content = ""
+                if isinstance(params, dict):
+                    content = params.get("content", "") or params.get("new_string", "")
+                if content:
+                    lines = content.count("\n") + 1
+                    try:
+                        increment_user_stats(user_id="local", lines_of_code=lines)
+                    except Exception as e:
+                        logger.error(f"Failed to increment LOC: {e}")
 
         def on_complete_reconnect(result: dict) -> None:
+            try:
+                increment_user_stats(
+                    user_id="local",
+                    queries=1,
+                    duration_ms=result.get("duration_ms") or 0,
+                    cost=result.get("cost") or 0,
+                    input_tokens=result.get("input_tokens") or 0,
+                    output_tokens=result.get("output_tokens") or 0,
+                )
+            except Exception as e:
+                logger.error(f"Failed to increment user stats: {e}")
+
             socketio.emit(
                 "response_complete",
                 {
@@ -699,6 +762,14 @@ def handle_message(data):
             project_path=project_path or None,
             image_ids=image_ids if image_ids else None,
         )
+        # Increment session count if this is the first message in a new session
+        existing = get_conversation_history(session_id, limit=1)
+        # If history only has the message we just recorded, it's a new session
+        if len(existing) <= 1:
+            try:
+                increment_user_stats(user_id=user_id, sessions=1)
+            except Exception as e:
+                logger.error(f"Failed to increment session count: {e}")
     except Exception as exc:
         logger.error(f"Failed to record user message: {exc}")
 
@@ -711,8 +782,32 @@ def handle_message(data):
 
     def on_tool_event(event: dict) -> None:
         socketio.emit("tool_event", event, room=session_id)
+        # Count lines of code from Write and Edit tools
+        if event.get("type") == "tool_complete" and event.get("tool_name") in ("Write", "Edit"):
+            params = event.get("parameters", {})
+            content = ""
+            if isinstance(params, dict):
+                content = params.get("content", "") or params.get("new_string", "")
+            if content:
+                lines = content.count("\n") + 1
+                try:
+                    increment_user_stats(user_id=user_id, lines_of_code=lines)
+                except Exception as e:
+                    logger.error(f"Failed to increment LOC: {e}")
 
     def on_complete(result: dict) -> None:
+        try:
+            increment_user_stats(
+                user_id=user_id,
+                queries=1,
+                duration_ms=result.get("duration_ms") or 0,
+                cost=result.get("cost") or 0,
+                input_tokens=result.get("input_tokens") or 0,
+                output_tokens=result.get("output_tokens") or 0,
+            )
+        except Exception as e:
+            logger.error(f"Failed to increment user stats: {e}")
+
         socketio.emit(
             "response_complete",
             {

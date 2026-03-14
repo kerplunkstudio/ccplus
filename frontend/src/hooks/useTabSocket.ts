@@ -17,33 +17,29 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 const DEFAULT_CONTEXT_WINDOW = 500_000;
 
-const loadPersistedStats = (): UsageStats => {
+const fetchUserStats = async (): Promise<UsageStats> => {
   try {
-    const stored = localStorage.getItem('ccplus_usage_stats');
-    console.log('Loading stats from localStorage:', stored);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      console.log('Parsed stats:', parsed);
-      return {
-        ...parsed,
-        totalSessions: (parsed.totalSessions || 0) + 1,
-      };
-    }
-  } catch (e) {
-    console.error('Failed to load stats:', e);
+    const res = await fetch(`${SOCKET_URL}/api/stats/user`);
+    if (!res.ok) throw new Error('Failed to fetch stats');
+    const data = await res.json();
+    return {
+      totalCost: data.total_cost || 0,
+      totalInputTokens: data.total_input_tokens || 0,
+      totalOutputTokens: data.total_output_tokens || 0,
+      totalDuration: data.total_duration_ms || 0,
+      queryCount: data.total_queries || 0,
+      contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+      model: '',
+      linesOfCode: data.total_lines_of_code || 0,
+      totalSessions: data.total_sessions || 0,
+    };
+  } catch {
+    return {
+      totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0,
+      totalDuration: 0, queryCount: 0, contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+      model: '', linesOfCode: 0, totalSessions: 0,
+    };
   }
-  console.log('Using default stats');
-  return {
-    totalCost: 0,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalDuration: 0,
-    queryCount: 0,
-    contextWindowSize: DEFAULT_CONTEXT_WINDOW,
-    model: '',
-    linesOfCode: 0,
-    totalSessions: 1,
-  };
 };
 
 type TreeAction =
@@ -196,7 +192,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
-  const [usageStats, setUsageStats] = useState<UsageStats>(loadPersistedStats);
+  const [usageStats, setUsageStats] = useState<UsageStats>({
+    totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0,
+    totalDuration: 0, queryCount: 0, contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+    model: '', linesOfCode: 0, totalSessions: 0,
+  });
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
@@ -216,11 +216,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
     toolUseId: string;
 } | null>(null);
 
-  // Persist usage stats to localStorage whenever they change
+  // Fetch persisted stats from backend on mount
   useEffect(() => {
-    console.log('Saving stats to localStorage:', usageStats);
-    localStorage.setItem('ccplus_usage_stats', JSON.stringify(usageStats));
-  }, [usageStats]);
+    fetchUserStats().then(setUsageStats);
+  }, []);
 
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
@@ -427,23 +426,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
       const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
 
       if (isFinalCompletion) {
-        // Final completion: update usage stats and end streaming
-        const model = data.model || '';
-        const contextWindowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
-        const inputTokens = data.input_tokens || 0;
-        const outputTokens = data.output_tokens || 0;
-
-        setUsageStats((prev) => ({
-          totalCost: prev.totalCost + (data.cost || 0),
-          totalInputTokens: prev.totalInputTokens + inputTokens,
-          totalOutputTokens: prev.totalOutputTokens + outputTokens,
-          totalDuration: prev.totalDuration + (data.duration_ms || 0),
-          queryCount: prev.queryCount + 1,
-          contextWindowSize,
-          model,
-          linesOfCode: prev.linesOfCode,
-          totalSessions: prev.totalSessions,
-        }));
+        // Final completion: re-fetch stats from backend to stay in sync
+        fetchUserStats().then(setUsageStats);
 
         // End streaming session completely
         setStreaming(false);
@@ -489,18 +473,6 @@ export function useTabSocket(token: string | null, sessionId: string) {
               : t
           );
           setToolLog([...toolLogRef.current]);
-
-          // Track lines of code from Write and Edit tools
-          if (event.tool_name === 'Write' || event.tool_name === 'Edit') {
-            const params = event.parameters as { content?: string; new_string?: string } | undefined;
-            const content = params?.content || params?.new_string || '';
-            const lines = content.split('\n').length;
-            console.log('LOC: Adding', lines, 'lines from', event.tool_name, 'tool');
-            setUsageStats((prev) => ({
-              ...prev,
-              linesOfCode: prev.linesOfCode + lines,
-            }));
-          }
           break;
         }
         case 'agent_stop':
