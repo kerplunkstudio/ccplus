@@ -1,26 +1,30 @@
 .app-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
   height: 100vh;
   width: 100vw;
   overflow: hidden;
   position: relative;
+  background: var(--bg-primary);
+  gap: 1px;
 }
 
 .panel-sessions {
-  flex: 0 0 200px;
+  background: var(--bg-secondary);
+  border-right: 2px solid var(--border-heavy);
   min-width: 0;
-  border-right: 1px solid var(--border);
 }
 
 .panel-chat {
-  flex: 1;
+  background: var(--bg-primary);
   min-width: 0;
+  position: relative;
 }
 
 .panel-activity {
-  flex: 0 0 280px;
+  background: var(--bg-secondary);
+  border-left: 2px solid var(--border-heavy);
   min-width: 0;
-  border-left: 1px solid var(--border);
 }
 
 /* Loading screen */
@@ -87,22 +91,21 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 20px;
+    height: 20px;
     padding: 0;
-    background: var(--button-bg);
-    border: 1px solid var(--button-border);
-    border-radius: 6px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
   }
 
   .mobile-drawer-btn:hover {
-    background: var(--button-bg-hover);
-    border-color: var(--button-border-hover);
-    color: var(--text-primary);
+    background: var(--bg-secondary);
+    color: var(--accent);
   }
 
   .mobile-overlay {

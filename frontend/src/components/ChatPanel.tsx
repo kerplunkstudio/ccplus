@@ -211,14 +211,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 aria-label="Toggle sessions"
                 title="Sessions"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="3" y1="6" x2="21" y2="6" />
                   <line x1="3" y1="12" x2="21" y2="12" />
                   <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
               </button>
             )}
-            <h1 className="chat-title">CC+</h1>
+            <div>
+              <h1 className="chat-title">CC+</h1>
+              <p className="chat-subtitle">OBS</p>
+            </div>
             <span className={`connection-dot ${connected ? 'online' : 'offline'}`} role="status" aria-label={connected ? 'Connected' : 'Disconnected'} />
           </div>
           <div className="header-right">
@@ -238,7 +241,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 aria-label="Toggle activity"
                 title="Activity"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <rect x="4" y="4" width="16" height="16" rx="2" />
                   <rect x="9" y="9" width="6" height="6" />
                   <line x1="9" y1="1" x2="9" y2="4" />

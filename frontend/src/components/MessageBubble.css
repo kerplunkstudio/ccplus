@@ -1,42 +1,48 @@
 .message-bubble {
   display: flex;
   flex-direction: column;
-  max-width: 85%;
+  width: 100%;
   animation: messageIn 0.25s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 @keyframes messageIn {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .message-bubble.user {
-  align-self: flex-end;
+  margin: var(--space-lg) 0 var(--space-md);
 }
 
 .message-bubble.assistant {
-  align-self: flex-start;
+  margin: var(--space-md) 0 var(--space-lg);
 }
 
 .message-bubble-inner {
-  padding: 12px 16px;
-  border-radius: 12px;
-  line-height: 1.6;
+  padding: 0;
+  line-height: 1.7;
   word-break: break-word;
 }
 
 .message-bubble.user .message-bubble-inner {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-right: 3px solid var(--accent);
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  font-style: italic;
+  border-left: 3px solid var(--accent);
+  padding-left: var(--space-md);
+  font-size: var(--text-base);
+}
+
+.message-bubble.user .message-bubble-inner::before {
+  content: "◊";
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 600;
+  margin-right: var(--space-xs);
 }
 
 .message-bubble.assistant .message-bubble-inner {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--text-secondary);
   color: var(--text-primary);
+  font-size: var(--text-base);
 }
 
 .message-markdown p {

@@ -110,3 +110,5 @@ export interface PluginUninstallResult {
   plugin?: string;
   error?: string;
 }
+
+export * from './workspace';
