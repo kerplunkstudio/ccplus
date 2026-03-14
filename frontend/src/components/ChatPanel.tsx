@@ -103,32 +103,50 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const [lastMessageCount, setLastMessageCount] = useState(0);
 
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const threshold = 150;
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  }, []);
+
   const scrollToBottom = useCallback((immediate = false) => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     if (immediate) {
-      // Instant jump — no visible scroll
       container.scrollTop = container.scrollHeight;
-    } else if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth',
+      });
     }
   }, []);
 
+  // Auto-scroll on new messages or streaming content updates
   useEffect(() => {
     const isSessionChange = Math.abs(messages.length - lastMessageCount) > 1;
-    const shouldScrollImmediate = isSessionChange || messages.length === 0;
+    const hasStreamingMessage = messages.some((m) => m.streaming);
 
-    if (shouldScrollImmediate) {
-      // Use rAF to ensure DOM has rendered before scrolling
+    if (isSessionChange || messages.length === 0) {
+      // Session switch: instant jump
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
-    } else {
-      scrollToBottom(false);
+    } else if (hasStreamingMessage) {
+      // During streaming: instant scroll if near bottom
+      if (isNearBottom()) {
+        scrollToBottom(true);
+      }
+    } else if (messages.length !== lastMessageCount) {
+      // New message added (not streaming): smooth scroll if near bottom
+      if (isNearBottom()) {
+        scrollToBottom(false);
+      }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount]);
+  }, [messages, scrollToBottom, lastMessageCount, isNearBottom]);
 
   // Always snap to bottom on session switch
   useEffect(() => {
