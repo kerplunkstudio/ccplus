@@ -208,7 +208,7 @@ function createWindow() {
     y: windowState.y,
     minWidth: 1000,
     minHeight: 600,
-    title: 'cc+ Desktop',
+    title: 'CC+',
     backgroundColor: '#18181b',
     webPreferences: {
       nodeIntegration: false,
@@ -236,10 +236,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
 
-    // Open DevTools in development
-    if (isDev) {
-      mainWindow.webContents.openDevTools();
-    }
+    // DevTools available via View menu or Cmd+Option+I
   });
 
   // Handle external links
