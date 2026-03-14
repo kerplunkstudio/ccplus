@@ -85,6 +85,9 @@ CCPLUS_SYSTEM_PROMPT = """
 
 You are running inside cc+, a multi-session web UI.
 
+## Asking the user questions
+When the user's request is ambiguous, has multiple valid approaches, or requires a choice, use the AskUserQuestion tool to present structured options. The cc+ UI renders these as selectable cards. Use it whenever you would normally ask the user to choose between approaches, confirm a direction, or clarify requirements. Do NOT just write out options as text — use AskUserQuestion so the user can click to select.
+
 ## Small tasks (handle directly)
 Questions, reading files, explaining code, searching, quick single-file edits, small bug fixes — handle these yourself using any tools you need.
 
@@ -155,6 +158,8 @@ class SDKWorker:
         self._pid_path = config.WORKER_PID_PATH
         self._pending_questions: dict[str, asyncio.Event] = {}
         self._question_responses: dict[str, str] = {}
+        self._event_buffer: dict[str, list[dict]] = {}  # per-session event buffer for disconnect gaps
+        self._buffer_overflow_warned: set[str] = set()  # sessions that have logged overflow warning
 
     async def start(self) -> None:
         """Start the worker, create socket, and listen for connections."""
@@ -216,6 +221,24 @@ class SDKWorker:
 
         # Send session status to newly connected Flask
         await self._send_session_status()
+
+        # Replay any buffered events from the disconnect gap
+        if self._event_buffer:
+            total = sum(len(v) for v in self._event_buffer.values())
+            logger.info(f"Replaying {total} buffered events across {len(self._event_buffer)} sessions")
+            for sid, events in list(self._event_buffer.items()):
+                for event in events:
+                    try:
+                        data = encode_message(event)
+                        writer.write(data)
+                        await writer.drain()
+                    except Exception as e:
+                        logger.error(f"Error replaying buffered event: {e}")
+                        return  # Don't clear buffer if replay failed
+                del self._event_buffer[sid]
+                # Reset overflow warning flag for this session
+                self._buffer_overflow_warned.discard(sid)
+            logger.info("Buffer replay complete")
 
         try:
             while not self._shutdown_requested:
@@ -311,16 +334,30 @@ class SDKWorker:
 
     async def handle_question_response(self, session_id: str, response: str) -> None:
         """Handle user's response to an AskUserQuestion."""
+        logger.info(f"[question_response] Received response for session {session_id}: {response[:100]}")
+        logger.info(f"[question_response] Pending questions: {list(self._pending_questions.keys())}")
         self._question_responses[session_id] = response
         event = self._pending_questions.get(session_id)
         if event:
+            logger.info(f"[question_response] Setting event for session {session_id}")
             event.set()
         else:
             logger.warning(f"No pending question for session {session_id}")
 
     async def send_event(self, msg: dict) -> None:
-        """Send an event to Flask if connected, drop silently if not."""
+        """Send an event to Flask if connected, buffer if not."""
         if self._flask_writer is None:
+            # Buffer session-scoped events for replay on reconnect
+            session_id = msg.get("session_id")
+            if session_id:
+                buf = self._event_buffer.setdefault(session_id, [])
+                if len(buf) >= config.WORKER_EVENT_BUFFER_SIZE:
+                    # Only warn once per session
+                    if session_id not in self._buffer_overflow_warned:
+                        logger.warning(f"Event buffer full for session {session_id}, dropping oldest events")
+                        self._buffer_overflow_warned.add(session_id)
+                    buf.pop(0)
+                buf.append(msg)
             return
 
         try:
@@ -330,6 +367,10 @@ class SDKWorker:
         except Exception as e:
             logger.error(f"Error sending event to Flask: {e}")
             self._flask_writer = None
+            # Buffer the failed event too
+            session_id = msg.get("session_id")
+            if session_id:
+                self._event_buffer.setdefault(session_id, []).append(msg)
 
     async def _send_session_status(self) -> None:
         """Send status of all active sessions to Flask."""
@@ -459,18 +500,22 @@ class SDKWorker:
                 })
 
                 # Wait for user response (up to 5 minutes)
+                logger.info(f"[AskUserQuestion] Waiting for user response for session {session_id}")
                 wait_event = asyncio.Event()
                 self._pending_questions[session_id] = wait_event
                 try:
                     await asyncio.wait_for(wait_event.wait(), timeout=300)
                     user_response = self._question_responses.pop(session_id, "No response provided")
+                    logger.info(f"[AskUserQuestion] Got user response: {user_response[:100]}")
                 except asyncio.TimeoutError:
                     user_response = "User did not respond in time"
+                    logger.warning(f"[AskUserQuestion] Timed out waiting for response")
                 finally:
                     self._pending_questions.pop(session_id, None)
 
                 # Block the tool so CLI subprocess doesn't prompt stdin,
                 # include user's selections in hookSpecificOutput
+                logger.info(f"[AskUserQuestion] Returning block decision with response")
                 return HookJSONOutput(
                     decision="block",
                     hookSpecificOutput={"reason": f"User responded: {user_response}"},
