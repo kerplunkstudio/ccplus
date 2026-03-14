@@ -1,9 +1,8 @@
-import { useReducer, useEffect, useCallback } from 'react';
+import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceState, WorkspaceAction, ProjectEntry, TabState } from '../types';
 
 const STORAGE_KEY = 'ccplus_workspace';
-const OLD_PROJECT_KEY = 'ccplus_selected_project';
-const OLD_SESSION_KEY = 'ccplus_session_id';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const generateSessionId = (): string =>
   `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -158,47 +157,78 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
 };
 
 const loadInitialState = (): WorkspaceState => {
+  // Start with localStorage as fast cache, will be overridden by API fetch
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
-
-    const oldProject = localStorage.getItem(OLD_PROJECT_KEY);
-    const oldSession = localStorage.getItem(OLD_SESSION_KEY);
-
-    if (oldProject && oldSession) {
-      const projectData = JSON.parse(oldProject);
-      const initialTab: TabState = {
-        sessionId: oldSession,
-        label: 'New session',
-        isStreaming: false,
-        hasRunningAgent: false,
-        createdAt: Date.now(),
-      };
-      const migratedProject: ProjectEntry = {
-        path: projectData.path,
-        name: projectData.name,
-        tabs: [initialTab],
-        activeTabId: initialTab.sessionId,
-      };
-      return {
-        projects: [migratedProject],
-        activeProjectPath: migratedProject.path,
-      };
-    }
-
-    return { projects: [], activeProjectPath: null };
   } catch {
-    return { projects: [], activeProjectPath: null };
+    // Fall through to default
   }
+  return { projects: [], activeProjectPath: null };
 };
+
+const stripTransientFields = (state: WorkspaceState): WorkspaceState => ({
+  ...state,
+  projects: state.projects.map((p) => ({
+    ...p,
+    tabs: p.tabs.map((t) => ({
+      ...t,
+      isStreaming: false,
+      hasRunningAgent: false,
+    })),
+  })),
+});
 
 export function useWorkspace() {
   const [state, dispatch] = useReducer(workspaceReducer, null, loadInitialState);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initializedRef = useRef(false);
 
+  // Fetch workspace from API on mount (source of truth for cross-client sync)
   useEffect(() => {
+    fetch(`${SOCKET_URL}/api/workspace`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((apiState) => {
+        if (apiState && apiState.projects && apiState.projects.length > 0) {
+          dispatch({ type: 'RESTORE', state: apiState });
+        }
+        initializedRef.current = true;
+      })
+      .catch(() => {
+        initializedRef.current = true;
+      });
+  }, []);
+
+  // Save to localStorage immediately + debounced API save on every change
+  useEffect(() => {
+    // Always save to localStorage for fast same-browser reload
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    // Don't save back to API until we've loaded from it first
+    if (!initializedRef.current) return;
+
+    // Debounced save to API (300ms) to avoid hammering on rapid changes
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      const persistable = stripTransientFields(state);
+      fetch(`${SOCKET_URL}/api/workspace`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(persistable),
+      }).catch(() => {
+        // Best-effort save, localStorage is the fallback
+      });
+    }, 300);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
   }, [state]);
 
   const activeProject = state.projects.find((p) => p.path === state.activeProjectPath) || null;
