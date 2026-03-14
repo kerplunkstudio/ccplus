@@ -14,6 +14,7 @@ Architecture:
 
 import logging
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -357,6 +358,112 @@ def list_projects():
     except Exception as exc:
         logger.error(f"Failed to list projects: {exc}")
         return jsonify({"error": "Failed to list projects"}), 500
+
+
+@app.route("/api/git/context")
+def git_context():
+    """Get git context for a project directory.
+
+    Query params:
+        project: absolute path to the project directory
+
+    Returns:
+        branch: current branch name
+        dirty_count: number of modified/untracked files
+        commits: list of last 5 commits with hash, message, time_ago
+    """
+    project_path = request.args.get("project", "").strip()
+    if not project_path:
+        return jsonify({"error": "project parameter required"}), 400
+
+    # Validate path exists
+    project_dir = Path(project_path)
+    if not project_dir.exists():
+        return jsonify({"error": f"Project path does not exist: {project_path}"}), 400
+
+    if not project_dir.is_dir():
+        return jsonify({"error": f"Project path is not a directory: {project_path}"}), 400
+
+    # Check if it's a git repo
+    try:
+        subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return jsonify({"error": f"Not a git repository: {project_path}"}), 400
+    except Exception as exc:
+        logger.error(f"Failed to check git repo: {exc}")
+        return jsonify({"error": f"Failed to check git repository: {exc}"}), 500
+
+    response = {}
+
+    # Get current branch
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            response["branch"] = result.stdout.strip()
+        else:
+            response["branch"] = None
+    except Exception as exc:
+        logger.error(f"Failed to get branch: {exc}")
+        response["branch"] = None
+
+    # Get dirty count
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            lines = [line for line in result.stdout.strip().split("\n") if line]
+            response["dirty_count"] = len(lines)
+        else:
+            response["dirty_count"] = 0
+    except Exception as exc:
+        logger.error(f"Failed to get dirty count: {exc}")
+        response["dirty_count"] = 0
+
+    # Get last 5 commits
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "log", "--format=%H|||%h|||%s|||%ar", "-n", "5"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            commits = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split("|||")
+                if len(parts) == 4:
+                    _, short_hash, subject, time_ago = parts
+                    # Truncate subject to 60 chars
+                    if len(subject) > 60:
+                        subject = subject[:57] + "..."
+                    commits.append({
+                        "hash": short_hash,
+                        "message": subject,
+                        "time_ago": time_ago,
+                    })
+            response["commits"] = commits
+        else:
+            response["commits"] = []
+    except Exception as exc:
+        logger.error(f"Failed to get commits: {exc}")
+        response["commits"] = []
+
+    return jsonify(response)
 
 
 @app.route("/api/sessions")
