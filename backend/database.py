@@ -416,3 +416,18 @@ def get_message_images(image_ids: list[str]) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def mark_orphaned_tool_events() -> int:
+    """Mark all running tool events (success IS NULL) as failed due to worker restart.
+    Returns the number of events marked."""
+    conn = _get_connection()
+    cursor = conn.execute(
+        """
+        UPDATE tool_usage
+        SET success = 0, error = 'Worker restarted', duration_ms = 0
+        WHERE success IS NULL
+        """
+    )
+    conn.commit()
+    return cursor.rowcount

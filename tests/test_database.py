@@ -271,3 +271,68 @@ class TestImmutability:
         history1 = db.get_conversation_history("sess1")
         history2 = db.get_conversation_history("sess1")
         assert history1 is not history2
+
+
+class TestMarkOrphanedToolEvents:
+    def test_no_orphans(self, fresh_db):
+        # All completed events
+        db.record_tool_event("sess1", "Read", "t1", success=True, duration_ms=100)
+        db.record_tool_event("sess1", "Write", "t2", success=False, duration_ms=50, error="Failed")
+
+        count = db.mark_orphaned_tool_events()
+        assert count == 0
+
+        # Verify events unchanged
+        events = db.get_tool_events("sess1")
+        assert events[0]["success"] == 1
+        assert events[1]["success"] == 0
+
+    def test_marks_running_events(self, fresh_db):
+        # Create some running events (success=None)
+        db.record_tool_event("sess1", "Read", "t1")
+        db.record_tool_event("sess1", "Write", "t2")
+        db.record_tool_event("sess1", "Bash", "t3", success=True, duration_ms=100)
+
+        count = db.mark_orphaned_tool_events()
+        assert count == 2
+
+        # Verify orphaned events marked
+        events = db.get_tool_events("sess1")
+        assert events[0]["success"] == 0
+        assert events[0]["error"] == "Worker restarted"
+        assert events[0]["duration_ms"] == 0
+
+        assert events[1]["success"] == 0
+        assert events[1]["error"] == "Worker restarted"
+        assert events[1]["duration_ms"] == 0
+
+        # Verify completed event unchanged
+        assert events[2]["success"] == 1
+        assert events[2]["error"] is None
+
+    def test_marks_across_sessions(self, fresh_db):
+        # Create orphans in multiple sessions
+        db.record_tool_event("sess1", "Read", "t1")
+        db.record_tool_event("sess2", "Write", "t2")
+        db.record_tool_event("sess3", "Bash", "t3")
+
+        count = db.mark_orphaned_tool_events()
+        assert count == 3
+
+        # Verify all sessions marked
+        assert db.get_tool_events("sess1")[0]["error"] == "Worker restarted"
+        assert db.get_tool_events("sess2")[0]["error"] == "Worker restarted"
+        assert db.get_tool_events("sess3")[0]["error"] == "Worker restarted"
+
+    def test_idempotent(self, fresh_db):
+        # Create running events
+        db.record_tool_event("sess1", "Read", "t1")
+        db.record_tool_event("sess1", "Write", "t2")
+
+        # First call should mark them
+        count1 = db.mark_orphaned_tool_events()
+        assert count1 == 2
+
+        # Second call should find no orphans
+        count2 = db.mark_orphaned_tool_events()
+        assert count2 == 0
