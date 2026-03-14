@@ -2,56 +2,114 @@
   <h1 align="center">cc+</h1>
 </p>
 
-<h3 align="center">Claude Code, but with a face.</h3>
+<h3 align="center">Observability for Claude Code</h3>
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square" alt="Python"/>
-  <img src="https://img.shields.io/badge/claude--code--sdk-latest-blueviolet?style=flat-square" alt="SDK"/>
-  <img src="https://img.shields.io/badge/vibes-immaculate-ff69b4?style=flat-square" alt="Vibes"/>
+  <img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square" alt="React"/>
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License"/>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#development">Development</a> •
+  <a href="#architecture">Architecture</a>
 </p>
 
 ---
 
-You already use Claude Code. It's great. It's also a terminal. And sometimes you want to see what the hell it's doing without squinting at scrolling text like it's 1998.
+## What is cc+?
 
-cc+ is a web UI that sits on top of Claude Code. You chat. It codes. You watch every agent spawn, every tool call, every file edit — live, in a tree, in your browser. Same Claude Code underneath. Better window into it.
+**cc+** is a web UI and desktop app for [Claude Code](https://docs.claude.com/claude-code). It provides a browser-based chat interface backed by the Claude Code SDK, with a real-time activity tree showing every agent spawn and tool call as it happens.
 
-## Why
+Same Claude Code underneath. Better window into it.
 
-- You type in a terminal. Claude Code types back. Somewhere in between, it spawned 4 agents, edited 12 files, and ran tests you didn't know existed. You find out when it's done. Maybe.
-- **cc+ shows you all of it. In real time. As it happens.**
+### Why?
 
-## What it does
+You type in a terminal. Claude Code types back. Somewhere in between, it spawned 4 agents, edited 12 files, and ran tests you didn't know existed. You find out when it's done. Maybe.
 
-- **Direct Claude Code session.** No middleman. No routing layer. Your message goes straight to the SDK. Whatever Claude Code can do in the terminal, it can do here.
-- **Activity tree.** Right sidebar. Every agent spawn is a collapsible node. Every tool call nested under its parent. Spinning while running, checkmark when done, X when it ate shit. You see the whole execution tree.
-- **Streaming responses.** Characters appear as Claude thinks them. Not "wait 30 seconds then get a wall of text." Actual streaming.
-- **Zero config.** Install. Run. Open browser. No accounts, no API keys to paste into a UI, no onboarding wizard. If Claude Code works in your terminal, cc+ works in your browser.
+**cc+ shows you all of it. In real time. As it happens.**
+
+---
+
+## Features
+
+- **Direct SDK Integration** - No middleman. Your messages go straight to the Claude Code SDK. Whatever works in terminal, works here.
+- **Real-time Activity Tree** - See every agent spawn, tool call, and file operation as it happens. Collapsible nodes, status indicators, execution hierarchy.
+- **Streaming Responses** - Watch Claude think. Characters appear in real-time, not in 30-second bursts.
+- **Web + Desktop** - Run in your browser or as a native desktop app (Electron).
+- **Session Persistence** - Conversation history and tool usage stored in SQLite. Pick up where you left off.
+- **Zero Configuration** - If Claude Code works in your terminal, cc+ works in your browser. No accounts, no API keys to paste.
+- **WebSocket Protocol** - Live updates via Socket.IO. Cancel queries mid-flight.
+
+---
 
 ## Quick Start
 
-### Web UI
+### Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- `ANTHROPIC_API_KEY` environment variable (or Claude Code configured in terminal)
+
+### Installation
 
 ```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
-python3 -m venv venv && source venv/bin/activate
+# Clone the repository
+git clone git@github.com:mjfuentes/ccplus.git
+cd ccplus
+
+# Install backend dependencies
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+
+# Install frontend dependencies
 cd frontend && npm install && cd ..
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your ANTHROPIC_API_KEY
+
+# Build and run
 ./deploy.sh
 ```
 
-Open `localhost:4000`. Start talking.
+Open `http://localhost:4000` in your browser.
+
+---
+
+## Usage
+
+### Web UI
+
+Default mode. Run the Flask server and access via browser:
+
+```bash
+./deploy.sh
+```
+
+Open `http://localhost:4000`. Start chatting with Claude Code.
 
 ### Desktop App
 
+Run cc+ as a standalone desktop application (no browser needed):
+
 ```bash
-# After setup above
 ./deploy.sh desktop
 ```
 
-Launches cc+ as a standalone desktop app (no browser needed).
+**Modes:**
+- **Exclusive mode**: Stops web server, runs backend inside Electron
+- **Parallel mode** (recommended for dev): Web server on port 4000, desktop app on port 4001
 
-## What you see
+```bash
+./deploy.sh desktop-parallel  # Both web and desktop run simultaneously
+```
+
+### What You See
 
 ```
 ┌─────────────────────────────────┬──────────────────────────┐
@@ -70,38 +128,55 @@ Launches cc+ as a standalone desktop app (no browser needed).
 └─────────────────────────────────┴──────────────────────────┘
 ```
 
-Left panel: chat. Right panel: everything Claude Code is doing under the hood.
+**Left panel**: Chat with Claude Code
+**Right panel**: Live activity tree showing every agent spawn, tool call, and execution status
 
-## How it works
+---
+
+## Architecture
+
+### Stack
+
+- **Backend**: Python 3.12, Flask, Flask-SocketIO, Claude Code SDK
+- **Frontend**: React 19, TypeScript, Socket.IO client
+- **Database**: SQLite (WAL mode, thread-safe)
+- **Desktop**: Electron 28
+
+### How It Works
 
 ```
-Browser → WebSocket → Flask → Claude Code SDK → streams back
+Browser → WebSocket → Flask → Claude Code SDK → Streaming response
                                     ↓
-                              SDK hooks write
-                              tool events to
-                              SQLite + WebSocket
+                              SDK hooks track
+                              tool events and
+                              write to SQLite
+                                    ↓
+                              WebSocket emits
+                              tool_event updates
                                     ↓
                               Activity tree
-                              updates live
+                              rebuilds in real-time
 ```
 
-No task queue. No background workers. No orchestrator deciding what model to use. Claude Code handles all of that. cc+ just gives it a UI and shows you what's happening.
+**No task queue. No orchestrator. No routing layer.**
 
-## Stack
+User messages go straight to the Claude Code SDK. The SDK handles everything. cc+ just provides the UI and observability layer.
 
-Python 3.12 / Claude Code SDK / Flask-SocketIO / React + TypeScript / SQLite
-
-## Project structure
+### Project Structure
 
 ```
 ccplus/
 ├── backend/
 │   ├── server.py          # Flask + WebSocket server
-│   ├── sdk_session.py     # SDK session manager (one per user, streaming)
-│   ├── sdk_hooks.py       # Tool event tracking + agent tree correlation
-│   ├── database.py        # SQLite (conversations + tool_usage)
-│   ├── auth.py            # Auto-login on localhost
-│   └── config.py          # Environment config
+│   ├── sdk_session.py     # SDK session manager (asyncio loop in background thread)
+│   ├── sdk_hooks.py       # Tool event tracking + agent stack correlation
+│   ├── database.py        # SQLite operations (conversations + tool_usage)
+│   ├── auth.py            # JWT auto-login for local mode
+│   └── config.py          # Environment configuration
+├── electron/
+│   ├── main.js            # Electron main process
+│   ├── preload.js         # IPC bridge
+│   └── assets/            # App icons (.icns, .png, .ico)
 ├── frontend/
 │   └── src/
 │       ├── components/
@@ -109,38 +184,80 @@ ccplus/
 │       │   ├── ActivityTree.tsx    # Real-time agent/tool tree
 │       │   └── MessageBubble.tsx   # Markdown rendering
 │       └── hooks/
-│           ├── useSocket.ts        # WebSocket + activity tree state
-│           └── useAuth.ts          # Auto-login
-├── static/chat/           # Built frontend (served by Flask)
-└── data/                  # SQLite database
+│           ├── useSocket.ts        # WebSocket connection + activity tree reducer
+│           └── useAuth.ts          # Auto-login flow
+├── static/chat/           # Deployed frontend build (served by Flask)
+├── data/                  # SQLite database (runtime, gitignored)
+├── tests/                 # pytest test suite
+└── deploy.sh              # Build + deploy + restart script
 ```
 
-## Run modes
+---
 
-cc+ can run in two modes:
+## Development
 
-1. **Web UI** (default): Flask server + browser at `localhost:4000`
-2. **Desktop app**: Electron wrapper that launches the server and opens a native app window
+### Running Locally
 
-Both modes use the same backend, same React UI, same everything. Desktop mode just skips the browser and gives you a proper app icon in your dock.
-
-Launch desktop mode with:
+**Full deploy** (build frontend + restart server):
 ```bash
-./deploy.sh desktop
+./deploy.sh
 ```
 
-See `electron/README.md` for packaging distributable binaries.
+**Server only** (no frontend rebuild):
+```bash
+./deploy.sh server
+```
 
-## The difference
+**Frontend only** (no server restart):
+```bash
+./deploy.sh frontend
+```
 
-| | Terminal | cc+ |
-|---|---|---|
-| Chat | ✓ | ✓ |
-| See agent spawns | If you're fast | Tree view, live |
-| See tool calls | Scrolls by | Nested, expandable |
-| See costs | After the fact | Real-time |
-| Cancel | Ctrl+C and pray | Button |
-| Share screen with someone | "look at my terminal" | "open localhost:4000" |
+**Desktop app** (parallel mode):
+```bash
+./deploy.sh desktop-parallel
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | (required) | API key for Claude Code SDK |
+| `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
+| `SDK_MODEL` | `sonnet` | Default model (`sonnet`, `opus`, `haiku`) |
+| `PORT` | `3000` | Server port |
+| `CCPLUS_AUTH` | `local` | Auth mode (`local` for auto-login) |
+| `SECRET_KEY` | (auto-generated) | JWT signing key |
+
+### Testing
+
+**Backend tests** (pytest):
+```bash
+pytest tests/ -v
+pytest tests/ --cov=backend --cov-report=html
+```
+
+**Frontend tests** (Jest + React Testing Library):
+```bash
+cd frontend && npm test
+```
+
+**Test coverage targets:**
+- Critical paths (sdk_session, sdk_hooks, database): 80%+
+- Utility functions (auth, config): 100%
+- Server routes: Best effort
+
+### Deploy Workflow
+
+The `deploy.sh` script intelligently restarts only what changed:
+
+- **Frontend changes**: Rebuilds React app, deploys to `static/chat/`, restarts Flask
+- **Server changes**: Restarts Flask only. SDK worker stays alive.
+- **Worker changes** (`sdk_worker.py`): Restarts SDK worker (interrupts active sessions)
+
+**Deploy resilience**: The SDK worker is a separate process. During server-only restarts, the worker buffers events and replays them when Flask reconnects. Active SDK sessions survive.
+
+---
 
 ## FAQ
 
@@ -148,19 +265,43 @@ See `electron/README.md` for packaging distributable binaries.
 No. It IS Claude Code. Same SDK, same agents, same tools. Different window.
 
 **Why not just use the terminal?**
-Use both. Terminal for quick stuff. cc+ for when you want to actually see what 4 parallel agents are doing to your codebase.
+Use both. Terminal for quick stuff. cc+ when you want to actually see what 4 parallel agents are doing to your codebase.
 
 **Does it cost more?**
 Same tokens, same API calls. cc+ adds zero overhead. The UI is free. The agents bill the same.
 
-**Can I use my existing .claude/ config?**
+**Can I use my existing `.claude/` config?**
 Yes. cc+ reads your agent definitions, hooks, and settings. It's the same Claude Code.
+
+**What about privacy?**
+cc+ runs locally. No data leaves your machine except API calls to Anthropic (same as terminal). Conversations stored in local SQLite.
+
+---
+
+## Contributing
+
+Contributions welcome! See [CLAUDE.md](CLAUDE.md) for development conventions and architecture details.
+
+**Key areas:**
+- Frontend improvements (React components, UI/UX)
+- Test coverage (backend 80%+, frontend best effort)
+- Desktop app features (window management, packaging)
+- WebSocket protocol enhancements
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
   <strong>Same Claude Code. Better window.</strong>
 </p>
+
 <p align="center">
-  <a href="https://docs.anthropic.com/">Anthropic Docs</a> · <a href="https://docs.claude.com/claude-code">Claude Code Docs</a>
+  <a href="https://docs.anthropic.com/">Anthropic Docs</a> •
+  <a href="https://docs.claude.com/claude-code">Claude Code Docs</a> •
+  <a href="CLAUDE.md">Developer Guide</a>
 </p>
