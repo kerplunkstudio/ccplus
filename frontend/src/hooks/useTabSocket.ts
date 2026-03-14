@@ -204,8 +204,25 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const toolLogRef = useRef<ToolEvent[]>([]);
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
+  const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
+
+  const setCurrentToolDebounced = (tool: ToolEvent | null) => {
+    if (clearToolTimerRef.current) {
+      clearTimeout(clearToolTimerRef.current);
+      clearToolTimerRef.current = null;
+    }
+    if (tool !== null) {
+      setCurrentTool(tool);
+    } else {
+      // Delay clearing to avoid flicker between rapid tool_complete → tool_start
+      clearToolTimerRef.current = setTimeout(() => {
+        setCurrentTool(null);
+        clearToolTimerRef.current = null;
+      }, 300);
+    }
+  };
   const [pendingQuestion, setPendingQuestion] = useState<{
     questions: Array<{
         question: string;
@@ -228,6 +245,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       dispatchTree({ type: 'CLEAR' });
       // Don't reset usage stats - they persist across sessions
       setStreaming(false);
+      if (clearToolTimerRef.current) {
+        clearTimeout(clearToolTimerRef.current);
+        clearToolTimerRef.current = null;
+      }
       setCurrentTool(null);
       toolLogRef.current = [];
       setToolLog([]);
@@ -264,6 +285,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
         streamingContentRef.current = '';
         streamingIdRef.current = null;
         setStreaming(false);
+        if (clearToolTimerRef.current) {
+          clearTimeout(clearToolTimerRef.current);
+          clearToolTimerRef.current = null;
+        }
         setCurrentTool(null);
       }
     });
@@ -431,6 +456,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
         // End streaming session completely
         setStreaming(false);
+        if (clearToolTimerRef.current) {
+          clearTimeout(clearToolTimerRef.current);
+          clearToolTimerRef.current = null;
+        }
         setCurrentTool(null);
       }
       // For intermediate completions, keep streaming active but current message is finalized
@@ -449,7 +478,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         case 'agent_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
-          setCurrentTool(event);
+          setCurrentToolDebounced(event);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
@@ -458,7 +487,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         case 'tool_start': {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
-          setCurrentTool(event);
+          setCurrentToolDebounced(event);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
@@ -466,7 +495,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         }
         case 'tool_complete': {
           dispatchTree({ type: 'TOOL_COMPLETE', event });
-          setCurrentTool(null);
+          setCurrentToolDebounced(null);
           toolLogRef.current = toolLogRef.current.map((t) =>
             t.tool_use_id === event.tool_use_id
               ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
@@ -477,7 +506,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         }
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
-          setCurrentTool(null);
+          setCurrentToolDebounced(null);
           toolLogRef.current = toolLogRef.current.map((t) =>
             t.tool_use_id === event.tool_use_id
               ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
@@ -499,6 +528,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(false);
       streamingContentRef.current = '';
       streamingIdRef.current = null;
+      if (clearToolTimerRef.current) {
+        clearTimeout(clearToolTimerRef.current);
+        clearToolTimerRef.current = null;
+      }
       setCurrentTool(null);
       setPendingQuestion(null);
     });
@@ -513,6 +546,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
     setSocket(newSocket);
 
     return () => {
+      if (clearToolTimerRef.current) {
+        clearTimeout(clearToolTimerRef.current);
+        clearToolTimerRef.current = null;
+      }
       newSocket.close();
     };
   }, [token, sessionId]);
@@ -643,6 +680,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
     streamingContentRef.current = '';
     streamingIdRef.current = null;
     setStreaming(false);
+    if (clearToolTimerRef.current) {
+      clearTimeout(clearToolTimerRef.current);
+      clearToolTimerRef.current = null;
+    }
     setCurrentTool(null);
   }, [socket, connected]);
 
