@@ -367,9 +367,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
       if (!streamingIdRef.current) {
-        // Always create a new message for each new Claude response
-        // Don't append to existing assistant messages to ensure proper separation
-        const msgId = `stream_${Date.now()}`;
+        // Create a new message for each new streaming sequence
+        // This ensures consecutive Claude responses appear as separate messages
+        const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         streamingContentRef.current = data.text;
         streamingIdRef.current = msgId;
         setMessages((prev) => [
@@ -383,6 +383,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
           },
         ]);
       } else {
+        // Append to existing streaming message
         streamingContentRef.current += data.text;
         const currentContent = streamingContentRef.current;
         const msgId = streamingIdRef.current;
@@ -403,40 +404,52 @@ export function useTabSocket(token: string | null, sessionId: string) {
       input_tokens?: number;
       output_tokens?: number;
       model?: string;
+      sdk_session_id?: string | null;
     }) => {
       const msgId = streamingIdRef.current;
       if (msgId) {
+        // Finalize the current streaming message
         const finalContent = data.content || streamingContentRef.current;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === msgId ? { ...m, content: finalContent, streaming: false, toolLog: [...toolLogRef.current] } : m
           )
         );
+
+        // Reset streaming state to allow next message to be created separately
+        streamingContentRef.current = '';
+        streamingIdRef.current = null;
+        toolLogRef.current = [];
+        setToolLog([]);
       }
 
-      const model = data.model || '';
-      const contextWindowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
-      const inputTokens = data.input_tokens || 0;
-      const outputTokens = data.output_tokens || 0;
+      // Check if this is the final completion (has sdk_session_id) or an intermediate one
+      const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
 
-      setUsageStats((prev) => ({
-        totalCost: prev.totalCost + (data.cost || 0),
-        totalInputTokens: prev.totalInputTokens + inputTokens,
-        totalOutputTokens: prev.totalOutputTokens + outputTokens,
-        totalDuration: prev.totalDuration + (data.duration_ms || 0),
-        queryCount: prev.queryCount + 1,
-        contextWindowSize,
-        model,
-        linesOfCode: prev.linesOfCode,
-        totalSessions: prev.totalSessions,
-      }));
+      if (isFinalCompletion) {
+        // Final completion: update usage stats and end streaming
+        const model = data.model || '';
+        const contextWindowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
+        const inputTokens = data.input_tokens || 0;
+        const outputTokens = data.output_tokens || 0;
 
-      streamingContentRef.current = '';
-      streamingIdRef.current = null;
-      setStreaming(false);
-      setCurrentTool(null);
-      toolLogRef.current = [];
-      setToolLog([]);
+        setUsageStats((prev) => ({
+          totalCost: prev.totalCost + (data.cost || 0),
+          totalInputTokens: prev.totalInputTokens + inputTokens,
+          totalOutputTokens: prev.totalOutputTokens + outputTokens,
+          totalDuration: prev.totalDuration + (data.duration_ms || 0),
+          queryCount: prev.queryCount + 1,
+          contextWindowSize,
+          model,
+          linesOfCode: prev.linesOfCode,
+          totalSessions: prev.totalSessions,
+        }));
+
+        // End streaming session completely
+        setStreaming(false);
+        setCurrentTool(null);
+      }
+      // For intermediate completions, keep streaming active but current message is finalized
     });
 
     newSocket.on('tool_event', (event: ToolEvent) => {
@@ -515,6 +528,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       setCurrentTool(null);
+      setPendingQuestion(null);
     });
 
     newSocket.on('user_question', (data: { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }>; tool_use_id: string }) => {
