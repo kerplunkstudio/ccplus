@@ -11,16 +11,16 @@
 }
 
 .message-bubble.user {
-  margin: var(--space-lg) 0 var(--space-md);
+  margin: var(--space-md) 0 var(--space-sm);
 }
 
 .message-bubble.assistant {
-  margin: var(--space-md) 0 var(--space-lg);
+  margin: var(--space-sm) 0 var(--space-md);
 }
 
 .message-bubble-inner {
   padding: 0;
-  line-height: 1.7;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .message-markdown p {
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
 }
 
 .message-markdown p:last-child {
@@ -55,7 +55,7 @@
 
 .message-markdown ul,
 .message-markdown ol {
-  margin: 4px 0 8px 20px;
+  margin: 2px 0 4px 16px;
 }
 
 .message-markdown li {
