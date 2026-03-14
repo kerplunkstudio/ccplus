@@ -15,12 +15,12 @@
 }
 
 .message-bubble.assistant {
-  margin: var(--space-lg) 0 var(--space-lg);
+  margin: var(--space-sm) 0 var(--space-sm);
 }
 
 /* Extra spacing between consecutive assistant messages */
 .message-bubble.assistant + .message-bubble.assistant {
-  margin-top: var(--space-2xl);
+  margin-top: var(--space-md);
 }
 
 /* First message in conversation */
@@ -140,6 +140,12 @@
   border-bottom: 1px solid var(--border);
 }
 
+.code-block-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .code-language {
   color: var(--text-secondary);
   font-family: var(--font-mono);
@@ -170,6 +176,37 @@
   gap: 4px;
   display: flex;
   align-items: center;
+}
+
+.toggle-preview-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+}
+
+.toggle-preview-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-dim);
+}
+
+.toggle-preview-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+.markdown-preview {
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 0 0 8px 8px;
+  border: 1px solid var(--border);
+  border-top: none;
 }
 
 .copy-check-icon {

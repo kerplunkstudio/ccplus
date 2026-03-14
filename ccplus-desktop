@@ -1,11 +1,20 @@
 #!/bin/bash
 # Quick launcher for cc+ Desktop app
-# Usage: ./ccplus-desktop
+# Usage: ./ccplus-desktop [--parallel]
+#
+# --parallel: Run alongside existing web server (uses port 4001)
+#             Default: Stops existing services and uses port 4000
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Parse command line arguments
+PARALLEL_MODE=false
+if [ "$#" -gt 0 ] && [ "$1" = "--parallel" ]; then
+    PARALLEL_MODE=true
+fi
 
 # Check if Electron deps are installed
 if [ ! -d "node_modules" ]; then
@@ -27,5 +36,10 @@ if [ ! -d "static/chat" ] || [ -z "$(ls -A "static/chat" 2>/dev/null)" ]; then
 fi
 
 # Launch desktop app
-echo "Starting cc+ Desktop..."
-npm run electron
+if [ "$PARALLEL_MODE" = true ]; then
+    echo "Starting cc+ Desktop in parallel mode..."
+    ./deploy.sh desktop-parallel
+else
+    echo "Starting cc+ Desktop..."
+    ./deploy.sh desktop
+fi

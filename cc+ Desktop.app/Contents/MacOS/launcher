@@ -1,54 +1,72 @@
 #!/bin/bash
-set -e
 
-# Source user environment to get PATH, node, npm, etc.
-if [ -f "$HOME/.zshrc" ]; then
-    source "$HOME/.zshrc"
+# cc+ Desktop launcher — designed to work when double-clicked from Finder/Dock
+# Finder launches don't inherit shell environment, so we set up everything explicitly.
+
+PROJECT_DIR="/Users/matifuentes/Workspace/ccplus"
+cd "$PROJECT_DIR"
+
+# Build PATH for Homebrew + system
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+# Load .env file
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
 fi
 
-# Ensure /usr/local/bin is in PATH (Homebrew)
-export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+# Override port for parallel mode
+export PORT=4001
 
-# Change to project directory
-cd /Users/matifuentes/Workspace/ccplus
+# Log to a file for debugging
+LOG="$PROJECT_DIR/logs/desktop-launcher.log"
+mkdir -p "$PROJECT_DIR/logs"
+exec > "$LOG" 2>&1
+echo "=== cc+ Desktop launch $(date) ==="
+echo "PATH: $PATH"
+echo "node: $(which node 2>/dev/null || echo 'NOT FOUND')"
+echo "npm: $(which npm 2>/dev/null || echo 'NOT FOUND')"
 
-# Kill any stale process on port 4001 (Electron desktop app port)
+# Kill any stale process on port 4001
 lsof -ti:4001 2>/dev/null | xargs kill -9 2>/dev/null || true
+sleep 1
 
 # Ensure SDK worker is running
-WORKER_SOCKET="data/sdk_worker.sock"
-WORKER_PID_FILE="data/sdk_worker.pid"
+WORKER_SOCKET="$PROJECT_DIR/data/sdk_worker.sock"
+WORKER_PID_FILE="$PROJECT_DIR/data/sdk_worker.pid"
+PYTHON="$PROJECT_DIR/venv/bin/python"
 
-if [ ! -S "$WORKER_SOCKET" ] || [ ! -f "$WORKER_PID_FILE" ] || ! ps -p "$(cat "$WORKER_PID_FILE" 2>/dev/null)" > /dev/null 2>&1; then
+worker_alive() {
+    [ -S "$WORKER_SOCKET" ] && [ -f "$WORKER_PID_FILE" ] && kill -0 "$(cat "$WORKER_PID_FILE" 2>/dev/null)" 2>/dev/null
+}
+
+if ! worker_alive; then
     echo "Starting SDK worker..."
-
-    # Ensure data directory exists
-    mkdir -p data
-
-    # Activate virtual environment and start worker in background
-    source venv/bin/activate
-
-    # Remove stale socket/pid if they exist
+    mkdir -p "$PROJECT_DIR/data"
     rm -f "$WORKER_SOCKET" "$WORKER_PID_FILE"
 
-    # Start worker
-    python backend/sdk_worker.py &
-    WORKER_PID=$!
-    echo $WORKER_PID > "$WORKER_PID_FILE"
+    export PYTHONPATH="$PROJECT_DIR"
+    "$PYTHON" "$PROJECT_DIR/backend/sdk_worker.py" &
 
-    # Wait for socket to be created (max 5 seconds)
-    for i in {1..10}; do
+    for i in $(seq 1 20); do
         if [ -S "$WORKER_SOCKET" ]; then
-            echo "SDK worker started successfully (PID: $WORKER_PID)"
+            echo "SDK worker ready"
             break
         fi
         sleep 0.5
     done
 
     if [ ! -S "$WORKER_SOCKET" ]; then
-        echo "Warning: SDK worker socket not created"
+        echo "ERROR: SDK worker failed to start"
     fi
+else
+    echo "SDK worker already running (PID: $(cat "$WORKER_PID_FILE"))"
 fi
 
-# Launch Electron desktop app on port 4001
-PORT=4001 npm run electron:dev
+# Launch Electron — exec replaces this process so only one dock icon appears
+echo "Launching Electron on port $PORT..."
+export PYTHONPATH="$PROJECT_DIR"
+export ELECTRON_IS_DEV=1
+ELECTRON_BIN="$PROJECT_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+exec "$ELECTRON_BIN" "$PROJECT_DIR"

@@ -19,6 +19,7 @@ const codeBlockStyle = {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [previewMarkdown, setPreviewMarkdown] = useState<Record<string, boolean>>({});
 
   const copyToClipboard = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -52,37 +53,58 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
       }
 
       const blockId = `code_${codeString.slice(0, 20)}`;
+      const isMarkdown = language === 'markdown';
+      const showPreview = isMarkdown && previewMarkdown[blockId];
 
       return (
         <div className="code-block-wrapper">
           <div className="code-block-header">
             <span className="code-language">{language || 'code'}</span>
-            <button
-              className={`copy-code-btn ${copiedId === blockId ? 'copied' : ''}`}
-              onClick={() => copyToClipboard(codeString, blockId)}
-              aria-label="Copy code"
-            >
-              {copiedId === blockId ? (
-                <>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="copy-check-icon">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Copied
-                </>
-              ) : 'Copy'}
-            </button>
+            <div className="code-block-controls">
+              {isMarkdown && (
+                <button
+                  className={`toggle-preview-btn ${showPreview ? 'active' : ''}`}
+                  onClick={() => setPreviewMarkdown(prev => ({ ...prev, [blockId]: !prev[blockId] }))}
+                  aria-label="Toggle preview"
+                >
+                  {showPreview ? 'Code' : 'Preview'}
+                </button>
+              )}
+              <button
+                className={`copy-code-btn ${copiedId === blockId ? 'copied' : ''}`}
+                onClick={() => copyToClipboard(codeString, blockId)}
+                aria-label="Copy code"
+              >
+                {copiedId === blockId ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="copy-check-icon">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Copied
+                  </>
+                ) : 'Copy'}
+              </button>
+            </div>
           </div>
-          <SyntaxHighlighter
-            language={language || 'text'}
-            style={vscDarkPlus}
-            customStyle={codeBlockStyle}
-          >
-            {codeString}
-          </SyntaxHighlighter>
+          {showPreview ? (
+            <div className="markdown-preview">
+              <ReactMarkdown components={markdownComponents}>
+                {codeString}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <SyntaxHighlighter
+              language={language || 'text'}
+              style={vscDarkPlus}
+              customStyle={codeBlockStyle}
+            >
+              {codeString}
+            </SyntaxHighlighter>
+          )}
         </div>
       );
     },
-  }), [copiedId, copyToClipboard]);
+  }), [copiedId, copyToClipboard, previewMarkdown]);
 
   return (
     <div className={`message-bubble ${message.role}`}>

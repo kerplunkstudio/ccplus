@@ -273,7 +273,7 @@ install_electron() {
     fi
 }
 
-# Launch desktop app
+# Launch desktop app (exclusive mode - stops existing services)
 launch_desktop() {
     header "Launching desktop app"
 
@@ -301,7 +301,43 @@ launch_desktop() {
 
     info "Starting cc+ Desktop..."
     cd "$SCRIPT_DIR"
-    npm run electron
+    npm run electron:dev
+}
+
+# Launch desktop app (parallel mode - runs alongside web server)
+launch_desktop_parallel() {
+    header "Launching desktop app (parallel mode)"
+
+    # Ensure electron is installed
+    install_electron
+
+    # Build frontend first if needed
+    if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then
+        warn "No static build found, building frontend first..."
+        build_frontend
+        deploy_static
+    fi
+
+    # Ensure worker is running (shared between web and desktop)
+    if ! worker_running; then
+        info "Starting shared SDK worker..."
+        start_worker
+    else
+        info "Using existing SDK worker (shared with web server)"
+    fi
+
+    # Check if web server is running
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        info "Web server running on port $PORT"
+        info "Desktop will run on port 4001"
+    else
+        info "No web server running, desktop will use port 4001"
+    fi
+
+    info "Starting cc+ Desktop (parallel mode)..."
+    cd "$SCRIPT_DIR"
+    # Use port 4001 for desktop to avoid conflict with web server
+    PORT=4001 npm run electron:dev
 }
 
 # Usage
@@ -315,7 +351,8 @@ show_usage() {
     echo "  frontend   Build + deploy frontend only (no server restart)"
     echo "  server     Restart Flask server only (worker stays alive)"
     echo "  worker     Force restart the SDK worker (kills active SDK sessions)"
-    echo "  desktop    Launch the Electron desktop app"
+    echo "  desktop    Launch the Electron desktop app (stops existing services)"
+    echo "  desktop-parallel  Launch desktop app in parallel with web server (port 4001)"
     echo "  stop       Stop both Flask server and SDK worker"
     echo ""
     echo "Examples:"
@@ -324,6 +361,7 @@ show_usage() {
     echo "  ./deploy.sh server     # Restart Flask only, SDK sessions survive"
     echo "  ./deploy.sh worker     # Force restart worker (drops active sessions)"
     echo "  ./deploy.sh desktop    # Launch desktop app (stops web server)"
+    echo "  ./deploy.sh desktop-parallel  # Launch desktop alongside web server"
     echo "  ./deploy.sh stop       # Stop everything"
 }
 
@@ -357,6 +395,9 @@ case "$COMPONENT" in
         ;;
     desktop)
         launch_desktop
+        ;;
+    desktop-parallel)
+        launch_desktop_parallel
         ;;
     stop)
         kill_server
