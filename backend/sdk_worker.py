@@ -445,13 +445,13 @@ class SDKWorker:
 
             # Handle AskUserQuestion: emit to frontend, wait for response
             if actual_tool_name == "AskUserQuestion":
-                question = tool_params.get("question", tool_params.get("prompt", "Claude is asking a question"))
+                questions = tool_params.get("questions", [])
 
                 # Emit question to frontend
                 await self.send_event({
                     "type": "user_question",
                     "session_id": session_id,
-                    "question": question,
+                    "questions": questions,
                     "tool_use_id": tool_use_id,
                 })
 
@@ -466,8 +466,8 @@ class SDKWorker:
                 finally:
                     self._pending_questions.pop(session_id, None)
 
-                # Block the tool so the CLI subprocess doesn't try to prompt stdin,
-                # but include the user's answer in hookSpecificOutput so Claude gets it
+                # Block the tool so CLI subprocess doesn't prompt stdin,
+                # include user's selections in hookSpecificOutput
                 return HookJSONOutput(
                     decision="block",
                     hookSpecificOutput={"reason": f"User responded: {user_response}"},

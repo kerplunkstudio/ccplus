@@ -186,7 +186,15 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
   const prevSessionIdRef = useRef(sessionId);
-  const [pendingQuestion, setPendingQuestion] = useState<{ question: string; toolUseId: string } | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    questions: Array<{
+        question: string;
+        header: string;
+        options: Array<{ label: string; description: string }>;
+        multiSelect: boolean;
+    }>;
+    toolUseId: string;
+} | null>(null);
 
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
@@ -449,9 +457,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setCurrentTool(null);
     });
 
-    newSocket.on('user_question', (data: { question: string; tool_use_id: string }) => {
+    newSocket.on('user_question', (data: { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }>; tool_use_id: string }) => {
       setPendingQuestion({
-        question: data.question,
+        questions: data.questions,
         toolUseId: data.tool_use_id,
       });
     });
