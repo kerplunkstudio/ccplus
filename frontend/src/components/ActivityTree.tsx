@@ -51,6 +51,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelec
 
 export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const userOverrideRef = useRef(false);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'tools'>('agents');
 
@@ -58,12 +59,35 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
   const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
-  // Auto-scroll to latest activity (only when not viewing details)
+  const hasRunningAgent = useCallback((nodes: ActivityNode[]): boolean => {
+    for (const node of nodes) {
+      if (node.status === 'running') return true;
+      if (isAgentNode(node) && hasRunningAgent((node as AgentNode).children)) return true;
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    if (tree.length === 0) {
+      userOverrideRef.current = false;
+      setActiveTab('agents');
+      return;
+    }
+
+    if (userOverrideRef.current) return;
+
+    if (hasRunningAgent(tree)) {
+      setActiveTab('agents');
+    } else if (toolNodes.length > 0) {
+      setActiveTab('tools');
+    }
+  }, [tree, toolNodes.length, hasRunningAgent]);
+
   useEffect(() => {
     if (containerRef.current && !selectedNode) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [tree, selectedNode]);
+  }, [tree, selectedNode, activeTab]);
 
   const handleNodeSelect = useCallback((node: ActivityNode) => {
     setSelectedNode(node);
@@ -71,6 +95,11 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
 
   const handleCloseDetail = () => {
     setSelectedNode(null);
+  };
+
+  const handleTabClick = (tab: 'agents' | 'tools') => {
+    userOverrideRef.current = true;
+    setActiveTab(tab);
   };
 
   return (
@@ -83,7 +112,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
             <div className="activity-tabs" role="tablist" aria-label="Activity views">
               <button
                 className={`activity-tab ${activeTab === 'agents' ? 'activity-tab-active' : ''}`}
-                onClick={() => setActiveTab('agents')}
+                onClick={() => handleTabClick('agents')}
                 role="tab"
                 aria-selected={activeTab === 'agents'}
                 aria-controls="activity-panel-agents"
@@ -92,7 +121,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
               </button>
               <button
                 className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
-                onClick={() => setActiveTab('tools')}
+                onClick={() => handleTabClick('tools')}
                 role="tab"
                 aria-selected={activeTab === 'tools'}
                 aria-controls="activity-panel-tools"
