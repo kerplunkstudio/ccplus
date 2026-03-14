@@ -2,7 +2,7 @@ import { useReducer, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceState, WorkspaceAction, ProjectEntry, TabState } from '../types';
 
 const STORAGE_KEY = 'ccplus_workspace';
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
 
 const generateSessionId = (): string =>
   `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
