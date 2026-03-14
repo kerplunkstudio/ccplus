@@ -257,7 +257,7 @@
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .message-input {
