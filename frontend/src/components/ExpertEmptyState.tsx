@@ -5,7 +5,6 @@ interface ProjectStats {
   totalSessions: number;
   lastProject: string | null;
   favoriteCommands: string[];
-  recentWorkspaces: string[];
 }
 
 interface ExpertEmptyStateProps {
@@ -54,8 +53,7 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
   const [stats, setStats] = useState<ProjectStats>({
     totalSessions: 0,
     lastProject: null,
-    favoriteCommands: [],
-    recentWorkspaces: []
+    favoriteCommands: []
   });
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -70,13 +68,11 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
     // Get stats from localStorage
     const sessions = localStorage.getItem('ccplus_session_count') || '0';
     const commands = JSON.parse(localStorage.getItem('ccplus_favorite_commands') || '[]');
-    const workspaces = JSON.parse(localStorage.getItem('ccplus_recent_workspaces') || '[]');
 
     setStats({
       totalSessions: parseInt(sessions),
       lastProject: projectPath || null,
-      favoriteCommands: commands.slice(0, 3),
-      recentWorkspaces: workspaces.slice(0, 3)
+      favoriteCommands: commands.slice(0, 3)
     });
   }, [projectPath]);
 
@@ -114,10 +110,6 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
           <div className="metric-label">TOTAL_SESSIONS</div>
         </div>
         <div className="metric-block">
-          <div className="metric-value">{stats.recentWorkspaces.length}</div>
-          <div className="metric-label">WORKSPACES</div>
-        </div>
-        <div className="metric-block">
           <div className="metric-value">{stats.favoriteCommands.length}</div>
           <div className="metric-label">SAVED_CMDS</div>
         </div>
@@ -148,30 +140,11 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
         ))}
       </div>
 
-      {/* Recent workspaces if any */}
-      {stats.recentWorkspaces.length > 0 && (
-        <div className="expert-recent">
-          <div className="recent-header">RECENT_WORKSPACES:</div>
-          <div className="recent-list">
-            {stats.recentWorkspaces.map((workspace, idx) => (
-              <button
-                key={workspace}
-                className="recent-workspace-btn"
-                onClick={() => handleCommandClick(`Switch to workspace: ${workspace}`)}
-              >
-                <span className="ws-index">{idx + 1}</span>
-                <span className="ws-path">{workspace}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Terminal-style footer */}
       <div className="expert-footer">
         <div className="footer-prompt">
           <span className="prompt-symbol">$</span>
-          <span className="prompt-text">type command or [1-9] for shortcuts</span>
         </div>
       </div>
     </div>

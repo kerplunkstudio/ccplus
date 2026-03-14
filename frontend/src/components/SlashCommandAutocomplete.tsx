@@ -94,7 +94,8 @@ export const SlashCommandAutocomplete: React.FC<SlashCommandAutocompleteProps> =
       <div className="slash-autocomplete-footer">
         <kbd>↑</kbd>
         <kbd>↓</kbd> navigate
-        <kbd>↵</kbd> select
+        <kbd>↵</kbd>
+        <kbd>Tab</kbd> select
         <kbd>Esc</kbd> close
       </div>
     </div>

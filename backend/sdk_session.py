@@ -37,6 +37,7 @@ class SessionManager:
         self._client.on_response_complete = self._handle_response_complete
         self._client.on_error = self._handle_error
         self._client.on_session_status = self._handle_session_status
+        self._client.on_user_question = self._handle_user_question
 
         # Connect to worker
         self._client.connect()
@@ -51,16 +52,20 @@ class SessionManager:
         on_complete: Callable[[dict], None],
         on_error: Callable[[str], None],
         model: Optional[str] = None,
+        on_user_question: Optional[Callable[[dict], None]] = None,
     ):
         """Submit a query to the SDK worker."""
         # Register callbacks for this session
         with self._lock:
-            self._callbacks[session_id] = {
+            cbs = {
                 "on_text": on_text,
                 "on_tool_event": on_tool_event,
                 "on_complete": on_complete,
                 "on_error": on_error,
             }
+            if on_user_question:
+                cbs["on_user_question"] = on_user_question
+            self._callbacks[session_id] = cbs
             self._active_sessions.add(session_id)
 
         self._client.submit_query(session_id, prompt, workspace, model)
@@ -103,6 +108,10 @@ class SessionManager:
             self._callbacks.pop(session_id, None)
             self._active_sessions.discard(session_id)
         self._client.disconnect_session(session_id)
+
+    def send_question_response(self, session_id: str, response: str) -> None:
+        """Forward user's question response to the worker."""
+        self._client.send_question_response(session_id, response)
 
     def shutdown(self) -> None:
         """Disconnect from the worker (does NOT shut down the worker)."""
@@ -162,3 +171,13 @@ class SessionManager:
                 s["session_id"] for s in sessions if s.get("query_active")
             }
         logger.info(f"Worker session status: {len(sessions)} sessions, {len(self._active_sessions)} active")
+
+    def _handle_user_question(self, session_id: str, data: dict) -> None:
+        """Handle user question from worker - forward to SocketIO."""
+        with self._lock:
+            cbs = self._callbacks.get(session_id)
+        if cbs and cbs.get("on_user_question"):
+            try:
+                cbs["on_user_question"](data)
+            except Exception as e:
+                logger.error(f"Error in on_user_question callback for {session_id}: {e}")

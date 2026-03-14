@@ -512,6 +512,12 @@ def handle_message(data):
     def on_error(error_msg: str) -> None:
         socketio.emit("error", {"message": error_msg}, room=session_id)
 
+    def on_user_question(data: dict) -> None:
+        socketio.emit("user_question", {
+            "question": data.get("question", ""),
+            "tool_use_id": data.get("tool_use_id", ""),
+        }, room=session_id)
+
     # Submit to SDK (runs async in SessionManager's background loop)
     # Slash commands (e.g., /polish, /critique) are sent directly to the SDK
     # which handles skill execution natively in context
@@ -524,6 +530,7 @@ def handle_message(data):
         on_tool_event=on_tool_event,
         on_complete=on_complete,
         on_error=on_error,
+        on_user_question=on_user_question,
     )
 
 
@@ -543,6 +550,19 @@ def handle_cancel():
 def handle_ping():
     """Keepalive ping -- respond with server timestamp."""
     emit("pong", {"timestamp": time.time()})
+
+
+@socketio.on("question_response")
+def handle_question_response(data):
+    """Forward user's question response to the SDK worker."""
+    client = connected_clients.get(request.sid)
+    if not client:
+        return
+
+    session_id = client["session_id"]
+    response = data.get("response", "") if isinstance(data, dict) else ""
+    session_manager.send_question_response(session_id, response)
+    logger.info(f"Question response forwarded for session={session_id}")
 
 
 # =========================================================================

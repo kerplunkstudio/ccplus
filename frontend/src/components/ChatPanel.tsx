@@ -52,6 +52,9 @@ interface ChatPanelProps {
   onToggleActivity?: () => void;
   projectPath?: string | null;
   onLoadSession?: (sessionId: string) => void;
+  sessionId?: string;
+  pendingQuestion?: { question: string; toolUseId: string } | null;
+  onRespondToQuestion?: (response: string) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -68,6 +71,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onToggleActivity,
   projectPath,
   onLoadSession,
+  sessionId,
+  pendingQuestion,
+  onRespondToQuestion,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,6 +87,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [isExpertUser, setIsExpertUser] = useState(false);
+  const [questionResponse, setQuestionResponse] = useState('');
 
   // Detect if user is experienced based on usage patterns
   const detectExpertUser = useCallback(() => {
@@ -150,12 +157,40 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   }, [messages.length]);
 
+  useEffect(() => {
+    if (pendingQuestion) {
+      setQuestionResponse('');
+    }
+  }, [pendingQuestion]);
+
+  // Additional focus for empty sessions (no keyboard needed)
+  useEffect(() => {
+    const isEmpty = messages.length === 0;
+    if (isEmpty && connected && !streaming && textareaRef.current) {
+      // Focus immediately when showing empty state
+      const focusTimeout = setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 50); // Slightly longer delay for empty state to ensure rendering is complete
+
+      return () => clearTimeout(focusTimeout);
+    }
+  }, [messages.length, connected, streaming]);
+
   // Autofocus textarea on mount, new chat, or session switch
   useEffect(() => {
-    if (textareaRef.current && !streaming) {
-      textareaRef.current.focus();
+    if (textareaRef.current && !streaming && connected) {
+      // Use a small timeout to ensure DOM is ready, especially for new sessions
+      const focusTimeout = setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 10);
+
+      return () => clearTimeout(focusTimeout);
     }
-  }, [messages.length, streaming]);
+  }, [messages.length, streaming, connected, sessionId]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -260,7 +295,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         setAutocompleteIndex((prev) => (prev > 0 ? prev - 1 : 0));
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
         e.preventDefault();
         const selected = autocompleteSuggestions[autocompleteIndex];
         if (selected) {
@@ -435,6 +470,40 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           ))}
           {streaming && toolLog.length > 0 && (
             <ToolLog events={toolLog} />
+          )}
+          {pendingQuestion && (
+            <div className="user-question-prompt">
+              <div className="question-label">Claude is asking:</div>
+              <div className="question-text">{pendingQuestion.question}</div>
+              <div className="question-input-row">
+                <input
+                  type="text"
+                  className="question-input"
+                  value={questionResponse}
+                  onChange={(e) => setQuestionResponse(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && questionResponse.trim()) {
+                      onRespondToQuestion?.(questionResponse.trim());
+                      setQuestionResponse('');
+                    }
+                  }}
+                  placeholder="Type your response..."
+                  autoFocus
+                />
+                <button
+                  className="question-submit"
+                  onClick={() => {
+                    if (questionResponse.trim()) {
+                      onRespondToQuestion?.(questionResponse.trim());
+                      setQuestionResponse('');
+                    }
+                  }}
+                  disabled={!questionResponse.trim()}
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
           )}
           {streaming && !messages.some((m) => m.streaming) && (
             <div className="thinking-indicator">
