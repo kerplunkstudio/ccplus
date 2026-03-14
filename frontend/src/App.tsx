@@ -49,6 +49,11 @@ function AppContent({ token, loading }: AppContentProps) {
     return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
   });
 
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('ccplus_sidebar_width');
+    return stored ? parseInt(stored, 10) : 260;
+  });
+
   const [mobileDrawer, setMobileDrawer] = useState<'sessions' | 'activity' | null>(null);
 
   const handleSelectModel = (model: string) => {
@@ -69,25 +74,43 @@ function AppContent({ token, loading }: AppContentProps) {
     setMobileDrawer(null);
   }, [workspace]);
 
+  const handleSelectTab = useCallback((projectPath: string, sessionId: string) => {
+    workspace.selectProject(projectPath);
+    workspace.selectTab(projectPath, sessionId);
+  }, [workspace]);
+
   const handleNewTab = useCallback(() => {
     if (!activeProject) return;
     workspace.addTab(activeProject.path);
   }, [workspace, activeProject]);
+
+  const handleNewTabForProject = useCallback((projectPath: string) => {
+    workspace.addTab(projectPath);
+  }, [workspace]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     if (!activeProject) return;
     workspace.addTab(activeProject.path, sessionId);
   }, [activeProject, workspace]);
 
-  const handleCloseTab = useCallback((sessionId: string) => {
+  const handleCloseTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
     workspace.closeTab(activeProject.path, sessionId);
   }, [workspace, activeProject]);
 
-  const handleSelectTab = useCallback((sessionId: string) => {
+  const handleCloseTab = useCallback((projectPath: string, sessionId: string) => {
+    workspace.closeTab(projectPath, sessionId);
+  }, [workspace]);
+
+  const handleSelectTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
     workspace.selectTab(activeProject.path, sessionId);
   }, [workspace, activeProject]);
+
+  const handleSidebarWidthChange = useCallback((width: number) => {
+    setSidebarWidth(width);
+    localStorage.setItem('ccplus_sidebar_width', width.toString());
+  }, []);
 
   const lastLabeledSessionRef = useRef<string | null>(null);
 
@@ -139,13 +162,13 @@ function AppContent({ token, loading }: AppContentProps) {
           nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
         }
 
-        handleSelectTab(tabs[nextIndex].sessionId);
+        handleSelectTabInActiveProject(tabs[nextIndex].sessionId);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeProject, handleSelectTab]);
+  }, [activeProject, handleSelectTabInActiveProject]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
@@ -165,7 +188,7 @@ function AppContent({ token, loading }: AppContentProps) {
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       {mobileDrawer && (
         <div
           className="mobile-overlay"
@@ -178,9 +201,15 @@ function AppContent({ token, loading }: AppContentProps) {
         <ProjectSidebar
           projects={workspace.state.projects}
           activeProjectPath={workspace.state.activeProjectPath}
+          activeTabId={activeTab?.sessionId || null}
           onSelectProject={handleSelectProject}
+          onSelectTab={handleSelectTab}
           onAddProject={handleAddProject}
           onRemoveProject={handleRemoveProject}
+          onNewTabForProject={handleNewTabForProject}
+          onCloseTab={handleCloseTab}
+          sidebarWidth={sidebarWidth}
+          onSidebarWidthChange={handleSidebarWidthChange}
         />
       </div>
 
@@ -189,9 +218,9 @@ function AppContent({ token, loading }: AppContentProps) {
           <TabBar
             tabs={activeProject.tabs}
             activeTabId={activeProject.activeTabId}
-            onSelectTab={handleSelectTab}
+            onSelectTab={handleSelectTabInActiveProject}
             onNewTab={handleNewTab}
-            onCloseTab={handleCloseTab}
+            onCloseTab={handleCloseTabInActiveProject}
           />
         )}
         <div className="panel-content">

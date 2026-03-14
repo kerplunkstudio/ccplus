@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ProjectEntry } from '../types';
 import './ProjectSidebar.css';
 
@@ -12,23 +12,101 @@ interface AvailableProject {
 interface ProjectSidebarProps {
   projects: ProjectEntry[];
   activeProjectPath: string | null;
+  activeTabId: string | null;
   onSelectProject: (path: string) => void;
+  onSelectTab: (projectPath: string, sessionId: string) => void;
   onAddProject: (path: string, name: string) => void;
   onRemoveProject: (path: string) => void;
+  onNewTabForProject: (projectPath: string) => void;
+  onCloseTab: (projectPath: string, sessionId: string) => void;
+  sidebarWidth: number;
+  onSidebarWidthChange: (width: number) => void;
 }
+
+const MIN_WIDTH = 180;
+const MAX_WIDTH = 400;
+const EXPANDED_KEY = 'ccplus_sidebar_expanded';
 
 const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   projects,
   activeProjectPath,
+  activeTabId,
   onSelectProject,
+  onSelectTab,
   onAddProject,
   onRemoveProject,
+  onNewTabForProject,
+  onCloseTab,
+  sidebarWidth,
+  onSidebarWidthChange,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
   const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([]);
   const [filterQuery, setFilterQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(EXPANDED_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoveredProject, setHoveredProject] = useState<string | null>(null);
+  const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+
   const pickerRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef<number>(0);
+
+  // Auto-expand active project on mount
+  useEffect(() => {
+    if (activeProjectPath && !expandedProjects.has(activeProjectPath)) {
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
+        next.add(activeProjectPath);
+        return next;
+      });
+    }
+  }, [activeProjectPath, expandedProjects]);
+
+  // Persist expanded state to localStorage
+  useEffect(() => {
+    localStorage.setItem(EXPANDED_KEY, JSON.stringify(Array.from(expandedProjects)));
+  }, [expandedProjects]);
+
+  // Drag resize handler
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = e.clientX;
+    document.body.classList.add('sidebar-resizing');
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - dragStartRef.current;
+      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, sidebarWidth + delta));
+      onSidebarWidthChange(newWidth);
+      dragStartRef.current = e.clientX;
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.body.classList.remove('sidebar-resizing');
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, sidebarWidth, onSidebarWidthChange]);
 
   useEffect(() => {
     if (!showPicker) return;
@@ -87,12 +165,50 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     onRemoveProject(path);
   };
 
+  const handleToggleProject = (event: React.MouseEvent | React.KeyboardEvent, path: string) => {
+    event.stopPropagation();
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  const handleNewTab = (event: React.MouseEvent, projectPath: string) => {
+    event.stopPropagation();
+    onNewTabForProject(projectPath);
+  };
+
+  const handleCloseSession = (event: React.MouseEvent, projectPath: string, sessionId: string) => {
+    event.stopPropagation();
+    onCloseTab(projectPath, sessionId);
+  };
+
+  const handleSelectSession = (projectPath: string, sessionId: string) => {
+    onSelectProject(projectPath);
+    onSelectTab(projectPath, sessionId);
+  };
+
   const isProjectActive = (projectPath: string): boolean => {
     return projectPath === activeProjectPath;
   };
 
+  const isSessionActive = (projectPath: string, sessionId: string): boolean => {
+    return projectPath === activeProjectPath && sessionId === activeTabId;
+  };
+
   const hasRunningActivity = (project: ProjectEntry): boolean => {
     return project.tabs.some(tab => tab.isStreaming || tab.hasRunningAgent);
+  };
+
+  const isExpanded = (projectPath: string): boolean => {
+    // Auto-expand when searching
+    if (searchQuery) return true;
+    return expandedProjects.has(projectPath);
   };
 
   const filteredProjects = availableProjects.filter(project => {
@@ -102,11 +218,45 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     return !isAlreadyOpen && matchesFilter;
   });
 
+  const matchesSearchQuery = useCallback((label: string): boolean => {
+    if (!searchQuery) return true;
+    return label.toLowerCase().includes(searchQuery.toLowerCase());
+  }, [searchQuery]);
+
+  const hasMatchingSessions = useCallback((project: ProjectEntry): boolean => {
+    if (!searchQuery) return true;
+    return project.tabs.some(tab => matchesSearchQuery(tab.label));
+  }, [searchQuery, matchesSearchQuery]);
+
   return (
     <div className="project-sidebar">
       <div className="project-sidebar-header">
-        <h1 className="sidebar-brand-title">CC+</h1>
-        <p className="sidebar-brand-subtitle">OBS</p>
+        <div className="sidebar-brand">
+          <h1 className="sidebar-brand-title">CC+</h1>
+          <p className="sidebar-brand-subtitle">OBS</p>
+        </div>
+        <button className="sidebar-settings-btn" aria-label="Settings">
+          ⚙
+        </button>
+      </div>
+
+      <div className="sidebar-search">
+        <input
+          type="text"
+          className="sidebar-search-input"
+          placeholder="Search sessions..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button
+            className="sidebar-search-clear"
+            onClick={() => setSearchQuery('')}
+            aria-label="Clear search"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <div className="project-list">
@@ -115,27 +265,93 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <p className="project-empty-message">Open a project to start</p>
           </div>
         ) : (
-          projects.map(project => (
-            <div
-              key={project.path}
-              className={`project-item ${isProjectActive(project.path) ? 'active' : ''}`}
-              onClick={() => onSelectProject(project.path)}
-            >
-              <span className="project-item-name" title={project.path}>
-                {project.name}
-              </span>
-              {hasRunningActivity(project) && (
-                <span className="project-item-dot" />
-              )}
-              <button
-                className="project-item-close"
-                onClick={(e) => handleRemoveProject(e, project.path)}
-                aria-label={`Remove ${project.name}`}
-              >
-                ×
-              </button>
-            </div>
-          ))
+          projects
+            .filter(hasMatchingSessions)
+            .map(project => {
+              const expanded = isExpanded(project.path);
+              const hasActivity = hasRunningActivity(project);
+
+              return (
+                <div key={project.path} className="project-group">
+                  <div
+                    className="project-header"
+                    onMouseEnter={() => setHoveredProject(project.path)}
+                    onMouseLeave={() => setHoveredProject(null)}
+                    onClick={(e) => handleToggleProject(e, project.path)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleToggleProject(e, project.path);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                  >
+                    <span className={`project-chevron ${expanded ? 'expanded' : ''}`}>
+                      ▸
+                    </span>
+                    <span className="project-header-name" title={project.path}>
+                      {project.name}
+                    </span>
+                    {!expanded && hasActivity && (
+                      <span className="project-activity-dot" />
+                    )}
+                    {hoveredProject === project.path && (
+                      <>
+                        <button
+                          className="project-header-new"
+                          onClick={(e) => handleNewTab(e, project.path)}
+                          aria-label="New session"
+                          title="New session"
+                        >
+                          +
+                        </button>
+                        <button
+                          className="project-header-close"
+                          onClick={(e) => handleRemoveProject(e, project.path)}
+                          aria-label={`Close ${project.name}`}
+                          title="Close project"
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className={`session-list ${expanded ? 'expanded' : ''}`}>
+                    {project.tabs
+                      .filter(tab => matchesSearchQuery(tab.label))
+                      .map(tab => (
+                        <div
+                          key={tab.sessionId}
+                          className={`session-item ${isSessionActive(project.path, tab.sessionId) ? 'active' : ''}`}
+                          onClick={() => handleSelectSession(project.path, tab.sessionId)}
+                          onMouseEnter={() => setHoveredSession(tab.sessionId)}
+                          onMouseLeave={() => setHoveredSession(null)}
+                          title={tab.label}
+                        >
+                          <span className="session-item-label">
+                            {tab.label}
+                          </span>
+                          {(tab.isStreaming || tab.hasRunningAgent) && (
+                            <span className="session-activity-dot" />
+                          )}
+                          {hoveredSession === tab.sessionId && project.tabs.length > 1 && (
+                            <button
+                              className="session-item-close"
+                              onClick={(e) => handleCloseSession(e, project.path, tab.sessionId)}
+                              aria-label={`Close ${tab.label}`}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              );
+            })
         )}
       </div>
 
@@ -179,6 +395,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           </div>
         )}
       </div>
+
+      <div
+        className="sidebar-resize-handle"
+        onMouseDown={handleMouseDown}
+        role="separator"
+        aria-label="Resize sidebar"
+      />
     </div>
   );
 };
