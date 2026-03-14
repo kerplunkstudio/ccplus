@@ -514,7 +514,7 @@ def handle_message(data):
 
     def on_user_question(data: dict) -> None:
         socketio.emit("user_question", {
-            "question": data.get("question", ""),
+            "questions": data.get("questions", []),
             "tool_use_id": data.get("tool_use_id", ""),
         }, room=session_id)
 

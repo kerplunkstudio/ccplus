@@ -53,7 +53,15 @@ interface ChatPanelProps {
   projectPath?: string | null;
   onLoadSession?: (sessionId: string) => void;
   sessionId?: string;
-  pendingQuestion?: { question: string; toolUseId: string } | null;
+  pendingQuestion?: {
+    questions: Array<{
+        question: string;
+        header: string;
+        options: Array<{ label: string; description: string }>;
+        multiSelect: boolean;
+    }>;
+    toolUseId: string;
+} | null;
   onRespondToQuestion?: (response: string) => void;
 }
 
@@ -87,7 +95,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [isExpertUser, setIsExpertUser] = useState(false);
-  const [questionResponse, setQuestionResponse] = useState('');
+  const [questionSelections, setQuestionSelections] = useState<Record<number, string[]>>({});
 
   // Detect if user is experienced based on usage patterns
   const detectExpertUser = useCallback(() => {
@@ -159,7 +167,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   useEffect(() => {
     if (pendingQuestion) {
-      setQuestionResponse('');
+      setQuestionSelections({});
     }
   }, [pendingQuestion]);
 
@@ -473,36 +481,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           )}
           {pendingQuestion && (
             <div className="user-question-prompt">
-              <div className="question-label">Claude is asking:</div>
-              <div className="question-text">{pendingQuestion.question}</div>
-              <div className="question-input-row">
-                <input
-                  type="text"
-                  className="question-input"
-                  value={questionResponse}
-                  onChange={(e) => setQuestionResponse(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && questionResponse.trim()) {
-                      onRespondToQuestion?.(questionResponse.trim());
-                      setQuestionResponse('');
-                    }
-                  }}
-                  placeholder="Type your response..."
-                  autoFocus
-                />
-                <button
-                  className="question-submit"
-                  onClick={() => {
-                    if (questionResponse.trim()) {
-                      onRespondToQuestion?.(questionResponse.trim());
-                      setQuestionResponse('');
-                    }
-                  }}
-                  disabled={!questionResponse.trim()}
-                >
-                  Reply
-                </button>
-              </div>
+              {pendingQuestion.questions.map((q, qIndex) => (
+                <div key={qIndex} className="question-block">
+                  <div className="question-header">{q.header}</div>
+                  <div className="question-text">{q.question}</div>
+                  <div className="question-options">
+                    {q.options.map((option, oIndex) => {
+                      const selected = (questionSelections[qIndex] || []).includes(option.label);
+                      return (
+                        <button
+                          key={oIndex}
+                          className={`question-option ${selected ? 'selected' : ''}`}
+                          onClick={() => {
+                            setQuestionSelections(prev => {
+                              const current = prev[qIndex] || [];
+                              if (q.multiSelect) {
+                                const next = selected
+                                  ? current.filter(l => l !== option.label)
+                                  : [...current, option.label];
+                                return { ...prev, [qIndex]: next };
+                              }
+                              return { ...prev, [qIndex]: [option.label] };
+                            });
+                          }}
+                        >
+                          <span className="option-indicator">
+                            {q.multiSelect ? (selected ? '☑' : '☐') : (selected ? '●' : '○')}
+                          </span>
+                          <span className="option-content">
+                            <span className="option-label">{option.label}</span>
+                            <span className="option-description">{option.description}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              <button
+                className="question-submit"
+                onClick={() => {
+                  const responses = pendingQuestion.questions.map((q, i) => {
+                    const sel = questionSelections[i] || [];
+                    return `${q.header}: ${sel.join(', ') || 'No selection'}`;
+                  });
+                  onRespondToQuestion?.(responses.join('\n'));
+                }}
+                disabled={Object.keys(questionSelections).length === 0 ||
+                          Object.values(questionSelections).every(s => s.length === 0)}
+              >
+                Confirm
+              </button>
             </div>
           )}
           {streaming && !messages.some((m) => m.streaming) && (
