@@ -78,7 +78,7 @@ logger = logging.getLogger("ccplus")
 app = Flask(__name__, static_folder=str(STATIC_DIR))
 app.secret_key = SECRET_KEY
 
-CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+CORS(app, origins="*")
 
 socketio = SocketIO(
     app,
