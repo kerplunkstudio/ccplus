@@ -197,13 +197,13 @@
 
 .toggle-preview-btn.active {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--bg-primary);
   border-color: var(--accent);
 }
 
 .markdown-preview {
   padding: 16px;
-  background: var(--bg);
+  background: var(--bg-primary);
   border-radius: 0 0 8px 8px;
   border: 1px solid var(--border);
   border-top: none;

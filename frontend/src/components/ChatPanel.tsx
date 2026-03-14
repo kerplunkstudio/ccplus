@@ -99,8 +99,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; filename: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-
   const [lastMessageCount, setLastMessageCount] = useState(0);
 
   const isNearBottom = useCallback(() => {
@@ -157,7 +155,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     });
   }, [sessionId]);
-
 
   useEffect(() => {
     if (pendingQuestion) {
@@ -280,7 +277,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         const imageData = await response.json();
         setUploadedImages(prev => [...prev, imageData]);
       } catch (error) {
-        console.error('Upload error:', error);
         alert(`Failed to upload ${file.name}`);
       }
     }

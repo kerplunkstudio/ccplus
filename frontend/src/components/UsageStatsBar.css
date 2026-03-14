@@ -3,7 +3,7 @@
   grid-template-columns: repeat(3, 1fr);
   padding: 6px 12px;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--border-primary);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
   font-family: var(--font-sans);
 }
@@ -15,7 +15,7 @@
   justify-content: center;
   gap: 2px;
   text-align: center;
-  border-right: 1px solid var(--border-primary);
+  border-right: 1px solid var(--border);
   opacity: 0.9;
 }
 

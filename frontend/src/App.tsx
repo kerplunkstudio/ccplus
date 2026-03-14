@@ -139,11 +139,26 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
-  // Keyboard shortcuts for tab switching (Ctrl+Tab / Ctrl+Shift+Tab)
+  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Escape cancel, Ctrl+Tab switch tabs)
   useEffect(() => {
     if (!activeProject) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+T / Ctrl+T: New tab
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        handleNewTab();
+        return;
+      }
+
+      // Escape: Cancel streaming query
+      if (e.key === 'Escape' && streaming) {
+        e.preventDefault();
+        cancelQuery();
+        return;
+      }
+
+      // Ctrl+Tab / Ctrl+Shift+Tab: Switch tabs
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
 
@@ -155,10 +170,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
         let nextIndex: number;
         if (e.shiftKey) {
-          // Ctrl+Shift+Tab: previous tab
           nextIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
         } else {
-          // Ctrl+Tab: next tab
           nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
         }
 
@@ -168,7 +181,7 @@ function AppContent({ token, loading }: AppContentProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeProject, handleSelectTabInActiveProject]);
+  }, [activeProject, handleSelectTabInActiveProject, handleNewTab, streaming, cancelQuery]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
