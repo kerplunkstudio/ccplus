@@ -90,6 +90,47 @@ START_TIME = time.time()
 connected_clients: dict[str, dict] = {}
 
 
+def _handle_worker_reconnect(session_id: str):
+    """Auto-register SocketIO callbacks when worker reconnects with active sessions."""
+    logger.info(f"Auto-registering callbacks for active session {session_id} after worker reconnect")
+
+    def on_text(text: str) -> None:
+        socketio.emit("text_delta", {"text": text}, room=session_id)
+
+    def on_tool_event(event: dict) -> None:
+        socketio.emit("tool_event", event, room=session_id)
+
+    def on_complete(result: dict) -> None:
+        socketio.emit(
+            "response_complete",
+            {
+                "cost": result.get("cost"),
+                "duration_ms": result.get("duration_ms"),
+                "input_tokens": result.get("input_tokens"),
+                "output_tokens": result.get("output_tokens"),
+                "model": result.get("model"),
+            },
+            room=session_id,
+        )
+
+    def on_error(error_msg: str) -> None:
+        socketio.emit("error", {"message": error_msg}, room=session_id)
+
+    session_manager.register_streaming_callbacks(
+        session_id,
+        on_text=on_text,
+        on_tool_event=on_tool_event,
+        on_complete=on_complete,
+        on_error=on_error,
+    )
+
+    # Notify any connected browser clients that streaming is active
+    socketio.emit("stream_active", {}, room=session_id)
+
+
+session_manager.on_session_reconnect = _handle_worker_reconnect
+
+
 # =========================================================================
 # HTTP Routes
 # =========================================================================
@@ -421,6 +462,7 @@ def handle_connect():
             on_error=on_error_reconnect,
         )
         logger.info(f"Re-registered callbacks for active session {session_id}")
+        socketio.emit("stream_active", {}, room=session_id)
 
     logger.info(f"Client connected: user={user_id} session={session_id}")
     emit("connected", {"session_id": session_id})
