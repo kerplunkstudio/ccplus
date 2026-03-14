@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Message, ToolEvent } from '../types';
 import { MessageBubble } from './MessageBubble';
-import { ProjectSelector } from './ProjectSelector';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
@@ -27,38 +26,47 @@ const THINKING_MESSAGES = [
   'Connecting the dots...',
 ];
 
+const formatTimeAgo = (timestamp: string): string => {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+};
+
 interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
   streaming: boolean;
-  sessionId: string;
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
-  selectedProject: string | null;
   selectedModel: string;
   onSendMessage: (content: string, workspace?: string, model?: string) => void;
-  onSelectProject: (path: string) => void;
   onSelectModel: (model: string) => void;
   onCancel: () => void;
   onToggleSessions?: () => void;
   onToggleActivity?: () => void;
+  projectPath?: string | null;
+  onLoadSession?: (sessionId: string) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
-  sessionId,
   currentTool,
   toolLog,
-  selectedProject,
   selectedModel,
   onSendMessage,
-  onSelectProject,
   onSelectModel,
   onCancel,
   onToggleSessions,
   onToggleActivity,
+  projectPath,
+  onLoadSession,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,6 +77,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const { skills } = useSkills();
+  const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
+  const [showPastSessions, setShowPastSessions] = useState(false);
 
   const examplePrompts = [
     'Watch agents work in parallel on a feature',
@@ -92,7 +102,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     if (textareaRef.current && !streaming) {
       textareaRef.current.focus();
     }
-  }, [sessionId, streaming]);
+  }, [messages.length, streaming]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -115,10 +125,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     return () => clearInterval(interval);
   }, [streaming]);
 
+  // Fetch past sessions when empty state is shown
+  useEffect(() => {
+    if (messages.length > 0 || !projectPath) {
+      setPastSessions([]);
+      setShowPastSessions(false);
+      return;
+    }
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+    fetch(`${SOCKET_URL}/api/sessions?project=${encodeURIComponent(projectPath)}`)
+      .then(res => res.ok ? res.json() : { sessions: [] })
+      .then(data => setPastSessions(data.sessions || []))
+      .catch(() => setPastSessions([]));
+  }, [messages.length, projectPath]);
+
   const handleSubmit = () => {
     const trimmed = input.trim();
     if (!trimmed || !connected) return;
-    onSendMessage(trimmed, selectedProject || undefined, selectedModel);
+    onSendMessage(trimmed);
     setInput('');
     setShowAutocomplete(false);
     if (textareaRef.current) {
@@ -218,17 +242,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 </svg>
               </button>
             )}
-            <div>
-              <h1 className="chat-title">CC+</h1>
-              <p className="chat-subtitle">OBS</p>
-            </div>
             <span className={`connection-dot ${connected ? 'online' : 'offline'}`} role="status" aria-label={connected ? 'Connected' : 'Disconnected'} />
           </div>
           <div className="header-right">
-            <ProjectSelector
-              selectedProject={selectedProject}
-              onSelectProject={onSelectProject}
-            />
             <ModelSelector
               selectedModel={selectedModel}
               onSelectModel={onSelectModel}
@@ -304,6 +320,37 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   </button>
                 ))}
               </div>
+              {pastSessions.length > 0 && (
+                <div className="past-sessions-hint">
+                  <button
+                    className="past-sessions-toggle"
+                    onClick={() => setShowPastSessions(!showPastSessions)}
+                  >
+                    {pastSessions.length} past session{pastSessions.length !== 1 ? 's' : ''}
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: showPastSessions ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>
+                      <path d="M3 4L5 6L7 4" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  </button>
+                  {showPastSessions && (
+                    <div className="past-sessions-list">
+                      {pastSessions.slice(0, 5).map((session) => (
+                        <button
+                          key={session.session_id}
+                          className="past-session-item"
+                          onClick={() => onLoadSession?.(session.session_id)}
+                        >
+                          <span className="past-session-label">
+                            {session.last_user_message || 'Empty session'}
+                          </span>
+                          <span className="past-session-time">
+                            {formatTimeAgo(session.last_activity)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {messages.map((msg) => (
