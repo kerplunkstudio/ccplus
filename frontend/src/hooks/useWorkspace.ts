@@ -185,6 +185,7 @@ export function useWorkspace() {
   const [state, dispatch] = useReducer(workspaceReducer, null, loadInitialState);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
+  const latestStateRef = useRef<WorkspaceState>(state);
 
   // Fetch workspace from API on mount (source of truth for cross-client sync)
   useEffect(() => {
@@ -211,10 +212,43 @@ export function useWorkspace() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Flush workspace state on beforeunload to prevent loss during debounce window
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Cancel any pending debounced save
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      // Only send if initialized
+      if (!initializedRef.current) return;
+
+      // Use sendBeacon for guaranteed delivery during page unload
+      // It survives even when the page is being torn down
+      const blob = new Blob(
+        [JSON.stringify(latestStateRef.current)],
+        { type: 'application/json' }
+      );
+
+      navigator.sendBeacon(`${SOCKET_URL}/api/workspace`, blob);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   // Save to localStorage immediately + debounced API save on every change
   useEffect(() => {
     // Always save to localStorage for fast same-browser reload
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    // Update ref with stripped state for beforeunload handler
+    const persistable = stripTransientFields(state);
+    latestStateRef.current = persistable;
 
     // Don't save back to API until we've loaded from it first
     if (!initializedRef.current) return;
@@ -224,7 +258,6 @@ export function useWorkspace() {
       clearTimeout(saveTimerRef.current);
     }
     saveTimerRef.current = setTimeout(() => {
-      const persistable = stripTransientFields(state);
       fetch(`${SOCKET_URL}/api/workspace`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
