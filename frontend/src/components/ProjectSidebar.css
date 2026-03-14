@@ -141,11 +141,11 @@
 
 /* Project group */
 
-.project-group {
+.sb-project-group {
   margin-bottom: 2px;
 }
 
-.project-header {
+.sb-project-header {
   display: flex;
   align-items: center;
   padding: 6px 12px;
@@ -155,11 +155,11 @@
   user-select: none;
 }
 
-.project-header:hover {
+.sb-project-header:hover {
   background: var(--hover-bg);
 }
 
-.project-chevron {
+.sb-chevron {
   font-size: 10px;
   color: var(--text-tertiary);
   margin-right: 6px;
@@ -169,11 +169,11 @@
   flex-shrink: 0;
 }
 
-.project-chevron.expanded {
+.sb-chevron.expanded {
   transform: rotate(90deg);
 }
 
-.project-header-name {
+.sb-project-header-name {
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
@@ -184,7 +184,7 @@
   white-space: nowrap;
 }
 
-.project-activity-dot {
+.sb-activity-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -203,7 +203,7 @@
   }
 }
 
-.project-header-new {
+.sb-project-header-new {
   opacity: 0;
   font-size: 14px;
   font-weight: 600;
@@ -217,15 +217,15 @@
   flex-shrink: 0;
 }
 
-.project-header:hover .project-header-new {
+.sb-project-header:hover .sb-project-header-new {
   opacity: 1;
 }
 
-.project-header-new:hover {
+.sb-project-header-new:hover {
   color: var(--accent);
 }
 
-.project-header-close {
+.sb-project-header-close {
   opacity: 0;
   font-size: 16px;
   color: var(--text-tertiary);
@@ -239,27 +239,27 @@
   line-height: 1;
 }
 
-.project-header:hover .project-header-close {
+.sb-project-header:hover .sb-project-header-close {
   opacity: 1;
 }
 
-.project-header-close:hover {
+.sb-project-header-close:hover {
   color: var(--accent);
 }
 
 /* Session list */
 
-.session-list {
+.sb-session-list {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.2s ease;
 }
 
-.session-list.expanded {
+.sb-session-list.expanded {
   max-height: 1000px;
 }
 
-.session-item {
+.sb-session-item {
   display: flex;
   align-items: center;
   padding: 4px 12px 4px 28px;
@@ -269,21 +269,21 @@
   border-left: 2px solid transparent;
 }
 
-.session-item:hover {
+.sb-session-item:hover {
   background: var(--hover-bg);
 }
 
-.session-item.active {
+.sb-session-item.active {
   background: var(--hover-bg);
   border-left-color: var(--accent);
 }
 
-.session-item.active .session-item-label {
+.sb-session-item.active .sb-session-label {
   color: var(--text-primary);
   font-weight: 500;
 }
 
-.session-item-label {
+.sb-session-label {
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-secondary);
@@ -293,7 +293,7 @@
   white-space: nowrap;
 }
 
-.session-activity-dot {
+.sb-session-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -303,7 +303,7 @@
   animation: pulse 2s ease-in-out infinite;
 }
 
-.session-item-close {
+.sb-session-close {
   opacity: 0;
   font-size: 14px;
   color: var(--text-tertiary);
@@ -317,11 +317,11 @@
   line-height: 1;
 }
 
-.session-item:hover .session-item-close {
+.sb-session-item:hover .sb-session-close {
   opacity: 1;
 }
 
-.session-item-close:hover {
+.sb-session-close:hover {
   color: var(--accent);
 }
 
