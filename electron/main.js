@@ -275,7 +275,26 @@ function createMenu() {
     {
       label: 'File',
       submenu: [
-        isMac ? { role: 'close' } : { role: 'quit' },
+        {
+          label: 'New Tab',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'new-tab');
+            }
+          },
+        },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.webContents.send('menu-action', 'close-tab');
+            }
+          },
+        },
+        { type: 'separator' },
+        ...(isMac ? [] : [{ role: 'quit' }]),
       ],
     },
     {

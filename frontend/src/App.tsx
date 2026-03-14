@@ -151,6 +151,15 @@ function AppContent({ token, loading }: AppContentProps) {
         return;
       }
 
+      // Cmd+W / Ctrl+W: Close current tab
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault();
+        if (activeProject.tabs.length > 1 && activeTab) {
+          handleCloseTabInActiveProject(activeTab.sessionId);
+        }
+        return;
+      }
+
       // Escape: Cancel streaming query
       if (e.key === 'Escape' && streaming) {
         e.preventDefault();
@@ -179,9 +188,26 @@ function AppContent({ token, loading }: AppContentProps) {
       }
     };
 
+    // Electron menu integration
+    const electronAPI = (window as any).electronAPI;
+    const handleMenuAction = (_event: any, action: string) => {
+      if (action === 'new-tab') handleNewTab();
+      if (action === 'close-tab' && activeProject.tabs.length > 1 && activeTab) {
+        handleCloseTabInActiveProject(activeTab.sessionId);
+      }
+    };
+    if (electronAPI?.onMenuAction) {
+      electronAPI.onMenuAction(handleMenuAction);
+    }
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeProject, handleSelectTabInActiveProject, handleNewTab, streaming, cancelQuery]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (electronAPI?.removeMenuActionListener) {
+        electronAPI.removeMenuActionListener(handleMenuAction);
+      }
+    };
+  }, [activeProject, activeTab, handleSelectTabInActiveProject, handleNewTab, handleCloseTabInActiveProject, streaming, cancelQuery]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
