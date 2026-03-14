@@ -25,3 +25,4 @@ MAX_ACTIVITY_EVENTS = 200
 WORKER_SOCKET_PATH = str(DATA_DIR / "sdk_worker.sock")
 WORKER_PID_PATH = str(DATA_DIR / "sdk_worker.pid")
 WORKER_LOG = str(LOG_DIR / "worker.log")
+WORKER_EVENT_BUFFER_SIZE = 1000
