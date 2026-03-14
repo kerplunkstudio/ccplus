@@ -203,6 +203,45 @@ class TestSessionStatus:
         # Should not raise
         mgr._handle_session_status([{"session_id": "s1", "query_active": True}])
 
+    def test_session_status_detects_lost_sessions(self, mgr):
+        """Test that lost sessions are detected when worker restarts."""
+        lost_cb = MagicMock()
+        mgr.on_session_lost = lost_cb
+
+        # First status: two active sessions
+        sessions1 = [
+            {"session_id": "s1", "query_active": True},
+            {"session_id": "s2", "query_active": True},
+        ]
+        mgr._handle_session_status(sessions1)
+        lost_cb.assert_not_called()  # First status, no lost sessions yet
+
+        # Second status: only s1 active (s2 lost)
+        sessions2 = [
+            {"session_id": "s1", "query_active": True},
+        ]
+        mgr._handle_session_status(sessions2)
+        lost_cb.assert_called_once_with("s2")
+
+    def test_session_status_no_lost_callback(self, mgr):
+        """Test that missing lost callback doesn't cause errors."""
+        # First status
+        mgr._handle_session_status([{"session_id": "s1", "query_active": True}])
+        # Second status with lost session
+        mgr._handle_session_status([])
+        # Should not raise
+
+    def test_lost_callback_exception_handled(self, mgr):
+        """Test that exceptions in lost callback are handled gracefully."""
+        lost_cb = MagicMock(side_effect=RuntimeError("lost failed"))
+        mgr.on_session_lost = lost_cb
+
+        # First status
+        mgr._handle_session_status([{"session_id": "s1", "query_active": True}])
+        # Second status with lost session (should handle exception)
+        mgr._handle_session_status([])
+        # Should not raise
+
 
 class TestRegisterStreamingCallbacks:
     """Tests for register_streaming_callbacks (post-restart recovery)."""

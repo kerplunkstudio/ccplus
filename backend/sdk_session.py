@@ -30,8 +30,14 @@ class SessionManager:
         self._callbacks: dict[str, dict[str, Callable]] = {}
         # Track which sessions have active queries
         self._active_sessions: set[str] = set()
+        # Track whether we've received at least one session status (to detect lost sessions)
+        self._has_received_status: bool = False
         # Callback to notify when worker reconnects with active sessions
         self.on_session_reconnect: Optional[Callable[[str], None]] = None
+        # Callback to notify when a session's query was lost (worker restart)
+        self.on_session_lost: Optional[Callable[[str], None]] = None
+        # Pending questions: session_id -> question data
+        self._pending_questions: dict[str, dict] = {}
 
         # Wire up worker client event handlers
         self._client.on_text_delta = self._handle_text_delta
@@ -80,15 +86,19 @@ class SessionManager:
         on_tool_event: Callable[[dict], None],
         on_complete: Callable[[dict], None],
         on_error: Callable[[str], None],
+        on_user_question: Optional[Callable[[dict], None]] = None,
     ):
         """Register callbacks for an already-active session (e.g., after Flask restart)."""
         with self._lock:
-            self._callbacks[session_id] = {
+            cbs = {
                 "on_text": on_text,
                 "on_tool_event": on_tool_event,
                 "on_complete": on_complete,
                 "on_error": on_error,
             }
+            if on_user_question:
+                cbs["on_user_question"] = on_user_question
+            self._callbacks[session_id] = cbs
             self._active_sessions.add(session_id)
 
     def cancel_query(self, session_id: str) -> None:
@@ -170,14 +180,41 @@ class SessionManager:
     def _handle_session_status(self, sessions: list) -> None:
         """Handle session status from worker (sent on reconnect)."""
         with self._lock:
-            self._active_sessions = {
+            new_active = {
                 s["session_id"] for s in sessions if s.get("query_active")
             }
-        logger.info(f"Worker session status: {len(sessions)} sessions, {len(self._active_sessions)} active")
+
+            # Detect sessions that disappeared (worker restarted)
+            lost_sessions = set()
+            if self._has_received_status:
+                lost_sessions = self._active_sessions - new_active
+
+            self._active_sessions = new_active
+            self._has_received_status = True
+
+            # Extract pending question data from each session
+            self._pending_questions = {}
+            for s in sessions:
+                pq = s.get("pending_question")
+                if pq:
+                    self._pending_questions[s["session_id"]] = pq
+
+        logger.info(f"Worker session status: {len(sessions)} sessions, {len(new_active)} active")
+
+        if lost_sessions:
+            logger.warning(f"Detected {len(lost_sessions)} lost sessions after worker restart: {lost_sessions}")
+
+        # Notify about lost sessions
+        if self.on_session_lost:
+            for session_id in lost_sessions:
+                try:
+                    self.on_session_lost(session_id)
+                except Exception as e:
+                    logger.error(f"Error in on_session_lost for {session_id}: {e}")
 
         # Auto-register callbacks for active sessions
         if self.on_session_reconnect:
-            for session_id in list(self._active_sessions):
+            for session_id in list(new_active):
                 try:
                     self.on_session_reconnect(session_id)
                 except Exception as e:
@@ -192,3 +229,8 @@ class SessionManager:
                 cbs["on_user_question"](data)
             except Exception as e:
                 logger.error(f"Error in on_user_question callback for {session_id}: {e}")
+
+    def get_pending_question(self, session_id: str) -> Optional[dict]:
+        """Return pending question data for a session, if any."""
+        with self._lock:
+            return self._pending_questions.get(session_id)
