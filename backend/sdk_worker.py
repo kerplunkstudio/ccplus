@@ -153,6 +153,8 @@ class SDKWorker:
         self._shutdown_requested = False
         self._socket_path = config.WORKER_SOCKET_PATH
         self._pid_path = config.WORKER_PID_PATH
+        self._pending_questions: dict[str, asyncio.Event] = {}
+        self._question_responses: dict[str, str] = {}
 
     async def start(self) -> None:
         """Start the worker, create socket, and listen for connections."""
@@ -268,6 +270,11 @@ class SDKWorker:
         elif msg_type == "ping":
             await self.send_event({"type": "pong"})
 
+        elif msg_type == "question_response":
+            session_id = msg.get("session_id")
+            response = msg.get("response", "")
+            await self.handle_question_response(session_id, response)
+
         else:
             logger.warning(f"Unknown message type: {msg_type}")
 
@@ -301,6 +308,15 @@ class SDKWorker:
     async def handle_disconnect_session(self, session_id: str) -> None:
         """Disconnect and tear down a session."""
         await self._disconnect_session(session_id)
+
+    async def handle_question_response(self, session_id: str, response: str) -> None:
+        """Handle user's response to an AskUserQuestion."""
+        self._question_responses[session_id] = response
+        event = self._pending_questions.get(session_id)
+        if event:
+            event.set()
+        else:
+            logger.warning(f"No pending question for session {session_id}")
 
     async def send_event(self, msg: dict) -> None:
         """Send an event to Flask if connected, drop silently if not."""
@@ -426,6 +442,36 @@ class SDKWorker:
             tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", f"tu_{time.monotonic()}")
             tool_params = hook_input.get("tool_input", {})
             tool_timers[tool_use_id] = time.monotonic()
+
+            # Handle AskUserQuestion: emit to frontend, wait for response
+            if actual_tool_name == "AskUserQuestion":
+                question = tool_params.get("question", tool_params.get("prompt", "Claude is asking a question"))
+
+                # Emit question to frontend
+                await self.send_event({
+                    "type": "user_question",
+                    "session_id": session_id,
+                    "question": question,
+                    "tool_use_id": tool_use_id,
+                })
+
+                # Wait for user response (up to 5 minutes)
+                wait_event = asyncio.Event()
+                self._pending_questions[session_id] = wait_event
+                try:
+                    await asyncio.wait_for(wait_event.wait(), timeout=300)
+                    user_response = self._question_responses.pop(session_id, "No response provided")
+                except asyncio.TimeoutError:
+                    user_response = "User did not respond in time"
+                finally:
+                    self._pending_questions.pop(session_id, None)
+
+                # Block the tool so the CLI subprocess doesn't try to prompt stdin,
+                # but include the user's answer in hookSpecificOutput so Claude gets it
+                return HookJSONOutput(
+                    decision="block",
+                    hookSpecificOutput={"reason": f"User responded: {user_response}"},
+                )
 
             is_agent = actual_tool_name in ("Agent", "Task")
             parent_id = agent_stack[-1] if agent_stack else None

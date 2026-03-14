@@ -11,11 +11,21 @@
 }
 
 .message-bubble.user {
-  margin: var(--space-md) 0 var(--space-sm);
+  margin: var(--space-lg) 0 var(--space-md);
 }
 
 .message-bubble.assistant {
-  margin: var(--space-sm) 0 var(--space-md);
+  margin: var(--space-lg) 0 var(--space-lg);
+}
+
+/* Extra spacing between consecutive assistant messages */
+.message-bubble.assistant + .message-bubble.assistant {
+  margin-top: var(--space-2xl);
+}
+
+/* First message in conversation */
+.message-bubble:first-child {
+  margin-top: var(--space-md);
 }
 
 .message-bubble-inner {

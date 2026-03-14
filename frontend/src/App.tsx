@@ -41,6 +41,8 @@ function AppContent({ token, loading }: AppContentProps) {
     toolLog,
     sendMessage,
     cancelQuery,
+    pendingQuestion,
+    respondToQuestion,
   } = useTabSocket(token, activeTab?.sessionId || '');
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -178,6 +180,9 @@ function AppContent({ token, loading }: AppContentProps) {
                 onToggleActivity={() => toggleDrawer('activity')}
                 projectPath={activeProject?.path || null}
                 onLoadSession={handleLoadSession}
+                sessionId={activeTab?.sessionId}
+                pendingQuestion={pendingQuestion}
+                onRespondToQuestion={respondToQuestion}
               />
             ) : (
               <div className="no-project-state">

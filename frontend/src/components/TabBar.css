@@ -27,26 +27,27 @@
   padding: 0 16px;
   border: none;
   background: none;
-  color: var(--text-secondary);
+  color: color-mix(in srgb, var(--text-secondary) 85%, var(--text-primary) 15%);
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 400;
   cursor: pointer;
   white-space: nowrap;
   position: relative;
-  transition: color 0.15s ease;
-  border-bottom: 2px solid transparent;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border-bottom: 1px solid transparent;
   max-width: 200px;
 }
 
 .tab-item:hover {
-  color: var(--text-primary);
+  color: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary) 10%);
 }
 
 .tab-item.active {
   color: var(--text-primary);
-  font-weight: 500;
-  border-bottom-color: var(--accent);
+  font-weight: 400;
+  border-bottom-color: color-mix(in srgb, var(--accent) 60%, var(--text-secondary) 40%);
+  opacity: 1;
 }
 
 .tab-item-label {
@@ -56,17 +57,18 @@
 }
 
 .tab-item-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 70%, var(--text-secondary) 30%);
   flex-shrink: 0;
-  animation: tabPulse 1.5s ease-in-out infinite;
+  opacity: 0.8;
+  animation: tabBreathe 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
 }
 
-@keyframes tabPulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.1); }
+@keyframes tabBreathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .tab-item-close {

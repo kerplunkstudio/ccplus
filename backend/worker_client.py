@@ -59,6 +59,7 @@ class WorkerClient:
         self.on_response_complete: Optional[Callable[[str, dict], None]] = None  # (session_id, data)
         self.on_error: Optional[Callable[[str, str], None]] = None  # (session_id, message)
         self.on_session_status: Optional[Callable[[list], None]] = None  # (sessions)
+        self.on_user_question: Optional[Callable[[str, dict], None]] = None  # (session_id, data)
 
     @property
     def connected(self) -> bool:
@@ -113,6 +114,14 @@ class WorkerClient:
     def ping(self) -> None:
         """Send keepalive ping."""
         self._send({"type": "ping"})
+
+    def send_question_response(self, session_id: str, response: str) -> None:
+        """Send user's response to an AskUserQuestion."""
+        self._send({
+            "type": "question_response",
+            "session_id": session_id,
+            "response": response,
+        })
 
     def _send(self, msg: dict) -> None:
         """Send a message to the worker. Thread-safe."""
@@ -219,6 +228,8 @@ class WorkerClient:
                 self.on_error(session_id, msg.get("message", "Unknown error"))
             elif msg_type == "session_status" and self.on_session_status:
                 self.on_session_status(msg.get("sessions", []))
+            elif msg_type == "user_question" and self.on_user_question:
+                self.on_user_question(session_id, msg)
             elif msg_type == "pong":
                 logger.debug("Received pong from worker")
             elif msg_type == "query_ack":

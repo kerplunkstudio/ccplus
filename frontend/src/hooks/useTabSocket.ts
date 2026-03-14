@@ -186,6 +186,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
   const prevSessionIdRef = useRef(sessionId);
+  const [pendingQuestion, setPendingQuestion] = useState<{ question: string; toolUseId: string } | null>(null);
 
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
@@ -321,31 +322,21 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
       if (!streamingIdRef.current) {
-        setMessages((prev) => {
-          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
-          if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.streaming) {
-            streamingContentRef.current = lastMsg.content + data.text;
-            streamingIdRef.current = lastMsg.id;
-            return prev.map((m) =>
-              m.id === lastMsg.id
-                ? { ...m, content: streamingContentRef.current, streaming: true }
-                : m
-            );
-          }
-          const msgId = `stream_${Date.now()}`;
-          streamingContentRef.current = data.text;
-          streamingIdRef.current = msgId;
-          return [
-            ...prev,
-            {
-              id: msgId,
-              content: data.text,
-              role: 'assistant' as const,
-              timestamp: Date.now(),
-              streaming: true,
-            },
-          ];
-        });
+        // Always create a new message for each new Claude response
+        // Don't append to existing assistant messages to ensure proper separation
+        const msgId = `stream_${Date.now()}`;
+        streamingContentRef.current = data.text;
+        streamingIdRef.current = msgId;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: msgId,
+            content: data.text,
+            role: 'assistant' as const,
+            timestamp: Date.now(),
+            streaming: true,
+          },
+        ]);
       } else {
         streamingContentRef.current += data.text;
         const currentContent = streamingContentRef.current;
@@ -456,6 +447,13 @@ export function useTabSocket(token: string | null, sessionId: string) {
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       setCurrentTool(null);
+    });
+
+    newSocket.on('user_question', (data: { question: string; tool_use_id: string }) => {
+      setPendingQuestion({
+        question: data.question,
+        toolUseId: data.tool_use_id,
+      });
     });
 
     setSocket(newSocket);
@@ -582,6 +580,15 @@ export function useTabSocket(token: string | null, sessionId: string) {
     setCurrentTool(null);
   }, [socket, connected]);
 
+  const respondToQuestion = useCallback(
+    (response: string) => {
+      if (!socket || !connected) return;
+      socket.emit('question_response', { response });
+      setPendingQuestion(null);
+    },
+    [socket, connected]
+  );
+
   return {
     connected,
     messages,
@@ -592,6 +599,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
     toolLog,
     sendMessage,
     cancelQuery,
+    pendingQuestion,
+    respondToQuestion,
   };
 }
 

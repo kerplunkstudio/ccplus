@@ -55,7 +55,6 @@
   padding: var(--space-md) var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
   scroll-behavior: smooth;
   max-width: var(--content-width);
   margin: 0 auto;
@@ -667,6 +666,81 @@
   font-size: 11px;
 }
 
+.user-question-prompt {
+  margin: 12px 24px;
+  padding: 16px;
+  background: color-mix(in oklch, var(--accent) 8%, var(--bg-secondary));
+  border: 1px solid color-mix(in oklch, var(--accent) 25%, var(--border));
+  border-radius: 8px;
+}
+
+.question-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.question-text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.question-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.question-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.question-input:focus {
+  border-color: var(--accent);
+}
+
+.question-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.question-submit {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.question-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.question-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .chat-panel-header {
     padding: 3px 8px;
@@ -683,7 +757,6 @@
 
   .messages-container {
     padding: 8px;
-    gap: 6px;
   }
 
   .input-container {
