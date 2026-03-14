@@ -47,6 +47,7 @@ from backend.database import (
     get_sessions_list,
     get_stats,
     get_tool_events,
+    mark_orphaned_tool_events,
     record_message,
     store_image,
 )
@@ -89,6 +90,11 @@ plugin_manager = PluginManager()
 
 START_TIME = time.time()
 
+# Mark orphaned tool events from previous run
+_orphan_count = mark_orphaned_tool_events()
+if _orphan_count:
+    logger.info(f"Marked {_orphan_count} orphaned tool events from previous run")
+
 # Maps SocketIO request.sid -> {session_id, user_id}
 connected_clients: dict[str, dict] = {}
 
@@ -119,12 +125,19 @@ def _handle_worker_reconnect(session_id: str):
     def on_error(error_msg: str) -> None:
         socketio.emit("error", {"message": error_msg}, room=session_id)
 
+    def on_user_question(data: dict) -> None:
+        socketio.emit("user_question", {
+            "questions": data.get("questions", []),
+            "tool_use_id": data.get("tool_use_id", ""),
+        }, room=session_id)
+
     session_manager.register_streaming_callbacks(
         session_id,
         on_text=on_text,
         on_tool_event=on_tool_event,
         on_complete=on_complete,
         on_error=on_error,
+        on_user_question=on_user_question,
     )
 
     # Notify any connected browser clients that streaming is active
@@ -556,12 +569,19 @@ def handle_connect():
         def on_error_reconnect(error_msg: str) -> None:
             socketio.emit("error", {"message": error_msg}, room=session_id)
 
+        def on_user_question_reconnect(data: dict) -> None:
+            socketio.emit("user_question", {
+                "questions": data.get("questions", []),
+                "tool_use_id": data.get("tool_use_id", ""),
+            }, room=session_id)
+
         session_manager.register_streaming_callbacks(
             session_id,
             on_text=on_text_reconnect,
             on_tool_event=on_tool_event_reconnect,
             on_complete=on_complete_reconnect,
             on_error=on_error_reconnect,
+            on_user_question=on_user_question_reconnect,
         )
         logger.info(f"Re-registered callbacks for active session {session_id}")
         socketio.emit("stream_active", {}, room=session_id)
