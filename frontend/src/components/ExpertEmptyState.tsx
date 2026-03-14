@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { UsageStats } from '../types';
-import { ExpertAccountLimits } from './ExpertAccountLimits';
 import './ExpertEmptyState.css';
 
 
@@ -62,9 +61,6 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
 
   return (
     <div className="expert-empty-state">
-      {/* API Limits for Expert Users */}
-      <ExpertAccountLimits />
-
       {/* Simple session info */}
       <div className="session-header">
         <div className="session-stats">
