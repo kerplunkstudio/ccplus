@@ -29,6 +29,7 @@ from flask_socketio import SocketIO, disconnect, emit, join_room
 # Add parent to path so ``backend.*`` imports resolve when running directly
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from backend.account_limits import fetch_account_limits
 from backend.auth import auto_login, verify_token
 from backend.config import (
     DATABASE_PATH,
@@ -250,6 +251,23 @@ def stats():
     except Exception as exc:
         logger.error(f"Failed to fetch stats: {exc}")
         return jsonify({"error": "Failed to load stats"}), 500
+
+
+@app.route("/api/account/limits")
+def account_limits():
+    """Get account limits and rate limit information from Anthropic API.
+
+    Returns current rate limits for requests and tokens, including remaining
+    quota and reset times. Results are cached for 5 minutes.
+    """
+    try:
+        result = fetch_account_limits()
+        if not result.get("success"):
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as exc:
+        logger.error(f"Failed to fetch account limits: {exc}")
+        return jsonify({"error": "Failed to fetch account limits"}), 500
 
 
 @app.route("/api/projects")
