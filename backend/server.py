@@ -17,13 +17,14 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 # Remove CLAUDECODE env var to allow SDK subprocess spawning
 # (otherwise Claude Code detects "nested session" and refuses to start)
 os.environ.pop("CLAUDECODE", None)
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO, disconnect, emit, join_room
 
@@ -376,8 +377,20 @@ def git_context():
     if not project_path:
         return jsonify({"error": "project parameter required"}), 400
 
-    # Validate path exists
-    project_dir = Path(project_path)
+    # Resolve to an absolute, canonical path to prevent directory traversal
+    # (e.g. /workspace/../../../etc/passwd)
+    try:
+        project_dir = Path(project_path).resolve()
+    except Exception:
+        return jsonify({"error": "Invalid project path"}), 400
+
+    # Confine to the configured workspace directory
+    workspace_dir = Path(WORKSPACE_PATH).resolve()
+    try:
+        project_dir.relative_to(workspace_dir)
+    except ValueError:
+        return jsonify({"error": "Project path is outside the configured workspace"}), 403
+
     if not project_dir.exists():
         return jsonify({"error": f"Project path does not exist: {project_path}"}), 400
 
@@ -552,7 +565,6 @@ def upload_image():
         return jsonify({"error": "File too large (max 10MB)"}), 400
 
     # Generate unique ID
-    import uuid
     image_id = str(uuid.uuid4())
 
     # Read file data
@@ -581,7 +593,6 @@ def get_image_endpoint(image_id):
         if not image:
             return jsonify({"error": "Image not found"}), 404
 
-        from flask import Response
         return Response(
             image["data"],
             mimetype=image["mime_type"],
@@ -706,12 +717,15 @@ def execute_skill():
 
 
 @socketio.on("connect")
-def handle_connect():
+def handle_connect(auth=None):
     """Authenticate the WebSocket handshake and join the session room.
 
     Expects ``token`` and ``session_id`` as query parameters on the
     connection URL. If the token is missing or invalid, the connection
     is refused.
+
+    Args:
+        auth: Optional authentication data (unused, kept for Flask-SocketIO 5.x compatibility)
     """
     token = request.args.get("token", "")
     user_id = verify_token(token)

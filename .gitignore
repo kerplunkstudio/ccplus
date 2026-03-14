@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
+*.pyo
 .env
+.env.local
+.env.*.local
 data/
 logs/
 node_modules/
@@ -8,9 +11,12 @@ frontend/build/
 static/chat/
 .DS_Store
 venv/
-
-# Electron
+.venv/
+*.egg-info/
 dist/
+build/
+
+# Electron build artifacts
 *.dmg
 *.AppImage
 *.deb
@@ -19,3 +25,23 @@ dist/
 electron/assets/icon.icns
 electron/assets/icon.png
 electron/assets/icon.ico
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+.secrets
+secrets/
+credentials.json
+
+# Editor / IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml

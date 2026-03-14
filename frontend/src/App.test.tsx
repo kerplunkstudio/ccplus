@@ -12,14 +12,26 @@ jest.mock('./hooks/useAuth', () => ({
   }),
 }));
 
-jest.mock('./hooks/useSocket', () => ({
-  useSocket: () => ({
+jest.mock('./hooks/useTabSocket', () => ({
+  useTabSocket: () => ({
     connected: true,
     messages: [],
     streaming: false,
     activityTree: [],
     sendMessage: jest.fn(),
     cancelQuery: jest.fn(),
+    toolLogs: [],
+    usageStats: {
+      totalCost: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalDuration: 0,
+      queryCount: 0,
+      contextWindowSize: 200000,
+      model: '',
+      linesOfCode: 0,
+      totalSessions: 0,
+    },
   }),
 }));
 
@@ -31,7 +43,8 @@ describe('App', () => {
 
   it('renders the activity panel', () => {
     render(<App />);
-    expect(screen.getByText('Observability')).toBeInTheDocument();
+    // Activity panel now has tabs instead of "Observability" header
+    expect(screen.getByText('Agents')).toBeInTheDocument();
   });
 
   it('renders the two-panel layout', () => {

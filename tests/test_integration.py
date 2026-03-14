@@ -15,8 +15,11 @@ import pytest
 
 # Patch SessionManager before importing server
 with patch("backend.sdk_session.SessionManager") as _MockSM:
-    _MockSM.return_value = MagicMock()
-    _MockSM.return_value.get_active_sessions.return_value = []
+    mock_instance = MagicMock()
+    mock_instance.get_active_sessions.return_value = []
+    mock_instance.is_active.return_value = False  # No active sessions by default
+    mock_instance.get_pending_question.return_value = None  # No pending questions by default
+    _MockSM.return_value = mock_instance
     from backend.server import app, socketio, connected_clients, session_manager
 
 
@@ -54,7 +57,8 @@ class TestWebSocketProtocolAlignment:
         """Frontend sends {content: string}, server reads data.get('content')."""
         authed_client.get_received()
 
-        with patch("backend.server.record_message"):
+        with patch("backend.server.record_message"), \
+             patch.object(session_manager, "submit_query") as mock_submit:
             # This matches what the frontend sends after the fix
             authed_client.emit("message", {"content": "hello world"})
 
@@ -63,8 +67,8 @@ class TestWebSocketProtocolAlignment:
         assert "message_received" in event_names
 
         # Verify submit_query was called with the right prompt
-        session_manager.submit_query.assert_called()
-        call_kwargs = session_manager.submit_query.call_args
+        mock_submit.assert_called()
+        call_kwargs = mock_submit.call_args
         assert call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt") or "hello world" in str(call_kwargs)
 
     def test_message_with_wrong_key_is_ignored(self, authed_client):
@@ -83,12 +87,13 @@ class TestWebSocketProtocolAlignment:
         """Server emits text_delta with {text: ...}, matching frontend expectation."""
         authed_client.get_received()
 
-        with patch("backend.server.record_message"):
+        with patch("backend.server.record_message"), \
+             patch.object(session_manager, "submit_query") as mock_submit:
             # Capture the on_text callback
             authed_client.emit("message", {"content": "test"})
 
         # Get the on_text callback from submit_query call
-        call_args = session_manager.submit_query.call_args
+        call_args = mock_submit.call_args
         # Could be positional or keyword
         on_text = call_args.kwargs.get("on_text") or call_args[1].get("on_text")
 
@@ -102,10 +107,11 @@ class TestWebSocketProtocolAlignment:
         """Server emits response_complete with cost/token metadata."""
         authed_client.get_received()
 
-        with patch("backend.server.record_message"):
+        with patch("backend.server.record_message"), \
+             patch.object(session_manager, "submit_query") as mock_submit:
             authed_client.emit("message", {"content": "test"})
 
-        call_args = session_manager.submit_query.call_args
+        call_args = mock_submit.call_args
         on_complete = call_args.kwargs.get("on_complete") or call_args[1].get("on_complete")
 
         if on_complete:
@@ -123,10 +129,11 @@ class TestWebSocketProtocolAlignment:
         """Server emits error with {message: ...}, matching frontend."""
         authed_client.get_received()
 
-        with patch("backend.server.record_message"):
+        with patch("backend.server.record_message"), \
+             patch.object(session_manager, "submit_query") as mock_submit:
             authed_client.emit("message", {"content": "test"})
 
-        call_args = session_manager.submit_query.call_args
+        call_args = mock_submit.call_args
         on_error = call_args.kwargs.get("on_error") or call_args[1].get("on_error")
 
         if on_error:
