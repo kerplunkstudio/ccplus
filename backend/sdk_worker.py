@@ -63,7 +63,7 @@ from claude_code_sdk import (
     TextBlock,
     ToolUseBlock,
 )
-from claude_code_sdk.types import HookMatcher, HookContext, HookJSONOutput
+from claude_code_sdk.types import HookMatcher, HookContext, HookJSONOutput, PermissionResultAllow, ToolPermissionContext
 from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk._internal.message_parser import parse_message as sdk_parse_message
 
@@ -440,15 +440,19 @@ class SDKWorker:
         if resume_id:
             logger.info(f"Resuming SDK session {resume_id} for {session_id}")
 
+        # Build can_use_tool callback
+        can_use_tool_cb = self._build_can_use_tool(session_id)
+
         options = ClaudeCodeOptions(
             max_turns=50,
             cwd=workspace,
-            permission_mode="bypassPermissions",
+            # No permission_mode - we handle all permissions via can_use_tool
             env=clean_env,
             hooks=hooks,
             model=model or "sonnet",
             resume=resume_id or "",
             append_system_prompt=CCPLUS_SYSTEM_PROMPT,
+            can_use_tool=can_use_tool_cb,
         )
 
         client = ClaudeSDKClient(options)
@@ -470,6 +474,73 @@ class SDKWorker:
             except Exception as exc:
                 logger.error(f"Error disconnecting client for {session_id}: {exc}")
 
+    def _build_can_use_tool(self, session_id: str):
+        """Build a can_use_tool callback that auto-allows everything and handles AskUserQuestion."""
+        async def can_use_tool(
+            tool_name: str,
+            tool_input: dict[str, Any],
+            context: ToolPermissionContext,
+        ) -> PermissionResultAllow:
+            # For AskUserQuestion, collect answers from the web UI
+            if tool_name == "AskUserQuestion":
+                questions = tool_input.get("questions", [])
+                tool_use_id = f"perm_{time.monotonic()}"
+                logger.info(f"[AskUserQuestion] Permission request with {len(questions)} questions for session {session_id}")
+
+                # Store question data for reconnect scenarios
+                self._pending_question_data[session_id] = {
+                    "questions": questions,
+                    "tool_use_id": tool_use_id,
+                }
+
+                # Emit question to frontend
+                await self.send_event({
+                    "type": "user_question",
+                    "session_id": session_id,
+                    "questions": questions,
+                    "tool_use_id": tool_use_id,
+                })
+
+                # Wait for user response (up to 5 minutes)
+                logger.info(f"[AskUserQuestion] Waiting for user response for session {session_id}")
+                wait_event = asyncio.Event()
+                self._pending_questions[session_id] = wait_event
+                try:
+                    await asyncio.wait_for(wait_event.wait(), timeout=300)
+                    user_response = self._question_responses.pop(session_id, "")
+                    logger.info(f"[AskUserQuestion] Got user response: {user_response[:100]}")
+                except asyncio.TimeoutError:
+                    user_response = "User did not respond in time"
+                    logger.warning(f"[AskUserQuestion] Timed out waiting for response")
+                finally:
+                    self._pending_questions.pop(session_id, None)
+                    self._pending_question_data.pop(session_id, None)
+
+                # Parse the response string into answers dict
+                # Frontend sends: "Header1: Selection1\nHeader2: Selection2"
+                answers = {}
+                for line in user_response.split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # Match each answer line to its question by header
+                    for q in questions:
+                        header = q.get("header", "")
+                        if line.startswith(f"{header}: "):
+                            answer_text = line[len(f"{header}: "):]
+                            answers[q.get("question", header)] = answer_text
+                            break
+
+                # Return allow with updated input that includes answers
+                updated = {**tool_input, "answers": answers}
+                logger.info(f"[AskUserQuestion] Returning allow with answers: {answers}")
+                return PermissionResultAllow(updated_input=updated)
+
+            # Auto-allow all other tools
+            return PermissionResultAllow()
+
+        return can_use_tool
+
     def _build_hooks(
         self,
         session_id: str,
@@ -489,49 +560,6 @@ class SDKWorker:
             tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", f"tu_{time.monotonic()}")
             tool_params = hook_input.get("tool_input", {})
             tool_timers[tool_use_id] = time.monotonic()
-
-            # Handle AskUserQuestion: emit to frontend, wait for response
-            if actual_tool_name == "AskUserQuestion":
-                questions = tool_params.get("questions", [])
-                logger.info(f"[AskUserQuestion] Detected! questions={questions}, tool_params keys={list(tool_params.keys())}")
-
-                # Store question data for reconnect scenarios
-                self._pending_question_data[session_id] = {
-                    "questions": questions,
-                    "tool_use_id": tool_use_id,
-                }
-
-                # Emit question to frontend
-                logger.info(f"[AskUserQuestion] Emitting user_question event with {len(questions)} questions to session {session_id}")
-                await self.send_event({
-                    "type": "user_question",
-                    "session_id": session_id,
-                    "questions": questions,
-                    "tool_use_id": tool_use_id,
-                })
-
-                # Wait for user response (up to 5 minutes)
-                logger.info(f"[AskUserQuestion] Waiting for user response for session {session_id}")
-                wait_event = asyncio.Event()
-                self._pending_questions[session_id] = wait_event
-                try:
-                    await asyncio.wait_for(wait_event.wait(), timeout=300)
-                    user_response = self._question_responses.pop(session_id, "No response provided")
-                    logger.info(f"[AskUserQuestion] Got user response: {user_response[:100]}")
-                except asyncio.TimeoutError:
-                    user_response = "User did not respond in time"
-                    logger.warning(f"[AskUserQuestion] Timed out waiting for response")
-                finally:
-                    self._pending_questions.pop(session_id, None)
-                    self._pending_question_data.pop(session_id, None)
-
-                # Block the tool so CLI subprocess doesn't prompt stdin,
-                # include user's selections in hookSpecificOutput
-                logger.info(f"[AskUserQuestion] Returning block decision with response")
-                return HookJSONOutput(
-                    decision="block",
-                    hookSpecificOutput={"reason": f"User responded: {user_response}"},
-                )
 
             is_agent = actual_tool_name in ("Agent", "Task")
             parent_id = agent_stack[-1] if agent_stack else None
