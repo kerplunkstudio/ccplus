@@ -7,6 +7,7 @@ import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { ExpertEmptyState } from './ExpertEmptyState';
+import { AccountLimits } from './AccountLimits';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
 import {
@@ -146,15 +147,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     'Run tests and observe what Claude reads and changes',
   ];
 
-  const scrollToBottom = useCallback(() => {
+  const [lastMessageCount, setLastMessageCount] = useState(0);
+
+  const scrollToBottom = useCallback((immediate = false) => {
     if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({
+        behavior: immediate ? 'auto' : 'smooth'
+      });
     }
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    const isSessionChange = Math.abs(messages.length - lastMessageCount) > 1;
+    const shouldScrollImmediate = isSessionChange || messages.length === 0;
+
+    scrollToBottom(shouldScrollImmediate);
+    setLastMessageCount(messages.length);
+  }, [messages, scrollToBottom, lastMessageCount]);
 
   // Initialize expert user detection on mount
   useEffect(() => {
@@ -453,6 +462,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 />
               ) : (
                 <div className="empty-state">
+                  <AccountLimits />
                   <div className="ghost-activity">
                     <div className="ghost-node ghost-agent">
                       <div className="ghost-bar ghost-bar-accent" />
@@ -649,57 +659,69 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               ))}
             </div>
           )}
-          <div className="input-wrapper">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-              multiple
-              style={{ display: 'none' }}
-            />
-            <button
-              className="attach-btn"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!connected || uploading}
-              aria-label="Attach image"
-              title="Attach image"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-            </button>
-            <textarea
-              ref={textareaRef}
-              className="message-input"
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
-              disabled={!connected}
-              rows={1}
-            />
-            {streaming ? (
-              <button className="cancel-btn" onClick={onCancel} aria-label="Cancel">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-                </svg>
-              </button>
-            ) : (
+          <div className="input-row">
+            <div className="input-wrapper">
+              <textarea
+                ref={textareaRef}
+                className="message-input"
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
+                disabled={!connected}
+                rows={1}
+              />
+            </div>
+            <div className="input-actions">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                multiple
+                style={{ display: 'none' }}
+              />
               <button
-                className="send-btn"
-                onClick={handleSubmit}
-                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
-                aria-label="Send"
+                className={`attach-btn ${uploading ? 'uploading' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!connected || uploading}
+                aria-label="Attach image"
+                title="Attach image"
+                data-state={uploading ? 'uploading' : 'idle'}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 2L11 13" />
-                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-                </svg>
+                <div className="attach-btn-inner">
+                  <div className="attach-icon">
+                    <div className="attach-square attach-square-1" />
+                    <div className="attach-square attach-square-2" />
+                    <div className="attach-square attach-square-3" />
+                  </div>
+                  <div className="attach-plus">
+                    <div className="attach-plus-h" />
+                    <div className="attach-plus-v" />
+                  </div>
+                </div>
+                {uploading && <div className="attach-spinner" />}
               </button>
-            )}
+              {streaming ? (
+                <button className="cancel-btn" onClick={onCancel} aria-label="Cancel">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  className="send-btn"
+                  onClick={handleSubmit}
+                  disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
+                  aria-label="Send"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 2L11 13" />
+                    <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
           {!streaming && (input.trim() || uploadedImages.length > 0) && (
             <div className="input-hint">
