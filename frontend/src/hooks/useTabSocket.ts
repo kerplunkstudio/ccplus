@@ -188,6 +188,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
   const prevSessionIdRef = useRef(sessionId);
+  const seenToolUseIds = useRef<Set<string>>(new Set());
   const [pendingQuestion, setPendingQuestion] = useState<{
     questions: Array<{
         question: string;
@@ -212,6 +213,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       streamingIdRef.current = null;
       streamActiveRef.current = false;
       sequenceRef.current = 0;
+      seenToolUseIds.current.clear();
       setPendingQuestion(null);
     }
   }, [sessionId]);
@@ -313,6 +315,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
                 }
               }
               dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+              // Track loaded IDs to prevent duplicates from buffer replay
+              toolEvents.forEach(e => {
+                if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
+              });
             }
           }
         } catch (err) {
@@ -406,6 +412,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     newSocket.on('tool_event', (event: ToolEvent) => {
+      // Deduplicate start events to prevent duplicate tree nodes after reconnect
+      if ((event.type === 'tool_start' || event.type === 'agent_start') && event.tool_use_id) {
+        if (seenToolUseIds.current.has(event.tool_use_id)) {
+          return; // Already processed this start event
+        }
+        seenToolUseIds.current.add(event.tool_use_id);
+      }
+
       switch (event.type) {
         case 'agent_start': {
           const seq = ++sequenceRef.current;
@@ -559,6 +573,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
               }
             }
             dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+            // Track loaded IDs to prevent duplicates from buffer replay
+            toolEvents.forEach(e => {
+              if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
+            });
           }
         }
       } catch (err) {
