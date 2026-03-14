@@ -116,6 +116,37 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
+  // Keyboard shortcuts for tab switching (Ctrl+Tab / Ctrl+Shift+Tab)
+  useEffect(() => {
+    if (!activeProject) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+
+        const tabs = activeProject.tabs;
+        if (tabs.length <= 1) return;
+
+        const currentIndex = tabs.findIndex(tab => tab.sessionId === activeProject.activeTabId);
+        if (currentIndex === -1) return;
+
+        let nextIndex: number;
+        if (e.shiftKey) {
+          // Ctrl+Shift+Tab: previous tab
+          nextIndex = currentIndex === 0 ? tabs.length - 1 : currentIndex - 1;
+        } else {
+          // Ctrl+Tab: next tab
+          nextIndex = currentIndex === tabs.length - 1 ? 0 : currentIndex + 1;
+        }
+
+        handleSelectTab(tabs[nextIndex].sessionId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeProject, handleSelectTab]);
+
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
   }, [sendMessage, activeProject, selectedModel]);
