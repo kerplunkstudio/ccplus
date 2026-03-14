@@ -143,8 +143,43 @@ def _handle_worker_reconnect(session_id: str):
     # Notify any connected browser clients that streaming is active
     socketio.emit("stream_active", {}, room=session_id)
 
+    # Re-emit pending question if worker has one waiting
+    pq = session_manager.get_pending_question(session_id)
+    if pq:
+        socketio.emit("user_question", {
+            "questions": pq.get("questions", []),
+            "tool_use_id": pq.get("tool_use_id", ""),
+        }, room=session_id)
+        logger.info(f"Re-emitted pending question for session {session_id}")
+
+
+def _handle_session_lost(session_id: str):
+    """Notify browser when a session's query was lost due to worker restart."""
+    logger.warning(f"Session {session_id} lost due to worker restart")
+
+    # Mark any orphaned tool events in DB
+    orphan_count = mark_orphaned_tool_events()
+    if orphan_count:
+        logger.info(f"Marked {orphan_count} orphaned tool events after worker restart")
+
+    # Send error message so user knows what happened
+    socketio.emit("error", {
+        "message": "The worker process restarted. Your query was interrupted. You can resend your message."
+    }, room=session_id)
+
+    # Send final response_complete to clear streaming state
+    socketio.emit("response_complete", {
+        "sdk_session_id": "worker_restart",
+        "cost": None,
+        "duration_ms": None,
+        "input_tokens": None,
+        "output_tokens": None,
+        "model": None,
+    }, room=session_id)
+
 
 session_manager.on_session_reconnect = _handle_worker_reconnect
+session_manager.on_session_lost = _handle_session_lost
 
 
 # =========================================================================
@@ -585,6 +620,15 @@ def handle_connect():
         )
         logger.info(f"Re-registered callbacks for active session {session_id}")
         socketio.emit("stream_active", {}, room=session_id)
+
+        # Re-emit pending question if worker has one waiting
+        pq = session_manager.get_pending_question(session_id)
+        if pq:
+            socketio.emit("user_question", {
+                "questions": pq.get("questions", []),
+                "tool_use_id": pq.get("tool_use_id", ""),
+            }, room=session_id)
+            logger.info(f"Re-emitted pending question for session {session_id}")
 
     logger.info(f"Client connected: user={user_id} session={session_id}")
     emit("connected", {"session_id": session_id})
