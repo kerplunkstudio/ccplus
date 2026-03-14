@@ -621,6 +621,16 @@ class SDKWorker:
                     "session_id": session_id,
                 }
 
+                # Include content params for Write/Edit tools to enable LOC counting
+                if actual_tool_name in ("Write", "Edit"):
+                    loc_params = {}
+                    if "content" in tool_params:
+                        loc_params["content"] = tool_params["content"]
+                    if "new_string" in tool_params:
+                        loc_params["new_string"] = tool_params["new_string"]
+                    if loc_params:
+                        event["parameters"] = loc_params
+
             # Send event to Flask
             await self.send_event({
                 "type": "tool_event",
