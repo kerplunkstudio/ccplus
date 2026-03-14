@@ -1,32 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
 :root {
-  /* === Quieter Editorial Palette === */
+  /* === Sophisticated Developer Palette === */
   --bg-primary: #fafaf9;
   --bg-secondary: #f6f5f4;
   --bg-tertiary: #ffffff;
   --text-primary: #1c1b1a;
-  --text-secondary: #7c7873;
-  --text-tertiary: #aba8a3;
-  --accent: #8a7066;
-  --accent-dim: #766358;
-  --accent-light: #9d8279;
+  --text-secondary: #6b6660;
+  --text-tertiary: #9a958f;
+  --accent: #0066cc;
+  --accent-dim: #0052a3;
+  --accent-light: #337de6;
+  --accent-bright: #0077f0;
   --border: #ececea;
   --border-heavy: #e0dedb;
-  --success: #5d7a68;
-  --warning: #8a7066;
-  --error: #8a7066;
+  --success: #16a34a;
+  --warning: #ea580c;
+  --error: #dc2626;
 
   /* === Derived colors === */
-  --accent-bg: rgba(138, 112, 102, 0.03);
-  --accent-border: rgba(138, 112, 102, 0.08);
-  --accent-shadow: rgba(138, 112, 102, 0.10);
-  --success-bg: rgba(93, 122, 104, 0.04);
-  --success-border: rgba(93, 122, 104, 0.10);
-  --error-bg: rgba(138, 112, 102, 0.04);
-  --error-border: rgba(138, 112, 102, 0.10);
-  --warning-bg: rgba(138, 112, 102, 0.04);
-  --warning-border: rgba(138, 112, 102, 0.10);
+  --accent-bg: rgba(0, 102, 204, 0.04);
+  --accent-border: rgba(0, 102, 204, 0.12);
+  --accent-shadow: rgba(0, 102, 204, 0.15);
+  --success-bg: rgba(22, 163, 74, 0.04);
+  --success-border: rgba(22, 163, 74, 0.12);
+  --error-bg: rgba(220, 38, 38, 0.04);
+  --error-border: rgba(220, 38, 38, 0.12);
+  --warning-bg: rgba(234, 88, 12, 0.04);
+  --warning-border: rgba(234, 88, 12, 0.12);
 
   /* === Interactive elements === */
   --button-bg: rgba(28, 27, 26, 0.02);

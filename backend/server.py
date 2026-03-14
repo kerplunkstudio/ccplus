@@ -42,10 +42,12 @@ from backend.config import (
 from backend.database import (
     archive_session,
     get_conversation_history,
+    get_image,
     get_sessions_list,
     get_stats,
     get_tool_events,
     record_message,
+    store_image,
 )
 from backend.plugins import PluginManager
 from backend.sdk_session import SessionManager
@@ -220,7 +222,10 @@ def get_history(session_id):
     """
     try:
         messages = get_conversation_history(session_id)
-        return jsonify({"messages": messages})
+        return jsonify({
+            "messages": messages,
+            "streaming": session_manager.is_active(session_id),
+        })
     except Exception as exc:
         logger.error(f"Failed to fetch history for {session_id}: {exc}")
         return jsonify({"error": "Failed to load history"}), 500
@@ -289,6 +294,85 @@ def archive_session_endpoint(session_id):
     except Exception as exc:
         logger.error(f"Failed to archive session {session_id}: {exc}")
         return jsonify({"error": "Failed to archive session"}), 500
+
+
+# -- Images ---------------------------------------------------------------
+
+
+@app.route("/api/images/upload", methods=["POST"])
+def upload_image():
+    """Upload an image file.
+
+    Accepts multipart/form-data with:
+        - file: the image file
+        - session_id: the browser session ID
+
+    Returns image metadata with URL.
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"error": "Empty file"}), 400
+
+    session_id = request.form.get("session_id", "")
+    if not session_id:
+        return jsonify({"error": "session_id required"}), 400
+
+    # Validate file type
+    allowed_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"}
+    mime_type = file.content_type
+    if mime_type not in allowed_types:
+        return jsonify({"error": f"Unsupported image type: {mime_type}"}), 400
+
+    # Validate file size (10MB max)
+    file.seek(0, 2)  # Seek to end
+    size = file.tell()
+    file.seek(0)  # Reset to beginning
+
+    if size > 10 * 1024 * 1024:
+        return jsonify({"error": "File too large (max 10MB)"}), 400
+
+    # Generate unique ID
+    import uuid
+    image_id = str(uuid.uuid4())
+
+    # Read file data
+    data = file.read()
+
+    try:
+        image_meta = store_image(
+            image_id=image_id,
+            filename=file.filename,
+            mime_type=mime_type,
+            size=size,
+            data=data,
+            session_id=session_id,
+        )
+        return jsonify(image_meta)
+    except Exception as exc:
+        logger.error(f"Failed to store image: {exc}")
+        return jsonify({"error": "Failed to store image"}), 500
+
+
+@app.route("/api/images/<image_id>")
+def get_image_endpoint(image_id):
+    """Retrieve an image by ID."""
+    try:
+        image = get_image(image_id)
+        if not image:
+            return jsonify({"error": "Image not found"}), 404
+
+        from flask import Response
+        return Response(
+            image["data"],
+            mimetype=image["mime_type"],
+            headers={"Content-Disposition": f'inline; filename="{image["filename"]}"'},
+        )
+    except Exception as exc:
+        logger.error(f"Failed to retrieve image {image_id}: {exc}")
+        return jsonify({"error": "Failed to retrieve image"}), 500
 
 
 # -- Plugins --------------------------------------------------------------
@@ -516,15 +600,23 @@ def handle_message(data):
     content = (data.get("content", "") if isinstance(data, dict) else "").strip()
     workspace = (data.get("workspace", "") if isinstance(data, dict) else "") or WORKSPACE_PATH
     model = (data.get("model", "") if isinstance(data, dict) else "") or None
+    image_ids = (data.get("image_ids", []) if isinstance(data, dict) else [])
     # Only record actual selected project in project_path, not the default workspace
     project_path = data.get("workspace", "") if isinstance(data, dict) else ""
 
-    if not content:
+    if not content and not image_ids:
         return
 
     # Persist user message
     try:
-        record_message(session_id, user_id, "user", content, project_path=project_path or None)
+        record_message(
+            session_id,
+            user_id,
+            "user",
+            content or "[Image]",
+            project_path=project_path or None,
+            image_ids=image_ids if image_ids else None,
+        )
     except Exception as exc:
         logger.error(f"Failed to record user message: {exc}")
 
@@ -565,9 +657,10 @@ def handle_message(data):
     # which handles skill execution natively in context
     session_manager.submit_query(
         session_id=session_id,
-        prompt=content,
+        prompt=content or "[Image attached]",
         workspace=workspace,
         model=model,
+        image_ids=image_ids if image_ids else None,
         on_text=on_text,
         on_tool_event=on_tool_event,
         on_complete=on_complete,

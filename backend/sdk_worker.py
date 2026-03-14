@@ -277,7 +277,8 @@ class SDKWorker:
             prompt = msg.get("prompt")
             workspace = msg.get("workspace")
             model = msg.get("model")
-            await self.handle_submit_query(session_id, prompt, workspace, model)
+            image_ids = msg.get("image_ids")
+            await self.handle_submit_query(session_id, prompt, workspace, model, image_ids)
 
         elif msg_type == "cancel_query":
             session_id = msg.get("session_id")
@@ -307,6 +308,7 @@ class SDKWorker:
         prompt: str,
         workspace: str,
         model: Optional[str] = None,
+        image_ids: Optional[list[str]] = None,
     ) -> None:
         """Submit a query to the SDK for a session."""
         logger.info(f"Submitting query for session {session_id}")
@@ -319,7 +321,7 @@ class SDKWorker:
         })
 
         # Start streaming query in background
-        asyncio.create_task(self.stream_query(session_id, prompt, workspace, model))
+        asyncio.create_task(self.stream_query(session_id, prompt, workspace, model, image_ids))
 
     async def handle_cancel_query(self, session_id: str) -> None:
         """Cancel active query for a session."""
@@ -641,6 +643,7 @@ class SDKWorker:
         prompt: str,
         workspace: str,
         model: Optional[str] = None,
+        image_ids: Optional[list[str]] = None,
     ) -> None:
         """Stream a query to the SDK and emit events to Flask."""
         result_text: list[str] = []
@@ -659,10 +662,61 @@ class SDKWorker:
             ps.cancel_requested = False
             ps.last_activity = time.monotonic()
 
+            # Build query content (text + images)
+            if image_ids:
+                # Fetch images from database and build content with image blocks
+                from backend.database import get_image
+                import base64
+
+                # Build content blocks: images first, then text
+                content_blocks = []
+
+                for img_id in image_ids:
+                    try:
+                        img = get_image(img_id)
+                        if img:
+                            img_data_b64 = base64.b64encode(img["data"]).decode("utf-8")
+                            # Determine media type from mime_type
+                            media_type = img["mime_type"]
+                            if media_type == "image/jpg":
+                                media_type = "image/jpeg"
+
+                            content_blocks.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": img_data_b64,
+                                }
+                            })
+                            logger.info(f"Added image {img_id} to query content")
+                    except Exception as e:
+                        logger.error(f"Failed to load image {img_id}: {e}")
+
+                # Add text prompt after images
+                if prompt:
+                    content_blocks.append({
+                        "type": "text",
+                        "text": prompt,
+                    })
+
+                logger.info(f"Query has {len(content_blocks)} content blocks ({len(image_ids)} images)")
+
+                # Create async generator that yields the message dict
+                async def message_stream():
+                    yield {
+                        "role": "user",
+                        "content": content_blocks,
+                    }
+
+                query_content = message_stream()
+            else:
+                query_content = prompt
+
             # Send query to persistent subprocess
             query_session_id = ps.sdk_session_id or session_id
             logger.info(f"Sending query to SDK for session {session_id} (query_session_id={query_session_id})...")
-            await ps.client.query(prompt, session_id=query_session_id)
+            await ps.client.query(query_content, session_id=query_session_id)
             logger.info(f"Query sent to SDK for session {session_id}, starting receive loop")
 
             # Stream response with error recovery

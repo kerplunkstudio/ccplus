@@ -300,6 +300,77 @@
   position: relative;
 }
 
+.uploaded-images-preview {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  flex-wrap: wrap;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.image-preview-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.image-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: all 0.15s ease;
+}
+
+.remove-image-btn:hover {
+  opacity: 1;
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--bg-primary);
+}
+
+.attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs);
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.attach-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .send-btn,
 .cancel-btn {
   display: flex;

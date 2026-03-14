@@ -1,3 +1,11 @@
+export interface ImageAttachment {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  url: string;
+}
+
 export interface Message {
   id: string;
   content?: string;
@@ -5,6 +13,7 @@ export interface Message {
   timestamp: number;
   streaming?: boolean;
   toolLog?: ToolEvent[];
+  images?: ImageAttachment[];
 }
 
 export interface ToolEvent {

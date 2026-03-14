@@ -37,10 +37,22 @@ CREATE TABLE IF NOT EXISTS conversations (
     timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     sdk_session_id TEXT,
     project_path TEXT,
-    archived BOOLEAN DEFAULT 0
+    archived BOOLEAN DEFAULT 0,
+    images TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_conversations_session
     ON conversations(session_id, timestamp);
+
+CREATE TABLE IF NOT EXISTS images (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    session_id TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_images_session ON images(session_id);
 
 CREATE TABLE IF NOT EXISTS tool_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +105,12 @@ def _get_connection() -> sqlite3.Connection:
             conn.commit()
         except Exception:
             pass  # Column already exists
+        # Ensure images column exists (migration for existing DBs)
+        try:
+            conn.execute("ALTER TABLE conversations ADD COLUMN images TEXT")
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
     return conn
 
 
@@ -103,15 +121,17 @@ def record_message(
     content: str,
     sdk_session_id: Optional[str] = None,
     project_path: Optional[str] = None,
+    image_ids: Optional[list[str]] = None,
 ) -> dict:
     """Insert a conversation message and return it as a dict."""
     conn = _get_connection()
+    images_json = json.dumps(image_ids) if image_ids else None
     cursor = conn.execute(
         """
-        INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (session_id, user_id, role, content, sdk_session_id, project_path),
+        (session_id, user_id, role, content, sdk_session_id, project_path, images_json),
     )
     conn.commit()
     row = conn.execute(
@@ -168,7 +188,20 @@ def get_conversation_history(session_id: str, limit: int = 50) -> list[dict]:
         """,
         (session_id, limit),
     ).fetchall()
-    return [dict(row) for row in rows]
+    messages = []
+    for row in rows:
+        msg = dict(row)
+        # Parse images JSON and fetch image metadata
+        if msg.get("images"):
+            try:
+                image_ids = json.loads(msg["images"])
+                msg["images"] = get_message_images(image_ids)
+            except (json.JSONDecodeError, TypeError):
+                msg["images"] = []
+        else:
+            msg["images"] = []
+        messages.append(msg)
+    return messages
 
 
 def record_tool_event(
@@ -335,3 +368,51 @@ def get_stats() -> dict:
         "total_tool_events": total_tool_events,
         "events_by_tool": events_by_tool,
     }
+
+
+def store_image(image_id: str, filename: str, mime_type: str, size: int, data: bytes, session_id: str) -> dict:
+    """Store an image in the database and return its metadata."""
+    conn = _get_connection()
+    conn.execute(
+        """
+        INSERT INTO images (id, filename, mime_type, size, data, session_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (image_id, filename, mime_type, size, data, session_id),
+    )
+    conn.commit()
+    return {
+        "id": image_id,
+        "filename": filename,
+        "mime_type": mime_type,
+        "size": size,
+        "url": f"/api/images/{image_id}",
+    }
+
+
+def get_image(image_id: str) -> Optional[dict]:
+    """Retrieve an image by ID."""
+    conn = _get_connection()
+    row = conn.execute(
+        "SELECT * FROM images WHERE id = ?", (image_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_message_images(image_ids: list[str]) -> list[dict]:
+    """Retrieve multiple images by their IDs."""
+    if not image_ids:
+        return []
+    conn = _get_connection()
+    placeholders = ",".join("?" * len(image_ids))
+    rows = conn.execute(
+        f"SELECT id, filename, mime_type, size FROM images WHERE id IN ({placeholders})",
+        image_ids,
+    ).fetchall()
+    return [
+        {
+            **dict(row),
+            "url": f"/api/images/{row['id']}",
+        }
+        for row in rows
+    ]

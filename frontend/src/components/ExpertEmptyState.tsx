@@ -1,46 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { UsageStats } from '../types';
 import './ExpertEmptyState.css';
 
-interface ProjectStats {
-  totalSessions: number;
-  lastProject: string | null;
-  favoriteCommands: string[];
-}
 
 interface ExpertEmptyStateProps {
   onSendMessage: (content: string) => void;
   projectPath?: string | null;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  usageStats: UsageStats;
 }
 
-// Power user command templates
-const POWER_COMMANDS = [
+// Refined command suggestions for experienced users
+const COMMAND_SUGGESTIONS = [
   {
-    category: 'AGENTS',
+    label: 'Review & Analysis',
     commands: [
       '/code-reviewer',
       '/security-reviewer',
-      '/architect',
+      '/architect'
+    ]
+  },
+  {
+    label: 'Development',
+    commands: [
       '/tdd',
-      '/build-fix'
-    ]
-  },
-  {
-    category: 'WORKFLOWS',
-    commands: [
-      'Implement auth module with TDD',
-      'Refactor the API layer for better separation',
-      'Set up CI/CD pipeline with automated testing',
-      'Add comprehensive logging and monitoring'
-    ]
-  },
-  {
-    category: 'DIRECT',
-    commands: [
-      'Read all TypeScript config files',
-      'Show me the database schema',
-      'Analyze the current test coverage',
-      'Review recent git commits'
+      '/build-fix',
+      'Implement auth with TDD'
     ]
   }
 ];
@@ -48,13 +33,9 @@ const POWER_COMMANDS = [
 export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
   onSendMessage,
   projectPath,
-  textareaRef
+  textareaRef,
+  usageStats
 }) => {
-  const [stats, setStats] = useState<ProjectStats>({
-    totalSessions: 0,
-    lastProject: null,
-    favoriteCommands: []
-  });
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Update time every second for terminal vibe
@@ -63,18 +44,6 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Load user stats from localStorage and API
-  useEffect(() => {
-    // Get stats from localStorage
-    const sessions = localStorage.getItem('ccplus_session_count') || '0';
-    const commands = JSON.parse(localStorage.getItem('ccplus_favorite_commands') || '[]');
-
-    setStats({
-      totalSessions: parseInt(sessions),
-      lastProject: projectPath || null,
-      favoriteCommands: commands.slice(0, 3)
-    });
-  }, [projectPath]);
 
   const handleCommandClick = (command: string) => {
     onSendMessage(command);
@@ -92,60 +61,52 @@ export const ExpertEmptyState: React.FC<ExpertEmptyStateProps> = ({
 
   return (
     <div className="expert-empty-state">
-      {/* Terminal-style header */}
-      <div className="expert-header">
-        <div className="expert-status-bar">
-          <span className="expert-time">{formatTime(currentTime)}</span>
-          <span className="expert-sessions">#{stats.totalSessions + 1}</span>
-          <span className="expert-project">
-            {projectPath ? projectPath.split('/').pop() : 'NO_PROJECT'}
-          </span>
+      {/* Simple session info */}
+      <div className="session-header">
+        <div className="session-stats">
+          <div className="stat-item">
+            <span className="stat-value">{usageStats.totalSessions}</span>
+            <span className="stat-label">Total sessions</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{formatTime(currentTime)}</span>
+            <span className="stat-label">Current time</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{usageStats.linesOfCode.toLocaleString()}</span>
+            <span className="stat-label">Lines of code</span>
+          </div>
         </div>
+        {projectPath && (
+          <div className="project-name">
+            {projectPath.split('/').pop()}
+          </div>
+        )}
       </div>
 
-      {/* System metrics grid */}
-      <div className="expert-metrics">
-        <div className="metric-block">
-          <div className="metric-value">{stats.totalSessions}</div>
-          <div className="metric-label">TOTAL_SESSIONS</div>
+      {/* Clean command suggestions */}
+      <div className="command-suggestions">
+        <div className="suggestions-header">
+          <h3>Quick actions</h3>
+          <p>Common commands for experienced users</p>
         </div>
-        <div className="metric-block">
-          <div className="metric-value">{stats.favoriteCommands.length}</div>
-          <div className="metric-label">SAVED_CMDS</div>
-        </div>
-      </div>
 
-      {/* Command categories in brutal grid */}
-      <div className="expert-commands">
-        {POWER_COMMANDS.map((category, categoryIdx) => (
-          <div key={category.category} className="command-category">
-            <div className="category-header">
-              <span className="category-index">[{categoryIdx + 1}]</span>
-              <span className="category-name">{category.category}</span>
-            </div>
-            <div className="category-commands">
-              {category.commands.map((command, cmdIdx) => (
+        {COMMAND_SUGGESTIONS.map((category) => (
+          <div key={category.label} className="suggestion-group">
+            <h4 className="group-label">{category.label}</h4>
+            <div className="commands-grid">
+              {category.commands.map((command) => (
                 <button
                   key={command}
-                  className="expert-command-btn"
+                  className="command-button"
                   onClick={() => handleCommandClick(command)}
-                  data-index={cmdIdx + 1}
                 >
-                  <span className="cmd-index">{cmdIdx + 1}</span>
-                  <span className="cmd-text">{command}</span>
+                  {command}
                 </button>
               ))}
             </div>
           </div>
         ))}
-      </div>
-
-
-      {/* Terminal-style footer */}
-      <div className="expert-footer">
-        <div className="footer-prompt">
-          <span className="prompt-symbol">$</span>
-        </div>
       </div>
     </div>
   );

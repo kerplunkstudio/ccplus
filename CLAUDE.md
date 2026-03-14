@@ -496,17 +496,13 @@ Tests are mandatory for all implementations:
 
 | Command | What it does |
 |---------|-------------|
-| `./deploy.sh` | Full deploy: build frontend, deploy to `static/chat/`, kill server, start server, health check |
-| `./deploy.sh server` | Skip frontend build, just restart backend |
+| `./deploy.sh` | Full deploy: build frontend, deploy static, restart server. Worker only restarts if `sdk_worker.py` or `config.py` changed. Active SDK sessions survive server-only restarts. |
+| `./deploy.sh server` | Restart Flask server only. Worker stays alive unless its code changed. |
+| `./deploy.sh frontend` | Build + deploy frontend only. No server or worker restart. |
+| `./deploy.sh worker` | Force restart the SDK worker (kills active SDK sessions). |
+| `./deploy.sh stop` | Stop both Flask server and SDK worker. |
 
-**What the script does in detail**:
-1. Detects Python (prefers `venv/bin/python`)
-2. Builds frontend (`npm run build` in `frontend/`)
-3. Copies `frontend/build/*` to `static/chat/`
-4. Kills any process on port 3000
-5. Starts `backend/server.py` in background with `nohup`
-6. Waits up to 15s for `/health` to return 200
-7. Prints URL or shows last 20 lines of logs on failure
+**Deploy resilience**: The SDK worker is a separate process that survives Flask restarts. During a server-only restart, the worker buffers events (up to 1000 per session). When Flask reconnects, buffered events are replayed and SocketIO callbacks are auto-registered for active sessions. The frontend deduplicates tool events to prevent duplicate activity tree nodes.
 
 **After deploy**: Hard refresh browser (Cmd+Shift+R) to clear cached assets.
 
@@ -593,11 +589,10 @@ Returns `{"decision": "block", "reason": "..."}` to prevent execution.
 
 ### Auto-Deploy After Changes
 
-**After any frontend or backend changes, automatically run `./deploy.sh`** to:
-1. Build the frontend (TypeScript check, React build)
-2. Deploy to `static/chat/`
-3. Restart the server
-4. Verify health check passes
+**After any frontend or backend changes, automatically run `./deploy.sh`** to build, deploy, and restart. The deploy script is smart about what to restart:
+- **Frontend changes**: Builds and deploys static files, restarts Flask server. Worker stays alive.
+- **Server/backend changes** (not `sdk_worker.py`): Restarts Flask server only. Active SDK sessions survive via event buffering.
+- **Worker code changes** (`sdk_worker.py`, `config.py`): Worker auto-restarts. Active sessions are interrupted.
 
 This prevents the common pitfall of editing code but not deploying it, leading to stale browser views.
 

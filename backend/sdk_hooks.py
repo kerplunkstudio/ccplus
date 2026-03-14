@@ -205,6 +205,10 @@ class HookManager:
                 "session_id": self.session_id,
             }
 
+            # Include untruncated parameters for Write and Edit tools to enable LOC tracking
+            if tool_name in ("Write", "Edit") and success:
+                event["parameters"] = _get_loc_params(tool_input)
+
         self._emit_event(event)
         self._record_to_db(tool_name, tool_use_id, tool_input, is_agent, success, error, duration_ms)
 
@@ -278,6 +282,26 @@ def _check_dangerous_command(command: str) -> Optional[dict]:
             logger.warning(f"Blocked dangerous command: {reason} (pattern={pattern!r})")
             return {"decision": "block", "reason": f"Blocked dangerous command: {command[:100]}"}
     return None
+
+
+def _get_loc_params(params: dict) -> dict:
+    """Extract parameters needed for lines of code counting.
+
+    Returns only the content-related parameters (content, new_string) without
+    truncation for accurate line counting in the frontend.
+
+    Args:
+        params: Raw tool parameters dict.
+
+    Returns:
+        Dict containing only LOC-relevant parameters.
+    """
+    loc_params = {}
+    if "content" in params:
+        loc_params["content"] = params["content"]
+    if "new_string" in params:
+        loc_params["new_string"] = params["new_string"]
+    return loc_params
 
 
 def _safe_serialize_params(params: dict) -> str:
