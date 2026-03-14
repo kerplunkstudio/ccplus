@@ -330,6 +330,14 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                           onMouseEnter={() => setHoveredSession(tab.sessionId)}
                           onMouseLeave={() => setHoveredSession(null)}
                           title={tab.label}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleSelectSession(project.path, tab.sessionId);
+                            }
+                          }}
                         >
                           <span className="sb-session-label">
                             {tab.label}
@@ -385,6 +393,14 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                     className="project-picker-item"
                     onClick={() => handleSelectProject(project.path, project.name)}
                     title={project.path}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectProject(project.path, project.name);
+                      }
+                    }}
                   >
                     <span className="project-picker-item-name">{project.name}</span>
                     <span className="project-picker-item-path">{project.path}</span>

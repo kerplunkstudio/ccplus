@@ -7,10 +7,10 @@
   margin: 0 auto;
   padding-top: var(--space-2xl);
   gap: var(--space-lg);
-  animation: messageIn 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  animation: dashboardIn 0.25s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@keyframes messageIn {
+@keyframes dashboardIn {
   from {
     opacity: 0;
     transform: translateY(4px);

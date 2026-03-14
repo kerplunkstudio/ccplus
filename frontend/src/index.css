@@ -22,9 +22,11 @@
   --accent-bg: rgba(0, 102, 204, 0.04);
   --accent-border: rgba(0, 102, 204, 0.12);
   --accent-shadow: rgba(0, 102, 204, 0.15);
+  --accent-rgb: 0, 102, 204;
   --success-bg: rgba(22, 163, 74, 0.04);
   --success-border: rgba(22, 163, 74, 0.12);
   --error-bg: rgba(220, 38, 38, 0.04);
+  --error-bg-subtle: rgba(220, 38, 38, 0.03);
   --error-border: rgba(220, 38, 38, 0.12);
   --warning-bg: rgba(234, 88, 12, 0.04);
   --warning-border: rgba(234, 88, 12, 0.12);
@@ -37,10 +39,13 @@
   --button-border-hover: rgba(28, 27, 26, 0.10);
   --button-text-hover: var(--text-primary);
   --hover-bg: rgba(28, 27, 26, 0.018);
+  --hover-bg-secondary: rgba(28, 27, 26, 0.03);
   --hover-border: rgba(28, 27, 26, 0.03);
+  --icon-bg: rgba(28, 27, 26, 0.04);
 
   /* === Surfaces === */
   --code-bg: #f8f7f6;
+  --code-header-bg: #f0efee;
   --code-border: var(--border);
   --overlay-bg: rgba(28, 27, 26, 0.25);
   --dropdown-shadow: 0 2px 12px rgba(28, 27, 26, 0.06);

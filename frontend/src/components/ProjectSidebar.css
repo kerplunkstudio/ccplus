@@ -204,7 +204,6 @@
 }
 
 .sb-project-header-new {
-  opacity: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-tertiary);
@@ -213,12 +212,8 @@
   cursor: pointer;
   padding: 0 4px;
   margin-left: 4px;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
   flex-shrink: 0;
-}
-
-.sb-project-header:hover .sb-project-header-new {
-  opacity: 1;
 }
 
 .sb-project-header-new:hover {
@@ -226,7 +221,6 @@
 }
 
 .sb-project-header-close {
-  opacity: 0;
   font-size: 16px;
   color: var(--text-tertiary);
   background: transparent;
@@ -234,13 +228,9 @@
   cursor: pointer;
   padding: 0 4px;
   margin-left: 4px;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
   flex-shrink: 0;
   line-height: 1;
-}
-
-.sb-project-header:hover .sb-project-header-close {
-  opacity: 1;
 }
 
 .sb-project-header-close:hover {
@@ -304,7 +294,6 @@
 }
 
 .sb-session-close {
-  opacity: 0;
   font-size: 14px;
   color: var(--text-tertiary);
   background: transparent;
@@ -312,13 +301,9 @@
   cursor: pointer;
   padding: 0 4px;
   margin-left: 4px;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
   flex-shrink: 0;
   line-height: 1;
-}
-
-.sb-session-item:hover .sb-session-close {
-  opacity: 1;
 }
 
 .sb-session-close:hover {
