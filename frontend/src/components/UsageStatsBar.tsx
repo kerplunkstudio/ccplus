@@ -24,16 +24,16 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
   return (
     <div className="usage-stats-bar">
       <div className="usage-stat">
-        <span className="usage-stat-label">Sessions</span>
         <span className="usage-stat-value">{stats.totalSessions}</span>
+        <span className="usage-stat-label">SESS</span>
       </div>
       <div className="usage-stat">
-        <span className="usage-stat-label">Time</span>
         <span className="usage-stat-value">{formatDuration(stats.totalDuration)}</span>
+        <span className="usage-stat-label">TIME</span>
       </div>
       <div className="usage-stat">
-        <span className="usage-stat-label">Lines of code</span>
         <span className="usage-stat-value">{formatNumber(stats.linesOfCode)}</span>
+        <span className="usage-stat-label">LINES</span>
       </div>
     </div>
   );

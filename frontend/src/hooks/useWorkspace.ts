@@ -192,13 +192,23 @@ export function useWorkspace() {
       .then((res) => (res.ok ? res.json() : null))
       .then((apiState) => {
         if (apiState && apiState.projects && apiState.projects.length > 0) {
+          // API has data — use it as source of truth
           dispatch({ type: 'RESTORE', state: apiState });
+        } else if (state.projects.length > 0) {
+          // API is empty but localStorage has data — bootstrap the API
+          const persistable = stripTransientFields(state);
+          fetch(`${SOCKET_URL}/api/workspace`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(persistable),
+          }).catch(() => {});
         }
         initializedRef.current = true;
       })
       .catch(() => {
         initializedRef.current = true;
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save to localStorage immediately + debounced API save on every change

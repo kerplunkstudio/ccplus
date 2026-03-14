@@ -283,16 +283,19 @@ All delivered via the `tool_event` WebSocket event. Differentiated by `type` fie
 
 ## Run Modes
 
-cc+ can run in two modes:
+cc+ can run in multiple modes:
 
 1. **Web UI** (default): Flask server serves the React app, access via browser at `localhost:4000`
-2. **Desktop app**: Electron wrapper launches Flask + SDK worker, displays UI in a native window
+2. **Desktop app (exclusive)**: Electron wrapper replaces the web server, displays UI in a native window
+3. **Desktop app (parallel)**: Electron wrapper runs alongside web server on port 4001, shared SDK worker
 
-Both modes use identical backend and frontend code. Desktop mode provides:
+All modes use identical backend and frontend code. Desktop modes provide:
 - Standalone app window (no browser needed)
 - Native menus and window management
 - Dock/taskbar integration
 - Window state persistence
+
+**Parallel mode** is recommended for development as it allows both web and desktop interfaces to run simultaneously without conflicts.
 
 ## Development Setup
 
@@ -342,7 +345,12 @@ Access at `http://localhost:4000`.
 
 **Desktop app**:
 ```bash
-./deploy.sh desktop  # Launch Electron app (auto-starts backend)
+# Exclusive mode (stops web server)
+./deploy.sh desktop
+
+# Parallel mode (runs alongside web server) - RECOMMENDED
+./deploy.sh desktop-parallel
+
 # Or use the standalone launcher:
 ./ccplus-desktop
 ```
@@ -538,6 +546,7 @@ Tests are mandatory for all implementations:
 | `./deploy.sh frontend` | Build + deploy frontend only. No server or worker restart. |
 | `./deploy.sh worker` | Force restart the SDK worker (kills active SDK sessions). |
 | `./deploy.sh desktop` | Launch Electron desktop app (stops web server, starts its own backend). |
+| `./deploy.sh desktop-parallel` | Launch Electron desktop app alongside web server (port 4001, shared worker). **Recommended for development.** |
 | `./deploy.sh stop` | Stop both Flask server and SDK worker. |
 | `./ccplus-desktop` | Standalone desktop app launcher (convenience script). |
 
