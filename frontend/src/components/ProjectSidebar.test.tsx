@@ -59,7 +59,10 @@ const defaultProps = {
 describe('ProjectSidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Clear all localStorage keys used by the component
     localStorage.clear();
+    localStorage.removeItem('ccplus_sidebar_expanded');
+    localStorage.removeItem('ccplus_sidebar_width');
   });
 
   it('renders project headers', () => {
@@ -75,32 +78,61 @@ describe('ProjectSidebar', () => {
     });
   });
 
-  it('toggles project expansion on click', () => {
-    render(<ProjectSidebar {...defaultProps} />);
+  it('toggles project expansion on click', async () => {
+    // Start with no active project so project 2 is not auto-expanded
+    const props = {
+      ...defaultProps,
+      activeProjectPath: null,
+      activeTabId: null,
+    };
+    render(<ProjectSidebar {...props} />);
+
+    await waitFor(() => {
+      const project2Header = screen.getByText('Project 2');
+      expect(project2Header).toBeInTheDocument();
+    });
+
     const project2Header = screen.getByText('Project 2');
+    // .project-header is inside .project-group, and .session-list is a sibling
+    const projectGroup = project2Header.closest('.project-group');
+    const sessionList = projectGroup?.querySelector('.session-list');
 
     // Initially collapsed
-    expect(screen.queryByText('Third session')).not.toBeInTheDocument();
+    expect(sessionList).not.toHaveClass('expanded');
 
     // Click to expand
     fireEvent.click(project2Header);
-    expect(screen.getByText('Third session')).toBeInTheDocument();
+    expect(sessionList).toHaveClass('expanded');
 
     // Click to collapse
     fireEvent.click(project2Header);
-    expect(screen.queryByText('Third session')).not.toBeInTheDocument();
+    expect(sessionList).not.toHaveClass('expanded');
   });
 
-  it('toggles expansion on Enter key', () => {
-    render(<ProjectSidebar {...defaultProps} />);
+  it('toggles expansion on Enter key', async () => {
+    // Start with no active project so project 2 is not auto-expanded
+    const props = {
+      ...defaultProps,
+      activeProjectPath: null,
+      activeTabId: null,
+    };
+    render(<ProjectSidebar {...props} />);
+
+    await waitFor(() => {
+      const project2Header = screen.getByText('Project 2');
+      expect(project2Header).toBeInTheDocument();
+    });
+
     const project2Header = screen.getByText('Project 2').closest('[role="button"]');
+    const projectGroup = project2Header?.closest('.project-group');
+    const sessionList = projectGroup?.querySelector('.session-list');
 
     // Initially collapsed
-    expect(screen.queryByText('Third session')).not.toBeInTheDocument();
+    expect(sessionList).not.toHaveClass('expanded');
 
     // Press Enter to expand
     fireEvent.keyDown(project2Header!, { key: 'Enter' });
-    expect(screen.getByText('Third session')).toBeInTheDocument();
+    expect(sessionList).toHaveClass('expanded');
   });
 
   it('highlights active session', async () => {
@@ -151,16 +183,32 @@ describe('ProjectSidebar', () => {
   });
 
   it('auto-expands all projects when searching', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    // Start with no active project so project 2 is not auto-expanded
+    const props = {
+      ...defaultProps,
+      activeProjectPath: null,
+      activeTabId: null,
+    };
+    render(<ProjectSidebar {...props} />);
+
+    await waitFor(() => {
+      const searchInput = screen.getByPlaceholderText('Search sessions...');
+      expect(searchInput).toBeInTheDocument();
+    });
+
+    const project2Header = screen.getByText('Project 2');
+    const projectGroup = project2Header.closest('.project-group');
+    const sessionList = projectGroup?.querySelector('.session-list');
 
     // Initially, project 2 is collapsed
-    expect(screen.queryByText('Third session')).not.toBeInTheDocument();
+    expect(sessionList).not.toHaveClass('expanded');
 
     const searchInput = screen.getByPlaceholderText('Search sessions...');
     fireEvent.change(searchInput, { target: { value: 'Third' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Third session')).toBeInTheDocument();
+      // Searching should auto-expand
+      expect(sessionList).toHaveClass('expanded');
     });
   });
 
