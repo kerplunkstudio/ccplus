@@ -30,6 +30,8 @@ class SessionManager:
         self._callbacks: dict[str, dict[str, Callable]] = {}
         # Track which sessions have active queries
         self._active_sessions: set[str] = set()
+        # Callback to notify when worker reconnects with active sessions
+        self.on_session_reconnect: Optional[Callable[[str], None]] = None
 
         # Wire up worker client event handlers
         self._client.on_text_delta = self._handle_text_delta
@@ -171,6 +173,14 @@ class SessionManager:
                 s["session_id"] for s in sessions if s.get("query_active")
             }
         logger.info(f"Worker session status: {len(sessions)} sessions, {len(self._active_sessions)} active")
+
+        # Auto-register callbacks for active sessions
+        if self.on_session_reconnect:
+            for session_id in list(self._active_sessions):
+                try:
+                    self.on_session_reconnect(session_id)
+                except Exception as e:
+                    logger.error(f"Error in on_session_reconnect for {session_id}: {e}")
 
     def _handle_user_question(self, session_id: str, data: dict) -> None:
         """Handle user question from worker - forward to SocketIO."""
