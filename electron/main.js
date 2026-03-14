@@ -51,6 +51,15 @@ async function startBackend() {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
+    // Check if worker is already running (parallel mode)
+    const workerSocket = path.join(PROJECT_ROOT, 'data', 'sdk_worker.sock');
+    if (fs.existsSync(workerSocket)) {
+      console.log('[Worker] Already running (parallel mode), skipping worker start');
+      // Go straight to Flask server
+      startFlaskServer(pythonExec, resolve, reject);
+      return;
+    }
+
     // Start SDK worker first
     const workerScript = path.join(PROJECT_ROOT, 'backend', 'sdk_worker.py');
     console.log('[Worker] Starting SDK worker from:', workerScript);
@@ -77,7 +86,6 @@ async function startBackend() {
     });
 
     // Wait for worker socket to be available
-    const workerSocket = path.join(PROJECT_ROOT, 'data', 'sdk_worker.sock');
     let workerWaitTime = 0;
     const workerCheckInterval = setInterval(() => {
       if (fs.existsSync(workerSocket)) {
@@ -111,30 +119,57 @@ function startFlaskServer(pythonExec, resolve, reject) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  serverProcess.stdout.on('data', (data) => {
-    const output = data.toString();
-    console.log(`[Server] ${output.trim()}`);
+  let serverReady = false;
 
-    // Look for server ready indicator
-    if (output.includes('Running on') || output.includes('WARNING')) {
+  const onServerReady = () => {
+    if (!serverReady) {
+      serverReady = true;
       setTimeout(() => {
         console.log('[Server] Ready');
         resolve();
       }, 2000); // Give it a moment to fully initialize
     }
+  };
+
+  // Timeout fallback in case we miss the ready message
+  const serverTimeout = setTimeout(() => {
+    if (!serverReady) {
+      console.log('[Server] Ready (timeout fallback after 8s)');
+      onServerReady();
+    }
+  }, 8000);
+
+  serverProcess.stdout.on('data', (data) => {
+    const output = data.toString();
+    console.log(`[Server] ${output.trim()}`);
+
+    // Look for server ready indicator on stdout
+    if (output.includes('Running on') || output.includes('WARNING')) {
+      clearTimeout(serverTimeout);
+      onServerReady();
+    }
   });
 
   serverProcess.stderr.on('data', (data) => {
-    console.error(`[Server] ${data.toString().trim()}`);
+    const output = data.toString();
+    console.error(`[Server] ${output.trim()}`);
+
+    // Flask-SocketIO outputs "Running on" to stderr, not stdout
+    if (output.includes('Running on') || output.includes('WARNING')) {
+      clearTimeout(serverTimeout);
+      onServerReady();
+    }
   });
 
   serverProcess.on('error', (error) => {
     console.error('[Server] Failed to start:', error);
+    clearTimeout(serverTimeout);
     reject(error);
   });
 
   serverProcess.on('exit', (code, signal) => {
     console.log(`[Server] Exited with code ${code} and signal ${signal}`);
+    clearTimeout(serverTimeout);
     if (code !== 0 && code !== null) {
       reject(new Error(`Server exited with code ${code}`));
     }
