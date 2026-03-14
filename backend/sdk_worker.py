@@ -158,6 +158,7 @@ class SDKWorker:
         self._pid_path = config.WORKER_PID_PATH
         self._pending_questions: dict[str, asyncio.Event] = {}
         self._question_responses: dict[str, str] = {}
+        self._pending_question_data: dict[str, dict] = {}
         self._event_buffer: dict[str, list[dict]] = {}  # per-session event buffer for disconnect gaps
         self._buffer_overflow_warned: set[str] = set()  # sessions that have logged overflow warning
 
@@ -383,6 +384,7 @@ class SDKWorker:
                 "workspace": ps.workspace,
                 "model": ps.model,
                 "started_at": ps.started_at,
+                "pending_question": self._pending_question_data.get(ps.session_id),
             }
             for ps in self._sessions.values()
         ]
@@ -492,6 +494,12 @@ class SDKWorker:
                 questions = tool_params.get("questions", [])
                 logger.info(f"[AskUserQuestion] Detected! questions={questions}, tool_params keys={list(tool_params.keys())}")
 
+                # Store question data for reconnect scenarios
+                self._pending_question_data[session_id] = {
+                    "questions": questions,
+                    "tool_use_id": tool_use_id,
+                }
+
                 # Emit question to frontend
                 logger.info(f"[AskUserQuestion] Emitting user_question event with {len(questions)} questions to session {session_id}")
                 await self.send_event({
@@ -514,6 +522,7 @@ class SDKWorker:
                     logger.warning(f"[AskUserQuestion] Timed out waiting for response")
                 finally:
                     self._pending_questions.pop(session_id, None)
+                    self._pending_question_data.pop(session_id, None)
 
                 # Block the tool so CLI subprocess doesn't prompt stdin,
                 # include user's selections in hookSpecificOutput
@@ -762,9 +771,11 @@ class SDKWorker:
 
                 if isinstance(message, AssistantMessage):
                     has_text = False
+                    current_message_text = []  # Track text for this specific AssistantMessage
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             result_text.append(block.text)
+                            current_message_text.append(block.text)
                             await self.send_event({
                                 "type": "text_delta",
                                 "session_id": session_id,
@@ -775,25 +786,26 @@ class SDKWorker:
                             pass
 
                     # Persist to DB (worker is the authority for message persistence)
+                    # Create a separate database record for each distinct AssistantMessage
                     if has_text:
-                        if assistant_msg_id is None:
-                            try:
-                                msg = record_message(session_id, "assistant", "assistant", "".join(result_text))
-                                assistant_msg_id = msg.get("id")
-                            except Exception as e:
-                                logger.error(f"Failed to record assistant message: {e}")
-                        else:
-                            try:
-                                update_message(assistant_msg_id, "".join(result_text))
-                            except Exception as e:
-                                logger.error(f"Failed to update assistant message: {e}")
+                        try:
+                            # Always create a new message for each AssistantMessage to ensure proper separation
+                            msg = record_message(session_id, "assistant", "assistant", "".join(current_message_text))
+                            current_msg_id = msg.get("id")
+
+                            # Keep track of the first message ID for final ResultMessage handling
+                            if assistant_msg_id is None:
+                                assistant_msg_id = current_msg_id
+                        except Exception as e:
+                            logger.error(f"Failed to record assistant message: {e}")
 
                     # After each AssistantMessage with text, signal intermediate completion
+                    # Send only the current message's text, not accumulated text
                     if has_text:
                         await self.send_event({
                             "type": "response_complete",
                             "session_id": session_id,
-                            "text": "".join(result_text),
+                            "text": "".join(current_message_text),
                             "sdk_session_id": None,
                             "cost": None,
                             "duration_ms": None,
@@ -823,16 +835,9 @@ class SDKWorker:
                         "model": ps.model,
                     }
 
-                    # Finalize assistant message with sdk_session_id
-                    if assistant_msg_id and message.session_id:
-                        try:
-                            update_message(
-                                assistant_msg_id,
-                                "".join(result_text),
-                                sdk_session_id=message.session_id,
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to finalize assistant message: {e}")
+                    # Note: We now create separate database records for each AssistantMessage,
+                    # so we don't need to update with accumulated text here.
+                    # The sdk_session_id will be set on the final response_complete event.
 
                     break
 
