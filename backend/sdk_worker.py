@@ -35,6 +35,7 @@ Protocol (JSON-lines over Unix socket):
 """
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -72,7 +73,7 @@ try:
 except ImportError:
     from claude_code_sdk.types import StreamEvent, UserMessage
 
-from backend.database import get_last_sdk_session_id, record_tool_event, update_tool_event, record_message, update_message
+from backend.database import get_image, get_last_sdk_session_id, record_tool_event, update_tool_event, record_message
 import backend.config as config
 
 # ---------------------------------------------------------------------------
@@ -674,9 +675,6 @@ class SDKWorker:
             # Build query content (text + images)
             if image_ids:
                 # Fetch images from database and build content with image blocks
-                from backend.database import get_image
-                import base64
-
                 # Build content blocks: images first, then text
                 content_blocks = []
 

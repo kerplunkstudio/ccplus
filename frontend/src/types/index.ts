@@ -67,13 +67,6 @@ export interface User {
   username: string;
 }
 
-export interface CompletionInfo {
-  cost?: number;
-  duration_ms?: number;
-  input_tokens?: number;
-  output_tokens?: number;
-}
-
 export interface UsageStats {
   totalCost: number;
   totalInputTokens: number;
