@@ -30,14 +30,26 @@ cc+ is a web UI that sits on top of Claude Code. You chat. It codes. You watch e
 
 ## Quick Start
 
+### Web UI
+
 ```bash
 git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cd frontend && npm install && npm run build && cd ..
-python backend/server.py
+cd frontend && npm install && cd ..
+./deploy.sh
 ```
 
-Open `localhost:3000`. Start talking.
+Open `localhost:4000`. Start talking.
+
+### Desktop App
+
+```bash
+# After setup above
+./deploy.sh desktop
+```
+
+Launches cc+ as a standalone desktop app (no browser needed).
 
 ## What you see
 
@@ -103,6 +115,22 @@ ccplus/
 └── data/                  # SQLite database
 ```
 
+## Run modes
+
+cc+ can run in two modes:
+
+1. **Web UI** (default): Flask server + browser at `localhost:4000`
+2. **Desktop app**: Electron wrapper that launches the server and opens a native app window
+
+Both modes use the same backend, same React UI, same everything. Desktop mode just skips the browser and gives you a proper app icon in your dock.
+
+Launch desktop mode with:
+```bash
+./deploy.sh desktop
+```
+
+See `electron/README.md` for packaging distributable binaries.
+
 ## The difference
 
 | | Terminal | cc+ |
@@ -112,7 +140,7 @@ ccplus/
 | See tool calls | Scrolls by | Nested, expandable |
 | See costs | After the fact | Real-time |
 | Cancel | Ctrl+C and pray | Button |
-| Share screen with someone | "look at my terminal" | "open localhost:3000" |
+| Share screen with someone | "look at my terminal" | "open localhost:4000" |
 
 ## FAQ
 

@@ -1,0 +1,47 @@
+{
+  "name": "ccplus",
+  "version": "1.0.0",
+  "description": "cc+ Desktop - Observability for Claude Code",
+  "main": "electron/main.js",
+  "author": "mjfuentes",
+  "license": "MIT",
+  "scripts": {
+    "electron": "electron .",
+    "electron:dev": "ELECTRON_IS_DEV=1 electron .",
+    "package:mac": "electron-builder --mac",
+    "package:linux": "electron-builder --linux",
+    "package:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.ccplus.desktop",
+    "productName": "cc+ Desktop",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "electron/assets/icon.icns",
+      "target": ["dmg", "zip"]
+    },
+    "linux": {
+      "category": "Development",
+      "icon": "electron/assets/icon.png",
+      "target": ["AppImage", "deb"]
+    },
+    "win": {
+      "icon": "electron/assets/icon.ico",
+      "target": ["nsis", "portable"]
+    },
+    "files": [
+      "electron/**/*",
+      "!electron/assets/icon.sketch"
+    ],
+    "directories": {
+      "buildResources": "electron/assets"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.2.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  }
+}
