@@ -1,0 +1,373 @@
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.connection-indicator.connected {
+  background: rgba(45, 90, 61, 0.05);
+  border-color: rgba(45, 90, 61, 0.2);
+}
+
+.connection-indicator.connecting {
+  background: rgba(197, 40, 47, 0.05);
+  border-color: rgba(197, 40, 47, 0.2);
+}
+
+.connection-indicator.disconnected {
+  background: rgba(197, 40, 47, 0.08);
+  border-color: rgba(197, 40, 47, 0.3);
+  animation: disconnectPulse 2s ease-in-out infinite;
+}
+
+@keyframes disconnectPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Visual elements container */
+.connection-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Main status dot */
+.status-dot-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot-core {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.connection-indicator.connected .dot-core {
+  background: var(--success);
+  box-shadow: 0 0 8px rgba(45, 90, 61, 0.4);
+}
+
+.connection-indicator.connecting .dot-core {
+  background: var(--accent);
+  animation: connectingPulse 1s ease-in-out infinite;
+}
+
+.connection-indicator.disconnected .dot-core {
+  background: var(--error);
+  animation: disconnectedBlink 1.5s ease-in-out infinite;
+}
+
+@keyframes connectingPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
+
+@keyframes disconnectedBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Connected state pulse ring */
+.dot-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--success);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: connectedPulse 2s ease-out infinite;
+  opacity: 0.6;
+}
+
+@keyframes connectedPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* Connecting state search rings */
+.dot-search-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  border-top-color: transparent;
+  transform: translate(-50%, -50%);
+  animation: searchSpin 1.2s linear infinite;
+}
+
+.dot-search-ring.secondary {
+  width: 16px;
+  height: 16px;
+  border-width: 1px;
+  opacity: 0.5;
+  animation-duration: 2s;
+  animation-direction: reverse;
+}
+
+@keyframes searchSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Signal waves for connected state */
+.signal-waves {
+  position: absolute;
+  left: 12px;
+  display: flex;
+  gap: 2px;
+  align-items: end;
+  height: 12px;
+}
+
+.wave {
+  width: 2px;
+  background: var(--success);
+  border-radius: 1px;
+  animation: waveHeight 2s ease-in-out infinite var(--delay);
+  opacity: 0.6;
+}
+
+.wave:nth-child(1) { height: 4px; }
+.wave:nth-child(2) { height: 8px; }
+.wave:nth-child(3) { height: 6px; }
+
+@keyframes waveHeight {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.3); }
+}
+
+/* Connection text */
+.connection-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.connection-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.connection-message {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.3s ease;
+  animation: messageSlide 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes messageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.connection-indicator.connected .connection-message {
+  color: var(--success);
+}
+
+.connection-indicator.connecting .connection-message {
+  color: var(--accent);
+}
+
+.connection-indicator.disconnected .connection-message {
+  color: var(--error);
+}
+
+/* Background glow effect */
+.connection-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg,
+    rgba(45, 90, 61, 0.03),
+    rgba(45, 90, 61, 0.01)
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.connection-indicator.connected .connection-glow {
+  opacity: 1;
+}
+
+.connection-indicator.connecting .connection-glow {
+  background: linear-gradient(135deg,
+    rgba(197, 40, 47, 0.03),
+    rgba(197, 40, 47, 0.01)
+  );
+  opacity: 1;
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.connection-indicator.disconnected .connection-glow {
+  background: linear-gradient(135deg,
+    rgba(197, 40, 47, 0.05),
+    rgba(197, 40, 47, 0.02)
+  );
+  opacity: 1;
+}
+
+/* Hover interaction */
+.connection-indicator:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 25, 23, 0.1);
+}
+
+.connection-indicator:hover .connection-message {
+  opacity: 1;
+}
+
+/* Tooltip on hover */
+.connection-indicator::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+  z-index: 100;
+}
+
+.connection-indicator:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* Mobile optimizations */
+@media (max-width: 900px) {
+  .connection-indicator {
+    padding: 2px 6px;
+    gap: 4px;
+  }
+
+  .connection-visual {
+    width: 20px;
+    height: 14px;
+  }
+
+  .connection-label {
+    font-size: 8px;
+  }
+
+  .connection-message {
+    font-size: 9px;
+    max-width: 80px;
+  }
+
+  .signal-waves {
+    left: 10px;
+    height: 10px;
+  }
+
+  .wave:nth-child(1) { height: 3px; }
+  .wave:nth-child(2) { height: 6px; }
+  .wave:nth-child(3) { height: 4px; }
+
+  .connection-indicator::after {
+    display: none; /* Hide tooltip on mobile */
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .connection-indicator,
+  .dot-core,
+  .dot-pulse,
+  .dot-search-ring,
+  .wave,
+  .connection-message,
+  .connection-glow {
+    animation: none;
+  }
+
+  .connection-indicator.connecting .dot-core,
+  .connection-indicator.disconnected .dot-core {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .connection-indicator:hover {
+    transform: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .connection-indicator {
+    border-width: 2px;
+  }
+
+  .dot-core {
+    width: 8px;
+    height: 8px;
+  }
+
+  .connection-label,
+  .connection-message {
+    font-weight: 600;
+  }
+}
