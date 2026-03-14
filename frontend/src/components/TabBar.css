@@ -1,0 +1,115 @@
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+  min-height: 36px;
+  overflow: visible;
+}
+
+.tab-list {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: color 0.15s ease;
+  border-bottom: 2px solid transparent;
+  max-width: 200px;
+}
+
+.tab-item:hover {
+  color: var(--text-primary);
+}
+
+.tab-item.active {
+  color: var(--text-primary);
+  font-weight: 500;
+  border-bottom-color: var(--accent);
+}
+
+.tab-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.tab-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: tabPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tabPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.tab-item-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 2px;
+  opacity: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.tab-item:hover .tab-item-close {
+  opacity: 1;
+}
+
+.tab-item-close:hover {
+  background: var(--hover-bg);
+  color: var(--error);
+}
+
+.tab-new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.tab-new-btn:hover {
+  color: var(--accent);
+  background: var(--hover-bg);
+}

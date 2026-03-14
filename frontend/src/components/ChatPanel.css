@@ -1,7 +1,7 @@
 .chat-panel {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: var(--bg-primary);
 }
 
@@ -30,30 +30,6 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-}
-
-.chat-title {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.08em;
-  line-height: 1;
-  margin: 0;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.chat-subtitle {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.12em;
-  margin: 0;
-  opacity: 0.6;
-  white-space: nowrap;
-  text-transform: uppercase;
 }
 
 .connection-dot {
@@ -618,6 +594,77 @@
 
 .mobile-drawer-btn:active {
   transform: translateY(0);
+}
+
+.past-sessions-hint {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: emptyFadeIn 0.4s cubic-bezier(0.25, 1, 0.5, 1) 0.5s backwards;
+}
+
+.past-sessions-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+
+.past-sessions-toggle:hover {
+  opacity: 1;
+}
+
+.past-sessions-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  max-width: 400px;
+  width: 100%;
+}
+
+.past-session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s ease;
+  border-left: 2px solid var(--border);
+}
+
+.past-session-item:hover {
+  color: var(--text-primary);
+  border-left-color: var(--accent);
+}
+
+.past-session-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.past-session-time {
+  flex-shrink: 0;
+  opacity: 0.6;
+  font-size: 11px;
 }
 
 @media (max-width: 900px) {

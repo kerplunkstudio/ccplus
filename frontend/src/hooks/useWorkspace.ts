@@ -216,9 +216,9 @@ export function useWorkspace() {
     dispatch({ type: 'SELECT_PROJECT', path });
   }, []);
 
-  const addTab = useCallback((projectPath: string) => {
-    const sessionId = generateSessionId();
-    dispatch({ type: 'ADD_TAB', projectPath, sessionId });
+  const addTab = useCallback((projectPath: string, sessionId?: string) => {
+    const newSessionId = sessionId || generateSessionId();
+    dispatch({ type: 'ADD_TAB', projectPath, sessionId: newSessionId });
   }, []);
 
   const closeTab = useCallback((projectPath: string, sessionId: string) => {

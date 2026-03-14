@@ -185,6 +185,24 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const toolLogRef = useRef<ToolEvent[]>([]);
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
+  const prevSessionIdRef = useRef(sessionId);
+
+  useEffect(() => {
+    if (prevSessionIdRef.current !== sessionId) {
+      prevSessionIdRef.current = sessionId;
+      setMessages([]);
+      dispatchTree({ type: 'CLEAR' });
+      setUsageStats(INITIAL_USAGE_STATS);
+      setStreaming(false);
+      setCurrentTool(null);
+      toolLogRef.current = [];
+      setToolLog([]);
+      streamingContentRef.current = '';
+      streamingIdRef.current = null;
+      streamActiveRef.current = false;
+      sequenceRef.current = 0;
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     if (!token) return;
