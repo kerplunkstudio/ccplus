@@ -193,15 +193,23 @@ export function useWorkspace() {
       .then((res) => (res.ok ? res.json() : null))
       .then((apiState) => {
         if (apiState && apiState.projects && apiState.projects.length > 0) {
-          // API has data — use it as source of truth
-          dispatch({ type: 'RESTORE', state: apiState });
+          // Compare timestamps: localStorage might be newer (e.g., after hard refresh where
+          // sendBeacon races with the GET request)
+          const localSavedAt = (state as any).savedAt || 0;
+          const apiSavedAt = apiState.savedAt || 0;
+
+          if (apiSavedAt >= localSavedAt) {
+            // API is same age or newer — use it as source of truth
+            dispatch({ type: 'RESTORE', state: apiState });
+          }
+          // else: localStorage is newer — keep current state, re-sync API
         } else if (state.projects.length > 0) {
           // API is empty but localStorage has data — bootstrap the API
           const persistable = stripTransientFields(state);
           fetch(`${SOCKET_URL}/api/workspace`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(persistable),
+            body: JSON.stringify({ ...persistable, savedAt: Date.now() }),
           }).catch(() => {});
         }
         initializedRef.current = true;
@@ -226,8 +234,9 @@ export function useWorkspace() {
 
       // Use sendBeacon for guaranteed delivery during page unload
       // It survives even when the page is being torn down
+      const payload = { ...latestStateRef.current, savedAt: Date.now() };
       const blob = new Blob(
-        [JSON.stringify(latestStateRef.current)],
+        [JSON.stringify(payload)],
         { type: 'application/json' }
       );
 
@@ -244,7 +253,7 @@ export function useWorkspace() {
   // Save to localStorage immediately + debounced API save on every change
   useEffect(() => {
     // Always save to localStorage for fast same-browser reload
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, savedAt: Date.now() }));
 
     // Update ref with stripped state for beforeunload handler
     const persistable = stripTransientFields(state);
@@ -258,10 +267,11 @@ export function useWorkspace() {
       clearTimeout(saveTimerRef.current);
     }
     saveTimerRef.current = setTimeout(() => {
+      const withTimestamp = { ...persistable, savedAt: Date.now() };
       fetch(`${SOCKET_URL}/api/workspace`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(persistable),
+        body: JSON.stringify(withTimestamp),
       }).catch(() => {
         // Best-effort save, localStorage is the fallback
       });
