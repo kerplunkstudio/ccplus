@@ -87,22 +87,13 @@
 }
 
 .project-item-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--accent);
   margin-left: 8px;
   flex-shrink: 0;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+  opacity: 0.6;
 }
 
 .project-item-close {
@@ -223,8 +214,3 @@
   color: var(--text-tertiary);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .project-item-dot {
-    animation: none;
-  }
-}

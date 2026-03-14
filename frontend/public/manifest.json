@@ -1,6 +1,7 @@
 {
   "short_name": "cc+",
-  "name": "cc+",
+  "name": "Claude Code Observability",
+  "description": "Real-time observability and chat interface for Claude Code SDK - monitor agent activity trees and tool usage",
   "icons": [
     {
       "src": "favicon.ico",
@@ -8,18 +9,24 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
-      "type": "image/png",
-      "sizes": "192x192"
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
     },
     {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "src": "favicon-16x16.svg",
+      "type": "image/svg+xml",
+      "sizes": "16x16"
+    },
+    {
+      "src": "apple-touch-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "180x180"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0f1629",
+  "background_color": "#0a0f1c",
+  "categories": ["developer", "productivity", "utilities"]
 }

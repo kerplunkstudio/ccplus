@@ -11,6 +11,8 @@ const mockStats: UsageStats = {
   queryCount: 0,
   contextWindowSize: 200000,
   model: '',
+  linesOfCode: 0,
+  totalSessions: 0,
 };
 
 describe('ActivityTree', () => {
@@ -230,17 +232,17 @@ describe('ActivityTree', () => {
       queryCount: 3,
       contextWindowSize: 200000,
       model: 'sonnet',
+      linesOfCode: 250,
+      totalSessions: 2,
     };
     render(<ActivityTree tree={[]} usageStats={stats} />);
-    expect(screen.getByText('$0.0123')).toBeInTheDocument();
-    expect(screen.getByText('1.5k↑ 2.5k↓')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('5.4s')).toBeInTheDocument();
+    expect(screen.getByText('250')).toBeInTheDocument();
   });
 
   it('renders usage stats bar with zero values', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
-    expect(screen.getByText('$0.0000')).toBeInTheDocument();
-    expect(screen.getByText('0↑ 0↓')).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument();
   });
 });

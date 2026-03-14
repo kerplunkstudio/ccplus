@@ -73,6 +73,8 @@ export interface UsageStats {
   queryCount: number;
   contextWindowSize: number;
   model: string;
+  linesOfCode: number;
+  totalSessions: number;
 }
 
 export interface PluginAuthor {
