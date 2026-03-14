@@ -702,11 +702,15 @@ class SDKWorker:
 
                 logger.info(f"Query has {len(content_blocks)} content blocks ({len(image_ids)} images)")
 
-                # Create async generator that yields the message dict
+                # SDK expects an AsyncIterable that yields streaming protocol messages
+                # Each yielded dict must have {"type": "user", "message": {"role": "user", "content": [...]}}
                 async def message_stream():
                     yield {
-                        "role": "user",
-                        "content": content_blocks,
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": content_blocks,
+                        }
                     }
 
                 query_content = message_stream()
