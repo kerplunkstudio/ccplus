@@ -55,7 +55,6 @@
   padding: var(--space-md) var(--space-lg);
   display: flex;
   flex-direction: column;
-  scroll-behavior: smooth;
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
