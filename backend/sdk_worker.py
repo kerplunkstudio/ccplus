@@ -221,10 +221,13 @@ class SDKWorker:
         logger.info("Flask connected to SDK worker")
         self._flask_writer = writer
 
-        # Send session status to newly connected Flask
-        await self._send_session_status()
-
-        # Replay any buffered events from the disconnect gap
+        # IMPORTANT: Replay buffered events BEFORE sending session status.
+        # This order prevents false "session lost" errors when Flask reconnects
+        # during heavy subagent activity. If we send status first, Flask sees
+        # query_active=False for queries that finished during the gap, but the
+        # response_complete event that would clear _active_sessions is still
+        # buffered. By replaying first, Flask processes all completions before
+        # receiving the status update, keeping _active_sessions in sync.
         if self._event_buffer:
             total = sum(len(v) for v in self._event_buffer.values())
             logger.info(f"Replaying {total} buffered events across {len(self._event_buffer)} sessions")
@@ -241,6 +244,9 @@ class SDKWorker:
                 # Reset overflow warning flag for this session
                 self._buffer_overflow_warned.discard(sid)
             logger.info("Buffer replay complete")
+
+        # Send session status to newly connected Flask (after replay)
+        await self._send_session_status()
 
         try:
             while not self._shutdown_requested:
@@ -443,16 +449,28 @@ class SDKWorker:
         # Build can_use_tool callback
         can_use_tool_cb = self._build_can_use_tool(session_id)
 
+        # Generate SDK settings from user's global settings, but with plugins
+        # disabled. Plugin hooks (e.g. suggest-compact.js) reference
+        # ${CLAUDE_PLUGIN_ROOT} which isn't set in the subprocess env.
+        sdk_settings_path = _get_sdk_settings_path()
+
+        # Capture subprocess stderr to a log file for debugging
+        sdk_stderr_path = Path(config.LOG_DIR) / f"sdk_stderr_{session_id}.log"
+        sdk_stderr = open(sdk_stderr_path, "a")
+        logger.info(f"SDK subprocess stderr -> {sdk_stderr_path}")
+
         options = ClaudeCodeOptions(
             max_turns=50,
             cwd=workspace,
-            # No permission_mode - we handle all permissions via can_use_tool
+            permission_mode="bypassPermissions",
             env=clean_env,
             hooks=hooks,
             model=model or "sonnet",
             resume=resume_id or "",
             append_system_prompt=CCPLUS_SYSTEM_PROMPT,
             can_use_tool=can_use_tool_cb,
+            settings=sdk_settings_path,
+            debug_stderr=sdk_stderr,
         )
 
         client = ClaudeSDKClient(options)
@@ -537,6 +555,7 @@ class SDKWorker:
                 return PermissionResultAllow(updated_input=updated)
 
             # Auto-allow all other tools
+            logger.info(f"[can_use_tool] Auto-allowing {tool_name} for session {session_id}")
             return PermissionResultAllow()
 
         return can_use_tool
@@ -926,6 +945,35 @@ class SDKWorker:
                     "output_tokens": None,
                     "model": ps.model if ps else None,
                 })
+
+
+def _get_sdk_settings_path() -> str:
+    """Build a derived settings file for SDK subprocesses.
+
+    Reads the user's global ~/.claude/settings.json, strips ``enabledPlugins``
+    (plugin hooks reference env vars unavailable in the subprocess), and writes
+    the result to data/sdk_settings.json.  Everything else (user hooks, model
+    preferences, etc.) is preserved.
+
+    The file is regenerated on every call so it stays in sync if the user
+    edits their global settings between sessions.
+    """
+    user_settings_path = Path.home() / ".claude" / "settings.json"
+    sdk_settings_path = Path(config.DATA_DIR) / "sdk_settings.json"
+
+    settings: dict = {}
+    if user_settings_path.exists():
+        try:
+            settings = json.loads(user_settings_path.read_text())
+        except Exception as e:
+            logger.warning(f"Failed to read user settings: {e}")
+
+    # Disable plugins — their hooks can't resolve ${CLAUDE_PLUGIN_ROOT}
+    settings.pop("enabledPlugins", None)
+    settings.pop("extraKnownMarketplaces", None)
+
+    sdk_settings_path.write_text(json.dumps(settings, indent=2))
+    return str(sdk_settings_path)
 
 
 def _safe_params(params: dict) -> dict:
