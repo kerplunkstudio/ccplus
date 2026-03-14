@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deploy script for ccplus
 # Usage: ./deploy.sh [component]
-# Components: all (default), server (skip frontend build)
+# Components: all (default), server, frontend, worker, stop
 
 set -euo pipefail
 
@@ -48,6 +48,13 @@ detect_python() {
 # Worker PID file
 WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
+# Files that require a worker restart when changed
+WORKER_FILES=(
+    "backend/sdk_worker.py"
+    "backend/worker_protocol.py"
+    "backend/config.py"
+)
+
 # Check if worker is running
 worker_running() {
     if [ -f "$WORKER_PID_FILE" ]; then
@@ -58,6 +65,29 @@ worker_running() {
         fi
     fi
     return 1
+}
+
+# Check if worker code has changed since the worker was started
+worker_code_changed() {
+    if ! worker_running; then
+        return 0  # Not running = needs start
+    fi
+
+    local worker_start_time
+    worker_start_time=$(stat -f %m "$WORKER_PID_FILE" 2>/dev/null || echo "0")
+
+    for f in "${WORKER_FILES[@]}"; do
+        if [ -f "$SCRIPT_DIR/$f" ]; then
+            local file_time
+            file_time=$(stat -f %m "$SCRIPT_DIR/$f" 2>/dev/null || echo "0")
+            if [ "$file_time" -gt "$worker_start_time" ]; then
+                info "Worker code changed: $f"
+                return 0
+            fi
+        fi
+    done
+
+    return 1  # No changes
 }
 
 # Start worker if not already running
@@ -117,6 +147,19 @@ stop_worker() {
 
     rm -f "$WORKER_PID_FILE" "$SCRIPT_DIR/data/sdk_worker.sock"
     ok "SDK worker stopped"
+}
+
+# Restart worker only if its code changed
+smart_worker_restart() {
+    if worker_code_changed; then
+        if worker_running; then
+            warn "Worker code changed — restarting worker (active sessions will be interrupted)"
+            stop_worker
+        fi
+        start_worker
+    else
+        start_worker  # ensures it's running, no-op if already running
+    fi
 }
 
 # Build React frontend
@@ -222,17 +265,19 @@ show_usage() {
     echo "Usage: ./deploy.sh [component]"
     echo ""
     echo "Components:"
-    echo "  (none)     Full deploy: start worker + build frontend + deploy + restart server"
-    echo "  frontend   Build + deploy frontend only (no server restart, preserves sessions)"
-    echo "  server     Start worker if needed + restart Flask server only"
-    echo "  worker     Restart the SDK worker (kills all active SDK sessions)"
+    echo "  (none)     Full deploy: build frontend + deploy + restart server"
+    echo "             Worker only restarts if sdk_worker.py or config.py changed."
+    echo "             Active SDK sessions survive server-only restarts."
+    echo "  frontend   Build + deploy frontend only (no server restart)"
+    echo "  server     Restart Flask server only (worker stays alive)"
+    echo "  worker     Force restart the SDK worker (kills active SDK sessions)"
     echo "  stop       Stop both Flask server and SDK worker"
     echo ""
     echo "Examples:"
-    echo "  ./deploy.sh            # Full deploy (sessions preserved)"
+    echo "  ./deploy.sh            # Safe deploy — active queries survive if possible"
     echo "  ./deploy.sh frontend   # Frontend only, keeps everything alive"
     echo "  ./deploy.sh server     # Restart Flask only, SDK sessions survive"
-    echo "  ./deploy.sh worker     # Restart worker (drops active sessions)"
+    echo "  ./deploy.sh worker     # Force restart worker (drops active sessions)"
     echo "  ./deploy.sh stop       # Stop everything"
 }
 
@@ -241,11 +286,7 @@ COMPONENT="${1:-all}"
 
 case "$COMPONENT" in
     all)
-        # Always restart worker on full deploy to pick up code changes
-        if worker_running; then
-            stop_worker
-        fi
-        start_worker
+        smart_worker_restart
         build_frontend
         deploy_static
         kill_server
@@ -260,11 +301,7 @@ case "$COMPONENT" in
         echo ""
         ;;
     server)
-        # Restart worker to pick up backend code changes
-        if worker_running; then
-            stop_worker
-        fi
-        start_worker
+        smart_worker_restart
         kill_server
         start_server
         ;;

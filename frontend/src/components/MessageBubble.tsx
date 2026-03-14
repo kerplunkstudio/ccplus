@@ -90,6 +90,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         <ToolLog events={message.toolLog} />
       )}
       <div className="message-bubble-inner">
+        {message.images && message.images.length > 0 && (
+          <div className="message-images">
+            {message.images.map((img) => (
+              <div key={img.id} className="message-image-container">
+                <img src={img.url} alt={img.filename} className="message-image" />
+              </div>
+            ))}
+          </div>
+        )}
         {message.role === 'assistant' ? (
           <div className="message-markdown">
             <ReactMarkdown components={markdownComponents}>

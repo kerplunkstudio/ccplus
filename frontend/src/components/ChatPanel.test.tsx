@@ -1,9 +1,21 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatPanel } from './ChatPanel';
-import { Message } from '../types';
+import { Message, UsageStats } from '../types';
 
 describe('ChatPanel', () => {
+  const mockUsageStats: UsageStats = {
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalDuration: 0,
+    queryCount: 0,
+    contextWindowSize: 0,
+    model: 'claude-sonnet-4-20250514',
+    linesOfCode: 0,
+    totalSessions: 0,
+  };
+
   const defaultProps = {
     messages: [] as Message[],
     connected: true,
@@ -12,6 +24,7 @@ describe('ChatPanel', () => {
     toolLog: [],
     selectedProject: null as string | null,
     selectedModel: 'claude-sonnet-4-20250514',
+    usageStats: mockUsageStats,
     onSendMessage: jest.fn(),
     onSelectProject: jest.fn(),
     onSelectModel: jest.fn(),

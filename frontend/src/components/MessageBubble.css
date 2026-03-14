@@ -34,6 +34,26 @@
   word-break: break-word;
 }
 
+.message-images {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.message-image-container {
+  max-width: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.message-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .message-bubble.user .message-bubble-inner {
   color: var(--text-secondary);
   font-style: italic;

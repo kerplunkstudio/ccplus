@@ -17,16 +17,33 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 };
 const DEFAULT_CONTEXT_WINDOW = 500_000;
 
-const INITIAL_USAGE_STATS: UsageStats = {
-  totalCost: 0,
-  totalInputTokens: 0,
-  totalOutputTokens: 0,
-  totalDuration: 0,
-  queryCount: 0,
-  contextWindowSize: DEFAULT_CONTEXT_WINDOW,
-  model: '',
-  linesOfCode: 0,
-  totalSessions: 1,
+const loadPersistedStats = (): UsageStats => {
+  try {
+    const stored = localStorage.getItem('ccplus_usage_stats');
+    console.log('Loading stats from localStorage:', stored);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      console.log('Parsed stats:', parsed);
+      return {
+        ...parsed,
+        totalSessions: (parsed.totalSessions || 0) + 1,
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load stats:', e);
+  }
+  console.log('Using default stats');
+  return {
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalDuration: 0,
+    queryCount: 0,
+    contextWindowSize: DEFAULT_CONTEXT_WINDOW,
+    model: '',
+    linesOfCode: 0,
+    totalSessions: 1,
+  };
 };
 
 type TreeAction =
@@ -179,7 +196,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
-  const [usageStats, setUsageStats] = useState<UsageStats>(INITIAL_USAGE_STATS);
+  const [usageStats, setUsageStats] = useState<UsageStats>(loadPersistedStats);
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
@@ -199,12 +216,18 @@ export function useTabSocket(token: string | null, sessionId: string) {
     toolUseId: string;
 } | null>(null);
 
+  // Persist usage stats to localStorage whenever they change
+  useEffect(() => {
+    console.log('Saving stats to localStorage:', usageStats);
+    localStorage.setItem('ccplus_usage_stats', JSON.stringify(usageStats));
+  }, [usageStats]);
+
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
       prevSessionIdRef.current = sessionId;
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
-      setUsageStats(INITIAL_USAGE_STATS);
+      // Don't reset usage stats - they persist across sessions
       setStreaming(false);
       setCurrentTool(null);
       toolLogRef.current = [];
@@ -251,7 +274,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
         try {
           const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
           if (historyRes.ok) {
-            const { messages: dbMessages } = await historyRes.json();
+            const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
+            const sessionIsActive = isStreaming || streamActiveRef.current;
+
             if (dbMessages && dbMessages.length > 0) {
               const restored: Message[] = dbMessages.map((m: any) => ({
                 id: `db_${m.id}`,
@@ -260,7 +285,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
                 timestamp: new Date(m.timestamp).getTime(),
               }));
 
-              if (streamActiveRef.current) {
+              if (sessionIsActive) {
                 streamActiveRef.current = false;
                 const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
                 if (lastAssistant) {
@@ -271,11 +296,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
                     m.id === lastAssistant.id ? { ...m, streaming: true } : m
                   ));
                 } else {
+                  setStreaming(true);
                   setMessages(restored);
                 }
               } else {
                 setMessages(restored);
               }
+            } else if (sessionIsActive) {
+              setStreaming(true);
             }
           }
 
@@ -454,6 +482,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
             const params = event.parameters as { content?: string; new_string?: string } | undefined;
             const content = params?.content || params?.new_string || '';
             const lines = content.split('\n').length;
+            console.log('LOC: Adding', lines, 'lines from', event.tool_name, 'tool');
             setUsageStats((prev) => ({
               ...prev,
               linesOfCode: prev.linesOfCode + lines,
@@ -509,7 +538,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       try {
         const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
         if (historyRes.ok) {
-          const { messages: dbMessages } = await historyRes.json();
+          const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
+          // Use API streaming flag OR socket stream_active event (whichever arrived first)
+          const sessionIsActive = isStreaming || streamActiveRef.current;
+
           if (dbMessages && dbMessages.length > 0) {
             const restored: Message[] = dbMessages.map((m: any) => ({
               id: `db_${m.id}`,
@@ -518,7 +550,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
               timestamp: new Date(m.timestamp).getTime(),
             }));
 
-            if (streamActiveRef.current) {
+            if (sessionIsActive) {
               streamActiveRef.current = false;
               const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
               if (lastAssistant) {
@@ -529,11 +561,16 @@ export function useTabSocket(token: string | null, sessionId: string) {
                   m.id === lastAssistant.id ? { ...m, streaming: true } : m
                 ));
               } else {
+                // Active but no assistant message yet (still thinking)
+                setStreaming(true);
                 setMessages(restored);
               }
             } else {
               setMessages(restored);
             }
+          } else if (sessionIsActive) {
+            // No messages in DB but session is active (very early in thinking)
+            setStreaming(true);
           }
         }
 
@@ -587,7 +624,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   }, [token, sessionId]);
 
   const sendMessage = useCallback(
-    (content: string, workspace?: string, model?: string) => {
+    (content: string, workspace?: string, model?: string, imageIds?: string[]) => {
       if (!socket || !connected) return;
 
       const userMessage: Message = {
@@ -600,7 +637,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(true);
       toolLogRef.current = [];
       setToolLog([]);
-      socket.emit('message', { content, workspace, model });
+      socket.emit('message', { content, workspace, model, image_ids: imageIds });
     },
     [socket, connected]
   );

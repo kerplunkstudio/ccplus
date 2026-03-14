@@ -173,6 +173,7 @@ function AppContent({ token, loading }: AppContentProps) {
                 currentTool={currentTool}
                 toolLog={toolLog}
                 selectedModel={selectedModel}
+                usageStats={usageStats}
                 onSendMessage={handleSendMessage}
                 onSelectModel={handleSelectModel}
                 onCancel={cancelQuery}

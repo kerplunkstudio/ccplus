@@ -32,7 +32,7 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
         <span className="usage-stat-value">{formatDuration(stats.totalDuration)}</span>
       </div>
       <div className="usage-stat">
-        <span className="usage-stat-label">Lines of Code</span>
+        <span className="usage-stat-label">Lines of code</span>
         <span className="usage-stat-value">{formatNumber(stats.linesOfCode)}</span>
       </div>
     </div>

@@ -1,443 +1,251 @@
-"""Tests for backend.sdk_session -- SessionManager and ActiveSession."""
+"""Tests for backend.sdk_session -- SessionManager (worker proxy)."""
 
 import sys
-import threading
-import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from backend.sdk_session import ActiveSession, SessionManager
+from backend.sdk_session import SessionManager
 
 
-# --- Raw message dicts (what _query.receive_messages() yields) ---
-
-def _raw_result(session_id="x", cost=None, duration_ms=0):
-    return {
-        "type": "result",
-        "subtype": "success",
-        "duration_ms": duration_ms,
-        "duration_api_ms": 0,
-        "is_error": False,
-        "num_turns": 1,
-        "session_id": session_id,
-        "total_cost_usd": cost,
-        "usage": {"input_tokens": 100, "output_tokens": 50},
-    }
-
-
-def _raw_assistant(text="Hello"):
-    return {
-        "type": "assistant",
-        "message": {
-            "content": [{"type": "text", "text": text}],
-            "model": "sonnet",
-        },
-    }
-
-
-def _raw_assistant_tool(tool_id="tu-001", name="Bash", tool_input=None):
-    return {
-        "type": "assistant",
-        "message": {
-            "content": [{
-                "type": "tool_use",
-                "id": tool_id,
-                "name": name,
-                "input": tool_input or {"command": "ls"},
-            }],
-            "model": "sonnet",
-        },
-    }
-
-
-def _raw_rate_limit():
-    return {"type": "rate_limit_event", "data": {}}
-
-
-def _mock_client_with_query(raw_messages_gen):
-    """Create a mock ClaudeSDKClient with _query.receive_messages set."""
-    mock_client = AsyncMock()
-    mock_client.connect = AsyncMock()
-    mock_client.query = AsyncMock()
-    mock_client.disconnect = AsyncMock()
-    mock_client.interrupt = AsyncMock()
-    mock_query = MagicMock()
-    mock_query.receive_messages = raw_messages_gen
-    mock_client._query = mock_query
-    return mock_client
-
-
-class TestActiveSession:
-    """Tests for the ActiveSession dataclass."""
-
-    def test_defaults(self):
-        session = ActiveSession(session_id="test-123")
-        assert session.session_id == "test-123"
-        assert not session.cancel_event.is_set()
-        assert session.started_at  # non-empty ISO timestamp
-
-    def test_cancel_event_set(self):
-        session = ActiveSession(session_id="s1")
-        session.cancel_event.set()
-        assert session.cancel_event.is_set()
+@pytest.fixture
+def mgr():
+    """Create a SessionManager with a mocked WorkerClient."""
+    with patch("backend.sdk_session.WorkerClient") as mock_client_class:
+        mock_client = MagicMock()
+        mock_client.connected = True
+        mock_client_class.return_value = mock_client
+        manager = SessionManager()
+        manager._mock_client = mock_client
+        yield manager
 
 
 class TestSessionManagerLifecycle:
-    """Tests for SessionManager init, shutdown, and state queries."""
+    """Tests for SessionManager init and state queries."""
 
-    def test_init_starts_background_thread(self):
-        mgr = SessionManager()
-        try:
-            assert mgr._loop is not None
-            assert mgr._thread is not None
-            assert mgr._thread.is_alive()
-            assert mgr._thread.daemon is True
-        finally:
-            mgr.shutdown()
+    def test_init_connects_to_worker(self, mgr):
+        mgr._mock_client.connect.assert_called_once()
 
-    def test_shutdown_stops_loop(self):
-        mgr = SessionManager()
+    def test_get_active_sessions_empty(self, mgr):
+        assert mgr.get_active_sessions() == []
+
+    def test_is_active_false_for_unknown(self, mgr):
+        assert mgr.is_active("nonexistent") is False
+
+    def test_worker_connected_property(self, mgr):
+        assert mgr.worker_connected is True
+
+    def test_shutdown_disconnects_client(self, mgr):
         mgr.shutdown()
-        # Thread should join within timeout
-        assert not mgr._thread.is_alive()
-
-    def test_get_active_sessions_empty(self):
-        mgr = SessionManager()
-        try:
-            assert mgr.get_active_sessions() == []
-        finally:
-            mgr.shutdown()
-
-    def test_is_active_false_for_unknown(self):
-        mgr = SessionManager()
-        try:
-            assert mgr.is_active("nonexistent") is False
-        finally:
-            mgr.shutdown()
+        mgr._mock_client.disconnect.assert_called_once()
 
 
-class TestSessionManagerCancel:
-    """Tests for cancel_query behavior."""
+class TestSubmitQuery:
+    """Tests for submit_query callback registration."""
 
-    def test_cancel_nonexistent_session_is_noop(self):
-        mgr = SessionManager()
-        try:
-            # Should not raise
-            mgr.cancel_query("no-such-session")
-        finally:
-            mgr.shutdown()
+    def test_submit_registers_callbacks(self, mgr):
+        on_text = MagicMock()
+        on_tool = MagicMock()
+        on_complete = MagicMock()
+        on_error = MagicMock()
 
-    def test_cancel_sets_event_on_active_session(self):
-        mgr = SessionManager()
-        try:
-            # Manually inject an active session
-            import asyncio
+        mgr.submit_query(
+            session_id="s1",
+            prompt="Hello",
+            workspace="/tmp",
+            on_text=on_text,
+            on_tool_event=on_tool,
+            on_complete=on_complete,
+            on_error=on_error,
+        )
 
-            active = ActiveSession(session_id="s1")
-            with mgr._lock:
-                mgr._active["s1"] = active
+        assert "s1" in mgr._callbacks
+        assert mgr.is_active("s1")
+        mgr._mock_client.submit_query.assert_called_once_with("s1", "Hello", "/tmp", None, None)
 
-            assert not active.cancel_event.is_set()
-            mgr.cancel_query("s1")
-            assert active.cancel_event.is_set()
-        finally:
-            mgr.shutdown()
+    def test_submit_with_model(self, mgr):
+        mgr.submit_query(
+            session_id="s2",
+            prompt="Hi",
+            workspace="/tmp",
+            on_text=MagicMock(),
+            on_tool_event=MagicMock(),
+            on_complete=MagicMock(),
+            on_error=MagicMock(),
+            model="opus",
+        )
+        mgr._mock_client.submit_query.assert_called_once_with("s2", "Hi", "/tmp", "opus", None)
+
+    def test_submit_with_user_question_callback(self, mgr):
+        on_question = MagicMock()
+        mgr.submit_query(
+            session_id="s3",
+            prompt="Test",
+            workspace="/tmp",
+            on_text=MagicMock(),
+            on_tool_event=MagicMock(),
+            on_complete=MagicMock(),
+            on_error=MagicMock(),
+            on_user_question=on_question,
+        )
+        assert mgr._callbacks["s3"]["on_user_question"] == on_question
 
 
-class TestSessionManagerSubmitQuery:
-    """Tests for submit_query with mocked SDK."""
+class TestCallbackDispatch:
+    """Tests for event handler dispatch to registered callbacks."""
 
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_submit_query_calls_on_complete(self, mock_client_class):
-        """Verify that a successful query calls on_complete with result dict."""
+    def _register(self, mgr, session_id="s1"):
+        cbs = {
+            "on_text": MagicMock(),
+            "on_tool_event": MagicMock(),
+            "on_complete": MagicMock(),
+            "on_error": MagicMock(),
+            "on_user_question": MagicMock(),
+        }
+        mgr.submit_query(
+            session_id=session_id,
+            prompt="test",
+            workspace="/tmp",
+            on_text=cbs["on_text"],
+            on_tool_event=cbs["on_tool_event"],
+            on_complete=cbs["on_complete"],
+            on_error=cbs["on_error"],
+            on_user_question=cbs["on_user_question"],
+        )
+        return cbs
 
-        async def raw_messages():
-            yield _raw_result(session_id="sdk-session-1", cost=0.01, duration_ms=500)
+    def test_text_delta_dispatched(self, mgr):
+        cbs = self._register(mgr)
+        mgr._handle_text_delta("s1", "hello")
+        cbs["on_text"].assert_called_once_with("hello")
 
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
+    def test_tool_event_dispatched(self, mgr):
+        cbs = self._register(mgr)
+        event = {"type": "tool_start", "tool_name": "Bash"}
+        mgr._handle_tool_event("s1", event)
+        cbs["on_tool_event"].assert_called_once_with(event)
 
-        mgr = SessionManager()
-        try:
-            completed = threading.Event()
-            result_data = {}
+    def test_error_dispatched(self, mgr):
+        cbs = self._register(mgr)
+        mgr._handle_error("s1", "something broke")
+        cbs["on_error"].assert_called_once_with("something broke")
+        # Error removes from active
+        assert not mgr.is_active("s1")
 
-            def on_complete(data):
-                result_data.update(data)
-                completed.set()
+    def test_response_complete_with_sdk_session_id_removes_active(self, mgr):
+        cbs = self._register(mgr)
+        mgr._handle_response_complete("s1", {"sdk_session_id": "sdk-123", "cost": 0.01})
+        cbs["on_complete"].assert_called_once()
+        assert not mgr.is_active("s1")
 
-            mgr.submit_query(
-                session_id="user-1",
-                prompt="Hello",
-                workspace="/tmp",
-                on_text=lambda t: None,
-                on_tool_event=lambda e: None,
-                on_complete=on_complete,
-                on_error=lambda e: None,
-            )
+    def test_response_complete_without_sdk_session_id_keeps_active(self, mgr):
+        cbs = self._register(mgr)
+        mgr._handle_response_complete("s1", {"text": "partial"})
+        cbs["on_complete"].assert_called_once()
+        assert mgr.is_active("s1")
 
-            completed.wait(timeout=5)
-            assert completed.is_set()
-            assert result_data["session_id"] == "sdk-session-1"
-            assert result_data["cost"] == 0.01
-            assert result_data["duration_ms"] == 500
-        finally:
-            mgr.shutdown()
+    def test_user_question_dispatched(self, mgr):
+        cbs = self._register(mgr)
+        data = {"questions": [{"question": "Which?"}], "tool_use_id": "tu1"}
+        mgr._handle_user_question("s1", data)
+        cbs["on_user_question"].assert_called_once_with(data)
 
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_submit_query_streams_text(self, mock_client_class):
-        """Verify that assistant text blocks are forwarded via on_text."""
+    def test_dispatch_to_unknown_session_is_noop(self, mgr):
+        # Should not raise
+        mgr._handle_text_delta("unknown", "text")
+        mgr._handle_tool_event("unknown", {})
+        mgr._handle_response_complete("unknown", {})
+        mgr._handle_error("unknown", "err")
+        mgr._handle_user_question("unknown", {})
 
-        async def raw_messages():
-            yield _raw_assistant("Hello world")
-            yield _raw_result()
+    def test_callback_exception_does_not_propagate(self, mgr):
+        cbs = self._register(mgr)
+        cbs["on_text"].side_effect = RuntimeError("boom")
+        # Should not raise
+        mgr._handle_text_delta("s1", "hello")
 
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
 
-        mgr = SessionManager()
-        try:
-            completed = threading.Event()
-            text_chunks = []
+class TestSessionStatus:
+    """Tests for _handle_session_status and reconnect callbacks."""
 
-            def on_text(t):
-                text_chunks.append(t)
+    def test_session_status_updates_active_sessions(self, mgr):
+        sessions = [
+            {"session_id": "s1", "query_active": True},
+            {"session_id": "s2", "query_active": False},
+            {"session_id": "s3", "query_active": True},
+        ]
+        mgr._handle_session_status(sessions)
+        assert mgr.is_active("s1")
+        assert not mgr.is_active("s2")
+        assert mgr.is_active("s3")
 
-            def on_complete(data):
-                completed.set()
+    def test_session_status_calls_reconnect_callback(self, mgr):
+        reconnect_cb = MagicMock()
+        mgr.on_session_reconnect = reconnect_cb
 
-            mgr.submit_query(
-                session_id="user-2",
-                prompt="Hi",
-                workspace="/tmp",
-                on_text=on_text,
-                on_tool_event=lambda e: None,
-                on_complete=on_complete,
-                on_error=lambda e: None,
-            )
+        sessions = [
+            {"session_id": "s1", "query_active": True},
+            {"session_id": "s2", "query_active": False},
+        ]
+        mgr._handle_session_status(sessions)
+        reconnect_cb.assert_called_once_with("s1")
 
-            completed.wait(timeout=5)
-            assert "Hello world" in text_chunks
-        finally:
-            mgr.shutdown()
+    def test_session_status_no_reconnect_callback(self, mgr):
+        # Should not raise when on_session_reconnect is None
+        mgr._handle_session_status([{"session_id": "s1", "query_active": True}])
 
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_submit_query_emits_tool_events(self, mock_client_class):
-        """Verify that tool_use blocks don't crash (events come via hooks)."""
+    def test_reconnect_callback_exception_handled(self, mgr):
+        reconnect_cb = MagicMock(side_effect=RuntimeError("reconnect failed"))
+        mgr.on_session_reconnect = reconnect_cb
+        # Should not raise
+        mgr._handle_session_status([{"session_id": "s1", "query_active": True}])
 
-        async def raw_messages():
-            yield _raw_assistant_tool()
-            yield _raw_result()
 
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
+class TestRegisterStreamingCallbacks:
+    """Tests for register_streaming_callbacks (post-restart recovery)."""
 
-        mgr = SessionManager()
-        try:
-            completed = threading.Event()
+    def test_register_adds_to_active(self, mgr):
+        mgr.register_streaming_callbacks(
+            "s1",
+            on_text=MagicMock(),
+            on_tool_event=MagicMock(),
+            on_complete=MagicMock(),
+            on_error=MagicMock(),
+        )
+        assert mgr.is_active("s1")
+        assert "s1" in mgr._callbacks
 
-            def on_complete(data):
-                completed.set()
+    def test_register_replaces_existing_callbacks(self, mgr):
+        cb1 = MagicMock()
+        cb2 = MagicMock()
+        mgr.register_streaming_callbacks("s1", cb1, MagicMock(), MagicMock(), MagicMock())
+        mgr.register_streaming_callbacks("s1", cb2, MagicMock(), MagicMock(), MagicMock())
+        mgr._handle_text_delta("s1", "test")
+        cb2.assert_called_once_with("test")
+        cb1.assert_not_called()
 
-            mgr.submit_query(
-                session_id="user-3",
-                prompt="Run ls",
-                workspace="/tmp",
-                on_text=lambda t: None,
-                on_tool_event=lambda e: None,
-                on_complete=on_complete,
-                on_error=lambda e: None,
-            )
 
-            completed.wait(timeout=5)
-            assert completed.is_set()
-        finally:
-            mgr.shutdown()
+class TestCancelAndDisconnect:
+    """Tests for cancel_query and disconnect_session."""
 
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_submit_query_calls_on_error(self, mock_client_class):
-        """Verify that SDK exceptions are forwarded via on_error."""
+    def test_cancel_forwards_to_client(self, mgr):
+        mgr.cancel_query("s1")
+        mgr._mock_client.cancel_query.assert_called_once_with("s1")
 
-        async def raw_messages():
-            raise RuntimeError("SDK connection failed")
-            yield  # make it an async generator  # noqa: E501
+    def test_disconnect_cleans_up(self, mgr):
+        mgr.submit_query(
+            "s1", "test", "/tmp",
+            MagicMock(), MagicMock(), MagicMock(), MagicMock(),
+        )
+        assert mgr.is_active("s1")
+        mgr.disconnect_session("s1")
+        assert not mgr.is_active("s1")
+        assert "s1" not in mgr._callbacks
+        mgr._mock_client.disconnect_session.assert_called_once_with("s1")
 
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
-
-        mgr = SessionManager()
-        try:
-            error_event = threading.Event()
-            error_msgs = []
-
-            def on_error(msg):
-                error_msgs.append(msg)
-                error_event.set()
-
-            mgr.submit_query(
-                session_id="user-4",
-                prompt="Fail",
-                workspace="/tmp",
-                on_text=lambda t: None,
-                on_tool_event=lambda e: None,
-                on_complete=lambda d: None,
-                on_error=on_error,
-            )
-
-            error_event.wait(timeout=5)
-            assert "SDK connection failed" in error_msgs[0]
-        finally:
-            mgr.shutdown()
-
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_submit_query_cancels_previous(self, mock_client_class):
-        """Verify that submitting a new query cancels the previous one."""
-
-        async def raw_messages():
-            import asyncio
-            await asyncio.sleep(10)
-            yield _raw_result()
-
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
-
-        mgr = SessionManager()
-        try:
-            mgr.submit_query(
-                session_id="user-5",
-                prompt="First",
-                workspace="/tmp",
-                on_text=lambda t: None,
-                on_tool_event=lambda e: None,
-                on_complete=lambda d: None,
-                on_error=lambda e: None,
-            )
-
-            time.sleep(0.1)
-
-            mgr.submit_query(
-                session_id="user-5",
-                prompt="Second",
-                workspace="/tmp",
-                on_text=lambda t: None,
-                on_tool_event=lambda e: None,
-                on_complete=lambda d: None,
-                on_error=lambda e: None,
-            )
-
-            time.sleep(0.2)
-        finally:
-            mgr.shutdown()
-
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_rate_limit_event_skipped(self, mock_client_class):
-        """Verify that rate_limit_event messages are skipped without breaking the stream."""
-
-        async def raw_messages():
-            yield _raw_assistant("Before rate limit")
-            yield _raw_rate_limit()  # This should be skipped
-            yield _raw_assistant("After rate limit")
-            yield _raw_result(session_id="ok", cost=0.05)
-
-        mock_client = _mock_client_with_query(raw_messages)
-        mock_client_class.return_value = mock_client
-
-        mgr = SessionManager()
-        try:
-            completed = threading.Event()
-            text_chunks = []
-            result_data = {}
-
-            def on_text(t):
-                text_chunks.append(t)
-
-            def on_complete(data):
-                result_data.update(data)
-                completed.set()
-
-            mgr.submit_query(
-                session_id="user-6",
-                prompt="Test rate limit",
-                workspace="/tmp",
-                on_text=on_text,
-                on_tool_event=lambda e: None,
-                on_complete=on_complete,
-                on_error=lambda e: None,
-            )
-
-            completed.wait(timeout=5)
-            assert completed.is_set()
-            assert "Before rate limit" in text_chunks
-            assert "After rate limit" in text_chunks
-            assert result_data["session_id"] == "ok"
-        finally:
-            mgr.shutdown()
-
-    @patch("backend.sdk_session.ClaudeSDKClient")
-    def test_second_query_works(self, mock_client_class):
-        """Verify that a second query on the same session works after the first completes."""
-        call_count = 0
-
-        async def raw_messages_1():
-            yield _raw_assistant("First response")
-            yield _raw_rate_limit()
-            yield _raw_result(session_id="s1")
-
-        async def raw_messages_2():
-            yield _raw_assistant("Second response")
-            yield _raw_result(session_id="s2")
-
-        mock_query = MagicMock()
-        # First call returns first generator, second call returns second
-        mock_query.receive_messages = MagicMock(side_effect=[raw_messages_1(), raw_messages_2()])
-
-        mock_client = AsyncMock()
-        mock_client.connect = AsyncMock()
-        mock_client.query = AsyncMock()
-        mock_client.disconnect = AsyncMock()
-        mock_client._query = mock_query
-        mock_client_class.return_value = mock_client
-
-        mgr = SessionManager()
-        try:
-            # First query
-            completed1 = threading.Event()
-            text1 = []
-
-            mgr.submit_query(
-                session_id="user-7",
-                prompt="First",
-                workspace="/tmp",
-                on_text=lambda t: text1.append(t),
-                on_tool_event=lambda e: None,
-                on_complete=lambda d: completed1.set(),
-                on_error=lambda e: None,
-            )
-            completed1.wait(timeout=5)
-            assert completed1.is_set()
-            assert "First response" in text1
-
-            # Second query — same session, reuses client
-            completed2 = threading.Event()
-            text2 = []
-            result2 = {}
-
-            mgr.submit_query(
-                session_id="user-7",
-                prompt="Second",
-                workspace="/tmp",
-                on_text=lambda t: text2.append(t),
-                on_tool_event=lambda e: None,
-                on_complete=lambda d: (result2.update(d), completed2.set()),
-                on_error=lambda e: None,
-            )
-            completed2.wait(timeout=5)
-            assert completed2.is_set()
-            assert "Second response" in text2
-            assert result2["session_id"] == "s2"
-        finally:
-            mgr.shutdown()
+    def test_send_question_response_forwards(self, mgr):
+        mgr.send_question_response("s1", "Option A")
+        mgr._mock_client.send_question_response.assert_called_once_with("s1", "Option A")

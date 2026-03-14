@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message, ToolEvent } from '../types';
+import { Message, ToolEvent, UsageStats } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
@@ -45,7 +45,8 @@ interface ChatPanelProps {
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
   selectedModel: string;
-  onSendMessage: (content: string, workspace?: string, model?: string) => void;
+  usageStats: UsageStats;
+  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[]) => void;
   onSelectModel: (model: string) => void;
   onCancel: () => void;
   onToggleSessions?: () => void;
@@ -72,6 +73,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   currentTool,
   toolLog,
   selectedModel,
+  usageStats,
   onSendMessage,
   onSelectModel,
   onCancel,
@@ -96,6 +98,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [showPastSessions, setShowPastSessions] = useState(false);
   const [isExpertUser, setIsExpertUser] = useState(false);
   const [questionSelections, setQuestionSelections] = useState<Record<number, string[]>>({});
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; filename: string; url: string }>>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detect if user is experienced based on usage patterns
   const detectExpertUser = useCallback(() => {
@@ -237,7 +242,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const handleSubmit = () => {
     const trimmed = input.trim();
-    if (!trimmed || !connected) return;
+    if ((!trimmed && uploadedImages.length === 0) || !connected) return;
 
     // Track favorite commands for expert detection
     if (trimmed.startsWith('/') || trimmed.includes('agent') || trimmed.includes('test') || trimmed.includes('review')) {
@@ -246,12 +251,68 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       localStorage.setItem('ccplus_favorite_commands', JSON.stringify(updated));
     }
 
-    onSendMessage(trimmed);
+    const imageIds = uploadedImages.map(img => img.id);
+    onSendMessage(trimmed || '[Image]', undefined, undefined, imageIds.length > 0 ? imageIds : undefined);
     setInput('');
+    setUploadedImages([]);
     setShowAutocomplete(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+
+    for (const file of Array.from(files)) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name} is not an image file`);
+        continue;
+      }
+
+      // Validate file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`${file.name} is too large (max 10MB)`);
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('session_id', sessionId || '');
+
+        const response = await fetch(`${SOCKET_URL}/api/images/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Upload failed');
+        }
+
+        const imageData = await response.json();
+        setUploadedImages(prev => [...prev, imageData]);
+      } catch (error) {
+        console.error('Upload error:', error);
+        alert(`Failed to upload ${file.name}`);
+      }
+    }
+
+    setUploading(false);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (imageId: string) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
   };
 
   // Get filtered autocomplete suggestions
@@ -388,6 +449,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   }}
                   projectPath={projectPath}
                   textareaRef={textareaRef}
+                  usageStats={usageStats}
                 />
               ) : (
                 <div className="empty-state">
@@ -568,7 +630,47 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               inputRef={textareaRef}
             />
           )}
+          {uploadedImages.length > 0 && (
+            <div className="uploaded-images-preview">
+              {uploadedImages.map(img => (
+                <div key={img.id} className="image-preview-item">
+                  <img src={img.url} alt={img.filename} />
+                  <button
+                    className="remove-image-btn"
+                    onClick={() => handleRemoveImage(img.id)}
+                    aria-label="Remove image"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="input-wrapper">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+              multiple
+              style={{ display: 'none' }}
+            />
+            <button
+              className="attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!connected || uploading}
+              aria-label="Attach image"
+              title="Attach image"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </button>
             <textarea
               ref={textareaRef}
               className="message-input"
@@ -589,7 +691,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <button
                 className="send-btn"
                 onClick={handleSubmit}
-                disabled={!input.trim() || !connected}
+                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
                 aria-label="Send"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -599,7 +701,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             )}
           </div>
-          {!streaming && input.trim() && (
+          {!streaming && (input.trim() || uploadedImages.length > 0) && (
             <div className="input-hint">
               <kbd className="kbd">Enter</kbd> to send, <kbd className="kbd">Shift+Enter</kbd> for new line
             </div>

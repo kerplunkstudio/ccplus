@@ -54,6 +54,7 @@ class SessionManager:
         on_complete: Callable[[dict], None],
         on_error: Callable[[str], None],
         model: Optional[str] = None,
+        image_ids: Optional[list[str]] = None,
         on_user_question: Optional[Callable[[dict], None]] = None,
     ):
         """Submit a query to the SDK worker."""
@@ -70,7 +71,7 @@ class SessionManager:
             self._callbacks[session_id] = cbs
             self._active_sessions.add(session_id)
 
-        self._client.submit_query(session_id, prompt, workspace, model)
+        self._client.submit_query(session_id, prompt, workspace, model, image_ids)
 
     def register_streaming_callbacks(
         self,

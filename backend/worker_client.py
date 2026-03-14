@@ -83,7 +83,14 @@ class WorkerClient:
         if self._reader_thread:
             self._reader_thread.join(timeout=5)
 
-    def submit_query(self, session_id: str, prompt: str, workspace: str, model: Optional[str] = None) -> None:
+    def submit_query(
+        self,
+        session_id: str,
+        prompt: str,
+        workspace: str,
+        model: Optional[str] = None,
+        image_ids: Optional[list[str]] = None,
+    ) -> None:
         """Send a query to the worker."""
         self._send({
             "type": "submit_query",
@@ -91,6 +98,7 @@ class WorkerClient:
             "prompt": prompt,
             "workspace": workspace,
             "model": model,
+            "image_ids": image_ids,
         })
 
     def cancel_query(self, session_id: str) -> None:
