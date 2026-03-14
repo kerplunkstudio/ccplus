@@ -6,7 +6,7 @@ import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
-import { ExpertEmptyState } from './ExpertEmptyState';
+import { NewSessionDashboard } from './NewSessionDashboard';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
 import {
@@ -95,64 +95,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const { skills } = useSkills();
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
-  const [showPastSessions, setShowPastSessions] = useState(false);
-  const [isExpertUser, setIsExpertUser] = useState(false);
   const [questionSelections, setQuestionSelections] = useState<Record<number, string[]>>({});
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; filename: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Detect if user is experienced based on usage patterns
-  const detectExpertUser = useCallback(() => {
-    const sessionCount = parseInt(localStorage.getItem('ccplus_session_count') || '0');
-    const totalMessages = parseInt(localStorage.getItem('ccplus_total_messages') || '0');
-    const lastSessionDate = localStorage.getItem('ccplus_last_session');
-    const isReturningUser = lastSessionDate &&
-      (Date.now() - new Date(lastSessionDate).getTime()) > 86400000; // 24+ hours ago
-
-    // User is expert if they have:
-    // - 3+ sessions, OR
-    // - 10+ total messages, OR
-    // - Returning after 24+ hours, OR
-    // - Has saved favorite commands
-    const favoriteCommands = JSON.parse(localStorage.getItem('ccplus_favorite_commands') || '[]');
-
-    return sessionCount >= 3 ||
-           totalMessages >= 10 ||
-           isReturningUser ||
-           favoriteCommands.length > 0;
-  }, []);
-
-  // Track user activity for experience detection
-  const trackUserActivity = useCallback(() => {
-    const currentSession = parseInt(localStorage.getItem('ccplus_session_count') || '0') + 1;
-    const currentMessages = parseInt(localStorage.getItem('ccplus_total_messages') || '0');
-
-    localStorage.setItem('ccplus_session_count', currentSession.toString());
-    localStorage.setItem('ccplus_last_session', new Date().toISOString());
-
-    // Update workspace tracking if we have a project
-    if (projectPath) {
-      const workspaces = JSON.parse(localStorage.getItem('ccplus_recent_workspaces') || '[]');
-      const updated = [projectPath, ...workspaces.filter((w: string) => w !== projectPath)].slice(0, 5);
-      localStorage.setItem('ccplus_recent_workspaces', JSON.stringify(updated));
-    }
-  }, [projectPath]);
-
-  const examplePrompts = [
-    'Watch agents work in parallel on a feature',
-    'Fix a bug and trace every tool call live',
-    'Refactor something complex — show me the full tool trace',
-    'Run tests and observe what Claude reads and changes',
-  ];
 
   const [lastMessageCount, setLastMessageCount] = useState(0);
 
   const scrollToBottom = useCallback((immediate = false) => {
-    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({
-        behavior: immediate ? 'auto' : 'smooth'
-      });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    if (immediate) {
+      // Instant jump — no visible scroll
+      container.scrollTop = container.scrollHeight;
+    } else if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
 
@@ -160,23 +119,27 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const isSessionChange = Math.abs(messages.length - lastMessageCount) > 1;
     const shouldScrollImmediate = isSessionChange || messages.length === 0;
 
-    scrollToBottom(shouldScrollImmediate);
+    if (shouldScrollImmediate) {
+      // Use rAF to ensure DOM has rendered before scrolling
+      requestAnimationFrame(() => {
+        scrollToBottom(true);
+      });
+    } else {
+      scrollToBottom(false);
+    }
     setLastMessageCount(messages.length);
   }, [messages, scrollToBottom, lastMessageCount]);
 
-  // Initialize expert user detection on mount
+  // Always snap to bottom on session switch
   useEffect(() => {
-    setIsExpertUser(detectExpertUser());
-    trackUserActivity();
-  }, [detectExpertUser, trackUserActivity]);
+    requestAnimationFrame(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+  }, [sessionId]);
 
-  // Track message count for experience detection
-  useEffect(() => {
-    if (messages.length > 0) {
-      const currentMessages = parseInt(localStorage.getItem('ccplus_total_messages') || '0');
-      localStorage.setItem('ccplus_total_messages', (currentMessages + 1).toString());
-    }
-  }, [messages.length]);
 
   useEffect(() => {
     if (pendingQuestion) {
@@ -238,7 +201,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   useEffect(() => {
     if (messages.length > 0 || !projectPath) {
       setPastSessions([]);
-      setShowPastSessions(false);
       return;
     }
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
@@ -251,13 +213,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSubmit = () => {
     const trimmed = input.trim();
     if ((!trimmed && uploadedImages.length === 0) || !connected) return;
-
-    // Track favorite commands for expert detection
-    if (trimmed.startsWith('/') || trimmed.includes('agent') || trimmed.includes('test') || trimmed.includes('review')) {
-      const favorites = JSON.parse(localStorage.getItem('ccplus_favorite_commands') || '[]');
-      const updated = [trimmed, ...favorites.filter((cmd: string) => cmd !== trimmed)].slice(0, 10);
-      localStorage.setItem('ccplus_favorite_commands', JSON.stringify(updated));
-    }
 
     const imageIds = uploadedImages.map(img => img.id);
     onSendMessage(trimmed || '[Image]', undefined, undefined, imageIds.length > 0 ? imageIds : undefined);
@@ -445,103 +400,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
         <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
           {messages.length === 0 && (
-            <>
-              {isExpertUser ? (
-                <ExpertEmptyState
-                  onSendMessage={(command) => {
-                    onSendMessage(command);
-                    // Track as favorite command
-                    const favorites = JSON.parse(localStorage.getItem('ccplus_favorite_commands') || '[]');
-                    const updated = [command, ...favorites.filter((cmd: string) => cmd !== command)].slice(0, 10);
-                    localStorage.setItem('ccplus_favorite_commands', JSON.stringify(updated));
-                  }}
-                  projectPath={projectPath}
-                  textareaRef={textareaRef}
-                  usageStats={usageStats}
-                />
-              ) : (
-                <div className="empty-state">
-                  <div className="ghost-activity">
-                    <div className="ghost-node ghost-agent">
-                      <div className="ghost-bar ghost-bar-accent" />
-                      <div className="ghost-content">
-                        <div className="ghost-label">Agent</div>
-                        <div className="ghost-line ghost-line-long" />
-                      </div>
-                      <div className="ghost-children">
-                        <div className="ghost-node ghost-tool">
-                          <div className="ghost-bar ghost-bar-success" />
-                          <div className="ghost-content">
-                            <div className="ghost-label">Read</div>
-                            <div className="ghost-line ghost-line-medium" />
-                          </div>
-                        </div>
-                        <div className="ghost-node ghost-tool">
-                          <div className="ghost-bar ghost-bar-success" />
-                          <div className="ghost-content">
-                            <div className="ghost-label">Edit</div>
-                            <div className="ghost-line ghost-line-short" />
-                          </div>
-                        </div>
-                        <div className="ghost-node ghost-tool">
-                          <div className="ghost-bar ghost-bar-running" />
-                          <div className="ghost-content">
-                            <div className="ghost-label">Bash</div>
-                            <div className="ghost-line ghost-line-medium ghost-line-pulse" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="empty-subtitle">Watch every tool call, agent spawn, and decision — live</p>
-                  <div className="empty-prompts">
-                    {examplePrompts.map((prompt) => (
-                      <button
-                        key={prompt}
-                        className="empty-prompt-btn"
-                        onClick={() => {
-                          setInput(prompt);
-                          textareaRef.current?.focus();
-                        }}
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
-                  {pastSessions.length > 0 && (
-                    <div className="past-sessions-hint">
-                      <button
-                        className="past-sessions-toggle"
-                        onClick={() => setShowPastSessions(!showPastSessions)}
-                      >
-                        {pastSessions.length} past session{pastSessions.length !== 1 ? 's' : ''}
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: showPastSessions ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s ease' }}>
-                          <path d="M3 4L5 6L7 4" stroke="currentColor" strokeWidth="1.5" />
-                        </svg>
-                      </button>
-                      {showPastSessions && (
-                        <div className="past-sessions-list">
-                          {pastSessions.slice(0, 5).map((session) => (
-                            <button
-                              key={session.session_id}
-                              className="past-session-item"
-                              onClick={() => onLoadSession?.(session.session_id)}
-                            >
-                              <span className="past-session-label">
-                                {session.last_user_message || 'Empty session'}
-                              </span>
-                              <span className="past-session-time">
-                                {formatTimeAgo(session.last_activity)}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
+            <NewSessionDashboard
+              projectPath={projectPath || null}
+              usageStats={usageStats}
+              pastSessions={pastSessions}
+              onLoadSession={onLoadSession || (() => {})}
+            />
           )}
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
