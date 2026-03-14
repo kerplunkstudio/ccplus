@@ -260,6 +260,50 @@ start_server() {
     exit 1
 }
 
+# Install Electron dependencies
+install_electron() {
+    header "Installing Electron dependencies"
+
+    if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+        info "Running npm install in project root..."
+        cd "$SCRIPT_DIR"
+        npm install || { error "npm install failed"; exit 1; }
+    else
+        ok "Electron dependencies already installed"
+    fi
+}
+
+# Launch desktop app
+launch_desktop() {
+    header "Launching desktop app"
+
+    # Ensure electron is installed
+    install_electron
+
+    # Build frontend first if needed
+    if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then
+        warn "No static build found, building frontend first..."
+        build_frontend
+        deploy_static
+    fi
+
+    # Stop any running web server (desktop app starts its own)
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        info "Stopping web server (desktop app will start its own)..."
+        kill_server
+    fi
+
+    # Stop worker if running (desktop app starts its own)
+    if worker_running; then
+        info "Stopping worker (desktop app will start its own)..."
+        stop_worker
+    fi
+
+    info "Starting cc+ Desktop..."
+    cd "$SCRIPT_DIR"
+    npm run electron
+}
+
 # Usage
 show_usage() {
     echo "Usage: ./deploy.sh [component]"
@@ -271,6 +315,7 @@ show_usage() {
     echo "  frontend   Build + deploy frontend only (no server restart)"
     echo "  server     Restart Flask server only (worker stays alive)"
     echo "  worker     Force restart the SDK worker (kills active SDK sessions)"
+    echo "  desktop    Launch the Electron desktop app"
     echo "  stop       Stop both Flask server and SDK worker"
     echo ""
     echo "Examples:"
@@ -278,6 +323,7 @@ show_usage() {
     echo "  ./deploy.sh frontend   # Frontend only, keeps everything alive"
     echo "  ./deploy.sh server     # Restart Flask only, SDK sessions survive"
     echo "  ./deploy.sh worker     # Force restart worker (drops active sessions)"
+    echo "  ./deploy.sh desktop    # Launch desktop app (stops web server)"
     echo "  ./deploy.sh stop       # Stop everything"
 }
 
@@ -308,6 +354,9 @@ case "$COMPONENT" in
     worker)
         stop_worker
         start_worker
+        ;;
+    desktop)
+        launch_desktop
         ;;
     stop)
         kill_server

@@ -35,6 +35,15 @@
 | `frontend/src/components/ActivityTree.tsx` | Real-time agent/tool tree with collapsible nodes, status icons |
 | `frontend/src/components/MessageBubble.tsx` | Markdown rendering for individual messages |
 
+### Desktop App
+
+| File | Purpose |
+|------|---------|
+| `electron/main.js` | Electron main process -- app lifecycle, launches Flask + SDK worker, creates window |
+| `electron/preload.js` | IPC bridge with secure context isolation |
+| `electron/assets/` | App icons for macOS (.icns), Linux (.png), Windows (.ico) |
+| `package.json` | Electron dependencies and build configuration |
+
 ### Other
 
 | Path | Purpose |
@@ -44,6 +53,7 @@
 | `logs/server.log` | Application log (runtime, gitignored) |
 | `tests/` | pytest test suite for backend |
 | `deploy.sh` | Build + deploy + restart script |
+| `ccplus-desktop` | Desktop app launcher (convenience wrapper) |
 
 ## Database Schema
 
@@ -271,6 +281,19 @@ All delivered via the `tool_event` WebSocket event. Differentiated by `type` fie
 }
 ```
 
+## Run Modes
+
+cc+ can run in two modes:
+
+1. **Web UI** (default): Flask server serves the React app, access via browser at `localhost:4000`
+2. **Desktop app**: Electron wrapper launches Flask + SDK worker, displays UI in a native window
+
+Both modes use identical backend and frontend code. Desktop mode provides:
+- Standalone app window (no browser needed)
+- Native menus and window management
+- Dock/taskbar integration
+- Window state persistence
+
 ## Development Setup
 
 ### Prerequisites
@@ -310,9 +333,18 @@ cp .env.example .env
 
 ### Running Locally
 
-**Full deploy (recommended)**:
+**Web UI (recommended)**:
 ```bash
 ./deploy.sh          # Build frontend + deploy to static/chat/ + start server
+```
+
+Access at `http://localhost:4000`.
+
+**Desktop app**:
+```bash
+./deploy.sh desktop  # Launch Electron app (auto-starts backend)
+# Or use the standalone launcher:
+./ccplus-desktop
 ```
 
 **Server restart only (no frontend rebuild)**:
@@ -326,8 +358,6 @@ source venv/bin/activate
 export PYTHONPATH="$(pwd):$PYTHONPATH"
 python backend/server.py
 ```
-
-Access at `http://localhost:3000`.
 
 ### Frontend Development
 
@@ -383,6 +413,11 @@ ccplus/
 │   ├── database.py        # SQLite operations
 │   ├── auth.py            # JWT auth
 │   └── config.py          # Environment config
+├── electron/
+│   ├── main.js            # Electron main process (app lifecycle, backend launcher)
+│   ├── preload.js         # IPC bridge (secure context isolation)
+│   ├── assets/            # App icons (icns, png, ico)
+│   └── README.md          # Desktop app docs
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx
@@ -409,7 +444,9 @@ ccplus/
 │   └── test_server.py
 ├── data/                  # SQLite DB (gitignored)
 ├── logs/                  # Server logs (gitignored)
-├── deploy.sh
+├── deploy.sh              # Main deploy script
+├── ccplus-desktop         # Desktop app launcher
+├── package.json           # Electron dependencies
 ├── requirements.txt
 ├── .env.example
 └── .gitignore
@@ -500,7 +537,9 @@ Tests are mandatory for all implementations:
 | `./deploy.sh server` | Restart Flask server only. Worker stays alive unless its code changed. |
 | `./deploy.sh frontend` | Build + deploy frontend only. No server or worker restart. |
 | `./deploy.sh worker` | Force restart the SDK worker (kills active SDK sessions). |
+| `./deploy.sh desktop` | Launch Electron desktop app (stops web server, starts its own backend). |
 | `./deploy.sh stop` | Stop both Flask server and SDK worker. |
+| `./ccplus-desktop` | Standalone desktop app launcher (convenience script). |
 
 **Deploy resilience**: The SDK worker is a separate process that survives Flask restarts. During a server-only restart, the worker buffers events (up to 1000 per session). When Flask reconnects, buffered events are replayed and SocketIO callbacks are auto-registered for active sessions. The frontend deduplicates tool events to prevent duplicate activity tree nodes.
 

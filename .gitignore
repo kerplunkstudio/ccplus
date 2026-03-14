@@ -8,3 +8,14 @@ frontend/build/
 static/chat/
 .DS_Store
 venv/
+
+# Electron
+dist/
+*.dmg
+*.AppImage
+*.deb
+*.exe
+*.zip
+electron/assets/icon.icns
+electron/assets/icon.png
+electron/assets/icon.ico

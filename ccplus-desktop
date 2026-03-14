@@ -1,0 +1,31 @@
+#!/bin/bash
+# Quick launcher for cc+ Desktop app
+# Usage: ./ccplus-desktop
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Check if Electron deps are installed
+if [ ! -d "node_modules" ]; then
+    echo "Installing Electron dependencies..."
+    npm install
+fi
+
+# Check if frontend is built
+if [ ! -d "static/chat" ] || [ -z "$(ls -A "static/chat" 2>/dev/null)" ]; then
+    echo "Building frontend..."
+    cd frontend
+    if [ ! -d "node_modules" ]; then
+        npm install
+    fi
+    npm run build
+    cd ..
+    mkdir -p static/chat
+    cp -r frontend/build/* static/chat/
+fi
+
+# Launch desktop app
+echo "Starting cc+ Desktop..."
+npm run electron
