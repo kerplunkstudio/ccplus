@@ -116,8 +116,8 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
-  const handleSendMessage = useCallback((content: string, workspace?: string, model?: string) => {
-    sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel);
+  const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
+    sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
   }, [sendMessage, activeProject, selectedModel]);
 
   const toggleDrawer = useCallback((drawer: 'sessions' | 'activity') => {
