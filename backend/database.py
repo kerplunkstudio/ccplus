@@ -86,6 +86,12 @@ CREATE TABLE IF NOT EXISTS user_stats (
     total_lines_of_code INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS workspace_state (
+    user_id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 """
 
 
@@ -485,5 +491,36 @@ def increment_user_stats(
             updated_at = datetime('now', 'localtime')
         """,
         (user_id, sessions, queries, duration_ms, cost, input_tokens, output_tokens, lines_of_code),
+    )
+    conn.commit()
+
+
+def get_workspace_state(user_id: str) -> Optional[dict]:
+    """Return the persisted workspace state for a user, or None."""
+    conn = _get_connection()
+    row = conn.execute(
+        "SELECT state FROM workspace_state WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if row:
+        try:
+            return json.loads(row["state"])
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+def save_workspace_state(user_id: str, state: dict) -> None:
+    """Persist workspace state for a user (upsert)."""
+    conn = _get_connection()
+    state_json = json.dumps(state)
+    conn.execute(
+        """
+        INSERT INTO workspace_state (user_id, state)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            state = excluded.state,
+            updated_at = datetime('now', 'localtime')
+        """,
+        (user_id, state_json),
     )
     conn.commit()
