@@ -439,6 +439,7 @@ class SDKWorker:
             context: HookContext,
         ) -> HookJSONOutput:
             actual_tool_name = hook_input.get("tool_name", "unknown")
+            logger.info(f"[pre_tool_use] tool_name={actual_tool_name}, tool_use_id={tool_use_id_param}")
             tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", f"tu_{time.monotonic()}")
             tool_params = hook_input.get("tool_input", {})
             tool_timers[tool_use_id] = time.monotonic()
@@ -446,8 +447,10 @@ class SDKWorker:
             # Handle AskUserQuestion: emit to frontend, wait for response
             if actual_tool_name == "AskUserQuestion":
                 questions = tool_params.get("questions", [])
+                logger.info(f"[AskUserQuestion] Detected! questions={questions}, tool_params keys={list(tool_params.keys())}")
 
                 # Emit question to frontend
+                logger.info(f"[AskUserQuestion] Emitting user_question event with {len(questions)} questions to session {session_id}")
                 await self.send_event({
                     "type": "user_question",
                     "session_id": session_id,
