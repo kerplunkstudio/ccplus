@@ -11,6 +11,7 @@ export interface ProjectEntry {
   name: string;
   tabs: TabState[];
   activeTabId: string;
+  tabMruOrder?: string[];
 }
 
 export interface WorkspaceState {

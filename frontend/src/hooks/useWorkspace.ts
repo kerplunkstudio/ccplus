@@ -29,6 +29,13 @@ const updateTab = (
   ),
 });
 
+const ensureMruOrder = (tabs: TabState[], mruOrder?: string[]): string[] => {
+  const tabIds = new Set(tabs.map(t => t.sessionId));
+  const valid = (mruOrder || []).filter(id => tabIds.has(id));
+  const missing = tabs.filter(t => !valid.includes(t.sessionId)).map(t => t.sessionId);
+  return [...valid, ...missing];
+};
+
 const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): WorkspaceState => {
   switch (action.type) {
     case 'ADD_PROJECT': {
@@ -47,6 +54,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
         name: action.name,
         tabs: [newTab],
         activeTabId: newTab.sessionId,
+        tabMruOrder: [newTab.sessionId],
       };
       return {
         ...state,
@@ -81,10 +89,12 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           hasRunningAgent: false,
           createdAt: Date.now(),
         };
+        const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
         return {
           ...project,
           tabs: [...project.tabs, newTab],
           activeTabId: newTab.sessionId,
+          tabMruOrder: updatedMru,
         };
       });
     }
@@ -105,24 +115,36 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
             ...project,
             tabs: [freshTab],
             activeTabId: freshTab.sessionId,
+            tabMruOrder: [freshTab.sessionId],
           };
         }
 
+        const updatedMru = ensureMruOrder(filtered, project.tabMruOrder);
         return {
           ...project,
           tabs: filtered,
           activeTabId: project.activeTabId === action.sessionId
             ? filtered[filtered.length - 1].sessionId
             : project.activeTabId,
+          tabMruOrder: updatedMru,
         };
       });
     }
 
-    case 'SELECT_TAB':
-      return updateProject(state, action.projectPath, (project) => ({
-        ...project,
-        activeTabId: action.sessionId,
-      }));
+    case 'SELECT_TAB': {
+      return updateProject(state, action.projectPath, (project) => {
+        const mru = ensureMruOrder(project.tabs, project.tabMruOrder);
+        const updatedMru = [
+          action.sessionId,
+          ...mru.filter(id => id !== action.sessionId)
+        ];
+        return {
+          ...project,
+          activeTabId: action.sessionId,
+          tabMruOrder: updatedMru,
+        };
+      });
+    }
 
     case 'UPDATE_TAB_LABEL':
       return updateProject(state, action.projectPath, (project) =>
