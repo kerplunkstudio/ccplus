@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+# Source user environment to get PATH, node, npm, etc.
+if [ -f "$HOME/.zshrc" ]; then
+    source "$HOME/.zshrc"
+fi
+
+# Ensure /usr/local/bin is in PATH (Homebrew)
+export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+
+# Change to project directory
+cd /Users/matifuentes/Workspace/ccplus
+
+# Kill any stale process on port 4001 (Electron desktop app port)
+lsof -ti:4001 2>/dev/null | xargs kill -9 2>/dev/null || true
+
+# Ensure SDK worker is running
+WORKER_SOCKET="data/sdk_worker.sock"
+WORKER_PID_FILE="data/sdk_worker.pid"
+
+if [ ! -S "$WORKER_SOCKET" ] || [ ! -f "$WORKER_PID_FILE" ] || ! ps -p "$(cat "$WORKER_PID_FILE" 2>/dev/null)" > /dev/null 2>&1; then
+    echo "Starting SDK worker..."
+
+    # Ensure data directory exists
+    mkdir -p data
+
+    # Activate virtual environment and start worker in background
+    source venv/bin/activate
+
+    # Remove stale socket/pid if they exist
+    rm -f "$WORKER_SOCKET" "$WORKER_PID_FILE"
+
+    # Start worker
+    python backend/sdk_worker.py &
+    WORKER_PID=$!
+    echo $WORKER_PID > "$WORKER_PID_FILE"
+
+    # Wait for socket to be created (max 5 seconds)
+    for i in {1..10}; do
+        if [ -S "$WORKER_SOCKET" ]; then
+            echo "SDK worker started successfully (PID: $WORKER_PID)"
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ ! -S "$WORKER_SOCKET" ]; then
+        echo "Warning: SDK worker socket not created"
+    fi
+fi
+
+# Launch Electron desktop app on port 4001
+PORT=4001 npm run electron:dev
