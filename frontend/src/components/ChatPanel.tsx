@@ -4,7 +4,7 @@ import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
-import { ToolLog } from './ToolLog';
+import { AmbientIndicator } from './AmbientIndicator';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { NewSessionDashboard } from './NewSessionDashboard';
 import { TextSelectionPopup } from './TextSelectionPopup';
@@ -522,7 +522,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <MessageBubble key={msg.id} message={msg} />
           ))}
           {streaming && toolLog.length > 0 && (
-            <ToolLog events={toolLog} />
+            <div className="streaming-ambient-container">
+              <AmbientIndicator
+                isActive={toolLog.some(event => event.type === 'tool_start' || event.type === 'agent_start')}
+                hasError={toolLog.some(event => event.success === false || (event.error != null && event.error !== 'Worker restarted'))}
+              />
+            </div>
           )}
           {pendingQuestion && (
             <div className="user-question-prompt">
