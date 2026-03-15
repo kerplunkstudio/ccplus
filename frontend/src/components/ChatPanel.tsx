@@ -236,7 +236,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // Don't steal focus from buttons or interactive elements outside the input
-      if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]')) {
+      if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]') || target.closest('input') || target.closest('select') || target.closest('.project-picker')) {
         return;
       }
       focusTextarea();
