@@ -248,6 +248,39 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }
   };
 
+  const checkAndFinalizeToolState = () => {
+    // Check if we have a completed message that needs final tool log update
+    if (!streamingIdRef.current && toolLogRef.current.length > 0) {
+      const allToolsCompleted = toolLogRef.current.every(tool =>
+        tool.type === 'tool_complete' || tool.type === 'agent_stop'
+      );
+
+      if (allToolsCompleted) {
+        // Find the most recent message and update its toolLog with final states
+        setMessages(prev => {
+          const messages = [...prev];
+          if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage.role === 'assistant') {
+              messages[messages.length - 1] = {
+                ...lastMessage,
+                toolLog: [...toolLogRef.current]
+              };
+            }
+          }
+          return messages;
+        });
+
+        // All tools completed, clear the tool log after a brief display period
+        setTimeout(() => {
+          toolLogRef.current = [];
+          setToolLog([]);
+          setBackgroundProcessing(false);
+        }, 1500); // 1.5 second delay to show completion state
+      }
+    }
+  };
+
   const clearPendingWorkerRestartError = () => {
     if (workerRestartGraceTimerRef.current) {
       clearTimeout(workerRestartGraceTimerRef.current);
@@ -520,7 +553,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }) => {
       const msgId = streamingIdRef.current;
       if (msgId) {
-        // Finalize the current streaming message
+        // Finalize the current streaming message content, but keep tool state active
         const finalContent = data.content || streamingContentRef.current;
         setMessages((prev) =>
           prev.map((m) =>
@@ -528,11 +561,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
           )
         );
 
-        // Reset streaming state to allow next message to be created separately
+        // Reset streaming content state but keep tool state until tools complete
         streamingContentRef.current = '';
         streamingIdRef.current = null;
-        toolLogRef.current = [];
-        setToolLog([]);
+        // Don't clear toolLogRef.current and toolLog here - wait for tools to complete
       }
 
       // Check if this is the final completion (has sdk_session_id) or an intermediate one
@@ -551,6 +583,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
           clearToolTimerRef.current = null;
         }
         setCurrentTool(null);
+
+        // Clear tool log only on final completion
+        toolLogRef.current = [];
+        setToolLog([]);
       } else {
         // Intermediate completion: main response is done, but check for background agents
         setStreaming(false);
@@ -561,6 +597,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
           const hasRunning = hasRunningAgents(activityTreeRef.current);
           if (hasRunning) {
             setBackgroundProcessing(true);
+          } else {
+            // No running agents, safe to clear tool log after a brief delay for visual consistency
+            setTimeout(() => {
+              toolLogRef.current = [];
+              setToolLog([]);
+            }, 1000); // 1 second delay to let users see tool completion
           }
         }, 100);
       }
@@ -604,6 +646,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
               : t
           );
           setToolLog([...toolLogRef.current]);
+
+          // Check if all tools have completed and update the final message
+          setTimeout(() => {
+            checkAndFinalizeToolState();
+          }, 50); // Small delay to ensure all state updates are processed
           break;
         }
         case 'agent_stop':
@@ -616,6 +663,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
               : t
           );
           setToolLog([...toolLogRef.current]);
+
+          // Check if all tools have completed and update the final message
+          setTimeout(() => {
+            checkAndFinalizeToolState();
+          }, 50); // Small delay to ensure all state updates are processed
           break;
       }
     });

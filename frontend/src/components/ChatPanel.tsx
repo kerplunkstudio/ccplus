@@ -521,7 +521,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
-          {streaming && toolLog.length > 0 && (
+          {(streaming || backgroundProcessing) && toolLog.length > 0 && (
             <div className="streaming-ambient-container">
               <AmbientIndicator
                 isActive={toolLog.some(event => event.type === 'tool_start' || event.type === 'agent_start')}
