@@ -781,6 +781,15 @@ async function streamQuery(
 
         session.sdkSessionId = result.session_id;
 
+        // Persist SDK session ID so next query can resume
+        if (assistantMsgId !== null && result.session_id) {
+          try {
+            database.updateMessage(assistantMsgId, resultText.join(""), result.session_id);
+          } catch (e) {
+            console.error("Failed to update SDK session ID:", e);
+          }
+        }
+
         // If the SDK returned result text but no assistant messages were streamed
         // (e.g. slash command output), emit the result text to the frontend
         const sdkResultText = result.result as string | undefined;

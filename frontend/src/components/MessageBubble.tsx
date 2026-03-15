@@ -21,6 +21,10 @@ const codeBlockStyle = {
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewMarkdown, setPreviewMarkdown] = useState<Record<string, boolean>>({});
+  const previousStreamingRef = React.useRef(message.streaming);
+  const [displayedText, setDisplayedText] = useState('');
+  const streamingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastContentLengthRef = React.useRef(0);
 
   const copyToClipboard = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -37,6 +41,77 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
       hour12: true,
     });
   };
+
+  // Sophisticated streaming text reveal
+  React.useEffect(() => {
+    if (!message.streaming) {
+      // Ensure final content is shown when streaming stops
+      setDisplayedText(message.content ?? '');
+      return;
+    }
+
+    const content = message.content ?? '';
+    const currentLength = content.length;
+    const previousLength = lastContentLengthRef.current;
+
+    // Only update if there's new content
+    if (currentLength <= previousLength) return;
+
+    lastContentLengthRef.current = currentLength;
+
+    // Clear any existing timeout
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+    }
+
+    // Calculate reveal timing based on content characteristics
+    const newContent = content.slice(previousLength);
+    const hasCodeBlock = newContent.includes('```');
+    const hasComplexStructure = /[{}\[\]().]/.test(newContent);
+
+    // Adaptive timing - slower for complex content, faster for simple text
+    const baseDelay = hasCodeBlock ? 15 : hasComplexStructure ? 8 : 5;
+    const variance = Math.random() * 3; // Add natural variation
+    const delay = Math.max(2, baseDelay + variance);
+
+    // Organic character-by-character reveal
+    const revealNextCharacter = () => {
+      setDisplayedText(current => {
+        const nextLength = current.length + 1;
+        const newText = content.slice(0, nextLength);
+
+        // Continue if there's more content to reveal
+        if (nextLength < content.length) {
+          const nextChar = content[nextLength];
+          // Slight pause after punctuation for natural reading rhythm
+          const pauseMultiplier = /[.!?;]/.test(nextChar) ? 2.5 : 1;
+
+          streamingTimeoutRef.current = setTimeout(revealNextCharacter, delay * pauseMultiplier);
+        }
+
+        return newText;
+      });
+    };
+
+    // Start the reveal with a small initial delay
+    streamingTimeoutRef.current = setTimeout(revealNextCharacter, delay * 0.5);
+
+    return () => {
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+      }
+    };
+  }, [message.content, message.streaming]);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+      }
+    };
+  }, []);
+
 
   const markdownComponents = useMemo(() => ({
     code({ className, children, ...props }: any) {
@@ -107,8 +182,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     },
   }), [copiedId, copyToClipboard, previewMarkdown]);
 
+  // Build CSS classes for animation states
+  const bubbleClasses = [
+    'message-bubble',
+    message.role,
+    message.streaming && 'streaming'
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`message-bubble ${message.role}`}>
+    <div className={bubbleClasses}>
       {message.toolLog && message.toolLog.length > 0 && (
         <ToolLog events={message.toolLog} />
       )}
@@ -125,9 +207,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         {message.role === 'assistant' ? (
           <div className="message-markdown">
             <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-              {message.content}
+              {message.streaming ? displayedText : (message.content ?? '')}
             </ReactMarkdown>
-            {message.streaming && <span className="streaming-cursor" />}
+            <span className={`streaming-cursor ${message.streaming ? 'visible' : 'hidden'}`} />
           </div>
         ) : (
           <>
