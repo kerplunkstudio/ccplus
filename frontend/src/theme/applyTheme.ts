@@ -25,6 +25,8 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--accent-border', withAlpha(c.accent, 0.2))
   root.style.setProperty('--accent-shadow', withAlpha(c.accent, 0.4))
   root.style.setProperty('--accent-shadow-fade', withAlpha(c.accent, 0))
+  root.style.setProperty('--accent-bg-active', withAlpha(c.accent, 0.15))
+  root.style.setProperty('--accent-hover', adjustBrightness(c.accent, 20))
 
   // Derived: semantic
   root.style.setProperty('--success-bg', withAlpha(c.success, 0.15))

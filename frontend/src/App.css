@@ -39,6 +39,34 @@
   width: 100%;
 }
 
+.panel-chat-content {
+  height: 100%;
+  animation: panelFadeIn 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+.panel-chat-content--centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@keyframes panelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-chat-content {
+    animation: none;
+  }
+}
+
 .panel-activity {
   width: 280px;
   background: var(--bg-secondary);

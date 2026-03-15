@@ -351,7 +351,7 @@
   gap: 0;
   padding: 0;
   background: var(--bg-secondary);
-  border-top: 1px solid rgba(242, 123, 63, 0.08);
+  border-top: 1px solid var(--accent-bg);
 }
 
 .footer-nav-item {
@@ -389,7 +389,7 @@
 }
 
 .footer-nav-item.active {
-  background: rgba(240, 123, 63, 0.14);
+  background: var(--accent-bg-active);
   border-bottom-color: var(--accent);
 }
 
@@ -498,8 +498,8 @@
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-md);
-  background: rgba(242, 123, 63, 0.08);
-  border: 1px solid rgba(242, 123, 63, 0.2);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
   margin: var(--space-sm);
   border-radius: var(--radius-sm);
 }

@@ -322,6 +322,8 @@ function safeParams(params: Record<string, unknown>): Record<string, unknown> {
 
 function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
   const toolTimers = new Map<string, number>();
+  const agentIdToToolUseId = new Map<string, string>();
+  const pendingAgentToolUseIds: string[] = [];
 
   const preToolUse: HookCallback = async (hookInput, toolUseId) => {
     const input = hookInput as Record<string, unknown>;
@@ -332,13 +334,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     toolTimers.set(actualToolUseId, performance.now());
 
     const parentId = input.agent_id as string | undefined;
-    console.log(`[HOOK DEBUG] preToolUse: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} isAgent=${toolName === "Agent" || toolName === "Task"}`);
     const isAgent = toolName === "Agent" || toolName === "Task";
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
 
     if (isAgent) {
+      pendingAgentToolUseIds.push(actualToolUseId);
       const event = {
         type: "agent_start",
         tool_name: toolName,
@@ -355,7 +357,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         type: "tool_start",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
-        parent_agent_id: parentId ?? null,
+        parent_agent_id: parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : null,
         parameters: safeParams(toolParams),
         timestamp: new Date().toISOString(),
         session_id: sessionId,
@@ -369,7 +371,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         sessionId,
         toolName,
         actualToolUseId,
-        isAgent ? undefined : (parentId ?? undefined),
+        isAgent ? undefined : (parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : undefined),
         isAgent ? ((toolParams.subagent_type as string) ?? undefined) : undefined,
         null, // success = running
         null,
@@ -395,7 +397,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     const isAgent = toolName === "Agent" || toolName === "Task";
     const parentId = input.agent_id as string | undefined;
-    console.log(`[HOOK DEBUG] postToolUse: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} success=true`);
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
@@ -411,12 +412,20 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         session_id: sessionId,
       };
       session.callbacks.onToolEvent(event);
+
+      // Clean up agent_id mapping
+      for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
+        if (tuId === actualToolUseId) {
+          agentIdToToolUseId.delete(agentId);
+          break;
+        }
+      }
     } else {
       const event: Record<string, unknown> = {
         type: "tool_complete",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
-        parent_agent_id: parentId ?? null,
+        parent_agent_id: parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : null,
         success: true,
         duration_ms: durationMs,
         timestamp: new Date().toISOString(),
@@ -455,7 +464,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     const isAgent = toolName === "Agent" || toolName === "Task";
     const parentId = input.agent_id as string | undefined;
-    console.log(`[HOOK DEBUG] postToolUseFailure: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} error=${String(input.error ?? "")}`);
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
@@ -471,12 +479,20 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         timestamp: new Date().toISOString(),
         session_id: sessionId,
       });
+
+      // Clean up agent_id mapping
+      for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
+        if (tuId === actualToolUseId) {
+          agentIdToToolUseId.delete(agentId);
+          break;
+        }
+      }
     } else {
       session.callbacks.onToolEvent({
         type: "tool_complete",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
-        parent_agent_id: parentId ?? null,
+        parent_agent_id: parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : null,
         success: false,
         error: errorMsg,
         duration_ms: durationMs,
@@ -494,10 +510,21 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     return {};
   };
 
+  const subagentStart: HookCallback = async (hookInput) => {
+    const input = hookInput as Record<string, unknown>;
+    const agentId = input.agent_id as string;
+    if (agentId && pendingAgentToolUseIds.length > 0) {
+      const toolUseIdForAgent = pendingAgentToolUseIds.pop()!;
+      agentIdToToolUseId.set(agentId, toolUseIdForAgent);
+    }
+    return {};
+  };
+
   return {
     PreToolUse: [{ hooks: [preToolUse] }],
     PostToolUse: [{ hooks: [postToolUse] }],
     PostToolUseFailure: [{ hooks: [postToolUseFailure] }],
+    SubagentStart: [{ hooks: [subagentStart] }],
   };
 }
 

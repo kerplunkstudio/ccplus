@@ -429,6 +429,13 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
 
+  const contentMode = shouldShowWelcome ? 'welcome'
+    : shouldShowInsights ? 'insights'
+    : shouldShowProfile ? 'profile'
+    : shouldShowDashboard ? 'dashboard'
+    : shouldShowChatPanel ? 'chat'
+    : 'no-project';
+
   return (
     <>
       <UpdateBanner />
@@ -476,53 +483,55 @@ function AppContent({ token, loading }: AppContentProps) {
         )}
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowWelcome) ? 'full-width' : ''}`}>
-            {shouldShowWelcome ? (
-              <WelcomeScreen
-                onSelectPrompt={handleWelcomePrompt}
-                onAddProject={handleWelcomeAddProject}
-              />
-            ) : shouldShowInsights ? (
-              <InsightsPanel />
-            ) : shouldShowProfile ? (
-              <ProfilePanel />
-            ) : activeProject ? (
-              shouldShowDashboard ? (
-                <ProjectDashboard
-                  projectPath={activeProject.path}
-                  projectName={activeProject.name}
-                  onNewSession={handleNewTab}
-                  onLoadSession={handleLoadSession}
+            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' ? 'panel-chat-content--centered' : ''}`}>
+              {shouldShowWelcome ? (
+                <WelcomeScreen
+                  onSelectPrompt={handleWelcomePrompt}
+                  onAddProject={handleWelcomeAddProject}
                 />
-              ) : shouldShowChatPanel ? (
-                <ChatPanel
-                  messages={messages}
-                  connected={connected}
-                  streaming={streaming}
-                  backgroundProcessing={backgroundProcessing}
-                  thinking={thinking}
-                  currentTool={currentTool}
-                  toolLog={toolLog}
-                  selectedModel={selectedModel}
-                  usageStats={usageStats}
-                  onSendMessage={handleSendMessage}
-                  onSelectModel={handleSelectModel}
-                  onCancel={cancelQuery}
-                  onToggleSessions={() => toggleDrawer('sessions')}
-                  onToggleActivity={() => toggleDrawer('activity')}
-                  projectPath={activeProject?.path || null}
-                  onLoadSession={handleLoadSession}
-                  sessionId={activeTab?.sessionId}
-                  pendingQuestion={pendingQuestion}
-                  onRespondToQuestion={respondToQuestion}
-                  isRestoringSession={isRestoringSession}
-                  onSendToNewSession={handleSendToNewSession}
-                />
-              ) : null
-            ) : (
-              <div className="no-project-state">
-                <p>Open a project from the sidebar to get started</p>
-              </div>
-            )}
+              ) : shouldShowInsights ? (
+                <InsightsPanel />
+              ) : shouldShowProfile ? (
+                <ProfilePanel />
+              ) : activeProject ? (
+                shouldShowDashboard ? (
+                  <ProjectDashboard
+                    projectPath={activeProject.path}
+                    projectName={activeProject.name}
+                    onNewSession={handleNewTab}
+                    onLoadSession={handleLoadSession}
+                  />
+                ) : shouldShowChatPanel ? (
+                  <ChatPanel
+                    messages={messages}
+                    connected={connected}
+                    streaming={streaming}
+                    backgroundProcessing={backgroundProcessing}
+                    thinking={thinking}
+                    currentTool={currentTool}
+                    toolLog={toolLog}
+                    selectedModel={selectedModel}
+                    usageStats={usageStats}
+                    onSendMessage={handleSendMessage}
+                    onSelectModel={handleSelectModel}
+                    onCancel={cancelQuery}
+                    onToggleSessions={() => toggleDrawer('sessions')}
+                    onToggleActivity={() => toggleDrawer('activity')}
+                    projectPath={activeProject?.path || null}
+                    onLoadSession={handleLoadSession}
+                    sessionId={activeTab?.sessionId}
+                    pendingQuestion={pendingQuestion}
+                    onRespondToQuestion={respondToQuestion}
+                    isRestoringSession={isRestoringSession}
+                    onSendToNewSession={handleSendToNewSession}
+                  />
+                ) : null
+              ) : (
+                <div className="no-project-state">
+                  <p>Open a project from the sidebar to get started</p>
+                </div>
+              )}
+            </div>
           </div>
           {shouldShowChatPanel && (
             <div className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>

@@ -144,56 +144,30 @@
 .thinking-indicator {
   align-self: flex-start;
   padding: var(--space-sm) 0;
-  animation: thinkingFlowIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: thinkingFadeIn 0.3s ease-out;
 }
 
 .thinking-indicator.fade-out {
-  animation: thinkingFlowOut 0.6s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+  animation: thinkingFadeOut 0.2s ease-out forwards;
 }
 
-@keyframes thinkingFlowIn {
-  0% {
+@keyframes thinkingFadeIn {
+  from {
     opacity: 0;
-    transform: translateY(12px) scale(0.94) rotateX(5deg);
-    filter: blur(1px);
+    transform: translateY(4px);
   }
-  30% {
-    opacity: 0.4;
-    transform: translateY(4px) scale(0.97) rotateX(2deg);
-    filter: blur(0.5px);
-  }
-  70% {
-    opacity: 0.85;
-    transform: translateY(-1px) scale(1.02) rotateX(0deg);
-    filter: blur(0.1px);
-  }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
+    transform: translateY(0);
   }
 }
 
-@keyframes thinkingFlowOut {
-  0% {
+@keyframes thinkingFadeOut {
+  from {
     opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
   }
-  30% {
-    opacity: 0.8;
-    transform: translateY(-2px) scale(1.02) rotateX(1deg);
-    filter: blur(0.2px);
-  }
-  70% {
-    opacity: 0.3;
-    transform: translateY(-6px) scale(0.96) rotateX(3deg);
-    filter: blur(0.8px);
-  }
-  100% {
+  to {
     opacity: 0;
-    transform: translateY(-10px) scale(0.92) rotateX(5deg);
-    filter: blur(1.5px);
   }
 }
 
@@ -205,77 +179,17 @@
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   border: 1px solid var(--border);
-  box-shadow:
-    0 0 12px color-mix(in oklch, var(--accent) 15%, transparent),
-    0 2px 8px color-mix(in oklch, var(--accent) 5%, transparent);
-  animation: thinkingBreathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@keyframes thinkingBreathe {
-  0%, 100% {
-    box-shadow:
-      0 0 12px color-mix(in oklch, var(--accent) 15%, transparent),
-      0 2px 8px color-mix(in oklch, var(--accent) 5%, transparent);
-    transform: scale(1);
-  }
-  25% {
-    box-shadow:
-      0 0 16px color-mix(in oklch, var(--accent) 20%, transparent),
-      0 3px 12px color-mix(in oklch, var(--accent) 8%, transparent);
-    transform: scale(1.005);
-  }
-  50% {
-    box-shadow:
-      0 0 20px color-mix(in oklch, var(--accent) 25%, transparent),
-      0 4px 16px color-mix(in oklch, var(--accent) 10%, transparent);
-    transform: scale(1.008);
-  }
-  75% {
-    box-shadow:
-      0 0 16px color-mix(in oklch, var(--accent) 18%, transparent),
-      0 3px 12px color-mix(in oklch, var(--accent) 7%, transparent);
-    transform: scale(1.003);
-  }
 }
 
 .thinking-content .dot {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    var(--accent) 30%,
-    color-mix(in oklch, var(--accent) 80%, transparent) 100%
-  );
-  animation: typingFlowWave 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-  box-shadow:
-    0 0 6px rgba(var(--accent-rgb), 0.4),
-    0 0 2px rgba(var(--accent-rgb), 0.8);
-  position: relative;
-}
-
-.thinking-content .dot::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(var(--accent-rgb), 0.2) 0%,
-    transparent 70%
-  );
-  animation: dotAura 2.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  background: var(--accent);
+  animation: dotPulse 2s ease-in-out infinite;
 }
 
 .thinking-content .dot:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.thinking-content .dot:nth-child(1)::before {
   animation-delay: 0s;
 }
 
@@ -283,57 +197,16 @@
   animation-delay: 0.25s;
 }
 
-.thinking-content .dot:nth-child(2)::before {
-  animation-delay: 0.25s;
-}
-
 .thinking-content .dot:nth-child(3) {
   animation-delay: 0.5s;
 }
 
-.thinking-content .dot:nth-child(3)::before {
-  animation-delay: 0.5s;
-}
-
-@keyframes typingFlowWave {
+@keyframes dotPulse {
   0%, 100% {
-    transform: scale(0.4) translateY(0);
-    opacity: 0.2;
-    box-shadow:
-      0 0 4px rgba(var(--accent-rgb), 0.2),
-      0 0 1px rgba(var(--accent-rgb), 0.4);
-  }
-  25% {
-    transform: scale(0.8) translateY(-1px);
-    opacity: 0.6;
-    box-shadow:
-      0 0 6px rgba(var(--accent-rgb), 0.3),
-      0 0 2px rgba(var(--accent-rgb), 0.6);
+    opacity: 0.3;
   }
   50% {
-    transform: scale(1.3) translateY(-2px);
     opacity: 1;
-    box-shadow:
-      0 0 10px rgba(var(--accent-rgb), 0.6),
-      0 0 4px rgba(var(--accent-rgb), 0.9);
-  }
-  75% {
-    transform: scale(1) translateY(-1px);
-    opacity: 0.8;
-    box-shadow:
-      0 0 8px rgba(var(--accent-rgb), 0.4),
-      0 0 3px rgba(var(--accent-rgb), 0.7);
-  }
-}
-
-@keyframes dotAura {
-  0%, 100% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  50% {
-    opacity: 0.4;
-    transform: scale(1.5);
   }
 }
 
@@ -341,45 +214,13 @@
 @media (prefers-reduced-motion: reduce) {
   .thinking-indicator,
   .thinking-indicator.fade-out {
-    animation: thinkingReducedMotion 0.2s ease-out !important;
-  }
-
-  .thinking-content {
     animation: none !important;
-    box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 10%, transparent) !important;
+    opacity: 1;
   }
 
   .thinking-content .dot {
-    animation: typingPulseSimple 2.5s ease-in-out infinite !important;
-    box-shadow: 0 0 2px rgba(var(--accent-rgb), 0.3) !important;
-    transform: none !important;
-  }
-
-  .thinking-content .dot::before {
     animation: none !important;
-    opacity: 0.1 !important;
-  }
-}
-
-@keyframes thinkingReducedMotion {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes typingPulseSimple {
-  0%, 100% {
-    opacity: 0.5;
-    transform: scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
+    opacity: 0.6;
   }
 }
 
@@ -415,7 +256,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: var(--space-md) var(--space-md);
-  transition: border-color var(--duration-normal) var(--ease-default);
+  box-shadow: none;
+  transition: border-color var(--duration-normal) var(--ease-default), box-shadow var(--duration-normal) var(--ease-default);
   flex: 1;
 }
 
@@ -426,7 +268,7 @@
   flex-shrink: 0;
 }
 
-.input-wrapper {
+.input-wrapper:focus-within {
   border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 10%, transparent);
 }

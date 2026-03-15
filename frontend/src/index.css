@@ -23,6 +23,8 @@
   --accent-border: rgba(0, 102, 204, 0.12);
   --accent-shadow: rgba(0, 102, 204, 0.15);
   --accent-rgb: 0, 102, 204;
+  --accent-bg-active: rgba(0, 102, 204, 0.06);
+  --accent-hover: #1a7de6;
   --success-bg: rgba(22, 163, 74, 0.04);
   --success-border: rgba(22, 163, 74, 0.12);
   --error-bg: rgba(220, 38, 38, 0.04);

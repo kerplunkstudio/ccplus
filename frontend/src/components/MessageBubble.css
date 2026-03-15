@@ -14,7 +14,7 @@
 }
 
 .message-bubble.streaming {
-  animation: streamingMessageFlow 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: messageSlideIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @keyframes messageSlideIn {
@@ -30,34 +30,6 @@
   }
 }
 
-/* Organic streaming entrance with anticipation */
-@keyframes streamingMessageFlow {
-  0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.96) rotateX(5deg);
-    filter: blur(1px);
-  }
-  25% {
-    opacity: 0.3;
-    transform: translateY(6px) scale(0.98) rotateX(2deg);
-    filter: blur(0.8px);
-  }
-  65% {
-    opacity: 0.8;
-    transform: translateY(-1px) scale(1.005) rotateX(0deg);
-    filter: blur(0.2px);
-  }
-  85% {
-    opacity: 0.95;
-    transform: translateY(0.5px) scale(1.002) rotateX(0deg);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
-  }
-}
 
 .message-bubble.user {
   margin: var(--space-xl) 0 var(--space-md);
@@ -368,360 +340,96 @@
   }
 }
 
-/* Sophisticated organic streaming cursor */
+/* Simple streaming cursor */
 .streaming-cursor {
   display: inline-block;
   width: 1.5px;
   height: 1.2em;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--accent) 15%,
-    var(--accent) 85%,
-    transparent 100%
-  );
+  background: var(--accent);
   margin-left: 1px;
   border-radius: 0.5px;
   vertical-align: text-bottom;
-  animation:
-    cursorBreathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite,
-    cursorFlowIn 1s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow:
-    0 0 12px rgba(var(--accent-rgb), 0.4),
-    0 0 4px rgba(var(--accent-rgb), 0.8);
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-  position: relative;
-}
-
-.streaming-cursor::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -1px;
-  width: 3.5px;
-  height: calc(100% + 4px);
-  background: radial-gradient(
-    ellipse,
-    rgba(var(--accent-rgb), 0.15) 0%,
-    transparent 70%
-  );
-  border-radius: 2px;
-  animation: cursorAura 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: cursorPulse 1.5s ease-in-out infinite;
 }
 
 .streaming-cursor.visible {
   opacity: 1;
-  transform: scaleY(1) scaleX(1);
 }
 
 .streaming-cursor.hidden {
   opacity: 0;
-  transform: scaleY(0.3) scaleX(0.3);
-  animation: cursorFadeOut 0.5s cubic-bezier(0.4, 0, 1, 1) forwards;
+  transition: opacity 0.2s;
 }
 
-/* Enhanced organic streaming text container */
-.message-bubble.streaming .message-markdown {
-  animation: streamingTextFlow 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: left top;
-}
-
-/* Breathing cursor animation with natural rhythm */
-@keyframes cursorBreathe {
+@keyframes cursorPulse {
   0%, 100% {
     opacity: 1;
-    transform: scaleY(1) scaleX(1);
-    box-shadow:
-      0 0 12px rgba(var(--accent-rgb), 0.4),
-      0 0 4px rgba(var(--accent-rgb), 0.8);
-  }
-  25% {
-    opacity: 0.8;
-    transform: scaleY(0.95) scaleX(0.9);
-    box-shadow:
-      0 0 8px rgba(var(--accent-rgb), 0.3),
-      0 0 3px rgba(var(--accent-rgb), 0.6);
   }
   50% {
-    opacity: 0.4;
-    transform: scaleY(0.85) scaleX(0.8);
-    box-shadow:
-      0 0 6px rgba(var(--accent-rgb), 0.2),
-      0 0 2px rgba(var(--accent-rgb), 0.4);
-  }
-  75% {
-    opacity: 0.7;
-    transform: scaleY(0.92) scaleX(0.85);
-    box-shadow:
-      0 0 10px rgba(var(--accent-rgb), 0.35),
-      0 0 3px rgba(var(--accent-rgb), 0.7);
-  }
-}
-
-/* Organic cursor entrance */
-@keyframes cursorFlowIn {
-  0% {
-    opacity: 0;
-    transform: scaleY(0.2) scaleX(0.1) translateX(-8px);
-    box-shadow: none;
-  }
-  30% {
-    opacity: 0.6;
-    transform: scaleY(0.6) scaleX(0.4) translateX(-2px);
-    box-shadow:
-      0 0 6px rgba(var(--accent-rgb), 0.2),
-      0 0 2px rgba(var(--accent-rgb), 0.4);
-  }
-  70% {
-    opacity: 0.9;
-    transform: scaleY(1.1) scaleX(1.2) translateX(1px);
-    box-shadow:
-      0 0 14px rgba(var(--accent-rgb), 0.5),
-      0 0 5px rgba(var(--accent-rgb), 0.9);
-  }
-  85% {
-    opacity: 1;
-    transform: scaleY(0.98) scaleX(1.05) translateX(0.5px);
-  }
-  100% {
-    opacity: 1;
-    transform: scaleY(1) scaleX(1) translateX(0);
-    box-shadow:
-      0 0 12px rgba(var(--accent-rgb), 0.4),
-      0 0 4px rgba(var(--accent-rgb), 0.8);
-  }
-}
-
-/* Cursor aura breathing */
-@keyframes cursorAura {
-  0%, 100% {
     opacity: 0.3;
-    transform: scaleX(1) scaleY(1);
-  }
-  50% {
-    opacity: 0.1;
-    transform: scaleX(1.4) scaleY(0.8);
-  }
-}
-
-/* Elegant cursor fadeout */
-@keyframes cursorFadeOut {
-  0% {
-    opacity: 1;
-    transform: scaleY(1) scaleX(1);
-    box-shadow:
-      0 0 12px rgba(var(--accent-rgb), 0.4),
-      0 0 4px rgba(var(--accent-rgb), 0.8);
-  }
-  70% {
-    opacity: 0.3;
-    transform: scaleY(0.6) scaleX(0.4);
-    box-shadow:
-      0 0 6px rgba(var(--accent-rgb), 0.2),
-      0 0 2px rgba(var(--accent-rgb), 0.3);
-  }
-  100% {
-    opacity: 0;
-    transform: scaleY(0.1) scaleX(0.1);
-    box-shadow: none;
-  }
-}
-
-/* Flowing text container animation */
-@keyframes streamingTextFlow {
-  0% {
-    opacity: 0;
-    transform: translateY(4px) scale(0.98) rotateX(2deg);
-    filter: blur(0.5px);
-  }
-  40% {
-    opacity: 0.7;
-    transform: translateY(1px) scale(0.995) rotateX(0.5deg);
-    filter: blur(0.2px);
-  }
-  70% {
-    opacity: 0.9;
-    transform: translateY(-0.5px) scale(1.002) rotateX(0deg);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
   }
 }
 
 
-/* Organic thinking indicator entrance */
+/* Simple thinking indicator entrance */
 .thinking-indicator {
-  animation: thinkingFlowIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: thinkingFadeIn 0.3s ease-out;
 }
 
-@keyframes thinkingFlowIn {
-  0% {
+@keyframes thinkingFadeIn {
+  from {
     opacity: 0;
-    transform: translateY(12px) scale(0.94) rotateX(5deg);
-    filter: blur(1px);
+    transform: translateY(4px);
   }
-  30% {
-    opacity: 0.4;
-    transform: translateY(4px) scale(0.97) rotateX(2deg);
-    filter: blur(0.5px);
-  }
-  70% {
-    opacity: 0.85;
-    transform: translateY(-1px) scale(1.02) rotateX(0deg);
-    filter: blur(0.1px);
-  }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
+    transform: translateY(0);
   }
 }
 
 /* Graceful thinking to message transition */
 .thinking-indicator.fade-out {
-  animation: thinkingFlowOut 0.6s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+  animation: thinkingFadeOut 0.2s ease-out forwards;
 }
 
-@keyframes thinkingFlowOut {
-  0% {
+@keyframes thinkingFadeOut {
+  from {
     opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
   }
-  30% {
-    opacity: 0.8;
-    transform: translateY(-2px) scale(1.02) rotateX(1deg);
-    filter: blur(0.2px);
-  }
-  70% {
-    opacity: 0.3;
-    transform: translateY(-6px) scale(0.96) rotateX(3deg);
-    filter: blur(0.8px);
-  }
-  100% {
+  to {
     opacity: 0;
-    transform: translateY(-10px) scale(0.92) rotateX(5deg);
-    filter: blur(1.5px);
-  }
-}
-
-/* Seamless thinking-to-streaming transition */
-.message-bubble.assistant.from-thinking {
-  animation: messageFromThinking 1s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes messageFromThinking {
-  0% {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.92) rotateX(5deg);
-    filter: blur(1.5px);
-  }
-  20% {
-    opacity: 0.3;
-    transform: translateY(-4px) scale(0.96) rotateX(3deg);
-    filter: blur(1px);
-  }
-  50% {
-    opacity: 0.7;
-    transform: translateY(1px) scale(0.99) rotateX(1deg);
-    filter: blur(0.3px);
-  }
-  80% {
-    opacity: 0.95;
-    transform: translateY(-0.5px) scale(1.01) rotateX(0deg);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1) rotateX(0deg);
-    filter: blur(0);
   }
 }
 
 /* Accessibility: Reduced motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .message-bubble,
-  .message-bubble.streaming,
-  .message-bubble.from-thinking {
-    animation: messageSlideInReduced 0.3s ease-out !important;
+  .message-bubble.streaming {
+    animation: none !important;
+    opacity: 1;
   }
 
   .streaming-cursor {
-    animation: cursorPulseReduced 2s ease-in-out infinite !important;
-    box-shadow: 0 0 4px rgba(var(--accent-rgb), 0.3) !important;
-  }
-
-  .streaming-cursor::before {
     animation: none !important;
-    opacity: 0.1 !important;
+    opacity: 0.7;
   }
 
-  .thinking-indicator {
-    animation: thinkingReducedMotion 0.2s ease-out !important;
-  }
-
-  .thinking-content {
+  .thinking-indicator,
+  .thinking-indicator.fade-out {
     animation: none !important;
-    box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 10%, transparent) !important;
+    opacity: 1;
   }
 
   .thinking-content .dot {
-    animation: typingPulseReduced 2.5s ease-in-out infinite !important;
-    box-shadow: none !important;
-  }
-}
-
-@keyframes messageSlideInReduced {
-  from {
-    opacity: 0.7;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes cursorPulseReduced {
-  0%, 100% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scaleY(0.9);
-  }
-}
-
-@keyframes thinkingReducedMotion {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes typingPulseReduced {
-  0%, 100% {
+    animation: none !important;
     opacity: 0.6;
-    transform: scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
   }
 }
 
 .message-meta {
   display: flex;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 2px;
   padding: 0 4px;
 }
 
