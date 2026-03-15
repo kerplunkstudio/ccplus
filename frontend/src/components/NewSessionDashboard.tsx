@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UsageStats } from '../types';
 import './NewSessionDashboard.css';
 
@@ -36,6 +36,67 @@ const formatDuration = (ms: number): string => {
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 };
 
+const getGreeting = (): string => {
+  const now = new Date();
+  const hour = now.getHours();
+  const day = now.getDay();
+  const isWeekend = day === 0 || day === 6;
+
+  const greetings = {
+    morning: [
+      'Good morning',
+      'Rise and build',
+      'Fresh start',
+      'Morning session',
+      'Early start',
+    ],
+    afternoon: [
+      'Good afternoon',
+      'Afternoon session',
+      'Back at it',
+      'Midday momentum',
+      'Afternoon flow',
+    ],
+    evening: [
+      'Evening session',
+      'Winding down?',
+      'One more thing?',
+      'Late afternoon vibes',
+      'Evening energy',
+    ],
+    lateNight: [
+      'Late night coding',
+      'Burning the midnight oil',
+      'Night owl mode',
+      'After hours',
+      'Deep work hours',
+    ],
+    weekend: [
+      'Weekend session?',
+      'Saturday vibes',
+      'Sunday session?',
+      'Weekend warrior',
+      'Weekend deep dive',
+    ],
+  };
+
+  let pool: string[];
+
+  if (isWeekend && Math.random() > 0.4) {
+    pool = greetings.weekend;
+  } else if (hour >= 5 && hour < 12) {
+    pool = greetings.morning;
+  } else if (hour >= 12 && hour < 17) {
+    pool = greetings.afternoon;
+  } else if (hour >= 17 && hour < 21) {
+    pool = greetings.evening;
+  } else {
+    pool = greetings.lateNight;
+  }
+
+  return pool[Math.floor(Math.random() * pool.length)];
+};
+
 export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
   projectPath,
   usageStats,
@@ -44,6 +105,9 @@ export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
 }) => {
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
   const [showSessions, setShowSessions] = useState(false);
+
+  // Generate greeting once per component mount
+  const greeting = useMemo(() => getGreeting(), []);
 
   // Fetch git context on mount / when projectPath changes
   useEffect(() => {
@@ -64,6 +128,12 @@ export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
 
   return (
     <div className="new-session-dashboard">
+      {/* Welcome greeting */}
+      <div className="welcome-greeting">
+        <span className="greeting-decoration">✦</span>
+        <span className="greeting-text">{greeting}</span>
+      </div>
+
       {/* Project header */}
       <div className="project-header">
         {projectName && <div className="project-name">{projectName}</div>}
