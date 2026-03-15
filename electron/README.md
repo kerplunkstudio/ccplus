@@ -89,7 +89,6 @@ Creates `.exe` installer and portable version in `dist/` directory.
 The desktop app respects the same environment variables as the web version:
 
 - `PORT` - Server port (default: 4000)
-- `ANTHROPIC_API_KEY` - Claude API key
 - `WORKSPACE_PATH` - Working directory for SDK sessions
 - `SDK_MODEL` - Default model (default: sonnet)
 - `CCPLUS_AUTH` - Auth mode (default: local)

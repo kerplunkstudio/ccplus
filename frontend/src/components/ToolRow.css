@@ -47,6 +47,10 @@
   border-color: var(--error-border);
 }
 
+.tool-row-stopped {
+  border-color: color-mix(in oklch, #8b8b8b 20%, transparent);
+}
+
 .tool-row-connector {
   display: flex;
   align-items: center;
@@ -121,6 +125,10 @@
   color: var(--error);
 }
 
+.tool-row-stopped .tool-row-name {
+  color: #8b8b8b;
+}
+
 .tool-row-meta {
   display: flex;
   align-items: center;
@@ -158,6 +166,10 @@
 
 .tool-status-failed {
   background: var(--error);
+}
+
+.tool-status-stopped {
+  background: #8b8b8b;
 }
 
 @keyframes toolSpin {

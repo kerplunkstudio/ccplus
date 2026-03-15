@@ -48,7 +48,8 @@ type TreeAction =
   | { type: 'TOOL_COMPLETE'; event: ToolEvent }
   | { type: 'AGENT_STOP'; event: ToolEvent }
   | { type: 'CLEAR' }
-  | { type: 'LOAD_HISTORY'; events: ToolEvent[] };
+  | { type: 'LOAD_HISTORY'; events: ToolEvent[] }
+  | { type: 'MARK_ALL_STOPPED' };
 
 function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
   return nodes.map((node) => {
@@ -75,6 +76,16 @@ function findAndUpdate(
       return { ...node, children: findAndUpdate(node.children, toolUseId, updater) };
     }
     return node;
+  });
+}
+
+function markRunningAsStopped(nodes: ActivityNode[]): ActivityNode[] {
+  return nodes.map((node) => {
+    const updated = node.status === 'running' ? { ...node, status: 'stopped' as const } : node;
+    if (isAgentNode(updated)) {
+      return { ...updated, children: markRunningAsStopped(updated.children) };
+    }
+    return updated;
   });
 }
 
@@ -113,20 +124,22 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
     }
 
     case 'TOOL_COMPLETE': {
+      const isWorkerRestart = action.event.error === 'Worker restarted';
       return findAndUpdate(state, action.event.tool_use_id, (node) => ({
         ...node,
-        status: action.event.success === false ? 'failed' : 'completed',
+        status: (action.event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
         duration_ms: action.event.duration_ms,
-        error: action.event.error,
+        error: isWorkerRestart ? undefined : action.event.error,
       }));
     }
 
     case 'AGENT_STOP': {
+      const isWorkerRestart = action.event.error === 'Worker restarted';
       return findAndUpdate(state, action.event.tool_use_id, (node) => ({
         ...node,
-        status: action.event.error ? 'failed' : 'completed',
+        status: (action.event.error && !isWorkerRestart) ? 'failed' : 'completed',
         duration_ms: action.event.duration_ms,
-        error: action.event.error,
+        error: isWorkerRestart ? undefined : action.event.error,
       }));
     }
 
@@ -167,11 +180,12 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
             newNodes.push(node);
           }
         } else if (event.type === 'tool_complete' || event.type === 'agent_stop') {
+          const isWorkerRestart = event.error === 'Worker restarted';
           newNodes = findAndUpdate(newNodes, event.tool_use_id, (node) => ({
             ...node,
-            status: event.success === false ? 'failed' : 'completed',
+            status: (event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
             duration_ms: event.duration_ms,
-            error: event.error,
+            error: isWorkerRestart ? undefined : event.error,
           }));
         }
       }
@@ -180,6 +194,9 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
 
     case 'CLEAR':
       return [];
+
+    case 'MARK_ALL_STOPPED':
+      return markRunningAsStopped(state);
 
     default:
       return state;
@@ -209,6 +226,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
   const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const pendingWorkerRestartErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
+  const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
@@ -224,6 +243,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
         clearToolTimerRef.current = null;
       }, 300);
     }
+  };
+
+  const clearPendingWorkerRestartError = () => {
+    if (workerRestartGraceTimerRef.current) {
+      clearTimeout(workerRestartGraceTimerRef.current);
+      workerRestartGraceTimerRef.current = null;
+    }
+    pendingWorkerRestartErrorRef.current = null;
   };
   const [pendingQuestion, setPendingQuestion] = useState<{
     questions: Array<{
@@ -261,6 +288,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
       sequenceRef.current = 0;
       seenToolUseIds.current.clear();
       setPendingQuestion(null);
+      pendingWorkerRestartErrorRef.current = null;
+      if (workerRestartGraceTimerRef.current) {
+        clearTimeout(workerRestartGraceTimerRef.current);
+        workerRestartGraceTimerRef.current = null;
+      }
     }
   }, [sessionId]);
 
@@ -409,6 +441,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
+      // Clear any pending worker restart error - streaming has resumed
+      clearPendingWorkerRestartError();
+
       if (!streamingIdRef.current) {
         // Create a new message for each new streaming sequence
         // This ensures consecutive Claude responses appear as separate messages
@@ -515,9 +550,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
         case 'tool_complete': {
           dispatchTree({ type: 'TOOL_COMPLETE', event });
           setCurrentToolDebounced(null);
+          const isWorkerRestartTool = event.error === 'Worker restarted';
           toolLogRef.current = toolLogRef.current.map((t) =>
             t.tool_use_id === event.tool_use_id
-              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
+              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: isWorkerRestartTool ? undefined : event.error, type: event.type }
               : t
           );
           setToolLog([...toolLogRef.current]);
@@ -526,9 +562,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
         case 'agent_stop':
           dispatchTree({ type: 'AGENT_STOP', event });
           setCurrentToolDebounced(null);
+          const isWorkerRestartAgent = event.error === 'Worker restarted';
           toolLogRef.current = toolLogRef.current.map((t) =>
             t.tool_use_id === event.tool_use_id
-              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: event.error, type: event.type }
+              ? { ...t, success: event.success, duration_ms: event.duration_ms, error: isWorkerRestartAgent ? undefined : event.error, type: event.type }
               : t
           );
           setToolLog([...toolLogRef.current]);
@@ -693,6 +730,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const cancelQuery = useCallback(() => {
     if (!socket || !connected) return;
     socket.emit('cancel');
+
+    dispatchTree({ type: 'MARK_ALL_STOPPED' });
 
     const msgId = streamingIdRef.current;
     if (msgId) {

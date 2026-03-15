@@ -434,7 +434,7 @@ class SDKWorker:
 
         clean_env = {
             k: v for k, v in os.environ.items()
-            if k != "CLAUDECODE"
+            if k not in ("CLAUDECODE", "ANTHROPIC_API_KEY")
         }
 
         # Create PersistentSession instance
@@ -626,7 +626,7 @@ class SDKWorker:
                     session_id=session_id,
                     tool_name=actual_tool_name,
                     tool_use_id=tool_use_id,
-                    parent_agent_id=parent_id,
+                    parent_agent_id=parent_id if not is_agent else None,
                     agent_type=tool_params.get("subagent_type") if is_agent else None,
                     success=None,  # Running
                     error=None,

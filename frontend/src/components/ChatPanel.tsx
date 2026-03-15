@@ -102,11 +102,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastMessageCount, setLastMessageCount] = useState(0);
+  const userScrolledUpRef = useRef(false);
+  const programmaticScrollRef = useRef(false);
 
   const isNearBottom = useCallback(() => {
     const container = messagesContainerRef.current;
     if (!container) return true;
-    const threshold = 150;
+    const threshold = 200;
     return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
   }, []);
 
@@ -114,6 +116,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    programmaticScrollRef.current = true;
     if (immediate) {
       container.scrollTop = container.scrollHeight;
     } else {
@@ -122,7 +125,32 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         behavior: 'smooth',
       });
     }
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
   }, []);
+
+  // Detect manual user scrolling
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      // Ignore programmatic scrolls
+      if (programmaticScrollRef.current) return;
+
+      // Check if user scrolled away from bottom
+      if (!isNearBottom()) {
+        userScrolledUpRef.current = true;
+      } else {
+        // User scrolled back to bottom
+        userScrolledUpRef.current = false;
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [isNearBottom]);
 
   // Auto-scroll on new messages, streaming content, or tool activity updates
   useEffect(() => {
@@ -130,23 +158,23 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const hasStreamingMessage = messages.some((m) => m.streaming);
 
     if (isSessionChange || messages.length === 0) {
-      // Session switch: instant jump
+      // Session switch: instant jump, always scroll
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
     } else if (hasStreamingMessage || streaming) {
-      // During streaming or tool activity: instant scroll if near bottom
-      if (isNearBottom()) {
+      // During streaming or tool activity: instant scroll unless user scrolled up
+      if (!userScrolledUpRef.current) {
         scrollToBottom(true);
       }
     } else if (messages.length !== lastMessageCount) {
-      // New message added (not streaming): smooth scroll if near bottom
-      if (isNearBottom()) {
+      // New message added (not streaming): smooth scroll unless user scrolled up
+      if (!userScrolledUpRef.current) {
         scrollToBottom(false);
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, isNearBottom, toolLog, currentTool, streaming, pendingQuestion]);
+  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion]);
 
   // Always snap to bottom on session switch
   useEffect(() => {
@@ -239,6 +267,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInput('');
     setUploadedImages([]);
     setShowAutocomplete(false);
+    userScrolledUpRef.current = false; // Reset scroll intent on new message
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }

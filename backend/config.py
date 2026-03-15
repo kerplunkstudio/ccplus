@@ -19,9 +19,9 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Environment
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 WORKSPACE_PATH = os.environ.get("WORKSPACE_PATH", str(Path.home() / "Workspace"))
 SDK_MODEL = os.environ.get("SDK_MODEL", "sonnet")
+HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "4000"))
 DATABASE_PATH = str(DATA_DIR / "ccplus.db")
 LOCAL_MODE = os.environ.get("CCPLUS_AUTH", "local") == "local"
