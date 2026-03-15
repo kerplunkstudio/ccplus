@@ -225,44 +225,66 @@
   color: var(--text-tertiary);
 }
 
-/* Project info grid */
+/* Project info editorial strip */
 
-.dashboard-info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-md);
+.dashboard-info-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
 }
 
-.dashboard-info-card {
+.dashboard-info-stat {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: var(--space-lg);
-  background: var(--bg-hover);
-  border-radius: var(--radius-md);
+  align-items: flex-start;
+  padding: 0 var(--space-2xl);
+  position: relative;
   transition: all var(--transition-fast);
 }
 
-.dashboard-info-card:hover {
-  background: var(--bg-secondary);
-  transform: translateY(-2px);
+.dashboard-info-stat:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 60%;
+  background: var(--border);
 }
 
-.dashboard-info-value {
+.dashboard-info-stat:first-child {
+  padding-left: 0;
+}
+
+.dashboard-info-stat-hero .dashboard-info-number {
+  font-family: var(--font-serif);
+  font-size: clamp(3rem, 3rem + 0.5vw, 4rem);
+  font-weight: 400;
+  line-height: 0.9;
+  color: var(--text-primary);
+}
+
+.dashboard-info-number {
   font-family: var(--font-mono);
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 1.5rem + 0.25vw, 1.75rem);
   font-weight: 500;
   line-height: 1;
   color: var(--text-primary);
-  margin-bottom: var(--space-xs);
+  transition: color var(--transition-fast);
+}
+
+.dashboard-info-stat:hover .dashboard-info-number {
+  color: var(--accent);
 }
 
 .dashboard-info-label {
   font-family: var(--font-sans);
   font-size: var(--text-xs);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  margin-top: var(--space-xs);
 }
 
 /* Tech stack */
@@ -433,17 +455,26 @@
     max-width: 100%;
   }
 
-  .dashboard-info-grid {
+  .dashboard-info-strip {
+    display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-sm);
+    gap: var(--space-xl) var(--space-lg);
   }
 
-  .dashboard-info-card {
-    padding: var(--space-md);
+  .dashboard-info-stat {
+    padding: 0;
   }
 
-  .dashboard-info-value {
-    font-size: 1.5rem;
+  .dashboard-info-stat:not(:first-child)::before {
+    display: none;
+  }
+
+  .dashboard-info-stat-hero .dashboard-info-number {
+    font-size: clamp(2.5rem, 2.5rem + 0.5vw, 3rem);
+  }
+
+  .dashboard-info-number {
+    font-size: clamp(1.25rem, 1.25rem + 0.25vw, 1.5rem);
   }
 
   .dashboard-language-legend {

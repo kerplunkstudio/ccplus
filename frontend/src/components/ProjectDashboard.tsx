@@ -215,24 +215,24 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
       <div className="dashboard-columns">
         {/* Left column: Project info + Tech stack + Languages + CLAUDE.md */}
         <div className="dashboard-column-left">
-          {/* Project info cards */}
+          {/* Project info editorial strip */}
           <div className="dashboard-section">
             <div className="dashboard-section-label">PROJECT INFO</div>
-            <div className="dashboard-info-grid">
-              <div className="dashboard-info-card">
-                <div className="dashboard-info-value">{formatNumber(overview.file_count)}</div>
+            <div className="dashboard-info-strip">
+              <div className="dashboard-info-stat dashboard-info-stat-hero">
+                <div className="dashboard-info-number">{formatNumber(overview.file_count)}</div>
                 <div className="dashboard-info-label">Files</div>
               </div>
-              <div className="dashboard-info-card">
-                <div className="dashboard-info-value">{formatNumber(overview.commit_count)}</div>
+              <div className="dashboard-info-stat">
+                <div className="dashboard-info-number">{formatNumber(overview.commit_count)}</div>
                 <div className="dashboard-info-label">Commits</div>
               </div>
-              <div className="dashboard-info-card">
-                <div className="dashboard-info-value">{overview.languages.length}</div>
+              <div className="dashboard-info-stat">
+                <div className="dashboard-info-number">{overview.languages.length}</div>
                 <div className="dashboard-info-label">Languages</div>
               </div>
-              <div className="dashboard-info-card">
-                <div className="dashboard-info-value">{overview.stats.total_sessions}</div>
+              <div className="dashboard-info-stat">
+                <div className="dashboard-info-number">{overview.stats.total_sessions}</div>
                 <div className="dashboard-info-label">Sessions</div>
               </div>
             </div>
