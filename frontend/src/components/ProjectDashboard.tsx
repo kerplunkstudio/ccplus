@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './ProjectDashboard.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const LANGUAGE_COLORS: Record<string, string> = {
   TypeScript: '#3178C6',
@@ -82,6 +83,11 @@ interface ProjectOverview {
   stats: ProjectStats;
 }
 
+interface CachedData {
+  overview: ProjectOverview;
+  timestamp: number;
+}
+
 const formatTimeAgo = (timestamp: string): string => {
   const diffMs = Date.now() - new Date(timestamp).getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -110,6 +116,39 @@ const formatNumber = (n: number): string => {
   return String(n);
 };
 
+// Cache utilities
+const getCacheKey = (projectPath: string): string => {
+  return `ccplus_dashboard_${projectPath}`;
+};
+
+const saveToCache = (projectPath: string, overview: ProjectOverview): void => {
+  try {
+    const cached: CachedData = {
+      overview,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(getCacheKey(projectPath), JSON.stringify(cached));
+  } catch (err) {
+    console.error('Failed to save to cache:', err);
+  }
+};
+
+const loadFromCache = (projectPath: string): CachedData | null => {
+  try {
+    const raw = localStorage.getItem(getCacheKey(projectPath));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedData;
+    return cached;
+  } catch (err) {
+    console.error('Failed to load from cache:', err);
+    return null;
+  }
+};
+
+const isCacheFresh = (cacheTimestamp: number): boolean => {
+  return Date.now() - cacheTimestamp < CACHE_TTL_MS;
+};;
+
 export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   projectPath,
   projectName,
@@ -119,17 +158,109 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(null);
+  const [showingStaleData, setShowingStaleData] = useState(false);
 
   useEffect(() => {
-    const fetchOverview = async () => {
-      setLoading(true);
-      setError(null);
+    const fetchOverview = async (isBackgroundRefresh: boolean = false) => {
+      if (!isBackgroundRefresh) {
+        setLoading(true);
+        setError(null);
+        setShowingStaleData(false);
+      }
+
       try {
         const url = `${SOCKET_URL}/api/project/overview?project=${encodeURIComponent(projectPath)}`;
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setOverview(data);
+          setCacheTimestamp(Date.now());
+          setShowingStaleData(false);
+          setError(null);
+          saveToCache(projectPath, data);
+        } else {
+          const text = await response.text();
+          let errorMessage: string;
+          try {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.error || `HTTP ${response.status}`;
+          } catch {
+            errorMessage = `HTTP ${response.status}: ${text.substring(0, 100)}`;
+          }
+
+          // On failure, try to use cached data
+          if (!isBackgroundRefresh) {
+            const cached = loadFromCache(projectPath);
+            if (cached) {
+              setOverview(cached.overview);
+              setCacheTimestamp(cached.timestamp);
+              setShowingStaleData(true);
+              setError(null);
+            } else {
+              setError(errorMessage);
+            }
+          }
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        const errorMessage = `Network error: ${message}`;
+
+        // On network error, try to use cached data
+        if (!isBackgroundRefresh) {
+          const cached = loadFromCache(projectPath);
+          if (cached) {
+            setOverview(cached.overview);
+            setCacheTimestamp(cached.timestamp);
+            setShowingStaleData(true);
+            setError(null);
+          } else {
+            setError(errorMessage);
+          }
+        }
+      } finally {
+        if (!isBackgroundRefresh) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Try to load from cache immediately
+    const cached = loadFromCache(projectPath);
+    if (cached) {
+      setOverview(cached.overview);
+      setCacheTimestamp(cached.timestamp);
+      setLoading(false);
+
+      // If cache is stale, show stale indicator
+      if (!isCacheFresh(cached.timestamp)) {
+        setShowingStaleData(true);
+      }
+
+      // Fetch fresh data in background
+      fetchOverview(true);
+    } else {
+      // No cache, do normal fetch
+      fetchOverview(false);
+    }
+  }, [projectPath]);
+
+  const handleRetry = () => {
+    setLoading(true);
+    setError(null);
+    setShowingStaleData(false);
+
+    const fetchOverview = async () => {
+      try {
+        const url = `${SOCKET_URL}/api/project/overview?project=${encodeURIComponent(projectPath)}`;
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setOverview(data);
+          setCacheTimestamp(Date.now());
+          setShowingStaleData(false);
+          setError(null);
+          saveToCache(projectPath, data);
         } else {
           const text = await response.text();
           try {
@@ -138,17 +269,19 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
           } catch {
             setError(`HTTP ${response.status}: ${text.substring(0, 100)}`);
           }
+          setShowingStaleData(true);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         setError(`Network error: ${message}`);
+        setShowingStaleData(true);
       } finally {
         setLoading(false);
       }
     };
 
     fetchOverview();
-  }, [projectPath]);
+  };
 
   if (loading) {
     return (
@@ -171,6 +304,18 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
   return (
     <div className="project-dashboard">
+      {/* Stale data indicator */}
+      {showingStaleData && cacheTimestamp && (
+        <div className="dashboard-stale-indicator">
+          <span className="dashboard-stale-text">
+            Showing cached data · Last updated {formatTimeAgo(new Date(cacheTimestamp).toISOString())}
+          </span>
+          <button className="dashboard-stale-retry" onClick={handleRetry}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="dashboard-header">
         <h1 className="dashboard-project-name">{overview.name}</h1>

@@ -208,6 +208,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
 
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
@@ -242,6 +243,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
       prevSessionIdRef.current = sessionId;
+      setIsRestoringSession(true);
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
       // Don't reset usage stats - they persist across sessions
@@ -661,6 +663,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
           }
         }
       } catch (err) {
+      } finally {
+        setIsRestoringSession(false);
       }
     };
 
@@ -730,6 +734,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     cancelQuery,
     pendingQuestion,
     respondToQuestion,
+    isRestoringSession,
   };
 }
 
