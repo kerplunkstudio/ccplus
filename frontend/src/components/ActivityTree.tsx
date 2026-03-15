@@ -133,24 +133,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
 
           <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-label={activeTab === 'agents' ? 'Agent activity' : 'Tool logs'}>
             {visibleNodes.length === 0 ? (
-              <div className="activity-empty">
-                <div className="activity-empty-icon">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-                    <rect x="4" y="4" width="16" height="16" rx="2" />
-                    <rect x="9" y="9" width="6" height="6" />
-                    <line x1="9" y1="1" x2="9" y2="4" />
-                    <line x1="15" y1="1" x2="15" y2="4" />
-                    <line x1="9" y1="20" x2="9" y2="23" />
-                    <line x1="15" y1="20" x2="15" y2="23" />
-                    <line x1="20" y1="9" x2="23" y2="9" />
-                    <line x1="20" y1="14" x2="23" y2="14" />
-                    <line x1="1" y1="9" x2="4" y2="9" />
-                    <line x1="1" y1="14" x2="4" y2="14" />
-                  </svg>
-                </div>
-                <p className="activity-empty-text">No activity yet</p>
-                <p className="activity-empty-sub">Agent operations and tool usage will appear here in real-time</p>
-              </div>
+              <p className="activity-empty-hint">Activity appears here</p>
             ) : (
               <div className="tree-root">
                 {visibleNodes.map((node) => (

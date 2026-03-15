@@ -205,6 +205,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
   const streamActiveRef = useRef(false);
   const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
 
@@ -269,9 +270,20 @@ export function useTabSocket(token: string | null, sessionId: string) {
       transports: ['polling', 'websocket'],
     });
 
-    newSocket.on('connect', () => setConnected(true));
+    newSocket.on('connect', () => {
+      // Clear any pending disconnect timer - we reconnected in time
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setConnected(true);
+    });
     newSocket.on('disconnect', () => {
-      setConnected(false);
+      // Debounce setting connected to false to prevent flicker during tab switches
+      disconnectTimerRef.current = setTimeout(() => {
+        setConnected(false);
+        disconnectTimerRef.current = null;
+      }, 1500);
       if (streamingIdRef.current) {
         const msgId = streamingIdRef.current;
         const finalContent = streamingContentRef.current;
@@ -294,6 +306,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     newSocket.io.on('reconnect', () => {
+      // Clear any pending disconnect timer on explicit reconnect
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
       const restoreAfterReconnect = async () => {
         try {
           const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
@@ -549,6 +566,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;
+      }
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
       }
       newSocket.close();
     };
