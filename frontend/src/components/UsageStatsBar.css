@@ -43,6 +43,23 @@
   line-height: 1;
 }
 
+.usage-stat-error {
+  color: #ef4444;
+}
+
+.usage-stat-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 900px) {
   .usage-stats-bar {
     padding: var(--space-sm) var(--space-md);
