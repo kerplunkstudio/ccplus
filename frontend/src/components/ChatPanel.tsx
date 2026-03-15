@@ -90,6 +90,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isRestoringSession = false,
 }) => {
   const [input, setInput] = useState('');
+  const inputDraftsRef = useRef<Record<string, string>>({});
+  const previousSessionIdRef = useRef<string | undefined>(sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -106,6 +108,25 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [lastMessageCount, setLastMessageCount] = useState(0);
   const userScrolledUpRef = useRef(false);
   const programmaticScrollRef = useRef(false);
+
+  // Persist input drafts per session
+  useEffect(() => {
+    if (!sessionId) return;
+
+    // Save current input to drafts map when session changes
+    if (previousSessionIdRef.current && previousSessionIdRef.current !== sessionId) {
+      inputDraftsRef.current = {
+        ...inputDraftsRef.current,
+        [previousSessionIdRef.current]: input,
+      };
+
+      // Restore input for new session
+      const savedDraft = inputDraftsRef.current[sessionId] || '';
+      setInput(savedDraft);
+    }
+
+    previousSessionIdRef.current = sessionId;
+  }, [sessionId, input]);
 
   const isNearBottom = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -272,6 +293,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     userScrolledUpRef.current = false; // Reset scroll intent on new message
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+    }
+    // Clear draft for current session
+    if (sessionId) {
+      inputDraftsRef.current = {
+        ...inputDraftsRef.current,
+        [sessionId]: '',
+      };
     }
   };
 
