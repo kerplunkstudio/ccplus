@@ -167,6 +167,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
   const handleToggleProject = (event: React.MouseEvent | React.KeyboardEvent, path: string) => {
     event.stopPropagation();
+    onSelectProject(path);
     setExpandedProjects((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
