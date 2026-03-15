@@ -1,15 +1,190 @@
 import { query, type Query, type HookCallback, type HookCallbackMatcher } from "@anthropic-ai/claude-agent-sdk";
-import { existsSync, readFileSync, writeFileSync, createWriteStream } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream } from "fs";
+import { execFileSync } from "child_process";
 import { homedir } from "os";
 import path from "path";
 import * as config from "./config.js";
 import * as database from "./database.js";
 
+// ---- Skills discovery (cached) ----
+
+interface SkillInfo {
+  name: string;
+  plugin: string;
+  description: string;
+}
+
+let cachedSkills: SkillInfo[] | null = null;
+
+function parseDescription(filePath: string): string | null {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (match) {
+      const descMatch = match[1].match(/description:\s*(.+)/);
+      if (descMatch) return descMatch[1].trim();
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function findClaudeBinary(): string | null {
+  const candidates = [
+    path.join(homedir(), ".local", "bin", "claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+    path.join(homedir(), ".claude", "local", "claude"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  try {
+    const result = execFileSync("which", ["claude"], { encoding: "utf-8", timeout: 5000 }).trim();
+    if (result) return result;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function discoverSkills(projectPath?: string): SkillInfo[] {
+  if (cachedSkills && !projectPath) return cachedSkills;
+
+  const skills: SkillInfo[] = [];
+  const claudeDir = path.join(homedir(), ".claude");
+
+  // 1. User commands
+  const userCmdDir = path.join(claudeDir, "commands");
+  if (existsSync(userCmdDir)) {
+    try {
+      for (const file of readdirSync(userCmdDir)) {
+        if (!file.endsWith(".md")) continue;
+        const name = file.replace(/\.md$/, "");
+        const desc = parseDescription(path.join(userCmdDir, file));
+        skills.push({ name, plugin: "user", description: desc || "" });
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 2. User skills
+  const userSkillsDir = path.join(claudeDir, "skills");
+  if (existsSync(userSkillsDir)) {
+    try {
+      for (const dir of readdirSync(userSkillsDir)) {
+        const skillFile = path.join(userSkillsDir, dir, "SKILL.md");
+        if (!existsSync(skillFile)) continue;
+        const desc = parseDescription(skillFile);
+        skills.push({ name: dir, plugin: "skill", description: desc || "" });
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 3. Plugin skills via Claude CLI
+  try {
+    const claudeBin = findClaudeBinary();
+    if (claudeBin) {
+      const output = execFileSync(claudeBin, ["plugin", "list", "--json"], {
+        timeout: 30000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
+      });
+      const plugins = JSON.parse(output.trim());
+      if (Array.isArray(plugins)) {
+        for (const plugin of plugins) {
+          const pluginName = plugin.name || (plugin.id || "").split("@")[0];
+          const installPath = plugin.installPath || "";
+          if (installPath) {
+            const skillsPath = path.join(installPath, ".claude", "skills");
+            if (existsSync(skillsPath)) {
+              try {
+                for (const dir of readdirSync(skillsPath)) {
+                  if (!statSync(path.join(skillsPath, dir)).isDirectory()) continue;
+                  if (skills.some(s => s.name === dir)) continue;
+                  const skillFile = path.join(skillsPath, dir, "SKILL.md");
+                  const desc = existsSync(skillFile) ? parseDescription(skillFile) : null;
+                  skills.push({ name: dir, plugin: pluginName, description: desc || "" });
+                }
+              } catch { /* ignore */ }
+            }
+            const cmdDir = path.join(installPath, "commands");
+            if (existsSync(cmdDir)) {
+              try {
+                for (const file of readdirSync(cmdDir)) {
+                  if (!file.endsWith(".md")) continue;
+                  const name = file.replace(/\.md$/, "");
+                  if (skills.some(s => s.name === name)) continue;
+                  const desc = parseDescription(path.join(cmdDir, file));
+                  skills.push({ name, plugin: pluginName, description: desc || "" });
+                }
+              } catch { /* ignore */ }
+            }
+          }
+          if (Array.isArray(plugin.skills)) {
+            for (const skillName of plugin.skills) {
+              if (skills.some(s => s.name === skillName)) continue;
+              skills.push({ name: skillName, plugin: pluginName, description: "" });
+            }
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 4. Project-level commands
+  if (projectPath) {
+    const projCmdDir = path.join(projectPath, ".claude", "commands");
+    if (existsSync(projCmdDir)) {
+      try {
+        for (const file of readdirSync(projCmdDir)) {
+          if (!file.endsWith(".md")) continue;
+          const name = file.replace(/\.md$/, "");
+          if (skills.some(s => s.name === name)) continue;
+          const desc = parseDescription(path.join(projCmdDir, file));
+          skills.push({ name, plugin: "project", description: desc || "" });
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  if (!projectPath) cachedSkills = skills;
+  return skills;
+}
+
+// Discover installed plugin paths for the SDK plugins option
+let cachedPluginPaths: Array<{ type: "local"; path: string }> | null = null;
+
+function getInstalledPlugins(): Array<{ type: "local"; path: string }> {
+  if (cachedPluginPaths) return cachedPluginPaths;
+
+  const result: Array<{ type: "local"; path: string }> = [];
+  try {
+    const claudeBin = findClaudeBinary();
+    if (claudeBin) {
+      const output = execFileSync(claudeBin, ["plugin", "list", "--json"], {
+        timeout: 30000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
+      });
+      const plugins = JSON.parse(output.trim());
+      if (Array.isArray(plugins)) {
+        for (const plugin of plugins) {
+          const installPath = plugin.installPath || "";
+          if (installPath && existsSync(installPath)) {
+            result.push({ type: "local", path: installPath });
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  cachedPluginPaths = result;
+  return result;
+}
+
+export { discoverSkills, type SkillInfo };
+
 // System prompt appended to every SDK session
-const CCPLUS_SYSTEM_PROMPT = `
+const CCPLUS_SYSTEM_PROMPT_BASE = `
 # cc+ Delegation Rules
 
 You are running inside cc+, a multi-session web UI.
+
+## Slash commands / Skills
+When the user invokes a slash command (e.g. "Run the /animate slash command"), use the Skill tool to execute it. For example, to run /animate, call: Skill({ skill: "animate" }). The Skill tool is available to you — use it for any slash command the user requests.
 
 ## Asking the user questions
 When the user's request is ambiguous, has multiple valid approaches, or requires a choice, use the AskUserQuestion tool to present structured options. The cc+ UI renders these as selectable cards. Use it whenever you would normally ask the user to choose between approaches, confirm a direction, or clarify requirements. Do NOT just write out options as text — use AskUserQuestion so the user can click to select.
@@ -37,6 +212,18 @@ Do NOT ask for clarification. Make reasonable assumptions and proceed.
 
 3. STOP after the Agent call. Do not continue working.
 `.trim();
+
+function buildSystemPrompt(projectPath?: string): string {
+  const skills = discoverSkills(projectPath);
+  if (skills.length === 0) return CCPLUS_SYSTEM_PROMPT_BASE;
+
+  const skillLines = skills.map(s => {
+    const desc = s.description ? ` - ${s.description}` : "";
+    return `- /${s.name} (${s.plugin})${desc}`;
+  });
+
+  return `${CCPLUS_SYSTEM_PROMPT_BASE}\n\n## Available Skills\nThe following slash commands are available. Use the Skill tool to execute them:\n${skillLines.join("\n")}`;
+}
 
 // ---- Types ----
 
@@ -460,8 +647,20 @@ async function streamQuery(
       return { behavior: "allow" };
     };
 
+    // Convert slash commands to regular prompts so the SDK doesn't intercept them.
+    // The model handles skills natively via the Skill tool.
+    let effectivePrompt = prompt;
+    if (prompt.startsWith("/")) {
+      const spaceIdx = prompt.indexOf(" ");
+      const skillName = spaceIdx > 0 ? prompt.slice(1, spaceIdx) : prompt.slice(1);
+      const args = spaceIdx > 0 ? prompt.slice(spaceIdx + 1).trim() : "";
+      effectivePrompt = args
+        ? `Run the /${skillName} slash command with these arguments: ${args}`
+        : `Run the /${skillName} slash command.`;
+    }
+
     // Build query content
-    let queryContent: string | AsyncIterable<Record<string, unknown>> = prompt;
+    let queryContent: string | AsyncIterable<Record<string, unknown>> = effectivePrompt;
 
     if (imageIds?.length) {
       const contentBlocks: Record<string, unknown>[] = [];
@@ -498,20 +697,24 @@ async function streamQuery(
       queryContent = messageStream();
     }
 
-    // Start the query
+    // Load installed plugins so the SDK subprocess can execute skills
+    const installedPlugins = getInstalledPlugins();
+
     const q = query({
       prompt: queryContent as string,
       options: {
         model: model ?? config.SDK_MODEL,
         cwd: workspace,
         permissionMode: "bypassPermissions" as any,
+        allowDangerouslySkipPermissions: true,
         env: cleanEnv,
         hooks: hooks as any,
+        plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,
         resume: resumeId ?? undefined,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: CCPLUS_SYSTEM_PROMPT,
+          append: buildSystemPrompt(workspace),
         } as any,
         canUseTool: canUseTool as any,
         maxTurns: 50,
@@ -578,6 +781,14 @@ async function streamQuery(
 
         session.sdkSessionId = result.session_id;
 
+        // If the SDK returned result text but no assistant messages were streamed
+        // (e.g. slash command output), emit the result text to the frontend
+        const sdkResultText = result.result as string | undefined;
+        if (sdkResultText && resultText.length === 0) {
+          resultText.push(sdkResultText);
+          callbacks.onText(sdkResultText);
+        }
+
         lastCompletionData = {
           text: resultText.join(""),
           sdk_session_id: result.session_id,
@@ -611,7 +822,7 @@ async function streamQuery(
       callbacks.onComplete(lastCompletionData);
     }
   } catch (err) {
-    console.error(`SDK query error for ${sessionId}:`, err);
+    console.error(`[sdk-session] SDK query CATCH for ${sessionId}:`, err);
     callbacks.onError(String(err));
     sessions.delete(sessionId);
   } finally {
