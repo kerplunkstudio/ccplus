@@ -117,32 +117,25 @@ detect_python() {
     fi
 }
 
-# Worker PID file
-WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
+# Worker PID file (DEPRECATED: TypeScript backend runs SDK in-process)
+# WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
 # Server PID file
-SERVER_PID_FILE="$SCRIPT_DIR/data/flask_server.pid"
+SERVER_PID_FILE="$SCRIPT_DIR/data/node_server.pid"
 
-# Worker checksum file
-WORKER_CHECKSUM_FILE="$SCRIPT_DIR/data/worker_checksums.md5"
+# Worker checksum file (DEPRECATED)
+# WORKER_CHECKSUM_FILE="$SCRIPT_DIR/data/worker_checksums.md5"
 
-# Files that require a worker restart when changed
-WORKER_FILES=(
-    "backend/sdk_worker.py"
-    "backend/worker_protocol.py"
-    "backend/config.py"
-)
+# Files that require a worker restart when changed (DEPRECATED)
+# WORKER_FILES=(
+#     "backend/sdk_worker.py"
+#     "backend/worker_protocol.py"
+#     "backend/config.py"
+# )
 
-# Check if worker is running
+# Check if worker is running (DEPRECATED: no separate worker in TS backend)
 worker_running() {
-    if [ -f "$WORKER_PID_FILE" ]; then
-        local pid
-        pid=$(cat "$WORKER_PID_FILE" 2>/dev/null)
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            return 0
-        fi
-    fi
-    return 1
+    return 1  # Always return false - no separate worker process
 }
 
 # Check if server is running
@@ -157,125 +150,20 @@ server_running() {
     return 1
 }
 
-# Save current checksums of worker files
-save_worker_checksums() {
-    mkdir -p "$SCRIPT_DIR/data"
-    > "$WORKER_CHECKSUM_FILE"  # Clear file
+# Save current checksums of worker files (DEPRECATED)
+# save_worker_checksums() { return 0; }
 
-    for f in "${WORKER_FILES[@]}"; do
-        if [ -f "$SCRIPT_DIR/$f" ]; then
-            local checksum
-            checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
-            echo "$checksum  $f" >> "$WORKER_CHECKSUM_FILE"
-        fi
-    done
-}
+# Check if worker code has changed since the worker was started (DEPRECATED)
+# worker_code_changed() { return 1; }
 
-# Check if worker code has changed since the worker was started
-worker_code_changed() {
-    if ! worker_running; then
-        return 0  # Not running = needs start
-    fi
+# Start worker if not already running (DEPRECATED: TS backend runs SDK in-process)
+# start_worker() { return 0; }
 
-    # If no checksum file exists, treat as changed (first run)
-    if [ ! -f "$WORKER_CHECKSUM_FILE" ]; then
-        info "No worker checksum file found — treating as changed"
-        return 0
-    fi
+# Stop the worker (DEPRECATED)
+# stop_worker() { return 0; }
 
-    # Compare current checksums against saved checksums
-    for f in "${WORKER_FILES[@]}"; do
-        if [ -f "$SCRIPT_DIR/$f" ]; then
-            local current_checksum
-            current_checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
-
-            local saved_checksum
-            saved_checksum=$(grep " $f\$" "$WORKER_CHECKSUM_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
-
-            if [ "$current_checksum" != "$saved_checksum" ]; then
-                info "Worker code changed: $f (checksum mismatch)"
-                return 0
-            fi
-        fi
-    done
-
-    return 1  # No changes
-}
-
-# Start worker if not already running
-start_worker() {
-    header "Checking SDK worker"
-
-    if worker_running; then
-        local pid
-        pid=$(cat "$WORKER_PID_FILE")
-        ok "SDK worker already running (PID: $pid)"
-        return 0
-    fi
-
-    info "Starting SDK worker..."
-    detect_python
-    mkdir -p "$SCRIPT_DIR/logs" "$SCRIPT_DIR/data"
-
-    export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
-    nohup "$PYTHON" "$SCRIPT_DIR/backend/sdk_worker.py" > "$SCRIPT_DIR/logs/worker.log" 2>&1 &
-
-    # Wait for socket to appear
-    local max_wait=10
-    local waited=0
-    while [ $waited -lt $max_wait ]; do
-        if [ -S "$SCRIPT_DIR/data/sdk_worker.sock" ]; then
-            ok "SDK worker started (PID: $(cat "$WORKER_PID_FILE" 2>/dev/null))"
-            # Save checksums after successful start
-            save_worker_checksums
-            return 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    error "SDK worker failed to start after ${max_wait}s"
-    tail -20 "$SCRIPT_DIR/logs/worker.log" 2>/dev/null || true
-    exit 1
-}
-
-# Stop the worker
-stop_worker() {
-    header "Stopping SDK worker"
-
-    if ! worker_running; then
-        ok "SDK worker not running"
-        return 0
-    fi
-
-    local pid
-    pid=$(cat "$WORKER_PID_FILE")
-    info "Stopping SDK worker (PID: $pid)..."
-    kill -TERM "$pid" 2>/dev/null || true
-    sleep 2
-
-    if kill -0 "$pid" 2>/dev/null; then
-        warn "Force killing worker..."
-        kill -9 "$pid" 2>/dev/null || true
-    fi
-
-    rm -f "$WORKER_PID_FILE" "$SCRIPT_DIR/data/sdk_worker.sock"
-    ok "SDK worker stopped"
-}
-
-# Restart worker only if its code changed
-smart_worker_restart() {
-    if worker_code_changed; then
-        if worker_running; then
-            warn "Worker code changed — restarting worker (active sessions will be interrupted)"
-            stop_worker
-        fi
-        start_worker
-        # Checksums saved by start_worker after successful start
-    else
-        start_worker  # ensures it's running, no-op if already running
-    fi
-}
+# Restart worker only if its code changed (DEPRECATED)
+# smart_worker_restart() { return 0; }
 
 # Build React frontend
 build_frontend() {
@@ -297,6 +185,23 @@ build_frontend() {
     run_with_spinner "$build_msg" "npm run build" || { error "Frontend build failed"; exit 1; }
 
     cd "$SCRIPT_DIR"
+}
+
+# Build TypeScript backend
+build_backend() {
+    header "Building TypeScript backend"
+
+    cd "$SCRIPT_DIR/backend-ts"
+
+    if [ ! -d "node_modules" ]; then
+        warn "node_modules not found, running npm install..."
+        run_with_spinner "Installing backend dependencies..." "npm install --silent" || { error "npm install failed"; exit 1; }
+    fi
+
+    run_with_spinner "Building backend..." "npm run build" || { error "Backend build failed"; exit 1; }
+
+    cd "$SCRIPT_DIR"
+    ok "Backend built successfully"
 }
 
 # Deploy build output to static/chat/
@@ -382,11 +287,15 @@ kill_server() {
 start_server() {
     header "Starting server"
 
-    detect_python
     mkdir -p "$SCRIPT_DIR/logs"
 
-    export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
-    nohup "$PYTHON" "$SCRIPT_DIR/backend/server.py" > "$SCRIPT_DIR/logs/server.log" 2>&1 &
+    # Ensure backend is built
+    if [ ! -d "$SCRIPT_DIR/backend-ts/dist" ] || [ -z "$(ls -A "$SCRIPT_DIR/backend-ts/dist" 2>/dev/null)" ]; then
+        warn "Backend not built, building TypeScript first..."
+        build_backend
+    fi
+
+    nohup node "$SCRIPT_DIR/backend-ts/dist/server.js" > "$SCRIPT_DIR/logs/server.log" 2>&1 &
     SERVER_PID=$!
 
     info "Server starting (PID: $SERVER_PID)"
@@ -449,11 +358,7 @@ launch_desktop() {
         kill_server
     fi
 
-    # Stop worker if running (desktop app starts its own)
-    if worker_running; then
-        info "Stopping worker (desktop app will start its own)..."
-        stop_worker
-    fi
+    # Note: No separate worker to stop - TS backend runs SDK in-process
 
     info "Starting cc+ Desktop..."
     cd "$SCRIPT_DIR"
@@ -474,13 +379,7 @@ launch_desktop_parallel() {
         deploy_static
     fi
 
-    # Ensure worker is running (shared between web and desktop)
-    if ! worker_running; then
-        info "Starting shared SDK worker..."
-        start_worker
-    else
-        info "Using existing SDK worker (shared with web server)"
-    fi
+    # Note: No separate worker needed - TS backend runs SDK in-process
 
     # Check if web server is running
     if lsof -ti:$PORT >/dev/null 2>&1; then
@@ -498,7 +397,7 @@ launch_desktop_parallel() {
 
 # Check if setup is needed
 needs_setup() {
-    [ ! -d "venv" ] || [ ! -f ".env" ] || [ ! -d "frontend/node_modules" ]
+    [ ! -f ".env" ] || [ ! -d "frontend/node_modules" ] || [ ! -d "backend-ts/node_modules" ]
 }
 
 # Run setup
@@ -547,6 +446,12 @@ run_setup() {
 
     # Install frontend dependencies
     run_with_spinner "Installing frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
+
+    # Install backend dependencies
+    run_with_spinner "Installing backend dependencies..." "cd backend-ts && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
+
+    # Build backend
+    run_with_spinner "Building TypeScript backend..." "cd backend-ts && npm run build && cd '$SCRIPT_DIR'" || exit 1
 
     # Setup .env file
     if [ ! -f ".env" ]; then
@@ -738,13 +643,7 @@ run_doctor() {
         warn "Port $PORT is free (server not running)"
     fi
 
-    # Worker status
-    if worker_running; then
-        worker_pid=$(cat "$WORKER_PID_FILE")
-        pass "SDK worker running (PID: $worker_pid)"
-    else
-        warn "SDK worker not running"
-    fi
+    # Note: No separate worker in TS backend - SDK runs in-process
 
     echo ""
     echo "${BOLD}Build${RESET}"
@@ -768,11 +667,21 @@ run_doctor() {
         exit_code=1
     fi
 
-    # venv exists
-    if [ -d "venv" ]; then
-        pass "Python venv exists"
+    # Backend build exists
+    if [ -f "backend-ts/dist/server.js" ]; then
+        pass "Backend build exists"
+
+        # Check staleness
+        if [ -d "backend-ts/src" ]; then
+            stale_count=$(find backend-ts/src -newer backend-ts/dist/server.js 2>/dev/null | wc -l)
+            if [ "$stale_count" -gt 0 ]; then
+                warn "Backend source is newer than build (rebuild recommended)"
+            else
+                pass "Backend build is up to date"
+            fi
+        fi
     else
-        fail "Python venv not found"
+        fail "Backend build not found"
         exit_code=1
     fi
 
@@ -864,39 +773,23 @@ run_status() {
     echo "${BOLD}Services${RESET}"
     echo ""
 
-    # Worker status
-    if worker_running; then
-        local worker_pid
-        worker_pid=$(cat "$WORKER_PID_FILE")
-        local worker_uptime
-        worker_uptime=$(get_uptime "$worker_pid")
-        echo "  ${GREEN}●${RESET} SDK Worker"
-        echo "    PID:    $worker_pid"
-        echo "    Uptime: $worker_uptime"
-    else
-        echo "  ${RED}●${RESET} SDK Worker"
-        echo "    Status: ${RED}not running${RESET}"
-    fi
-
-    echo ""
-
     # Server status
     if server_running; then
         local server_pid
         server_pid=$(cat "$SERVER_PID_FILE")
         local server_uptime
         server_uptime=$(get_uptime "$server_pid")
-        echo "  ${GREEN}●${RESET} Flask Server"
+        echo "  ${GREEN}●${RESET} Node.js Server"
         echo "    PID:    $server_pid"
         echo "    Port:   $PORT"
         echo "    Uptime: $server_uptime"
 
         # Try to get connected clients count from health endpoint
         local clients
-        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('connected_clients', 0))" 2>/dev/null || echo "N/A")
+        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | node -e "process.stdin.on('data', d => console.log(JSON.parse(d).connected_clients || 0))" 2>/dev/null || echo "N/A")
         echo "    Clients: $clients"
     else
-        echo "  ${RED}●${RESET} Flask Server"
+        echo "  ${RED}●${RESET} Node.js Server"
         echo "    Status: ${RED}not running${RESET}"
         echo "    Port:   $PORT"
     fi
@@ -917,26 +810,14 @@ run_logs() {
             info "Tailing server log (Ctrl+C to stop)..."
             tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
             ;;
-        worker)
-            if [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
-                error "Worker log not found: $SCRIPT_DIR/logs/worker.log"
-                exit 1
-            fi
-            info "Tailing worker log (Ctrl+C to stop)..."
-            tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /"
-            ;;
         all|*)
-            if [ ! -f "$SCRIPT_DIR/logs/server.log" ] && [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
-                error "No log files found in $SCRIPT_DIR/logs/"
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ]; then
+                error "Server log not found in $SCRIPT_DIR/logs/"
                 exit 1
             fi
 
-            info "Tailing all logs (Ctrl+C to stop)..."
-            (
-                [ -f "$SCRIPT_DIR/logs/server.log" ] && tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /" &
-                [ -f "$SCRIPT_DIR/logs/worker.log" ] && tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /" &
-                wait
-            )
+            info "Tailing server log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
             ;;
     esac
 }
@@ -1063,12 +944,12 @@ run_update() {
         run_with_spinner "Reinstalling frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
     fi
 
-    # Always rebuild frontend
+    # Always rebuild frontend and backend
+    build_backend
     build_frontend
     deploy_static
 
-    # Restart services
-    smart_worker_restart
+    # Restart server
     kill_server
     start_server
 
@@ -1183,22 +1064,21 @@ cc+ - Unified launcher and deployment tool
 Usage: ./ccplus [command]
 
 Commands:
-  (none) or start  Full deploy: build frontend + deploy + restart server
+  (none) or start  Full deploy: build frontend + backend + deploy + restart server
                    On first run: setup + configure + build + start
-                   Worker only restarts if code changed.
   status           Show service status (version, uptime, PID, clients)
-  logs [target]    Tail logs (target: all, server, worker. default: all)
+  logs [target]    Tail logs (target: all or server. default: all)
   doctor           Run system diagnostics
   version          Show version information
   check-update     Check if an update is available
   update           Update cc+ to the latest version
   release [type]   Create a new release (type: patch, minor, major)
-  server           Restart Flask server only (worker stays alive)
+  server           Restart Node.js server
   frontend         Build + deploy frontend only (no server restart)
-  worker           Force restart the SDK worker (kills active sessions)
+  backend          Build TypeScript backend only (no server restart)
   desktop          Launch Electron desktop app (stops existing services)
   desktop-parallel Launch desktop app in parallel with web server
-  stop             Stop both Flask server and SDK worker
+  stop             Stop Node.js server
   setup            Force re-run setup
   help             Show this help message
 
@@ -1231,7 +1111,7 @@ case "$COMMAND" in
         if needs_setup; then
             run_setup
         fi
-        smart_worker_restart
+        build_backend
         build_frontend
         deploy_static
         kill_server
@@ -1287,15 +1167,14 @@ case "$COMMAND" in
         echo "  ${BOLD}Hard refresh your browser (Cmd+Shift+R) to load new assets${RESET}"
         echo ""
         ;;
-    server)
-        smart_worker_restart
-        kill_server
-        start_server
+    backend)
+        build_backend
+        ok "Backend built (server not restarted)"
+        echo ""
+        echo "  ${BOLD}Run './ccplus server' to restart with new backend${RESET}"
+        echo ""
         ;;
-    worker)
-        stop_worker
-        start_worker
-        # Flask must reconnect to the new worker socket
+    server)
         kill_server
         start_server
         ;;
@@ -1307,7 +1186,6 @@ case "$COMMAND" in
         ;;
     stop)
         kill_server
-        stop_worker
         ;;
     setup)
         run_setup
@@ -1368,39 +1246,23 @@ run_status() {
     echo "${BOLD}Services${RESET}"
     echo ""
 
-    # Worker status
-    if worker_running; then
-        local worker_pid
-        worker_pid=$(cat "$WORKER_PID_FILE")
-        local worker_uptime
-        worker_uptime=$(get_uptime "$worker_pid")
-        echo "  ${GREEN}●${RESET} SDK Worker"
-        echo "    PID:    $worker_pid"
-        echo "    Uptime: $worker_uptime"
-    else
-        echo "  ${RED}●${RESET} SDK Worker"
-        echo "    Status: ${RED}not running${RESET}"
-    fi
-
-    echo ""
-
     # Server status
     if server_running; then
         local server_pid
         server_pid=$(cat "$SERVER_PID_FILE")
         local server_uptime
         server_uptime=$(get_uptime "$server_pid")
-        echo "  ${GREEN}●${RESET} Flask Server"
+        echo "  ${GREEN}●${RESET} Node.js Server"
         echo "    PID:    $server_pid"
         echo "    Port:   $PORT"
         echo "    Uptime: $server_uptime"
 
         # Try to get connected clients count from health endpoint
         local clients
-        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('connected_clients', 0))" 2>/dev/null || echo "N/A")
+        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | node -e "process.stdin.on('data', d => console.log(JSON.parse(d).connected_clients || 0))" 2>/dev/null || echo "N/A")
         echo "    Clients: $clients"
     else
-        echo "  ${RED}●${RESET} Flask Server"
+        echo "  ${RED}●${RESET} Node.js Server"
         echo "    Status: ${RED}not running${RESET}"
         echo "    Port:   $PORT"
     fi
@@ -1421,26 +1283,14 @@ run_logs() {
             info "Tailing server log (Ctrl+C to stop)..."
             tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
             ;;
-        worker)
-            if [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
-                error "Worker log not found: $SCRIPT_DIR/logs/worker.log"
-                exit 1
-            fi
-            info "Tailing worker log (Ctrl+C to stop)..."
-            tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /"
-            ;;
         all|*)
-            if [ ! -f "$SCRIPT_DIR/logs/server.log" ] && [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
-                error "No log files found in $SCRIPT_DIR/logs/"
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ]; then
+                error "Server log not found in $SCRIPT_DIR/logs/"
                 exit 1
             fi
 
-            info "Tailing all logs (Ctrl+C to stop)..."
-            (
-                [ -f "$SCRIPT_DIR/logs/server.log" ] && tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /" &
-                [ -f "$SCRIPT_DIR/logs/worker.log" ] && tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /" &
-                wait
-            )
+            info "Tailing server log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
             ;;
     esac
 }
