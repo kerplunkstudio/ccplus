@@ -4,37 +4,59 @@ import './UsageStatsBar.css';
 
 interface UsageStatsBarProps {
   stats: UsageStats;
+  totalTools?: number;
+  elapsed?: string;
+  errorCount?: number;
+  hasRunning?: boolean;
 }
 
-const formatNumber = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-};
+export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({
+  stats,
+  totalTools,
+  elapsed,
+  errorCount = 0,
+  hasRunning = false,
+}) => {
+  const showActivityStats = totalTools !== undefined && elapsed !== undefined;
 
-const formatDuration = (ms: number): string => {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000);
-  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-};
+  if (!showActivityStats) {
+    return (
+      <div className="usage-stats-bar">
+        <div className="usage-stat">
+          <span className="usage-stat-value">{stats.totalSessions}</span>
+          <span className="usage-stat-label">SESS</span>
+        </div>
+        <div className="usage-stat">
+          <span className="usage-stat-value">{stats.model}</span>
+          <span className="usage-stat-label">MODEL</span>
+        </div>
+      </div>
+    );
+  }
 
-export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({ stats }) => {
   return (
     <div className="usage-stats-bar">
       <div className="usage-stat">
-        <span className="usage-stat-value">{stats.totalSessions}</span>
-        <span className="usage-stat-label">SESS</span>
+        <span className="usage-stat-value">{totalTools}</span>
+        <span className="usage-stat-label">TOOLS</span>
       </div>
       <div className="usage-stat">
-        <span className="usage-stat-value">{formatDuration(stats.totalDuration)}</span>
-        <span className="usage-stat-label">TIME</span>
+        <span className={`usage-stat-value ${hasRunning ? 'usage-stat-pulse' : ''}`}>
+          {elapsed}
+        </span>
+        <span className="usage-stat-label">ELAPSED</span>
       </div>
-      <div className="usage-stat">
-        <span className="usage-stat-value">{formatNumber(stats.linesOfCode)}</span>
-        <span className="usage-stat-label">LINES</span>
-      </div>
+      {errorCount > 0 ? (
+        <div className="usage-stat">
+          <span className="usage-stat-value usage-stat-error">{errorCount}</span>
+          <span className="usage-stat-label">ERRORS</span>
+        </div>
+      ) : (
+        <div className="usage-stat">
+          <span className="usage-stat-value">{stats.model}</span>
+          <span className="usage-stat-label">MODEL</span>
+        </div>
+      )}
     </div>
   );
 };
