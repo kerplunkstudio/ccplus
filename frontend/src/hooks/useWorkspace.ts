@@ -102,29 +102,22 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
     case 'CLOSE_TAB': {
       return updateProject(state, action.projectPath, (project) => {
         const filtered = project.tabs.filter((t) => t.sessionId !== action.sessionId);
+        const updatedMru = ensureMruOrder(filtered, project.tabMruOrder);
 
         if (filtered.length === 0) {
-          const freshTab: TabState = {
-            sessionId: generateSessionId(),
-            label: 'New session',
-            isStreaming: false,
-            hasRunningAgent: false,
-            createdAt: Date.now(),
-          };
           return {
             ...project,
-            tabs: [freshTab],
-            activeTabId: freshTab.sessionId,
-            tabMruOrder: [freshTab.sessionId],
+            tabs: [],
+            activeTabId: '',
+            tabMruOrder: [],
           };
         }
 
-        const updatedMru = ensureMruOrder(filtered, project.tabMruOrder);
         return {
           ...project,
           tabs: filtered,
           activeTabId: project.activeTabId === action.sessionId
-            ? filtered[filtered.length - 1].sessionId
+            ? updatedMru[0]
             : project.activeTabId,
           tabMruOrder: updatedMru,
         };

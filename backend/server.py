@@ -505,6 +505,215 @@ def archive_session_endpoint(session_id):
         return jsonify({"error": "Failed to archive session"}), 500
 
 
+@app.route("/api/project/overview")
+def project_overview():
+    """Return project overview data for the dashboard.
+
+    Query params:
+        project: absolute path to the project directory
+
+    Returns:
+        name: project name
+        path: project path
+        git: {branch, dirty_count}
+        file_tree: top-level directory listing
+        recent_activity: last 20 tool events across all sessions for this project
+        sessions: list of past sessions with their first message and stats
+        stats: aggregated project stats
+    """
+    project_path = request.args.get("project", "").strip()
+    if not project_path:
+        return jsonify({"error": "project parameter required"}), 400
+
+    # Resolve and validate path (same as git_context)
+    try:
+        project_dir = Path(project_path).resolve()
+    except Exception:
+        return jsonify({"error": "Invalid project path"}), 400
+
+    workspace_dir = Path(WORKSPACE_PATH).resolve()
+    try:
+        project_dir.relative_to(workspace_dir)
+    except ValueError:
+        return jsonify({"error": "Project path is outside the configured workspace"}), 403
+
+    if not project_dir.exists() or not project_dir.is_dir():
+        return jsonify({"error": f"Project path does not exist or is not a directory: {project_path}"}), 400
+
+    response = {
+        "name": project_dir.name,
+        "path": str(project_dir),
+    }
+
+    # Git context
+    git_info = {}
+    try:
+        # Check if it's a git repo
+        subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--git-dir"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+
+        # Get branch
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            git_info["branch"] = result.stdout.strip()
+
+        # Get dirty count
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            lines = [line for line in result.stdout.strip().split("\n") if line]
+            git_info["dirty_count"] = len(lines)
+        else:
+            git_info["dirty_count"] = 0
+    except Exception:
+        git_info = None
+
+    response["git"] = git_info
+
+    # File tree (top-level only)
+    ignore_patterns = {".git", "node_modules", "__pycache__", "venv", ".env", "build", "dist", ".DS_Store", ".idea", ".vscode"}
+    try:
+        entries = []
+        for item in sorted(project_dir.iterdir(), key=lambda x: (not x.is_dir(), x.name)):
+            if item.name.startswith(".") or item.name in ignore_patterns:
+                continue
+            entries.append(item.name + ("/" if item.is_dir() else ""))
+            if len(entries) >= 30:
+                break
+        response["file_tree"] = entries
+    except Exception as exc:
+        logger.error(f"Failed to read file tree: {exc}")
+        response["file_tree"] = []
+
+    # Recent activity (last 20 tool events for this project)
+    try:
+        from backend.database import _get_connection
+        conn = _get_connection()
+        cursor = conn.cursor()
+
+        # Get all session IDs for this project
+        cursor.execute("""
+            SELECT DISTINCT session_id
+            FROM conversations
+            WHERE project_path = ?
+        """, (str(project_dir),))
+        session_ids = [row[0] for row in cursor.fetchall()]
+
+        if session_ids:
+            placeholders = ",".join("?" * len(session_ids))
+            cursor.execute(f"""
+                SELECT tool_name, timestamp, success, session_id
+                FROM tool_usage
+                WHERE session_id IN ({placeholders})
+                ORDER BY timestamp DESC
+                LIMIT 20
+            """, session_ids)
+
+            recent_activity = []
+            for row in cursor.fetchall():
+                recent_activity.append({
+                    "tool_name": row[0],
+                    "timestamp": row[1],
+                    "success": bool(row[2]) if row[2] is not None else True,
+                    "session_id": row[3],
+                })
+            response["recent_activity"] = recent_activity
+        else:
+            response["recent_activity"] = []
+    except Exception as exc:
+        logger.error(f"Failed to fetch recent activity: {exc}")
+        response["recent_activity"] = []
+
+    # Sessions (list of past sessions for this project)
+    try:
+        sessions_list = get_sessions_list(project_path=str(project_dir))
+        response["sessions"] = sessions_list[:20]  # Limit to 20 most recent
+    except Exception as exc:
+        logger.error(f"Failed to fetch sessions: {exc}")
+        response["sessions"] = []
+
+    # Stats (aggregated for this project)
+    try:
+        from backend.database import _get_connection
+        conn = _get_connection()
+        cursor = conn.cursor()
+
+        # Get all session IDs for this project
+        cursor.execute("""
+            SELECT DISTINCT session_id
+            FROM conversations
+            WHERE project_path = ?
+        """, (str(project_dir),))
+        session_ids = [row[0] for row in cursor.fetchall()]
+
+        stats = {
+            "total_sessions": len(session_ids),
+            "total_cost": 0.0,
+            "total_duration_ms": 0.0,
+            "total_tools": 0,
+            "lines_of_code": 0,
+        }
+
+        if session_ids:
+            placeholders = ",".join("?" * len(session_ids))
+
+            # Aggregate tool usage
+            cursor.execute(f"""
+                SELECT
+                    COUNT(*) as total_tools,
+                    SUM(COALESCE(duration_ms, 0)) as total_duration
+                FROM tool_usage
+                WHERE session_id IN ({placeholders})
+            """, session_ids)
+            row = cursor.fetchone()
+            if row:
+                stats["total_tools"] = row[0] or 0
+                stats["total_duration_ms"] = row[1] or 0.0
+
+            # Count lines of code (from Write/Edit tools)
+            cursor.execute(f"""
+                SELECT parameters
+                FROM tool_usage
+                WHERE session_id IN ({placeholders})
+                AND tool_name IN ('Write', 'Edit')
+                AND success = 1
+            """, session_ids)
+            for row in cursor.fetchall():
+                try:
+                    params = json.loads(row[0]) if row[0] else {}
+                    content = params.get("content", "") or params.get("new_string", "")
+                    if content:
+                        stats["lines_of_code"] += content.count("\n") + 1
+                except Exception:
+                    pass
+
+        response["stats"] = stats
+    except Exception as exc:
+        logger.error(f"Failed to fetch project stats: {exc}")
+        response["stats"] = {
+            "total_sessions": 0,
+            "total_cost": 0.0,
+            "total_duration_ms": 0.0,
+            "total_tools": 0,
+            "lines_of_code": 0,
+        }
+
+    return jsonify(response)
+
+
 @app.route("/api/workspace")
 def get_workspace():
     """Return persisted workspace state for the current user."""

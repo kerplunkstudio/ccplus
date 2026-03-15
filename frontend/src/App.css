@@ -35,6 +35,10 @@
   position: relative;
 }
 
+.panel-chat.full-width {
+  width: 100%;
+}
+
 .panel-activity {
   width: 280px;
   background: var(--bg-secondary);

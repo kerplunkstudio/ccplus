@@ -4,6 +4,7 @@ import { useWorkspace } from './hooks/useWorkspace';
 import { useTabSocket } from './hooks/useTabSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
+import { ProjectDashboard } from './components/ProjectDashboard';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
@@ -153,13 +154,13 @@ function AppContent({ token, loading }: AppContentProps) {
 
   // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Escape cancel, Ctrl+Tab MRU tab switching)
   useEffect(() => {
-    if (!activeProject) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+T / Ctrl+T: New tab
+      // Cmd+T / Ctrl+T: New tab (works even with zero tabs if project is selected)
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault();
-        handleNewTab();
+        if (activeProject) {
+          handleNewTab();
+        }
         return;
       }
 
@@ -184,7 +185,7 @@ function AppContent({ token, loading }: AppContentProps) {
         e.preventDefault();
 
         const projects = workspace.state.projects;
-        if (projects.length === 0) return;
+        if (projects.length === 0 || !activeProject) return;
 
         const forward = !e.shiftKey;
 
@@ -228,6 +229,9 @@ function AppContent({ token, loading }: AppContentProps) {
             mruSnapshotProjectRef.current = nextProject.path;
             mruCycleIndexRef.current = targetIdx;
             handleSelectTab(nextProject.path, nextMru[targetIdx]);
+          } else {
+            // Next project has no tabs, just select it (shows dashboard)
+            handleSelectProject(nextProject.path);
           }
         }
       }
@@ -263,7 +267,7 @@ function AppContent({ token, loading }: AppContentProps) {
         electronAPI.removeMenuActionListener(handleMenuAction);
       }
     };
-  }, [activeProject, activeTab, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTab, handleNewTab, handleCloseTabInActiveProject, streaming, cancelQuery]);
+  }, [activeProject, activeTab, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTab, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
@@ -281,6 +285,8 @@ function AppContent({ token, loading }: AppContentProps) {
       </div>
     );
   }
+
+  const hasTabs = activeProject && activeProject.tabs.length > 0;
 
   return (
     <div className="app-layout" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
@@ -309,7 +315,7 @@ function AppContent({ token, loading }: AppContentProps) {
       </div>
 
       <div className="panel-main">
-        {activeProject && (
+        {activeProject && hasTabs && (
           <TabBar
             tabs={activeProject.tabs}
             activeTabId={activeProject.activeTabId}
@@ -319,36 +325,47 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className="panel-chat">
+          <div className={`panel-chat ${!hasTabs ? 'full-width' : ''}`}>
             {activeProject ? (
-              <ChatPanel
-                messages={messages}
-                connected={connected}
-                streaming={streaming}
-                currentTool={currentTool}
-                toolLog={toolLog}
-                selectedModel={selectedModel}
-                usageStats={usageStats}
-                onSendMessage={handleSendMessage}
-                onSelectModel={handleSelectModel}
-                onCancel={cancelQuery}
-                onToggleSessions={() => toggleDrawer('sessions')}
-                onToggleActivity={() => toggleDrawer('activity')}
-                projectPath={activeProject?.path || null}
-                onLoadSession={handleLoadSession}
-                sessionId={activeTab?.sessionId}
-                pendingQuestion={pendingQuestion}
-                onRespondToQuestion={respondToQuestion}
-              />
+              hasTabs ? (
+                <ChatPanel
+                  messages={messages}
+                  connected={connected}
+                  streaming={streaming}
+                  currentTool={currentTool}
+                  toolLog={toolLog}
+                  selectedModel={selectedModel}
+                  usageStats={usageStats}
+                  onSendMessage={handleSendMessage}
+                  onSelectModel={handleSelectModel}
+                  onCancel={cancelQuery}
+                  onToggleSessions={() => toggleDrawer('sessions')}
+                  onToggleActivity={() => toggleDrawer('activity')}
+                  projectPath={activeProject?.path || null}
+                  onLoadSession={handleLoadSession}
+                  sessionId={activeTab?.sessionId}
+                  pendingQuestion={pendingQuestion}
+                  onRespondToQuestion={respondToQuestion}
+                />
+              ) : (
+                <ProjectDashboard
+                  projectPath={activeProject.path}
+                  projectName={activeProject.name}
+                  onNewSession={handleNewTab}
+                  onLoadSession={handleLoadSession}
+                />
+              )
             ) : (
               <div className="no-project-state">
                 <p>Open a project from the sidebar to get started</p>
               </div>
             )}
           </div>
-          <div className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
-            <ActivityTree tree={activityTree} usageStats={usageStats} />
-          </div>
+          {hasTabs && (
+            <div className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
+              <ActivityTree tree={activityTree} usageStats={usageStats} />
+            </div>
+          )}
         </div>
       </div>
     </div>
