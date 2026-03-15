@@ -332,6 +332,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     toolTimers.set(actualToolUseId, performance.now());
 
     const parentId = input.agent_id as string | undefined;
+    console.log(`[HOOK DEBUG] preToolUse: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} isAgent=${toolName === "Agent" || toolName === "Task"}`);
     const isAgent = toolName === "Agent" || toolName === "Task";
 
     const session = sessions.get(sessionId);
@@ -394,6 +395,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     const isAgent = toolName === "Agent" || toolName === "Task";
     const parentId = input.agent_id as string | undefined;
+    console.log(`[HOOK DEBUG] postToolUse: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} success=true`);
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
@@ -453,6 +455,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     const isAgent = toolName === "Agent" || toolName === "Task";
     const parentId = input.agent_id as string | undefined;
+    console.log(`[HOOK DEBUG] postToolUseFailure: tool=${toolName} toolUseId=${actualToolUseId} agent_id=${parentId ?? 'null'} error=${String(input.error ?? "")}`);
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
@@ -705,6 +708,7 @@ async function streamQuery(
       options: {
         model: model ?? config.SDK_MODEL,
         cwd: workspace,
+        settingSources: ['user', 'project'],
         permissionMode: "bypassPermissions" as any,
         allowDangerouslySkipPermissions: true,
         env: cleanEnv,
