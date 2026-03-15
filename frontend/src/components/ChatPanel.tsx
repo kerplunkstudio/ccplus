@@ -42,6 +42,7 @@ interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
   streaming: boolean;
+  backgroundProcessing?: boolean;
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
   selectedModel: string;
@@ -71,6 +72,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   connected,
   streaming,
+  backgroundProcessing = false,
   currentTool,
   toolLog,
   selectedModel,
@@ -390,10 +392,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     }
 
-    // Normal message sending
+    // Normal message sending (allow during background processing, block during active streaming)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (streaming) return;
+      if (streaming && !backgroundProcessing) return;
       handleSubmit();
     }
   };
@@ -574,7 +576,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
-                disabled={!connected}
+                disabled={!connected || (streaming && !backgroundProcessing)}
                 rows={1}
               />
             </div>
@@ -602,7 +604,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   </svg>
                 )}
               </button>
-              {streaming ? (
+              {streaming && !backgroundProcessing ? (
                 <button className="cancel-btn" onClick={onCancel} aria-label="Cancel">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
@@ -623,7 +625,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               )}
             </div>
           </div>
-          {!streaming && (input.trim() || uploadedImages.length > 0) && (
+          {backgroundProcessing && !streaming && (
+            <div className="background-processing-indicator">
+              <span className="processing-dot"></span>
+              <span className="processing-text">Background agents running...</span>
+            </div>
+          )}
+          {!streaming && !backgroundProcessing && (input.trim() || uploadedImages.length > 0) && (
             <div className="input-hint">
               <kbd className="kbd">Enter</kbd> to send, <kbd className="kbd">Shift+Enter</kbd> for new line
             </div>

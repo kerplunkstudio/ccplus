@@ -208,7 +208,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [backgroundProcessing, setBackgroundProcessing] = useState(false);
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
+  const activityTreeRef = useRef<ActivityNode[]>([]);
   const [usageStats, setUsageStats] = useState<UsageStats>({
     totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0,
     totalDuration: 0, queryCount: 0, contextWindowSize: DEFAULT_CONTEXT_WINDOW,
@@ -252,6 +254,23 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }
     pendingWorkerRestartErrorRef.current = null;
   };
+
+  // Helper to check if there are any running agents in the activity tree
+  const hasRunningAgents = useCallback((nodes: ActivityNode[]): boolean => {
+    const checkNodes = (nodeList: ActivityNode[]): boolean => {
+      for (const node of nodeList) {
+        if (node.status === 'running') {
+          return true;
+        }
+        if (isAgentNode(node) && checkNodes(node.children)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    return checkNodes(nodes);
+  }, []);
+
   const [pendingQuestion, setPendingQuestion] = useState<{
     questions: Array<{
         question: string;
@@ -261,6 +280,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }>;
     toolUseId: string;
 } | null>(null);
+
+  // Keep activityTreeRef in sync with activityTree
+  useEffect(() => {
+    activityTreeRef.current = activityTree;
+  }, [activityTree]);
 
   // Fetch persisted stats from backend on mount
   useEffect(() => {
@@ -275,6 +299,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       dispatchTree({ type: 'CLEAR' });
       // Don't reset usage stats - they persist across sessions
       setStreaming(false);
+      setBackgroundProcessing(false);
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;
@@ -444,6 +469,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       // Clear any pending worker restart error - streaming has resumed
       clearPendingWorkerRestartError();
 
+      // If we receive new text, we're actively streaming again
+      setStreaming(true);
+      setBackgroundProcessing(false);
+
       if (!streamingIdRef.current) {
         // Create a new message for each new streaming sequence
         // This ensures consecutive Claude responses appear as separate messages
@@ -471,7 +500,6 @@ export function useTabSocket(token: string | null, sessionId: string) {
           )
         );
       }
-      setStreaming(true);
     });
 
     newSocket.on('response_complete', (data: {
@@ -508,15 +536,27 @@ export function useTabSocket(token: string | null, sessionId: string) {
         // Final completion: re-fetch stats from backend to stay in sync
         fetchUserStats().then(setUsageStats);
 
-        // End streaming session completely
+        // End streaming session completely and clear background processing
         setStreaming(false);
+        setBackgroundProcessing(false);
         if (clearToolTimerRef.current) {
           clearTimeout(clearToolTimerRef.current);
           clearToolTimerRef.current = null;
         }
         setCurrentTool(null);
+      } else {
+        // Intermediate completion: main response is done, but check for background agents
+        setStreaming(false);
+
+        // Check if there are still running agents in the activity tree
+        // Use a small delay to let the tree update with any final events
+        setTimeout(() => {
+          const hasRunning = hasRunningAgents(activityTreeRef.current);
+          if (hasRunning) {
+            setBackgroundProcessing(true);
+          }
+        }, 100);
       }
-      // For intermediate completions, keep streaming active but current message is finalized
     });
 
     newSocket.on('tool_event', (event: ToolEvent) => {
@@ -582,6 +622,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       };
       setMessages((prev) => [...prev, errorMsg]);
       setStreaming(false);
+      setBackgroundProcessing(false);
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       if (clearToolTimerRef.current) {
@@ -712,6 +753,13 @@ export function useTabSocket(token: string | null, sessionId: string) {
     (content: string, workspace?: string, model?: string, imageIds?: string[]) => {
       if (!socket || !connected) return;
 
+      // If background processing, cancel first
+      if (backgroundProcessing) {
+        socket.emit('cancel');
+        setBackgroundProcessing(false);
+        dispatchTree({ type: 'MARK_ALL_STOPPED' });
+      }
+
       const userMessage: Message = {
         id: `user_${Date.now()}`,
         content,
@@ -724,7 +772,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setToolLog([]);
       socket.emit('message', { content, workspace, model, image_ids: imageIds });
     },
-    [socket, connected]
+    [socket, connected, backgroundProcessing]
   );
 
   const cancelQuery = useCallback(() => {
@@ -744,6 +792,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     streamingContentRef.current = '';
     streamingIdRef.current = null;
     setStreaming(false);
+    setBackgroundProcessing(false);
     if (clearToolTimerRef.current) {
       clearTimeout(clearToolTimerRef.current);
       clearToolTimerRef.current = null;
@@ -765,6 +814,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     connected,
     messages,
     streaming,
+    backgroundProcessing,
     currentTool,
     activityTree,
     usageStats,
