@@ -45,16 +45,16 @@ describe('ChatPanel', () => {
     expect(screen.getByText('CC+')).toBeInTheDocument();
   });
 
-  it('shows online connection dot when connected', () => {
+  it('shows online connection status when connected', () => {
     const { container } = render(<ChatPanel {...defaultProps} />);
-    const dot = container.querySelector('.connection-dot');
-    expect(dot).toHaveClass('online');
+    const status = container.querySelector('.connection-status');
+    expect(status).toHaveClass('online');
   });
 
-  it('shows offline connection dot when disconnected', () => {
+  it('shows offline connection status when disconnected', () => {
     const { container } = render(<ChatPanel {...defaultProps} connected={false} />);
-    const dot = container.querySelector('.connection-dot');
-    expect(dot).toHaveClass('offline');
+    const status = container.querySelector('.connection-status');
+    expect(status).toHaveClass('offline');
   });
 
   it('renders messages when provided', () => {
