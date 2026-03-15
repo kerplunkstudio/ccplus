@@ -76,6 +76,7 @@
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
+  position: relative;
   /* Firefox scrollbar support */
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;

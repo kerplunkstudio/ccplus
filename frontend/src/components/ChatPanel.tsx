@@ -7,6 +7,7 @@ import { PluginModal } from './PluginModal';
 import { ToolLog } from './ToolLog';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { NewSessionDashboard } from './NewSessionDashboard';
+import { TextSelectionPopup } from './TextSelectionPopup';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
 import {
@@ -66,6 +67,7 @@ interface ChatPanelProps {
 } | null;
   onRespondToQuestion?: (response: Record<string, string>) => void;
   isRestoringSession?: boolean;
+  onSendToNewSession?: (text: string) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -88,6 +90,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   pendingQuestion,
   onRespondToQuestion,
   isRestoringSession = false,
+  onSendToNewSession,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -480,6 +483,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
+          {onSendToNewSession && (
+            <TextSelectionPopup
+              onSendToNewSession={onSendToNewSession}
+              containerRef={messagesContainerRef}
+            />
+          )}
           {messages.length === 0 && !isRestoringSession && (
             <NewSessionDashboard
               projectPath={projectPath || null}

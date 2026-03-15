@@ -7,6 +7,7 @@ import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
@@ -74,10 +75,41 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [activePage, setActivePage] = useState<string | null>(null);
 
+  const [isFirstRun, setIsFirstRun] = useState<boolean>(false);
+  const [checkingFirstRun, setCheckingFirstRun] = useState<boolean>(true);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
   };
+
+  useEffect(() => {
+    const checkFirstRun = async () => {
+      if (!token) {
+        setCheckingFirstRun(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/status/first-run', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsFirstRun(data.first_run);
+        }
+      } catch (error) {
+        // Silently fail, default to not showing welcome screen
+      } finally {
+        setCheckingFirstRun(false);
+      }
+    };
+
+    checkFirstRun();
+  }, [token]);
 
   const handleAddProject = useCallback((path: string, name: string) => {
     workspace.addProject(path, name);
@@ -332,6 +364,38 @@ function AppContent({ token, loading }: AppContentProps) {
     setShowDashboard(false);
   }, []);
 
+  const handleWelcomePrompt = useCallback((prompt: string) => {
+    if (!activeProject) {
+      return;
+    }
+    handleNewTab();
+    setTimeout(() => {
+      sendMessage(prompt);
+    }, 100);
+  }, [activeProject, handleNewTab, sendMessage]);
+
+  const handleWelcomeAddProject = useCallback(() => {
+    const path = prompt('Enter project path:');
+    if (path) {
+      const name = path.split('/').pop() || 'Project';
+      handleAddProject(path, name);
+      setIsFirstRun(false);
+    }
+  }, [handleAddProject]);
+
+  const handleSendToNewSession = useCallback((text: string) => {
+    if (!activeProject) return;
+
+    // Create a new tab
+    workspace.addTab(activeProject.path);
+
+    // Wait a moment for the tab to be created and switched to
+    setTimeout(() => {
+      // Send the selected text as the first message
+      sendMessage(text, activeProject.path);
+    }, 100);
+  }, [activeProject, workspace, sendMessage]);
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -341,6 +405,8 @@ function AppContent({ token, loading }: AppContentProps) {
     );
   }
 
+  const hasProjects = workspace.state.projects.length > 0;
+  const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
   const hasTabs = activeProject && activeProject.tabs.length > 0;
   const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
   const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage;
@@ -390,8 +456,13 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile) ? 'full-width' : ''}`}>
-            {shouldShowInsights ? (
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowWelcome) ? 'full-width' : ''}`}>
+            {shouldShowWelcome ? (
+              <WelcomeScreen
+                onSelectPrompt={handleWelcomePrompt}
+                onAddProject={handleWelcomeAddProject}
+              />
+            ) : shouldShowInsights ? (
               <InsightsPanel />
             ) : shouldShowProfile ? (
               <ProfilePanel />
@@ -424,6 +495,7 @@ function AppContent({ token, loading }: AppContentProps) {
                   pendingQuestion={pendingQuestion}
                   onRespondToQuestion={respondToQuestion}
                   isRestoringSession={isRestoringSession}
+                  onSendToNewSession={handleSendToNewSession}
                 />
               ) : null
             ) : (
