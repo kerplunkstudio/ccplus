@@ -18,15 +18,39 @@ import {
 } from '../utils/slashCommands';
 import './ChatPanel.css';
 
-const THINKING_MESSAGES = [
-  'Thinking...',
-  'Reasoning...',
-  'Exploring the codebase...',
-  'Reading the code...',
-  'Analyzing patterns...',
-  'Considering options...',
-  'Connecting the dots...',
-];
+/**
+ * Derive a status label from the most recent tool activity.
+ * Falls back to "Thinking..." when no tools have run yet.
+ */
+function deriveStreamingStatus(toolLog: ToolEvent[], currentTool: ToolEvent | null | undefined): string {
+  if (currentTool) return formatToolLabelVerbose(currentTool);
+
+  // Look at the last completed tool to show what just finished
+  const lastCompleted = [...toolLog].reverse().find(
+    (t) => t.type === 'tool_complete' || t.type === 'agent_stop'
+  );
+
+  if (!lastCompleted) return 'Thinking...';
+
+  // After a tool completes, the model is deciding what to do next
+  switch (lastCompleted.tool_name) {
+    case 'Read':
+      return 'Reviewing code...';
+    case 'Grep':
+    case 'Glob':
+      return 'Processing results...';
+    case 'Bash':
+      return 'Reviewing output...';
+    case 'Edit':
+    case 'Write':
+      return 'Continuing...';
+    case 'Agent':
+    case 'Task':
+      return 'Coordinating...';
+    default:
+      return 'Thinking...';
+  }
+}
 
 const formatTimeAgo = (timestamp: string): string => {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -100,7 +124,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0);
+  // thinkingMsgIndex removed — status is now derived from tool activity
   const [pluginModalOpen, setPluginModalOpen] = useState(false);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
@@ -266,17 +290,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   }, [input]);
 
-  // Rotate thinking messages
-  useEffect(() => {
-    if (!streaming) {
-      setThinkingMsgIndex(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setThinkingMsgIndex((prev) => (prev + 1) % THINKING_MESSAGES.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [streaming]);
+  // Status text is now derived from tool activity — no timer needed
 
   // Fetch past sessions when empty state is shown
   useEffect(() => {
@@ -572,18 +586,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <div className="thinking-content-text">{thinking}</div>
             </div>
           )}
-          {streaming && !messages.some((m) => m.streaming) && (
+          {streaming && (currentTool || !messages.some((m) => m.streaming)) && (
             <div className="thinking-indicator">
-              {currentTool ? (
-                <div className="tool-status">{formatToolLabelVerbose(currentTool)}</div>
-              ) : (
-                <div className="thinking-content">
-                  <span className="dot" />
-                  <span className="dot" />
-                  <span className="dot" />
-                  <span className="thinking-text" role="status">{THINKING_MESSAGES[thinkingMsgIndex]}</span>
-                </div>
-              )}
+              <div className="thinking-content">
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+                <span className="thinking-text" role="status">
+                  {deriveStreamingStatus(toolLog, currentTool)}
+                </span>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
