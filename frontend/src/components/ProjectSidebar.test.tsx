@@ -54,6 +54,8 @@ const defaultProps = {
   onCloseTab: jest.fn(),
   sidebarWidth: 260,
   onSidebarWidthChange: jest.fn(),
+  onNavigate: jest.fn(),
+  activePage: null,
 };
 
 describe('ProjectSidebar', () => {
