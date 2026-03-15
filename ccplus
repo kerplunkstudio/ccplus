@@ -1,32 +1,783 @@
 #!/bin/bash
-# cc+ launcher — build, deploy, and run desktop app
-# Usage: ./ccplus
+# cc+ unified launcher and deployment tool
+# Usage: ./ccplus [command]
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Activate venv
-if [ ! -f "venv/bin/activate" ]; then
-    echo "Virtual environment not found. Run ./setup.sh first." >&2
-    exit 1
+PORT="${PORT:-4000}"
+
+# Colors (graceful degradation for non-interactive terminals)
+if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+    RED=$(tput setaf 1)
+    GREEN=$(tput setaf 2)
+    YELLOW=$(tput setaf 3)
+    BLUE=$(tput setaf 4)
+    BOLD=$(tput bold)
+    RESET=$(tput sgr0)
+else
+    RED="" GREEN="" YELLOW="" BLUE="" BOLD="" RESET=""
 fi
 
-source venv/bin/activate
+info()  { echo "${BLUE}[info]${RESET}  $*"; }
+ok()    { echo "${GREEN}[ok]${RESET}    $*"; }
+warn()  { echo "${YELLOW}[warn]${RESET}  $*"; }
+error() { echo "${RED}[error]${RESET} $*" >&2; }
+pass()  { echo "${GREEN}[PASS]${RESET}  $*"; }
+fail()  { echo "${RED}[FAIL]${RESET}  $*" >&2; }
+header() {
+    echo ""
+    echo "${BOLD}--- $* ---${RESET}"
+}
 
-# Build frontend
-echo "Building frontend..."
-cd frontend
-npm run build >/dev/null 2>&1 || { echo "Frontend build failed" >&2; exit 1; }
-cd "$SCRIPT_DIR"
+# Detect Python (prefer venv)
+detect_python() {
+    if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
+        PYTHON="$SCRIPT_DIR/venv/bin/python"
+        info "Using venv Python: $PYTHON"
+    elif command -v python3 >/dev/null 2>&1; then
+        PYTHON="python3"
+        warn "No venv found, using system python3"
+    else
+        error "Python not found. Create a venv: python3 -m venv venv"
+        exit 1
+    fi
+}
 
-# Deploy to static/chat/
-echo "Deploying static files..."
-mkdir -p static/chat
-rm -rf static/chat/*
-cp -r frontend/build/* static/chat/
+# Worker PID file
+WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
-# Launch desktop app in parallel mode
-echo "Starting cc+ Desktop..."
-exec ./deploy.sh desktop-parallel
+# Worker checksum file
+WORKER_CHECKSUM_FILE="$SCRIPT_DIR/data/worker_checksums.md5"
+
+# Files that require a worker restart when changed
+WORKER_FILES=(
+    "backend/sdk_worker.py"
+    "backend/worker_protocol.py"
+    "backend/config.py"
+)
+
+# Check if worker is running
+worker_running() {
+    if [ -f "$WORKER_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$WORKER_PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Save current checksums of worker files
+save_worker_checksums() {
+    mkdir -p "$SCRIPT_DIR/data"
+    > "$WORKER_CHECKSUM_FILE"  # Clear file
+
+    for f in "${WORKER_FILES[@]}"; do
+        if [ -f "$SCRIPT_DIR/$f" ]; then
+            local checksum
+            checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
+            echo "$checksum  $f" >> "$WORKER_CHECKSUM_FILE"
+        fi
+    done
+}
+
+# Check if worker code has changed since the worker was started
+worker_code_changed() {
+    if ! worker_running; then
+        return 0  # Not running = needs start
+    fi
+
+    # If no checksum file exists, treat as changed (first run)
+    if [ ! -f "$WORKER_CHECKSUM_FILE" ]; then
+        info "No worker checksum file found — treating as changed"
+        return 0
+    fi
+
+    # Compare current checksums against saved checksums
+    for f in "${WORKER_FILES[@]}"; do
+        if [ -f "$SCRIPT_DIR/$f" ]; then
+            local current_checksum
+            current_checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
+
+            local saved_checksum
+            saved_checksum=$(grep " $f\$" "$WORKER_CHECKSUM_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+
+            if [ "$current_checksum" != "$saved_checksum" ]; then
+                info "Worker code changed: $f (checksum mismatch)"
+                return 0
+            fi
+        fi
+    done
+
+    return 1  # No changes
+}
+
+# Start worker if not already running
+start_worker() {
+    header "Checking SDK worker"
+
+    if worker_running; then
+        local pid
+        pid=$(cat "$WORKER_PID_FILE")
+        ok "SDK worker already running (PID: $pid)"
+        return 0
+    fi
+
+    info "Starting SDK worker..."
+    detect_python
+    mkdir -p "$SCRIPT_DIR/logs" "$SCRIPT_DIR/data"
+
+    export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
+    nohup "$PYTHON" "$SCRIPT_DIR/backend/sdk_worker.py" > "$SCRIPT_DIR/logs/worker.log" 2>&1 &
+
+    # Wait for socket to appear
+    local max_wait=10
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+        if [ -S "$SCRIPT_DIR/data/sdk_worker.sock" ]; then
+            ok "SDK worker started (PID: $(cat "$WORKER_PID_FILE" 2>/dev/null))"
+            # Save checksums after successful start
+            save_worker_checksums
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    error "SDK worker failed to start after ${max_wait}s"
+    tail -20 "$SCRIPT_DIR/logs/worker.log" 2>/dev/null || true
+    exit 1
+}
+
+# Stop the worker
+stop_worker() {
+    header "Stopping SDK worker"
+
+    if ! worker_running; then
+        ok "SDK worker not running"
+        return 0
+    fi
+
+    local pid
+    pid=$(cat "$WORKER_PID_FILE")
+    info "Stopping SDK worker (PID: $pid)..."
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 2
+
+    if kill -0 "$pid" 2>/dev/null; then
+        warn "Force killing worker..."
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+
+    rm -f "$WORKER_PID_FILE" "$SCRIPT_DIR/data/sdk_worker.sock"
+    ok "SDK worker stopped"
+}
+
+# Restart worker only if its code changed
+smart_worker_restart() {
+    if worker_code_changed; then
+        if worker_running; then
+            warn "Worker code changed — restarting worker (active sessions will be interrupted)"
+            stop_worker
+        fi
+        start_worker
+        # Checksums saved by start_worker after successful start
+    else
+        start_worker  # ensures it's running, no-op if already running
+    fi
+}
+
+# Build React frontend
+build_frontend() {
+    header "Building frontend"
+
+    cd "$SCRIPT_DIR/frontend"
+
+    if [ ! -d "node_modules" ]; then
+        warn "node_modules not found, running npm install..."
+        npm install || { error "npm install failed"; exit 1; }
+    fi
+
+    info "Running npm run build..."
+    npm run build || { error "Frontend build failed"; exit 1; }
+
+    cd "$SCRIPT_DIR"
+    ok "Frontend build complete"
+}
+
+# Deploy build output to static/chat/
+deploy_static() {
+    header "Deploying to static/chat/"
+
+    mkdir -p "$SCRIPT_DIR/static/chat"
+    rm -rf "$SCRIPT_DIR/static/chat/"*
+
+    if [ ! -d "$SCRIPT_DIR/frontend/build" ]; then
+        error "No frontend build found. Run: ./ccplus"
+        exit 1
+    fi
+
+    cp -r "$SCRIPT_DIR/frontend/build/"* "$SCRIPT_DIR/static/chat/"
+    ok "Static files deployed"
+}
+
+# Kill existing server on PORT
+kill_server() {
+    header "Stopping existing server"
+
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        info "Killing processes on port $PORT..."
+        lsof -ti:$PORT | xargs kill -TERM 2>/dev/null || true
+        sleep 2
+
+        # Force kill if still running
+        if lsof -ti:$PORT >/dev/null 2>&1; then
+            warn "Force killing processes on port $PORT..."
+            lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
+            sleep 1
+        fi
+
+        if lsof -ti:$PORT >/dev/null 2>&1; then
+            error "Failed to free port $PORT"
+            exit 1
+        fi
+    fi
+
+    ok "Port $PORT is free"
+}
+
+# Start backend server
+start_server() {
+    header "Starting server"
+
+    detect_python
+    mkdir -p "$SCRIPT_DIR/logs"
+
+    export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
+    nohup "$PYTHON" "$SCRIPT_DIR/backend/server.py" > "$SCRIPT_DIR/logs/server.log" 2>&1 &
+    SERVER_PID=$!
+
+    info "Server starting (PID: $SERVER_PID)"
+
+    # Health check
+    info "Waiting for health check at localhost:$PORT/health..."
+    max_wait=15
+    waited=0
+    while [ $waited -lt $max_wait ]; do
+        status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/health" 2>/dev/null || echo "000")
+        if [ "$status" = "200" ]; then
+            ok "Server is healthy (PID: $SERVER_PID)"
+            echo ""
+            echo "${GREEN}${BOLD}Deployment complete!${RESET}"
+            echo ""
+            echo "  URL:  ${BOLD}http://localhost:$PORT${RESET}"
+            echo "  Logs: tail -f logs/server.log"
+            echo ""
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    error "Server failed health check after ${max_wait}s"
+    echo "Last 20 lines of logs:" >&2
+    tail -20 "$SCRIPT_DIR/logs/server.log" 2>/dev/null || true
+    exit 1
+}
+
+# Install Electron dependencies
+install_electron() {
+    header "Installing Electron dependencies"
+
+    if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
+        info "Running npm install in project root..."
+        cd "$SCRIPT_DIR"
+        npm install || { error "npm install failed"; exit 1; }
+    else
+        ok "Electron dependencies already installed"
+    fi
+}
+
+# Launch desktop app (exclusive mode - stops existing services)
+launch_desktop() {
+    header "Launching desktop app"
+
+    # Ensure electron is installed
+    install_electron
+
+    # Build frontend first if needed
+    if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then
+        warn "No static build found, building frontend first..."
+        build_frontend
+        deploy_static
+    fi
+
+    # Stop any running web server (desktop app starts its own)
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        info "Stopping web server (desktop app will start its own)..."
+        kill_server
+    fi
+
+    # Stop worker if running (desktop app starts its own)
+    if worker_running; then
+        info "Stopping worker (desktop app will start its own)..."
+        stop_worker
+    fi
+
+    info "Starting cc+ Desktop..."
+    cd "$SCRIPT_DIR"
+    npm run electron:dev
+}
+
+# Launch desktop app (parallel mode - runs alongside web server)
+launch_desktop_parallel() {
+    header "Launching desktop app (parallel mode)"
+
+    # Ensure electron is installed
+    install_electron
+
+    # Build frontend first if needed
+    if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then
+        warn "No static build found, building frontend first..."
+        build_frontend
+        deploy_static
+    fi
+
+    # Ensure worker is running (shared between web and desktop)
+    if ! worker_running; then
+        info "Starting shared SDK worker..."
+        start_worker
+    else
+        info "Using existing SDK worker (shared with web server)"
+    fi
+
+    # Check if web server is running
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        info "Web server running on port $PORT"
+        info "Desktop will run on port 4001"
+    else
+        info "No web server running, desktop will use port 4001"
+    fi
+
+    info "Starting cc+ Desktop (parallel mode)..."
+    cd "$SCRIPT_DIR"
+    # Use port 4001 for desktop to avoid conflict with web server
+    PORT=4001 npm run electron:dev
+}
+
+# Check if setup is needed
+needs_setup() {
+    [ ! -d "venv" ] || [ ! -f ".env" ] || [ ! -d "frontend/node_modules" ]
+}
+
+# Run setup
+run_setup() {
+    header "Setting up cc+"
+
+    # Check prerequisites
+    if ! command -v python3 >/dev/null 2>&1; then
+        error "Python 3 not found"
+        exit 1
+    fi
+
+    py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    py_major=$(echo "$py_version" | cut -d. -f1)
+    py_minor=$(echo "$py_version" | cut -d. -f2)
+
+    if [ "$py_major" -ne 3 ] || [ "$py_minor" -lt 12 ]; then
+        error "Python 3.12+ required (found $py_version)"
+        exit 1
+    fi
+
+    if ! command -v node >/dev/null 2>&1; then
+        error "Node.js not found"
+        exit 1
+    fi
+
+    node_major=$(node -v | sed 's/v//' | cut -d. -f1)
+    if [ "$node_major" -lt 18 ]; then
+        error "Node.js 18+ required (found $(node -v))"
+        exit 1
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        error "npm not found"
+        exit 1
+    fi
+
+    # Create venv if needed
+    if [ ! -d "venv" ]; then
+        info "Creating Python virtual environment..."
+        python3 -m venv venv || exit 1
+    fi
+
+    # Install Python dependencies
+    info "Installing Python dependencies..."
+    source venv/bin/activate
+    pip install -q --upgrade pip
+    pip install -q -r requirements.txt || exit 1
+
+    # Install frontend dependencies
+    info "Installing frontend dependencies..."
+    cd frontend
+    npm install --silent || exit 1
+    cd "$SCRIPT_DIR"
+
+    # Setup .env file
+    if [ ! -f ".env" ]; then
+        interactive_env_setup
+    fi
+
+    # Check Claude Code CLI is available
+    if ! command -v claude >/dev/null 2>&1; then
+        error "Claude Code CLI not found. Install it first: npm install -g @anthropic-ai/claude-code"
+        exit 1
+    fi
+
+    ok "Setup complete!"
+}
+
+# Interactive .env setup
+interactive_env_setup() {
+    header "Environment configuration"
+
+    # Detect if stdin is non-interactive
+    if [ ! -t 0 ]; then
+        info "Non-interactive mode detected, using defaults"
+        WORKSPACE_PATH="$HOME/Workspace"
+        SDK_MODEL="sonnet"
+        SECRET_KEY=$(openssl rand -hex 32 2>/dev/null || echo "ccplus-dev-secret-change-me")
+
+        cat > .env <<EOF
+# cc+ uses the Claude Code CLI subscription — no API key needed
+WORKSPACE_PATH=$WORKSPACE_PATH
+SDK_MODEL=$SDK_MODEL
+PORT=4000
+CCPLUS_AUTH=local
+SECRET_KEY=$SECRET_KEY
+EOF
+        ok ".env created with defaults"
+        return
+    fi
+
+    echo ""
+    echo "Setting up cc+ for the first time..."
+    echo ""
+
+    # Smart default for workspace path
+    WORKSPACE_DEFAULT="$HOME/Workspace"
+    for candidate in "$HOME/Workspace" "$HOME/Projects" "$HOME/Developer" "$HOME/Code" "$HOME/repos"; do
+        if [ -d "$candidate" ]; then
+            WORKSPACE_DEFAULT="$candidate"
+            break
+        fi
+    done
+
+    read -p "Where are your projects? [default: $WORKSPACE_DEFAULT] > " WORKSPACE_INPUT
+    WORKSPACE_PATH="${WORKSPACE_INPUT:-$WORKSPACE_DEFAULT}"
+
+    echo ""
+    echo "Which model should cc+ use by default?"
+    echo "  1) sonnet  (recommended, best coding model)"
+    echo "  2) opus    (deepest reasoning, slower)"
+    echo "  3) haiku   (fastest, most affordable)"
+    read -p "[default: 1] > " MODEL_INPUT
+    case "${MODEL_INPUT:-1}" in
+        1) SDK_MODEL="sonnet" ;;
+        2) SDK_MODEL="opus" ;;
+        3) SDK_MODEL="haiku" ;;
+        *) SDK_MODEL="sonnet" ;;
+    esac
+
+    # Generate secret key
+    SECRET_KEY=$(openssl rand -hex 32 2>/dev/null || echo "ccplus-dev-secret-change-me")
+
+    # Write .env file
+    cat > .env <<EOF
+# cc+ uses the Claude Code CLI subscription — no API key needed
+WORKSPACE_PATH=$WORKSPACE_PATH
+SDK_MODEL=$SDK_MODEL
+PORT=4000
+CCPLUS_AUTH=local
+SECRET_KEY=$SECRET_KEY
+EOF
+
+    ok ".env created successfully"
+    echo ""
+}
+
+# Run doctor command
+run_doctor() {
+    header "Running diagnostics"
+
+    local exit_code=0
+
+    echo ""
+    echo "${BOLD}System${RESET}"
+    echo ""
+
+    # Python version
+    if command -v python3 >/dev/null 2>&1; then
+        py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        py_major=$(echo "$py_version" | cut -d. -f1)
+        py_minor=$(echo "$py_version" | cut -d. -f2)
+        if [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 12 ]; then
+            pass "Python $py_version"
+        else
+            fail "Python $py_version (need 3.12+)"
+            exit_code=1
+        fi
+    else
+        fail "Python 3 not found"
+        exit_code=1
+    fi
+
+    # Node version
+    if command -v node >/dev/null 2>&1; then
+        node_version=$(node -v)
+        node_major=$(echo "$node_version" | sed 's/v//' | cut -d. -f1)
+        if [ "$node_major" -ge 18 ]; then
+            pass "Node $node_version"
+        else
+            fail "Node $node_version (need 18+)"
+            exit_code=1
+        fi
+    else
+        fail "Node.js not found"
+        exit_code=1
+    fi
+
+    # npm
+    if command -v npm >/dev/null 2>&1; then
+        npm_version=$(npm -v)
+        pass "npm $npm_version"
+    else
+        fail "npm not found"
+        exit_code=1
+    fi
+
+    # Claude CLI
+    if command -v claude >/dev/null 2>&1; then
+        claude_version=$(claude --version 2>&1 | head -1 || echo "unknown")
+        pass "Claude CLI ($claude_version)"
+    else
+        fail "Claude CLI not found"
+        exit_code=1
+    fi
+
+    echo ""
+    echo "${BOLD}Environment${RESET}"
+    echo ""
+
+    # .env exists
+    if [ -f ".env" ]; then
+        pass ".env file exists"
+
+        # Check workspace path
+        source .env 2>/dev/null || true
+        if [ -n "$WORKSPACE_PATH" ] && [ -d "$WORKSPACE_PATH" ]; then
+            pass "WORKSPACE_PATH exists: $WORKSPACE_PATH"
+        elif [ -n "$WORKSPACE_PATH" ]; then
+            warn "WORKSPACE_PATH set but directory not found: $WORKSPACE_PATH"
+        else
+            warn "WORKSPACE_PATH not set in .env"
+        fi
+
+        # Check secret key
+        if [ "$SECRET_KEY" = "change-me-in-production" ] || [ "$SECRET_KEY" = "ccplus-dev-secret-change-me" ]; then
+            warn "SECRET_KEY is default value (not secure for production)"
+        elif [ -n "$SECRET_KEY" ]; then
+            pass "SECRET_KEY is configured"
+        else
+            warn "SECRET_KEY not set in .env"
+        fi
+    else
+        fail ".env file not found"
+        exit_code=1
+    fi
+
+    echo ""
+    echo "${BOLD}Services${RESET}"
+    echo ""
+
+    # Port availability
+    if lsof -ti:$PORT >/dev/null 2>&1; then
+        pass "Port $PORT is in use (server likely running)"
+    else
+        warn "Port $PORT is free (server not running)"
+    fi
+
+    # Worker status
+    if worker_running; then
+        worker_pid=$(cat "$WORKER_PID_FILE")
+        pass "SDK worker running (PID: $worker_pid)"
+    else
+        warn "SDK worker not running"
+    fi
+
+    echo ""
+    echo "${BOLD}Build${RESET}"
+    echo ""
+
+    # Static build exists
+    if [ -f "static/chat/index.html" ]; then
+        pass "Frontend build exists"
+
+        # Check staleness
+        if [ -d "frontend/src" ]; then
+            stale_count=$(find frontend/src -newer static/chat/index.html 2>/dev/null | wc -l)
+            if [ "$stale_count" -gt 0 ]; then
+                warn "Frontend source is newer than build (rebuild recommended)"
+            else
+                pass "Frontend build is up to date"
+            fi
+        fi
+    else
+        fail "Frontend build not found"
+        exit_code=1
+    fi
+
+    # venv exists
+    if [ -d "venv" ]; then
+        pass "Python venv exists"
+    else
+        fail "Python venv not found"
+        exit_code=1
+    fi
+
+    echo ""
+    echo "${BOLD}Database${RESET}"
+    echo ""
+
+    # Database exists
+    if [ -f "data/ccplus.db" ]; then
+        pass "Database file exists"
+
+        # Table count
+        if command -v sqlite3 >/dev/null 2>&1; then
+            table_count=$(sqlite3 data/ccplus.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table'" 2>/dev/null || echo "0")
+            if [ "$table_count" -gt 0 ]; then
+                pass "Database has $table_count tables"
+            else
+                warn "Database has no tables"
+            fi
+
+            # Conversation count
+            conv_count=$(sqlite3 data/ccplus.db "SELECT COUNT(*) FROM conversations" 2>/dev/null || echo "0")
+            pass "$conv_count conversations recorded"
+
+            # Tool event count
+            tool_count=$(sqlite3 data/ccplus.db "SELECT COUNT(*) FROM tool_usage" 2>/dev/null || echo "0")
+            pass "$tool_count tool events recorded"
+        else
+            warn "sqlite3 not installed, cannot check database contents"
+        fi
+    else
+        warn "Database not found (will be created on first run)"
+    fi
+
+    echo ""
+    if [ $exit_code -eq 0 ]; then
+        echo "${GREEN}${BOLD}All checks passed!${RESET}"
+    else
+        echo "${RED}${BOLD}Some checks failed.${RESET}"
+    fi
+    echo ""
+
+    exit $exit_code
+}
+
+# Usage
+show_usage() {
+    cat <<EOF
+cc+ - Unified launcher and deployment tool
+
+Usage: ./ccplus [command]
+
+Commands:
+  (none) or start  Full deploy: build frontend + deploy + restart server
+                   On first run: setup + configure + build + start
+                   Worker only restarts if code changed.
+  doctor           Run system diagnostics
+  server           Restart Flask server only (worker stays alive)
+  frontend         Build + deploy frontend only (no server restart)
+  worker           Force restart the SDK worker (kills active sessions)
+  desktop          Launch Electron desktop app (stops existing services)
+  desktop-parallel Launch desktop app in parallel with web server
+  stop             Stop both Flask server and SDK worker
+  setup            Force re-run setup
+  help             Show this help message
+
+Examples:
+  ./ccplus              # First run: setup + build + start
+  ./ccplus              # Subsequent: smart deploy
+  ./ccplus doctor       # Check system health
+  ./ccplus frontend     # Rebuild frontend only
+  ./ccplus desktop      # Launch desktop app
+  ./ccplus stop         # Stop everything
+EOF
+}
+
+# Main
+COMMAND="${1:-start}"
+
+case "$COMMAND" in
+    start|"")
+        if needs_setup; then
+            run_setup
+        fi
+        smart_worker_restart
+        build_frontend
+        deploy_static
+        kill_server
+        start_server
+        ;;
+    doctor)
+        run_doctor
+        ;;
+    frontend)
+        build_frontend
+        deploy_static
+        ok "Frontend deployed (server not restarted)"
+        echo ""
+        echo "  ${BOLD}Hard refresh your browser (Cmd+Shift+R) to load new assets${RESET}"
+        echo ""
+        ;;
+    server)
+        smart_worker_restart
+        kill_server
+        start_server
+        ;;
+    worker)
+        stop_worker
+        start_worker
+        # Flask must reconnect to the new worker socket
+        kill_server
+        start_server
+        ;;
+    desktop)
+        launch_desktop
+        ;;
+    desktop-parallel)
+        launch_desktop_parallel
+        ;;
+    stop)
+        kill_server
+        stop_worker
+        ;;
+    setup)
+        run_setup
+        ;;
+    help|-h|--help)
+        show_usage
+        ;;
+    *)
+        error "Unknown command: $COMMAND"
+        show_usage
+        exit 1
+        ;;
+esac

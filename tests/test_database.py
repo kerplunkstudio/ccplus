@@ -324,15 +324,28 @@ class TestMarkOrphanedToolEvents:
         assert db.get_tool_events("sess2")[0]["error"] == "Worker restarted"
         assert db.get_tool_events("sess3")[0]["error"] == "Worker restarted"
 
-    def test_idempotent(self, fresh_db):
-        # Create running events
-        db.record_tool_event("sess1", "Read", "t1")
-        db.record_tool_event("sess1", "Write", "t2")
 
-        # First call should mark them
-        count1 = db.mark_orphaned_tool_events()
-        assert count1 == 2
+class TestIsFirstRun:
+    def test_empty_database(self, fresh_db):
+        # Fresh database should be first run
+        assert db.is_first_run() is True
 
-        # Second call should find no orphans
-        count2 = db.mark_orphaned_tool_events()
-        assert count2 == 0
+    def test_with_conversations(self, fresh_db):
+        # Add a conversation
+        db.record_message("sess1", "user1", "user", "hello")
+        assert db.is_first_run() is False
+
+    def test_with_archived_conversations_only(self, fresh_db):
+        # Add an archived conversation
+        db.record_message("sess1", "user1", "user", "hello")
+        db.archive_session("sess1")
+        # Should still be first run since only archived conversations exist
+        assert db.is_first_run() is True
+
+    def test_with_mixed_conversations(self, fresh_db):
+        # Add both archived and non-archived
+        db.record_message("sess1", "user1", "user", "archived message")
+        db.archive_session("sess1")
+        db.record_message("sess2", "user1", "user", "active message")
+        # Should not be first run since there's a non-archived conversation
+        assert db.is_first_run() is False

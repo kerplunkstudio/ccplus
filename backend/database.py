@@ -527,6 +527,15 @@ def save_workspace_state(user_id: str, state: dict) -> None:
     conn.commit()
 
 
+def is_first_run() -> bool:
+    """Check if this is a first run (no non-archived conversations exist)."""
+    conn = _get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM conversations WHERE archived = 0 OR archived IS NULL"
+    ).fetchone()[0]
+    return count == 0
+
+
 def get_insights(days: int = 30, project_path: Optional[str] = None) -> dict:
     """Return insights data for daily usage statistics.
 
