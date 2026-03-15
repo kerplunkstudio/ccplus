@@ -21,7 +21,7 @@ export function useSkills() {
       const skillSuggestions: SkillSuggestion[] = (data.skills || []).map((skill: any) => ({
         name: skill.name,
         plugin: skill.plugin,
-        description: `From ${skill.plugin}`,
+        description: skill.description || `From ${skill.plugin}`,
       }));
 
       setSkills(skillSuggestions);

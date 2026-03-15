@@ -13,7 +13,6 @@ const SERVER_URL = `http://localhost:${SERVER_PORT}`;
 
 let mainWindow = null;
 let serverProcess = null;
-let workerProcess = null;
 
 // Get project root directory
 const getProjectRoot = () => {
@@ -29,16 +28,10 @@ const getProjectRoot = () => {
 
 const PROJECT_ROOT = getProjectRoot();
 
-// Start Flask server and SDK worker
+// Start Node.js backend
 async function startBackend() {
   return new Promise((resolve, reject) => {
     console.log('[Backend] Starting backend from:', PROJECT_ROOT);
-
-    // Determine Python executable
-    const venvPython = path.join(PROJECT_ROOT, 'venv', 'bin', 'python');
-    const pythonExec = fs.existsSync(venvPython) ? venvPython : 'python3';
-
-    console.log('[Backend] Using Python:', pythonExec);
 
     // Ensure required directories exist
     const dataDir = path.join(PROJECT_ROOT, 'data');
@@ -51,143 +44,78 @@ async function startBackend() {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
-    // Check if worker is already running (parallel mode)
-    const workerSocket = path.join(PROJECT_ROOT, 'data', 'sdk_worker.sock');
-    if (fs.existsSync(workerSocket)) {
-      console.log('[Worker] Already running (parallel mode), skipping worker start');
-      // Go straight to Flask server
-      startFlaskServer(pythonExec, resolve, reject);
-      return;
-    }
+    // Start Node.js server
+    const serverScript = path.join(PROJECT_ROOT, 'backend-ts', 'dist', 'server.js');
+    console.log('[Server] Starting Node.js server from:', serverScript);
 
-    // Start SDK worker first
-    const workerScript = path.join(PROJECT_ROOT, 'backend', 'sdk_worker.py');
-    console.log('[Worker] Starting SDK worker from:', workerScript);
-
-    workerProcess = spawn(pythonExec, [workerScript], {
+    serverProcess = spawn('node', [serverScript], {
       cwd: PROJECT_ROOT,
       env: {
         ...process.env,
-        PYTHONPATH: PROJECT_ROOT,
+        PORT: SERVER_PORT.toString(),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    workerProcess.stdout.on('data', (data) => {
-      console.log(`[Worker] ${data.toString().trim()}`);
-    });
+    let serverReady = false;
 
-    workerProcess.stderr.on('data', (data) => {
-      console.error(`[Worker] ${data.toString().trim()}`);
-    });
-
-    workerProcess.on('error', (error) => {
-      console.error('[Worker] Failed to start:', error);
-    });
-
-    // Wait for worker socket to be available
-    let workerWaitTime = 0;
-    const workerCheckInterval = setInterval(() => {
-      if (fs.existsSync(workerSocket)) {
-        clearInterval(workerCheckInterval);
-        console.log('[Worker] Ready');
-
-        // Start Flask server
-        startFlaskServer(pythonExec, resolve, reject);
-      } else {
-        workerWaitTime += 500;
-        if (workerWaitTime > 10000) {
-          clearInterval(workerCheckInterval);
-          reject(new Error('SDK worker failed to start within 10 seconds'));
-        }
+    const onServerReady = () => {
+      if (!serverReady) {
+        serverReady = true;
+        setTimeout(() => {
+          console.log('[Server] Ready');
+          resolve();
+        }, 2000); // Give it a moment to fully initialize
       }
-    }, 500);
+    };
+
+    // Timeout fallback in case we miss the ready message
+    const serverTimeout = setTimeout(() => {
+      if (!serverReady) {
+        console.log('[Server] Ready (timeout fallback after 8s)');
+        onServerReady();
+      }
+    }, 8000);
+
+    serverProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(`[Server] ${output.trim()}`);
+
+      // Look for server ready indicator on stdout
+      if (output.includes('ccplus server listening on')) {
+        clearTimeout(serverTimeout);
+        onServerReady();
+      }
+    });
+
+    serverProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      console.error(`[Server] ${output.trim()}`);
+    });
+
+    serverProcess.on('error', (error) => {
+      console.error('[Server] Failed to start:', error);
+      clearTimeout(serverTimeout);
+      reject(error);
+    });
+
+    serverProcess.on('exit', (code, signal) => {
+      console.log(`[Server] Exited with code ${code} and signal ${signal}`);
+      clearTimeout(serverTimeout);
+      if (code !== 0 && code !== null) {
+        reject(new Error(`Server exited with code ${code}`));
+      }
+    });
   });
 }
 
-function startFlaskServer(pythonExec, resolve, reject) {
-  const serverScript = path.join(PROJECT_ROOT, 'backend', 'server.py');
-  console.log('[Server] Starting Flask server from:', serverScript);
-
-  serverProcess = spawn(pythonExec, [serverScript], {
-    cwd: PROJECT_ROOT,
-    env: {
-      ...process.env,
-      PYTHONPATH: PROJECT_ROOT,
-      PORT: SERVER_PORT.toString(),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  let serverReady = false;
-
-  const onServerReady = () => {
-    if (!serverReady) {
-      serverReady = true;
-      setTimeout(() => {
-        console.log('[Server] Ready');
-        resolve();
-      }, 2000); // Give it a moment to fully initialize
-    }
-  };
-
-  // Timeout fallback in case we miss the ready message
-  const serverTimeout = setTimeout(() => {
-    if (!serverReady) {
-      console.log('[Server] Ready (timeout fallback after 8s)');
-      onServerReady();
-    }
-  }, 8000);
-
-  serverProcess.stdout.on('data', (data) => {
-    const output = data.toString();
-    console.log(`[Server] ${output.trim()}`);
-
-    // Look for server ready indicator on stdout
-    if (output.includes('Running on') || output.includes('WARNING')) {
-      clearTimeout(serverTimeout);
-      onServerReady();
-    }
-  });
-
-  serverProcess.stderr.on('data', (data) => {
-    const output = data.toString();
-    console.error(`[Server] ${output.trim()}`);
-
-    // Flask-SocketIO outputs "Running on" to stderr, not stdout
-    if (output.includes('Running on') || output.includes('WARNING')) {
-      clearTimeout(serverTimeout);
-      onServerReady();
-    }
-  });
-
-  serverProcess.on('error', (error) => {
-    console.error('[Server] Failed to start:', error);
-    clearTimeout(serverTimeout);
-    reject(error);
-  });
-
-  serverProcess.on('exit', (code, signal) => {
-    console.log(`[Server] Exited with code ${code} and signal ${signal}`);
-    clearTimeout(serverTimeout);
-    if (code !== 0 && code !== null) {
-      reject(new Error(`Server exited with code ${code}`));
-    }
-  });
-}
-
-// Stop backend processes
+// Stop backend process
 function stopBackend() {
-  console.log('[Backend] Stopping backend processes...');
+  console.log('[Backend] Stopping backend process...');
 
   if (serverProcess) {
     serverProcess.kill();
     serverProcess = null;
-  }
-
-  if (workerProcess) {
-    workerProcess.kill();
-    workerProcess = null;
   }
 }
 
