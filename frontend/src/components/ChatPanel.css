@@ -200,7 +200,7 @@
   flex-shrink: 0;
 }
 
-.input-wrapper:focus-within {
+.input-wrapper {
   border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 10%, transparent);
 }
