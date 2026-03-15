@@ -55,6 +55,7 @@
 }
 
 .message-bubble.user .message-bubble-inner {
+  position: relative;
   color: var(--text-secondary);
   font-style: italic;
   border-left: 2px solid var(--accent);
@@ -295,4 +296,37 @@
   font-size: 0.85em;
   color: var(--error);
   padding: 4px 0;
+}
+
+.copy-message-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-bubble.user:hover .copy-message-btn {
+  opacity: 0.5;
+}
+
+.copy-message-btn:hover {
+  opacity: 1 !important;
+  border-color: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.copy-message-btn.copied {
+  color: var(--success);
+  border-color: var(--success);
+  opacity: 1;
 }
