@@ -557,14 +557,13 @@ class SDKWorker:
         session_id: str,
         ps: PersistentSession,
     ) -> dict:
-        """Build SDK hook callbacks that forward tool events."""
-        tool_timers: dict[str, float] = {}
-        task_stacks: dict[int, list[str]] = {}
+        """Build SDK hook callbacks that forward tool events.
 
-        def get_stack() -> list[str]:
-            """Get the agent stack for the current asyncio task."""
-            task_id = id(asyncio.current_task())
-            return task_stacks.setdefault(task_id, [])
+        Uses the SDK's native agent_id field to determine parent-child relationships
+        instead of maintaining a manual stack. The agent_id is set when a hook fires
+        inside a subagent, allowing accurate parent tracking even with parallel agents.
+        """
+        tool_timers: dict[str, float] = {}
 
         async def pre_tool_use(
             hook_input: dict[str, Any],
@@ -577,12 +576,12 @@ class SDKWorker:
             tool_params = hook_input.get("tool_input", {})
             tool_timers[tool_use_id] = time.monotonic()
 
+            # The SDK provides agent_id when this hook fires inside a subagent
+            parent_id = hook_input.get("agent_id")
+
             is_agent = actual_tool_name in ("Agent", "Task")
-            stack = get_stack()
-            parent_id = stack[-1] if stack else None
 
             if is_agent:
-                stack.append(tool_use_id)
                 event = {
                     "type": "agent_start",
                     "tool_name": actual_tool_name,
@@ -641,15 +640,8 @@ class SDKWorker:
 
             is_agent = actual_tool_name in ("Agent", "Task")
             tool_params = hook_input.get("tool_input", {})
-            stack = get_stack()
 
             if is_agent:
-                if stack and stack[-1] == tool_use_id:
-                    stack.pop()
-                    # Clean up empty stack to prevent memory leaks
-                    if not stack:
-                        task_id = id(asyncio.current_task())
-                        task_stacks.pop(task_id, None)
                 event = {
                     "type": "agent_stop",
                     "tool_name": actual_tool_name,
@@ -660,11 +652,13 @@ class SDKWorker:
                     "session_id": session_id,
                 }
             else:
+                # Use SDK's agent_id as parent
+                parent_id = hook_input.get("agent_id")
                 event = {
                     "type": "tool_complete",
                     "tool_name": actual_tool_name,
                     "tool_use_id": tool_use_id,
-                    "parent_agent_id": stack[-1] if stack else None,
+                    "parent_agent_id": parent_id,
                     "success": True,
                     "duration_ms": duration_ms,
                     "timestamp": datetime.now().isoformat(),
