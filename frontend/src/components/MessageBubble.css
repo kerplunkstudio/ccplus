@@ -11,7 +11,7 @@
 }
 
 .message-bubble.user {
-  margin: var(--space-lg) 0 var(--space-md);
+  margin: var(--space-xl) 0 var(--space-md);
 }
 
 .message-bubble.assistant {
@@ -226,22 +226,23 @@
 
 .streaming-cursor {
   display: inline-block;
-  width: 2px;
-  height: 1.1em;
+  width: 6px;
+  height: 6px;
   background: var(--accent);
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  animation: blink 1.4s ease-in-out infinite;
+  margin-left: 4px;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.4;
   }
   50% {
-    opacity: 0.3;
+    transform: scale(1.2);
+    opacity: 0.9;
   }
 }
 
