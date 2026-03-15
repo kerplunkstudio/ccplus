@@ -54,6 +54,7 @@ from backend.database import (
     get_user_stats,
     get_workspace_state,
     increment_user_stats,
+    is_first_run,
     mark_orphaned_tool_events,
     record_message,
     save_workspace_state,
@@ -299,6 +300,22 @@ def auth_verify():
     })
 
 
+# -- Status -----------------------------------------------------------------
+
+
+@app.route("/api/status/first-run")
+def first_run_status():
+    """Check if this is the user's first run (no conversations yet).
+
+    Requires authentication.
+    """
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not verify_token(token):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    return jsonify({"first_run": is_first_run()})
+
+
 # -- Data -----------------------------------------------------------------
 
 
@@ -395,6 +412,70 @@ def list_projects():
     except Exception as exc:
         logger.error(f"Failed to list projects: {exc}")
         return jsonify({"error": "Failed to list projects"}), 500
+
+
+@app.route("/api/projects/clone", methods=["POST"])
+def clone_project():
+    """Clone a GitHub repository into the workspace.
+
+    Request body:
+        url: GitHub URL (https or ssh format)
+
+    Returns:
+        name: repository name
+        path: absolute path to cloned directory
+    """
+    data = request.get_json()
+    if not data or "url" not in data:
+        return jsonify({"error": "Missing 'url' in request body"}), 400
+
+    repo_url = data["url"].strip()
+    if not repo_url:
+        return jsonify({"error": "Empty repository URL"}), 400
+
+    # Validate URL format (basic check for GitHub URLs)
+    import re
+    github_pattern = r'^(https?://github\.com/|git@github\.com:)[\w\-]+/[\w\-]+(?:\.git)?$'
+    if not re.match(github_pattern, repo_url):
+        return jsonify({"error": "Invalid GitHub URL format. Expected: https://github.com/user/repo or git@github.com:user/repo"}), 400
+
+    # Extract repo name from URL
+    repo_name = repo_url.rstrip('/').rstrip('.git').split('/')[-1]
+
+    workspace = Path(WORKSPACE_PATH).resolve()
+    target_path = workspace / repo_name
+
+    # Check if directory already exists
+    if target_path.exists():
+        return jsonify({"error": f"Directory '{repo_name}' already exists in workspace"}), 409
+
+    try:
+        # Clone the repository
+        logger.info(f"Cloning {repo_url} to {target_path}")
+        result = subprocess.run(
+            ["git", "clone", repo_url, str(target_path)],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout for large repos
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or result.stdout.strip() or "Git clone failed"
+            logger.error(f"Git clone failed: {error_msg}")
+            return jsonify({"error": f"Failed to clone repository: {error_msg}"}), 500
+
+        logger.info(f"Successfully cloned {repo_url} to {target_path}")
+        return jsonify({
+            "name": repo_name,
+            "path": str(target_path),
+        })
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Git clone timed out for {repo_url}")
+        return jsonify({"error": "Clone operation timed out (>5 minutes)"}), 504
+    except Exception as exc:
+        logger.error(f"Failed to clone repository: {exc}")
+        return jsonify({"error": f"Failed to clone repository: {str(exc)}"}), 500
 
 
 @app.route("/api/git/context")

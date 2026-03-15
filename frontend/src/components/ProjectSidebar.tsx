@@ -138,6 +138,34 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     };
   }, [showPicker]);
 
+  const isGitHubUrl = (text: string): boolean => {
+    const githubPattern = /^(https?:\/\/github\.com\/|git@github\.com:)[\w\-]+\/[\w\-]+(?:\.git)?$/;
+    return githubPattern.test(text.trim());
+  };
+
+  const cloneGitHubRepo = async (url: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/projects/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        handleSelectProject(data.path, data.name);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to clone repository: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Failed to clone repository: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const fetchAvailableProjects = async () => {
     setIsLoading(true);
     try {
@@ -156,6 +184,16 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const handleOpenPicker = () => {
     setShowPicker(true);
     fetchAvailableProjects();
+  };
+
+  const handleFilterInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const trimmedQuery = filterQuery.trim();
+      if (isGitHubUrl(trimmedQuery)) {
+        e.preventDefault();
+        cloneGitHubRepo(trimmedQuery);
+      }
+    }
   };
 
   const handleSelectProject = (path: string, name: string) => {
@@ -387,14 +425,23 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <input
               type="text"
               className="project-picker-input"
-              placeholder="Filter projects..."
+              placeholder="GitHub URL or filter projects..."
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
+              onKeyDown={handleFilterInputKeyDown}
               autoFocus
             />
             <div className="project-picker-list">
               {isLoading ? (
                 <div className="project-picker-loading">Loading...</div>
+              ) : isGitHubUrl(filterQuery) ? (
+                <div className="project-picker-github-hint">
+                  <div className="github-hint-icon">⎘</div>
+                  <div className="github-hint-text">
+                    <div className="github-hint-title">Clone repository</div>
+                    <div className="github-hint-subtitle">Press Enter to clone from GitHub</div>
+                  </div>
+                </div>
               ) : filteredProjects.length === 0 ? (
                 <div className="project-picker-empty">No available projects</div>
               ) : (
