@@ -47,6 +47,7 @@ function AppContent({ token, loading }: AppContentProps) {
     connected,
     messages,
     streaming,
+    backgroundProcessing,
     currentTool,
     activityTree,
     usageStats,
@@ -400,6 +401,7 @@ function AppContent({ token, loading }: AppContentProps) {
                   messages={messages}
                   connected={connected}
                   streaming={streaming}
+                  backgroundProcessing={backgroundProcessing}
                   currentTool={currentTool}
                   toolLog={toolLog}
                   selectedModel={selectedModel}

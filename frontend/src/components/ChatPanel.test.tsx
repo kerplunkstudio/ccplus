@@ -20,6 +20,7 @@ describe('ChatPanel', () => {
     messages: [] as Message[],
     connected: true,
     streaming: false,
+    backgroundProcessing: false,
     sessionId: 'test_session',
     toolLog: [],
     selectedProject: null as string | null,
@@ -122,5 +123,42 @@ describe('ChatPanel', () => {
     fireEvent.change(textarea, { target: { value: 'To be cleared' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     expect(textarea.value).toBe('');
+  });
+
+  it('shows send button when background processing is active', () => {
+    render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
+    expect(screen.getByLabelText('Send')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Cancel')).not.toBeInTheDocument();
+  });
+
+  it('shows background processing indicator when backgroundProcessing is true', () => {
+    render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
+    expect(screen.getByText('Background agents running...')).toBeInTheDocument();
+  });
+
+  it('enables input when background processing is active', () => {
+    render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
+    const textarea = screen.getByPlaceholderText(/Send a message/);
+    expect(textarea).not.toBeDisabled();
+  });
+
+  it('allows sending messages during background processing', () => {
+    render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
+    const textarea = screen.getByPlaceholderText(/Send a message/);
+    fireEvent.change(textarea, { target: { value: 'New message' } });
+    const sendBtn = screen.getByLabelText('Send');
+    fireEvent.click(sendBtn);
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, 'claude-sonnet-4-20250514', undefined);
+  });
+
+  it('hides background processing indicator when streaming is active', () => {
+    render(<ChatPanel {...defaultProps} streaming={true} backgroundProcessing={true} />);
+    expect(screen.queryByText('Background agents running...')).not.toBeInTheDocument();
+  });
+
+  it('shows cancel button when actively streaming, even if backgroundProcessing was true', () => {
+    render(<ChatPanel {...defaultProps} streaming={true} backgroundProcessing={false} />);
+    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Send')).not.toBeInTheDocument();
   });
 });
