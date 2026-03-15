@@ -122,7 +122,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   }, []);
 
-  // Auto-scroll on new messages or streaming content updates
+  // Auto-scroll on new messages, streaming content, or tool activity updates
   useEffect(() => {
     const isSessionChange = Math.abs(messages.length - lastMessageCount) > 1;
     const hasStreamingMessage = messages.some((m) => m.streaming);
@@ -132,8 +132,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
-    } else if (hasStreamingMessage) {
-      // During streaming: instant scroll if near bottom
+    } else if (hasStreamingMessage || streaming) {
+      // During streaming or tool activity: instant scroll if near bottom
       if (isNearBottom()) {
         scrollToBottom(true);
       }
@@ -144,7 +144,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, isNearBottom]);
+  }, [messages, scrollToBottom, lastMessageCount, isNearBottom, toolLog, currentTool, streaming, pendingQuestion]);
 
   // Always snap to bottom on session switch
   useEffect(() => {
