@@ -45,6 +45,7 @@ from backend.database import (
     archive_session,
     get_conversation_history,
     get_image,
+    get_insights,
     get_sessions_list,
     get_stats,
     get_tool_events,
@@ -147,6 +148,8 @@ def _handle_worker_reconnect(session_id: str):
                 "input_tokens": result.get("input_tokens"),
                 "output_tokens": result.get("output_tokens"),
                 "model": result.get("model"),
+                "sdk_session_id": result.get("sdk_session_id"),
+                "content": result.get("text"),
             },
             room=session_id,
         )
@@ -1158,6 +1161,8 @@ def handle_connect(auth=None):
                     "input_tokens": result.get("input_tokens"),
                     "output_tokens": result.get("output_tokens"),
                     "model": result.get("model"),
+                    "sdk_session_id": result.get("sdk_session_id"),
+                    "content": result.get("text"),
                 },
                 room=session_id,
             )
@@ -1314,6 +1319,8 @@ def handle_message(data):
                 "input_tokens": result.get("input_tokens"),
                 "output_tokens": result.get("output_tokens"),
                 "model": result.get("model"),
+                "sdk_session_id": result.get("sdk_session_id"),
+                "content": result.get("text"),
             },
             room=session_id,
         )
