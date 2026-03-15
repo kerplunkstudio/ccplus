@@ -112,7 +112,7 @@ class HookManager:
                 "type": "agent_start",
                 "tool_name": tool_name,
                 "tool_use_id": tool_use_id,
-                "parent_agent_id": parent_id,
+                "parent_agent_id": None,
                 "agent_type": agent_type,
                 "description": tool_input.get("description", ""),
                 "timestamp": datetime.now().isoformat(),
