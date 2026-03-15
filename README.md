@@ -14,27 +14,54 @@ cc+ wraps the Claude Code SDK in a lightweight IDE — tabbed sessions, a live a
 
 **A desktop app.** Native window via Electron. Dock integration, window state persistence. Run it standalone or alongside the web UI — same backend either way.
 
+**Workspace browser.** Browse your filesystem and select project directories from the UI. Auto-detects git repos under common workspace paths.
+
+**First-run onboarding.** Welcome screen with example prompts, detected projects, and workspace setup — shown automatically on first launch.
+
 **Proper markdown.** Conversations render like they should. Code blocks, tables, headings, inline formatting — not a wall of raw text.
+
+**One-line install.** `curl | bash` installer that checks prereqs, clones the repo, and starts the server.
 
 ## Getting started
 
 **Requirements:** Python 3.12+, Node.js 18+, Claude Code CLI configured.
 
 ```bash
+# One-line installer (recommended)
+curl -fsSL https://raw.githubusercontent.com/Kerplunk-Studio/ccplus/main/install.sh | bash
+
+# Or manual install
 git clone https://github.com/Kerplunk-Studio/ccplus.git && cd ccplus
-./setup.sh    # one-time install
-./ccplus      # build, deploy, launch
+./ccplus      # auto-setup on first run, build + deploy + launch on subsequent runs
 ```
 
-That's it. `setup.sh` handles the venv, dependencies, and config. `./ccplus` builds the frontend, starts the server, and opens the desktop app. Run `./ccplus` every time you want to use it.
+That's it. First run auto-detects missing dependencies, creates the venv, installs packages, runs interactive `.env` setup, builds the frontend, and starts the server. Just run `./ccplus` every time you want to use it.
 
 ## Development
 
 ```bash
 cd frontend && npm start        # Hot reload on :3001
-./deploy.sh server              # Restart backend only
-./deploy.sh stop                # Kill everything
+./ccplus server                 # Restart backend only
+./ccplus frontend               # Rebuild + deploy frontend only
+./ccplus doctor                 # System health check
+./ccplus stop                   # Kill everything
 ```
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `./ccplus` | Smart deploy (first run: setup, subsequent: build + restart) |
+| `./ccplus status` | Show service status |
+| `./ccplus doctor` | System health check |
+| `./ccplus stop` | Stop all services |
+| `./ccplus logs` | Tail all logs |
+| `./ccplus desktop` | Launch Electron desktop app |
+| `./ccplus desktop-parallel` | Desktop + web server side by side |
+| `./ccplus release [type]` | Create release (patch/minor/major) |
+| `./ccplus check-update` | Check for new versions |
+| `./ccplus update` | Update to latest |
+| `./ccplus setup` | Force re-run setup |
 
 ## Architecture
 
