@@ -103,20 +103,6 @@ run_with_spinner() {
     fi
 }
 
-# Detect Python (prefer venv)
-detect_python() {
-    if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
-        PYTHON="$SCRIPT_DIR/venv/bin/python"
-        info "Using venv Python: $PYTHON"
-    elif command -v python3 >/dev/null 2>&1; then
-        PYTHON="python3"
-        warn "No venv found, using system python3"
-    else
-        error "Python not found. Create a venv: python3 -m venv venv"
-        exit 1
-    fi
-}
-
 # Worker PID file (DEPRECATED: TypeScript backend runs SDK in-process)
 # WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
@@ -397,7 +383,7 @@ launch_desktop_parallel() {
 
 # Check if setup is needed
 needs_setup() {
-    [ ! -f ".env" ] || [ ! -d "frontend/node_modules" ] || [ ! -d "backend-ts/node_modules" ]
+    [ ! -f ".env" ] || [ ! -d "backend-ts/node_modules" ]
 }
 
 # Run setup
@@ -405,20 +391,6 @@ run_setup() {
     header "Setting up cc+"
 
     # Check prerequisites
-    if ! command -v python3 >/dev/null 2>&1; then
-        error "Python 3 not found"
-        exit 1
-    fi
-
-    py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    py_major=$(echo "$py_version" | cut -d. -f1)
-    py_minor=$(echo "$py_version" | cut -d. -f2)
-
-    if [ "$py_major" -ne 3 ] || [ "$py_minor" -lt 12 ]; then
-        error "Python 3.12+ required (found $py_version)"
-        exit 1
-    fi
-
     if ! command -v node >/dev/null 2>&1; then
         error "Node.js not found"
         exit 1
@@ -434,15 +406,6 @@ run_setup() {
         error "npm not found"
         exit 1
     fi
-
-    # Create venv if needed
-    if [ ! -d "venv" ]; then
-        run_with_spinner "Creating Python virtual environment..." python3 -m venv venv || exit 1
-    fi
-
-    # Install Python dependencies
-    source venv/bin/activate
-    run_with_spinner "Installing Python dependencies..." "pip install -q --upgrade pip && pip install -q -r requirements.txt" || exit 1
 
     # Install frontend dependencies
     run_with_spinner "Installing frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
@@ -551,22 +514,6 @@ run_doctor() {
     echo ""
     echo "${BOLD}System${RESET}"
     echo ""
-
-    # Python version
-    if command -v python3 >/dev/null 2>&1; then
-        py_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        py_major=$(echo "$py_version" | cut -d. -f1)
-        py_minor=$(echo "$py_version" | cut -d. -f2)
-        if [ "$py_major" -eq 3 ] && [ "$py_minor" -ge 12 ]; then
-            pass "Python $py_version"
-        else
-            fail "Python $py_version (need 3.12+)"
-            exit_code=1
-        fi
-    else
-        fail "Python 3 not found"
-        exit_code=1
-    fi
 
     # Node version
     if command -v node >/dev/null 2>&1; then
@@ -931,13 +878,6 @@ run_update() {
     # Read new version
     AFTER_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "dev")
 
-    # Check if requirements.txt changed
-    if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "^requirements.txt$"; then
-        info "Dependencies changed, reinstalling Python packages..."
-        source venv/bin/activate 2>/dev/null || true
-        run_with_spinner "Reinstalling Python dependencies..." "pip install -q --upgrade pip && pip install -q -r requirements.txt" || exit 1
-    fi
-
     # Check if frontend/package.json changed
     if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "^frontend/package.json$"; then
         info "Frontend dependencies changed, reinstalling npm packages..."
@@ -1064,8 +1004,9 @@ cc+ - Unified launcher and deployment tool
 Usage: ./ccplus [command]
 
 Commands:
-  (none) or start  Full deploy: build frontend + backend + deploy + restart server
-                   On first run: setup + configure + build + start
+  (none) or start  Full deploy: build frontend + backend + deploy + launch desktop app
+                   On first run: setup + configure + build + launch
+  web              Full deploy + start web server (browser mode at localhost:4000)
   status           Show service status (version, uptime, PID, clients)
   logs [target]    Tail logs (target: all or server. default: all)
   doctor           Run system diagnostics
@@ -1087,8 +1028,9 @@ Installation:
     curl -fsSL https://raw.githubusercontent.com/mjfuentes/ccplus/main/install.sh | bash
 
 Examples:
-  ./ccplus              # First run: setup + build + start
-  ./ccplus              # Subsequent: smart deploy
+  ./ccplus              # First run: setup + build + launch desktop
+  ./ccplus              # Subsequent: smart deploy + launch desktop
+  ./ccplus web          # Launch in browser mode (localhost:4000)
   ./ccplus status       # Show service status
   ./ccplus logs         # Tail all logs
   ./ccplus logs server  # Tail server log only
@@ -1098,7 +1040,7 @@ Examples:
   ./ccplus update       # Update to latest version
   ./ccplus release patch # Create patch release (1.1.0 -> 1.1.1)
   ./ccplus frontend     # Rebuild frontend only
-  ./ccplus desktop      # Launch desktop app
+  ./ccplus desktop      # Launch desktop app (exclusive mode)
   ./ccplus stop         # Stop everything
 EOF
 }
@@ -1108,6 +1050,16 @@ COMMAND="${1:-start}"
 
 case "$COMMAND" in
     start|"")
+        if needs_setup; then
+            run_setup
+        fi
+        build_backend
+        build_frontend
+        deploy_static
+        kill_server
+        launch_desktop
+        ;;
+    web)
         if needs_setup; then
             run_setup
         fi
