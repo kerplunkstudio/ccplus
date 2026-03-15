@@ -188,11 +188,18 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
   const handleFilterInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
       const trimmedQuery = filterQuery.trim();
       if (isGitHubUrl(trimmedQuery)) {
-        e.preventDefault();
         cloneGitHubRepo(trimmedQuery);
       }
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowPicker(false);
+      setFilterQuery('');
     }
   };
 
