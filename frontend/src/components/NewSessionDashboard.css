@@ -7,13 +7,13 @@
   margin: 0 auto;
   padding-top: var(--space-2xl);
   gap: var(--space-lg);
-  animation: dashboardIn 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  animation: dashboardIn var(--duration-normal) var(--ease-out);
 }
 
 @keyframes dashboardIn {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--space-xs));
   }
   to {
     opacity: 1;
@@ -45,9 +45,9 @@
 }
 
 .branch-indicator {
-  font-size: 16px;
+  font-size: var(--text-base);
   line-height: 1;
-  color: #f59e0b; /* amber/yellow for dirty */
+  color: var(--warning);
 }
 
 .branch-indicator[data-clean="true"] {
@@ -87,7 +87,7 @@
 .commits-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xs);
 }
 
 .commit-row {
@@ -95,8 +95,8 @@
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
-  transition: background 0.15s ease;
-  border-radius: 4px;
+  transition: background var(--transition-fast);
+  border-radius: var(--radius-sm);
 }
 
 .commit-row:hover {
@@ -175,7 +175,7 @@
   font-size: var(--text-sm);
   cursor: pointer;
   padding: var(--space-xs) 0;
-  transition: color 0.15s ease;
+  transition: color var(--transition-fast);
   text-align: left;
 }
 
@@ -192,7 +192,7 @@
 .sessions-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-xs);
 }
 
 .session-item {
@@ -203,13 +203,13 @@
   padding: var(--space-xs) var(--space-sm);
   background: none;
   border: none;
-  border-left: 2px solid var(--border);
+  border-left: var(--space-xs) solid var(--border);
   color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
   border-radius: 0;
 }
 

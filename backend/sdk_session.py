@@ -46,6 +46,7 @@ class SessionManager:
         self._client.on_error = self._handle_error
         self._client.on_session_status = self._handle_session_status
         self._client.on_user_question = self._handle_user_question
+        self._client.on_reconnect = self._handle_reconnect
 
         # Connect to worker
         self._client.connect()
@@ -234,3 +235,9 @@ class SessionManager:
         """Return pending question data for a session, if any."""
         with self._lock:
             return self._pending_questions.get(session_id)
+
+    def _handle_reconnect(self) -> None:
+        """Handle worker reconnection - reset status flag to prevent false lost-session detection."""
+        with self._lock:
+            self._has_received_status = False
+        logger.info("Worker reconnected, reset session status flag")

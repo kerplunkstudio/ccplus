@@ -1,7 +1,7 @@
 .usage-stats-bar {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  padding: 6px 12px;
+  padding: var(--space-sm) var(--space-md);
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
@@ -27,14 +27,14 @@
   color: var(--text-primary);
   font-weight: 600;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
 .usage-stat-label {
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 500;
   opacity: 0.7;
   text-transform: uppercase;
@@ -45,6 +45,6 @@
 
 @media (max-width: 900px) {
   .usage-stats-bar {
-    padding: 5px 10px;
+    padding: var(--space-sm) var(--space-md);
   }
 }
