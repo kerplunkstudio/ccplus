@@ -61,6 +61,6 @@ describe('App', () => {
 
   it('shows empty state in activity panel', () => {
     render(<App />);
-    expect(screen.getByText('No activity yet')).toBeInTheDocument();
+    expect(screen.getByText('Activity appears here')).toBeInTheDocument();
   });
 });

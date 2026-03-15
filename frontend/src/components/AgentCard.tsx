@@ -49,54 +49,55 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
       >
-        <div className="agent-card-header">
-          <div className="agent-card-title-area">
-            <div className="agent-card-info">
-              <div className="agent-card-type">
-                {node.sequence !== undefined && (
-                  <span className="node-sequence">#{node.sequence}</span>
-                )}{' '}
-                {node.agent_type}
-              </div>
-              {node.description && (
-                <div className="agent-card-description">{node.description}</div>
-              )}
-            </div>
-          </div>
-          <div className="agent-card-meta">
-            {node.duration_ms !== undefined && (
-              <span className="agent-card-duration">{formatDuration(node.duration_ms)}</span>
-            )}
-            {getStatusBadge(node.status)}
-          </div>
+        {/* Agent type — full width, no competition */}
+        <div className="agent-card-type">
+          {node.sequence !== undefined && (
+            <span className="node-sequence">#{node.sequence}</span>
+          )}{' '}
+          {node.agent_type}
         </div>
 
-        {childCount > 0 && (
-          <div className="agent-card-footer">
-            <button
-              className="agent-card-toggle"
-              onClick={toggleExpand}
-              aria-expanded={expanded}
-              aria-label={expanded ? 'Collapse children' : 'Expand children'}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 10 10"
-                fill="currentColor"
-                className={`toggle-arrow ${expanded ? 'expanded' : ''}`}
-              >
-                <path d="M3 2L7 5L3 8Z" />
-              </svg>
-              <span className="agent-card-child-count">
-                {toolCount > 0 && `${toolCount} tool${toolCount > 1 ? 's' : ''}`}
-                {toolCount > 0 && agentCount > 0 && ', '}
-                {agentCount > 0 && `${agentCount} agent${agentCount > 1 ? 's' : ''}`}
-              </span>
-            </button>
-          </div>
+        {/* Description */}
+        {node.description && (
+          <div className="agent-card-description">{node.description}</div>
         )}
 
+        {/* Meta row: status + duration + child breakdown */}
+        <div className="agent-card-meta-row">
+          {getStatusBadge(node.status)}
+          {node.duration_ms !== undefined && (
+            <span className="agent-card-chip">
+              {formatDuration(node.duration_ms)}
+            </span>
+          )}
+          {toolCount > 0 && (
+            <span className="agent-card-chip">
+              {toolCount} tool{toolCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {agentCount > 0 && (
+            <span className="agent-card-chip agent-card-chip-accent">
+              {agentCount} agent{agentCount > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Expand toggle */}
+        {childCount > 0 && (
+          <button
+            className="agent-card-toggle"
+            onClick={toggleExpand}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Collapse children' : 'Expand children'}
+          >
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" className={`toggle-arrow ${expanded ? 'expanded' : ''}`}>
+              <path d="M3 2L7 5L3 8Z" />
+            </svg>
+            {expanded ? 'Collapse' : 'Expand'}
+          </button>
+        )}
+
+        {/* Error */}
         {node.error && (
           <div className="agent-card-error">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">

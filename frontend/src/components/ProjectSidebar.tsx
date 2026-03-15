@@ -231,13 +231,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   return (
     <div className="project-sidebar">
       <div className="project-sidebar-header">
-        <div className="sidebar-brand">
-          <h1 className="sidebar-brand-title">CC+</h1>
-          <p className="sidebar-brand-subtitle">OBS</p>
-        </div>
-        <button className="sidebar-settings-btn" aria-label="Settings">
-          ⚙
-        </button>
+        <h1 className="sidebar-brand-title">CC+</h1>
       </div>
 
       <div className="sidebar-search">
@@ -262,7 +256,14 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       <div className="project-list">
         {projects.length === 0 ? (
           <div className="project-empty-state">
-            <p className="project-empty-message">Open a project to start</p>
+            <p className="project-empty-message">No projects open</p>
+            <button
+              className="project-empty-cta"
+              onClick={handleOpenPicker}
+              aria-label="Add a project"
+            >
+              + Add a project
+            </button>
           </div>
         ) : (
           projects

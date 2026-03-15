@@ -62,14 +62,6 @@
   font-size: var(--text-base);
 }
 
-.message-bubble.user .message-bubble-inner::before {
-  content: "◊";
-  color: var(--accent);
-  font-style: normal;
-  font-weight: 500;
-  margin-right: var(--space-xs);
-  opacity: 0.8;
-}
 
 .message-bubble.assistant .message-bubble-inner {
   color: var(--text-primary);

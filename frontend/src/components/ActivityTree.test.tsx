@@ -18,7 +18,7 @@ const mockStats: UsageStats = {
 describe('ActivityTree', () => {
   it('renders empty state when no tree nodes', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
-    expect(screen.getByText('No activity yet')).toBeInTheDocument();
+    expect(screen.getByText('Activity appears here')).toBeInTheDocument();
   });
 
   it('renders the activity tabs', () => {

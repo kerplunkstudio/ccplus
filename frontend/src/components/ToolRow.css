@@ -20,12 +20,27 @@
 .tool-row:hover {
   background: var(--hover-bg-secondary);
   border-color: var(--border);
-  transform: translateX(4px);
-  box-shadow: 0 2px 8px var(--shadow);
 }
 
 .tool-row-running {
   border-color: var(--accent-border);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--accent) 5%, var(--bg-secondary)) 0%,
+    var(--bg-secondary) 50%,
+    color-mix(in oklch, var(--accent) 5%, var(--bg-secondary)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .tool-row-failed {
@@ -79,7 +94,6 @@
 .tool-row:hover .tool-row-icon {
   background: var(--accent-bg);
   color: var(--accent);
-  transform: scale(1.1);
 }
 
 .tool-row-info {
@@ -133,6 +147,9 @@
   border: 2px solid var(--accent-dim);
   border-top-color: var(--accent);
   animation: toolSpin 0.6s linear infinite;
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 8px color-mix(in oklch, var(--accent) 30%, transparent);
 }
 
 .tool-status-completed {
