@@ -209,6 +209,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
+  const [thinking, setThinking] = useState<string>('');
   const [activityTree, dispatchTree] = useReducer(treeReducer, []);
   const activityTreeRef = useRef<ActivityNode[]>([]);
   const [usageStats, setUsageStats] = useState<UsageStats>({
@@ -465,6 +466,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(true);
     });
 
+    newSocket.on('thinking_delta', (data: { text: string }) => {
+      setThinking(prev => prev + data.text);
+    });
+
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
       // Clear any pending worker restart error - streaming has resumed
       clearPendingWorkerRestartError();
@@ -479,6 +484,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         streamingContentRef.current = data.text;
         streamingIdRef.current = msgId;
+        setThinking('');
         setMessages((prev) => [
           ...prev,
           {
@@ -539,6 +545,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         // End streaming session completely and clear background processing
         setStreaming(false);
         setBackgroundProcessing(false);
+        setThinking('');
         if (clearToolTimerRef.current) {
           clearTimeout(clearToolTimerRef.current);
           clearToolTimerRef.current = null;
@@ -815,6 +822,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     messages,
     streaming,
     backgroundProcessing,
+    thinking,
     currentTool,
     activityTree,
     usageStats,

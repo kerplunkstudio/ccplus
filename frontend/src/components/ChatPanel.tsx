@@ -44,6 +44,7 @@ interface ChatPanelProps {
   connected: boolean;
   streaming: boolean;
   backgroundProcessing?: boolean;
+  thinking?: string;
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
   selectedModel: string;
@@ -75,6 +76,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   connected,
   streaming,
   backgroundProcessing = false,
+  thinking,
   currentTool,
   toolLog,
   selectedModel,
@@ -562,6 +564,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               >
                 Confirm
               </button>
+            </div>
+          )}
+          {thinking && (
+            <div className="thinking-block">
+              <div className="thinking-label">Thinking</div>
+              <div className="thinking-content-text">{thinking}</div>
             </div>
           )}
           {streaming && !messages.some((m) => m.streaming) && (
