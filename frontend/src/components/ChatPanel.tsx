@@ -162,34 +162,37 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   }, [pendingQuestion]);
 
-  // Additional focus for empty sessions (no keyboard needed)
+  // Keep textarea always focused and ready for input
   useEffect(() => {
-    const isEmpty = messages.length === 0;
-    if (isEmpty && connected && !streaming && textareaRef.current) {
-      // Focus immediately when showing empty state
-      const focusTimeout = setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-        }
-      }, 50); // Slightly longer delay for empty state to ensure rendering is complete
+    const focusTextarea = () => {
+      if (textareaRef.current && !pendingQuestion) {
+        textareaRef.current.focus();
+      }
+    };
 
-      return () => clearTimeout(focusTimeout);
-    }
-  }, [messages.length, connected, streaming]);
+    // Focus on mount, session switch, streaming end
+    const focusTimeout = setTimeout(focusTextarea, 50);
 
-  // Autofocus textarea on mount, new chat, or session switch
-  useEffect(() => {
-    if (textareaRef.current && !streaming && connected) {
-      // Use a small timeout to ensure DOM is ready, especially for new sessions
-      const focusTimeout = setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-        }
-      }, 10);
+    // Re-focus when window regains focus
+    window.addEventListener('focus', focusTextarea);
 
-      return () => clearTimeout(focusTimeout);
-    }
-  }, [messages.length, streaming, connected, sessionId]);
+    // Re-focus when clicking anywhere in the document
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't steal focus from buttons or interactive elements outside the input
+      if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]')) {
+        return;
+      }
+      focusTextarea();
+    };
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      clearTimeout(focusTimeout);
+      window.removeEventListener('focus', focusTextarea);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [messages.length, streaming, connected, sessionId, pendingQuestion]);
 
   // Auto-resize textarea
   useEffect(() => {
