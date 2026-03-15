@@ -1,0 +1,86 @@
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: #e0e7ff;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.3);
+  font-size: 14px;
+  z-index: 1000;
+  position: relative;
+}
+
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-banner-icon {
+  font-size: 18px;
+  font-weight: bold;
+  color: #c7d2fe;
+}
+
+.update-banner-message {
+  line-height: 1.4;
+  color: #e0e7ff;
+}
+
+.update-banner-command {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-size: 13px;
+  color: #fef3c7;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.update-banner-dismiss {
+  background: transparent;
+  border: none;
+  color: #c7d2fe;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: -4px -4px -4px 0;
+  border-radius: 4px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.update-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.update-banner-dismiss:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Dark mode adjustments (if needed) */
+[data-theme="dark"] .update-banner {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-bottom-color: rgba(71, 85, 105, 0.5);
+}
+
+[data-theme="dark"] .update-banner-message,
+[data-theme="dark"] .update-banner-icon {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .update-banner-command {
+  background: rgba(0, 0, 0, 0.4);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+[data-theme="dark"] .update-banner-dismiss {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .update-banner-dismiss:hover {
+  color: #f1f5f9;
+}

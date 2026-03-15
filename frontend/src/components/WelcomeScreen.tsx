@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { WorkspaceBrowser } from './WorkspaceBrowser';
 import './WelcomeScreen.css';
+
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+
+interface DetectedProject {
+  name: string;
+  path: string;
+}
 
 interface WelcomeScreenProps {
   onSelectPrompt: (prompt: string) => void;
-  onAddProject: () => void;
+  onAddProject: (path: string, name: string) => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -30,8 +38,65 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenProps) {
+  const [showBrowser, setShowBrowser] = useState(false);
+  const [detectedProjects, setDetectedProjects] = useState<DetectedProject[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
+  useEffect(() => {
+    const fetchDetectedProjects = async () => {
+      setIsLoadingProjects(true);
+      try {
+        const response = await fetch(`${SOCKET_URL}/api/scan-projects`);
+        if (response.ok) {
+          const data = await response.json();
+          setDetectedProjects(data.projects || []);
+        }
+      } catch (err) {
+        // Silently fail, detected projects are optional
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+
+    fetchDetectedProjects();
+  }, []);
+
+  const handleSelectWorkspace = async (path: string) => {
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/set-workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+
+      if (response.ok) {
+        // Workspace updated, now add as a project
+        const name = path.split('/').pop() || 'Project';
+        onAddProject(path, name);
+        setShowBrowser(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to set workspace: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Failed to set workspace: ${error}`);
+    }
+  };
+
+  const handleSelectDetectedProject = (path: string) => {
+    const name = path.split('/').pop() || 'Project';
+    onAddProject(path, name);
+  };
+
   return (
     <div className="welcome-screen">
+      {showBrowser && (
+        <WorkspaceBrowser
+          onSelectWorkspace={handleSelectWorkspace}
+          onClose={() => setShowBrowser(false)}
+        />
+      )}
+
       <div className="welcome-hero">
         <div className="welcome-logo">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -113,13 +178,56 @@ export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenPro
         </div>
       </div>
 
-      <div className="welcome-cta">
-        <button className="cta-button" onClick={onAddProject}>
-          <span className="cta-icon">+</span>
-          Add a project
+      {/* Workspace setup section */}
+      <div className="welcome-section">
+        <h2 className="section-heading">Set up workspace</h2>
+
+        {isLoadingProjects ? (
+          <div className="workspace-loading">
+            <div className="spinner" />
+            <span>Scanning for projects...</span>
+          </div>
+        ) : detectedProjects.length > 0 ? (
+          <div className="workspace-detected">
+            <p className="workspace-detected-description">
+              We found {detectedProjects.length} project{detectedProjects.length === 1 ? '' : 's'} on your system:
+            </p>
+            <div className="workspace-detected-list">
+              {detectedProjects.slice(0, 5).map((project) => (
+                <button
+                  key={project.path}
+                  className="workspace-detected-item"
+                  onClick={() => handleSelectDetectedProject(project.path)}
+                  title={project.path}
+                >
+                  <span className="workspace-detected-icon">📦</span>
+                  <div className="workspace-detected-content">
+                    <span className="workspace-detected-name">{project.name}</span>
+                    <span className="workspace-detected-path">{project.path}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {detectedProjects.length > 5 && (
+              <p className="workspace-detected-more">
+                + {detectedProjects.length - 5} more project{detectedProjects.length - 5 === 1 ? '' : 's'}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="workspace-empty-message">
+            No projects detected. Browse to select a workspace directory.
+          </p>
+        )}
+
+        <button className="workspace-browse-button" onClick={() => setShowBrowser(true)}>
+          Browse for workspace...
         </button>
+      </div>
+
+      <div className="welcome-cta">
         <p className="cta-hint">
-          Add a project folder to start using Claude Code
+          Select a workspace or add a project to start using Claude Code
         </p>
       </div>
     </div>

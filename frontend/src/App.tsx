@@ -8,6 +8,7 @@ import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
@@ -78,6 +79,8 @@ function AppContent({ token, loading }: AppContentProps) {
   const [isFirstRun, setIsFirstRun] = useState<boolean>(false);
   const [checkingFirstRun, setCheckingFirstRun] = useState<boolean>(true);
 
+  const [version, setVersion] = useState<string | null>(null);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
@@ -110,6 +113,22 @@ function AppContent({ token, loading }: AppContentProps) {
 
     checkFirstRun();
   }, [token]);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const response = await fetch('/api/version');
+        if (response.ok) {
+          const data = await response.json();
+          setVersion(data.version);
+        }
+      } catch (error) {
+        // Silently fail, version display is optional
+      }
+    };
+
+    fetchVersion();
+  }, []);
 
   const handleAddProject = useCallback((path: string, name: string) => {
     workspace.addProject(path, name);
@@ -374,13 +393,9 @@ function AppContent({ token, loading }: AppContentProps) {
     }, 100);
   }, [activeProject, handleNewTab, sendMessage]);
 
-  const handleWelcomeAddProject = useCallback(() => {
-    const path = prompt('Enter project path:');
-    if (path) {
-      const name = path.split('/').pop() || 'Project';
-      handleAddProject(path, name);
-      setIsFirstRun(false);
-    }
+  const handleWelcomeAddProject = useCallback((path: string, name: string) => {
+    handleAddProject(path, name);
+    setIsFirstRun(false);
   }, [handleAddProject]);
 
   const handleSendToNewSession = useCallback((text: string) => {
@@ -414,18 +429,20 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowProfile = activePage === 'profile';
 
   return (
-    <div
-      className="app-layout"
-      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
-      data-chat-font={profile.chatFont}
-    >
-      {mobileDrawer && (
-        <div
-          className="mobile-overlay"
-          onClick={() => setMobileDrawer(null)}
-          aria-hidden="true"
-        />
-      )}
+    <>
+      <UpdateBanner />
+      <div
+        className="app-layout"
+        style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+        data-chat-font={profile.chatFont}
+      >
+        {mobileDrawer && (
+          <div
+            className="mobile-overlay"
+            onClick={() => setMobileDrawer(null)}
+            aria-hidden="true"
+          />
+        )}
 
       <div className={`panel-sidebar ${mobileDrawer === 'sessions' ? 'mobile-open' : ''}`}>
         <ProjectSidebar
@@ -442,6 +459,7 @@ function AppContent({ token, loading }: AppContentProps) {
           onSidebarWidthChange={handleSidebarWidthChange}
           onNavigate={handleNavigate}
           activePage={activePage}
+          version={version}
         />
       </div>
 
@@ -511,7 +529,8 @@ function AppContent({ token, loading }: AppContentProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -239,6 +239,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]') || target.closest('input') || target.closest('select') || target.closest('.project-picker')) {
         return;
       }
+      // Don't steal focus if user has selected text
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) {
+        return;
+      }
       focusTextarea();
     };
     document.addEventListener('click', handleClick);
