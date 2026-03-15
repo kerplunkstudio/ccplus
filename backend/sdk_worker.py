@@ -338,6 +338,13 @@ class SDKWorker:
             ps.cancel_requested = True
             logger.info(f"Cancellation requested for session {session_id}")
 
+            # Unblock any pending AskUserQuestion wait
+            event = self._pending_questions.get(session_id)
+            if event:
+                self._question_responses[session_id] = "User cancelled the query"
+                event.set()
+                logger.info(f"Unblocked pending AskUserQuestion for cancelled session {session_id}")
+
     async def handle_disconnect_session(self, session_id: str) -> None:
         """Disconnect and tear down a session."""
         await self._disconnect_session(session_id)

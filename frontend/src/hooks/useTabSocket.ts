@@ -706,6 +706,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       clearToolTimerRef.current = null;
     }
     setCurrentTool(null);
+    setPendingQuestion(null);
   }, [socket, connected]);
 
   const respondToQuestion = useCallback(
