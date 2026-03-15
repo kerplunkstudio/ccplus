@@ -64,7 +64,7 @@ interface ChatPanelProps {
     }>;
     toolUseId: string;
 } | null;
-  onRespondToQuestion?: (response: string) => void;
+  onRespondToQuestion?: (response: Record<string, string>) => void;
   isRestoringSession?: boolean;
 }
 
@@ -508,11 +508,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <button
                 className="question-submit"
                 onClick={() => {
-                  const responses = pendingQuestion.questions.map((q, i) => {
+                  const answers: Record<string, string> = {};
+                  pendingQuestion.questions.forEach((q, i) => {
                     const sel = questionSelections[i] || [];
-                    return `${q.header}: ${sel.join(', ') || 'No selection'}`;
+                    answers[q.question] = sel.join(', ') || 'No selection';
                   });
-                  onRespondToQuestion?.(responses.join('\n'));
+                  onRespondToQuestion?.(answers);
                 }}
                 disabled={Object.keys(questionSelections).length === 0 ||
                           Object.values(questionSelections).every(s => s.length === 0)}

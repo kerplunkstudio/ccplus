@@ -802,7 +802,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   }, [socket, connected]);
 
   const respondToQuestion = useCallback(
-    (response: string) => {
+    (response: Record<string, string>) => {
       if (!socket || !connected) return;
       socket.emit('question_response', { response });
       setPendingQuestion(null);

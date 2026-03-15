@@ -20,10 +20,30 @@ const KIND_OF_WORK_OPTIONS = [
 ];
 
 const CHAT_FONT_OPTIONS = [
-  { label: 'System Default', value: 'system' },
-  { label: 'Mono', value: 'mono' },
-  { label: 'Sans-Serif', value: 'sans' },
-  { label: 'Serif', value: 'serif' },
+  {
+    label: 'System Default',
+    value: 'system',
+    family: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif',
+    preview: 'The quick brown fox jumps over the lazy dog',
+  },
+  {
+    label: 'Mono',
+    value: 'mono',
+    family: 'var(--font-mono)',
+    preview: 'The quick brown fox jumps over the lazy dog',
+  },
+  {
+    label: 'Sans-Serif',
+    value: 'sans',
+    family: 'var(--font-sans)',
+    preview: 'The quick brown fox jumps over the lazy dog',
+  },
+  {
+    label: 'Serif',
+    value: 'serif',
+    family: 'var(--font-serif)',
+    preview: 'The quick brown fox jumps over the lazy dog',
+  },
 ];
 
 const DEFAULT_PROFILE: ProfileSettings = {
@@ -41,8 +61,7 @@ const loadProfile = (): ProfileSettings => {
       ...DEFAULT_PROFILE,
       ...parsed,
     };
-  } catch (error) {
-    console.error('Failed to load profile settings:', error);
+  } catch {
     return DEFAULT_PROFILE;
   }
 };
@@ -50,8 +69,8 @@ const loadProfile = (): ProfileSettings => {
 const saveProfile = (profile: ProfileSettings): void => {
   try {
     localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-  } catch (error) {
-    console.error('Failed to save profile settings:', error);
+  } catch {
+    // Silent fail for localStorage errors
   }
 };
 
@@ -78,92 +97,114 @@ export const ProfilePanel: React.FC = () => {
     }));
   };
 
-  const handleKindOfWorkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleKindOfWorkSelect = (work: string) => {
     setProfile((prev) => ({
       ...prev,
-      kindOfWork: e.target.value,
+      kindOfWork: work,
     }));
   };
 
-  const handleChatFontChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleChatFontSelect = (font: string) => {
     setProfile((prev) => ({
       ...prev,
-      chatFont: e.target.value,
+      chatFont: font,
     }));
   };
+
+  // Extract first letter for avatar
+  const avatarLetter = profile.name.trim() ? profile.name.trim()[0].toUpperCase() : '?';
 
   return (
     <div className="profile-panel">
-      <div className="profile-header">
-        <h1 className="profile-title">Profile</h1>
-        {saveStatus === 'saved' && (
-          <span className="profile-save-indicator">Saved</span>
-        )}
-      </div>
+      <div className="profile-container">
+        {/* Typographic Avatar Hero */}
+        <div className="profile-avatar-section">
+          <div className="profile-avatar" aria-label={`Avatar for ${profile.name || 'unnamed user'}`}>
+            <span className="profile-avatar-letter">{avatarLetter}</span>
+          </div>
+          {saveStatus === 'saved' && (
+            <span className="profile-save-indicator" role="status" aria-live="polite">
+              Auto-saved
+            </span>
+          )}
+        </div>
 
-      <div className="profile-form">
-        <div className="profile-field">
-          <label htmlFor="profile-name" className="profile-label">
-            NAME
-          </label>
+        {/* Section 01: Identity */}
+        <section className="profile-section" style={{ animationDelay: '0.1s' }}>
+          <div className="profile-section-header">
+            <span className="profile-section-number" aria-hidden="true">01</span>
+            <label htmlFor="profile-name" className="profile-label">
+              IDENTITY
+            </label>
+          </div>
           <input
             id="profile-name"
             type="text"
             className="profile-input"
-            placeholder="Enter your name"
+            placeholder="Your name"
             value={profile.name}
             onChange={handleNameChange}
+            aria-label="Your name"
           />
-        </div>
+        </section>
 
-        <div className="profile-field">
-          <label htmlFor="profile-work" className="profile-label">
-            KIND OF WORK
-          </label>
-          <select
-            id="profile-work"
-            className="profile-select"
-            value={profile.kindOfWork}
-            onChange={handleKindOfWorkChange}
+        {/* Section 02: Work */}
+        <section className="profile-section" style={{ animationDelay: '0.2s' }}>
+          <div className="profile-section-header">
+            <span className="profile-section-number" aria-hidden="true">02</span>
+            <div className="profile-label">KIND OF WORK</div>
+          </div>
+          <div
+            className="profile-pills"
+            role="radiogroup"
+            aria-label="Select your kind of work"
           >
             {KIND_OF_WORK_OPTIONS.map((option) => (
-              <option key={option} value={option}>
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={profile.kindOfWork === option}
+                className={`profile-pill ${profile.kindOfWork === option ? 'profile-pill-selected' : ''}`}
+                onClick={() => handleKindOfWorkSelect(option)}
+              >
                 {option}
-              </option>
+              </button>
             ))}
-          </select>
-        </div>
+          </div>
+        </section>
 
-        <div className="profile-field">
-          <label htmlFor="profile-font" className="profile-label">
-            CHAT FONT
-          </label>
-          <select
-            id="profile-font"
-            className="profile-select"
-            value={profile.chatFont}
-            onChange={handleChatFontChange}
+        {/* Section 03: Typography */}
+        <section className="profile-section" style={{ animationDelay: '0.3s' }}>
+          <div className="profile-section-header">
+            <span className="profile-section-number" aria-hidden="true">03</span>
+            <div className="profile-label">CHAT TYPOGRAPHY</div>
+          </div>
+          <div
+            className="profile-font-cards"
+            role="radiogroup"
+            aria-label="Select chat font"
           >
             {CHAT_FONT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={profile.chatFont === option.value}
+                className={`profile-font-card ${profile.chatFont === option.value ? 'profile-font-card-selected' : ''}`}
+                onClick={() => handleChatFontSelect(option.value)}
+              >
+                <div className="profile-font-card-label">{option.label}</div>
+                <div
+                  className="profile-font-card-preview"
+                  style={{ fontFamily: option.family }}
+                >
+                  {option.preview}
+                </div>
+              </button>
             ))}
-          </select>
-          <div className="profile-font-preview" data-font={profile.chatFont}>
-            The quick brown fox jumps over the lazy dog
           </div>
-        </div>
-      </div>
-
-      <div className="profile-divider" />
-
-      <div className="profile-info">
-        <p className="profile-info-text">
-          Your profile settings are stored locally in your browser and persist
-          across sessions. The chat font selection will update your message
-          display in real-time.
-        </p>
+        </section>
       </div>
     </div>
   );
