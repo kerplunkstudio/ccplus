@@ -7,7 +7,58 @@
   margin: 0 auto;
   padding-top: var(--space-2xl);
   gap: var(--space-lg);
-  animation: dashboardIn var(--duration-normal) var(--ease-out);
+}
+
+/* Welcome greeting - hero element */
+.welcome-greeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.75rem, 0.5rem + 1vw, 1.25rem);
+  padding-bottom: var(--space-xl);
+  animation: greetingIn 0.6s var(--ease-out) both;
+}
+
+.greeting-text {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 1.5rem + 2.5vw, 3.5rem);
+  font-weight: 300;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.greeting-decoration {
+  font-size: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+  color: var(--warning);
+  line-height: 1;
+  animation: greetingSpin 8s linear infinite;
+}
+
+@keyframes greetingIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes greetingSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Stagger dashboard content after greeting */
+.new-session-dashboard > *:not(.welcome-greeting) {
+  animation: dashboardIn 0.4s var(--ease-out) both;
+  animation-delay: 0.15s;
 }
 
 @keyframes dashboardIn {
