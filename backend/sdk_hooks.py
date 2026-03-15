@@ -57,9 +57,17 @@ class HookManager:
         self.session_id = session_id
         self.on_event = on_event
         self.db = db
-        self._agent_stack: list[str] = []  # Stack of agent tool_use_ids
+        self._thread_stacks: dict[int, list[str]] = {}  # Per-thread agent stacks (thread_id -> stack)
         self._tool_timers: dict[str, float] = {}  # tool_use_id -> monotonic start time
         self._lock = threading.Lock()
+
+    def _get_stack(self) -> list[str]:
+        """Get the agent stack for the current thread.
+
+        Must be called with self._lock held.
+        """
+        thread_id = threading.current_thread().ident
+        return self._thread_stacks.setdefault(thread_id, [])
 
     @property
     def current_parent_id(self) -> Optional[str]:
@@ -68,7 +76,8 @@ class HookManager:
         Returns None when no agent is active (tools running at root level).
         """
         with self._lock:
-            return self._agent_stack[-1] if self._agent_stack else None
+            stack = self._get_stack()
+            return stack[-1] if stack else None
 
     # ------------------------------------------------------------------
     # Pre-tool hook
@@ -105,14 +114,15 @@ class HookManager:
 
         if is_agent:
             with self._lock:
-                parent_id = self._agent_stack[-1] if self._agent_stack else None
-                self._agent_stack.append(tool_use_id)
+                stack = self._get_stack()
+                parent_id = stack[-1] if stack else None
+                stack.append(tool_use_id)
 
             event = {
                 "type": "agent_start",
                 "tool_name": tool_name,
                 "tool_use_id": tool_use_id,
-                "parent_agent_id": None,
+                "parent_agent_id": parent_id,
                 "agent_type": agent_type,
                 "description": tool_input.get("description", ""),
                 "timestamp": datetime.now().isoformat(),
@@ -179,8 +189,13 @@ class HookManager:
 
         if is_agent:
             with self._lock:
-                if self._agent_stack and self._agent_stack[-1] == tool_use_id:
-                    self._agent_stack.pop()
+                stack = self._get_stack()
+                if stack and stack[-1] == tool_use_id:
+                    stack.pop()
+                    # Clean up empty stack to prevent memory leaks
+                    if not stack:
+                        thread_id = threading.current_thread().ident
+                        self._thread_stacks.pop(thread_id, None)
 
             event = {
                 "type": "agent_stop",
