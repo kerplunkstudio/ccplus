@@ -52,6 +52,7 @@ class WorkerClient:
         self._running = False
         self._connected = False
         self._buffer = b""
+        self._ever_connected = False  # Track if we've ever connected (to detect reconnections)
 
         # Event callbacks (set by the consumer, e.g. SessionManager)
         self.on_text_delta: Optional[Callable[[str, str], None]] = None  # (session_id, text)
@@ -60,6 +61,7 @@ class WorkerClient:
         self.on_error: Optional[Callable[[str, str], None]] = None  # (session_id, message)
         self.on_session_status: Optional[Callable[[list], None]] = None  # (sessions)
         self.on_user_question: Optional[Callable[[str, dict], None]] = None  # (session_id, data)
+        self.on_reconnect: Optional[Callable[[], None]] = None  # Called when socket reconnects
 
     @property
     def connected(self) -> bool:
@@ -153,7 +155,20 @@ class WorkerClient:
                 self._sock = sock
                 self._connected = True
                 self._buffer = b""
-            logger.info(f"Connected to SDK worker at {self._socket_path}")
+                is_reconnect = self._ever_connected
+                self._ever_connected = True
+
+            if is_reconnect:
+                logger.info(f"Reconnected to SDK worker at {self._socket_path}")
+                # Notify SessionManager to reset _has_received_status
+                if self.on_reconnect:
+                    try:
+                        self.on_reconnect()
+                    except Exception as e:
+                        logger.error(f"Error in on_reconnect callback: {e}")
+            else:
+                logger.info(f"Connected to SDK worker at {self._socket_path}")
+
             return True
         except (ConnectionRefusedError, FileNotFoundError, OSError) as e:
             logger.debug(f"Cannot connect to worker: {e}")

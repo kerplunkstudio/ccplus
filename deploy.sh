@@ -48,6 +48,9 @@ detect_python() {
 # Worker PID file
 WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
+# Worker checksum file
+WORKER_CHECKSUM_FILE="$SCRIPT_DIR/data/worker_checksums.md5"
+
 # Files that require a worker restart when changed
 WORKER_FILES=(
     "backend/sdk_worker.py"
@@ -67,21 +70,43 @@ worker_running() {
     return 1
 }
 
+# Save current checksums of worker files
+save_worker_checksums() {
+    mkdir -p "$SCRIPT_DIR/data"
+    > "$WORKER_CHECKSUM_FILE"  # Clear file
+
+    for f in "${WORKER_FILES[@]}"; do
+        if [ -f "$SCRIPT_DIR/$f" ]; then
+            local checksum
+            checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
+            echo "$checksum  $f" >> "$WORKER_CHECKSUM_FILE"
+        fi
+    done
+}
+
 # Check if worker code has changed since the worker was started
 worker_code_changed() {
     if ! worker_running; then
         return 0  # Not running = needs start
     fi
 
-    local worker_start_time
-    worker_start_time=$(stat -f %m "$WORKER_PID_FILE" 2>/dev/null || echo "0")
+    # If no checksum file exists, treat as changed (first run)
+    if [ ! -f "$WORKER_CHECKSUM_FILE" ]; then
+        info "No worker checksum file found — treating as changed"
+        return 0
+    fi
 
+    # Compare current checksums against saved checksums
     for f in "${WORKER_FILES[@]}"; do
         if [ -f "$SCRIPT_DIR/$f" ]; then
-            local file_time
-            file_time=$(stat -f %m "$SCRIPT_DIR/$f" 2>/dev/null || echo "0")
-            if [ "$file_time" -gt "$worker_start_time" ]; then
-                info "Worker code changed: $f"
+            local current_checksum
+            current_checksum=$(md5 -q "$SCRIPT_DIR/$f" 2>/dev/null || echo "missing")
+
+            local saved_checksum
+            saved_checksum=$(grep " $f\$" "$WORKER_CHECKSUM_FILE" 2>/dev/null | cut -d' ' -f1 || echo "")
+
+            if [ "$current_checksum" != "$saved_checksum" ]; then
+                info "Worker code changed: $f (checksum mismatch)"
                 return 0
             fi
         fi
@@ -114,6 +139,8 @@ start_worker() {
     while [ $waited -lt $max_wait ]; do
         if [ -S "$SCRIPT_DIR/data/sdk_worker.sock" ]; then
             ok "SDK worker started (PID: $(cat "$WORKER_PID_FILE" 2>/dev/null))"
+            # Save checksums after successful start
+            save_worker_checksums
             return 0
         fi
         sleep 1
@@ -157,6 +184,7 @@ smart_worker_restart() {
             stop_worker
         fi
         start_worker
+        # Checksums saved by start_worker after successful start
     else
         start_worker  # ensures it's running, no-op if already running
     fi
@@ -392,6 +420,9 @@ case "$COMPONENT" in
     worker)
         stop_worker
         start_worker
+        # Flask must reconnect to the new worker socket
+        kill_server
+        start_server
         ;;
     desktop)
         launch_desktop

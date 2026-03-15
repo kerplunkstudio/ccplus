@@ -77,6 +77,28 @@
   /* === Layout === */
   --content-width: 85ch;
   --sidebar-width: 280px;
+
+  /* === Missing tokens === */
+  --border-subtle: rgba(28, 27, 26, 0.04);
+  --accent-shadow-fade: rgba(0, 102, 204, 0.05);
+
+  /* === Border radius === */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* === Transitions === */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --duration-fast: 0.15s;
+  --duration-normal: 0.2s;
+  --duration-slow: 0.3s;
+  --transition-fast: var(--duration-fast) var(--ease-default);
+  --transition-normal: var(--duration-normal) var(--ease-default);
+  --transition-slow: var(--duration-slow) var(--ease-default);
 }
 
 * {

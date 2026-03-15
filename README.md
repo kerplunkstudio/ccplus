@@ -225,7 +225,7 @@ ccplus/
 | `ANTHROPIC_API_KEY` | (required) | API key for Claude Code SDK |
 | `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
 | `SDK_MODEL` | `sonnet` | Default model (`sonnet`, `opus`, `haiku`) |
-| `PORT` | `3000` | Server port |
+| `PORT` | `4000` | Server port |
 | `CCPLUS_AUTH` | `local` | Auth mode (`local` for auto-login) |
 | `SECRET_KEY` | (auto-generated) | JWT signing key |
 

@@ -499,13 +499,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {streaming && currentTool && (
-          <div className="minimal-tool-indicator">
-            <span className="pulsing-dot" />
-            {formatToolLabelVerbose(currentTool)}
-          </div>
-        )}
-
         <div className="input-container">
           {showAutocomplete && autocompleteSuggestions.length > 0 && (
             <SlashCommandAutocomplete
