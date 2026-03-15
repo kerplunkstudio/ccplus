@@ -21,6 +21,8 @@ interface ProjectSidebarProps {
   onCloseTab: (projectPath: string, sessionId: string) => void;
   sidebarWidth: number;
   onSidebarWidthChange: (width: number) => void;
+  onNavigate: (page: string) => void;
+  activePage: string | null;
 }
 
 const MIN_WIDTH = 180;
@@ -39,6 +41,8 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onCloseTab,
   sidebarWidth,
   onSidebarWidthChange,
+  onNavigate,
+  activePage,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
   const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([]);
@@ -378,6 +382,15 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       </div>
 
       <div className="project-sidebar-footer">
+        <div className="sidebar-nav">
+          <button
+            className={`sidebar-nav-item ${activePage === 'insights' ? 'active' : ''}`}
+            onClick={() => onNavigate('insights')}
+          >
+            Insights
+          </button>
+        </div>
+
         <button
           className="project-add-btn"
           onClick={handleOpenPicker}

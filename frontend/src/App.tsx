@@ -5,6 +5,7 @@ import { useTabSocket } from './hooks/useTabSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
+import { InsightsPanel } from './components/InsightsPanel';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
@@ -68,6 +69,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
 
+  const [activePage, setActivePage] = useState<string | null>(null);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
@@ -85,12 +88,14 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.selectProject(path);
     setMobileDrawer(null);
     setShowDashboard(true);
+    setActivePage(null);
   }, [workspace]);
 
   const handleSelectTab = useCallback((projectPath: string, sessionId: string) => {
     workspace.selectProject(projectPath);
     workspace.selectTab(projectPath, sessionId);
     setShowDashboard(false);
+    setActivePage(null);
   }, [workspace]);
 
   const handleSelectTabQuiet = useCallback((projectPath: string, sessionId: string) => {
@@ -228,31 +233,41 @@ function AppContent({ token, loading }: AppContentProps) {
         }
 
         const snapshot = mruSnapshotRef.current;
-        const nextIndex = forward
+        const rawNext = forward
           ? mruCycleIndexRef.current + 1
           : mruCycleIndexRef.current - 1;
 
-        if (nextIndex >= 0 && nextIndex < snapshot.length) {
+        if (rawNext >= 0 && rawNext < snapshot.length) {
           // Still within current project's MRU
-          mruCycleIndexRef.current = nextIndex;
-          handleSelectTabInActiveProjectQuiet(snapshot[nextIndex]);
+          mruCycleIndexRef.current = rawNext;
+          handleSelectTabInActiveProjectQuiet(snapshot[rawNext]);
         } else {
-          // Cross to next/previous project, skipping projects with no tabs
-          const projectIndex = projects.findIndex(p => p.path === activeProject.path);
-          for (let i = 1; i < projects.length; i++) {
-            const candidateIndex = forward
-              ? (projectIndex + i) % projects.length
-              : (projectIndex - i + projects.length) % projects.length;
-            const candidateProject = projects[candidateIndex];
-            const candidateMru = ensureMruOrder(candidateProject.tabs, candidateProject.tabMruOrder);
-            if (candidateMru.length > 0) {
-              const targetIdx = forward ? 0 : candidateMru.length - 1;
-              mruSnapshotRef.current = candidateMru;
-              mruSnapshotProjectRef.current = candidateProject.path;
-              mruCycleIndexRef.current = targetIdx;
-              handleSelectTabQuiet(candidateProject.path, candidateMru[targetIdx]);
-              break;
+          // Try to cross to next/previous project, skipping projects with no tabs
+          let crossed = false;
+          if (projects.length > 1) {
+            const projectIndex = projects.findIndex(p => p.path === activeProject.path);
+            for (let i = 1; i < projects.length; i++) {
+              const candidateIndex = forward
+                ? (projectIndex + i) % projects.length
+                : (projectIndex - i + projects.length) % projects.length;
+              const candidateProject = projects[candidateIndex];
+              const candidateMru = ensureMruOrder(candidateProject.tabs, candidateProject.tabMruOrder);
+              if (candidateMru.length > 0) {
+                const targetIdx = forward ? 0 : candidateMru.length - 1;
+                mruSnapshotRef.current = candidateMru;
+                mruSnapshotProjectRef.current = candidateProject.path;
+                mruCycleIndexRef.current = targetIdx;
+                handleSelectTabQuiet(candidateProject.path, candidateMru[targetIdx]);
+                crossed = true;
+                break;
+              }
             }
+          }
+          if (!crossed && snapshot.length > 0) {
+            // Wrap around within current project
+            const wrappedIndex = forward ? 0 : snapshot.length - 1;
+            mruCycleIndexRef.current = wrappedIndex;
+            handleSelectTabInActiveProjectQuiet(snapshot[wrappedIndex]);
           }
         }
       }
@@ -302,6 +317,11 @@ function AppContent({ token, loading }: AppContentProps) {
     setMobileDrawer((prev) => (prev === drawer ? null : drawer));
   }, []);
 
+  const handleNavigate = useCallback((page: string) => {
+    setActivePage(page);
+    setShowDashboard(false);
+  }, []);
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -312,8 +332,9 @@ function AppContent({ token, loading }: AppContentProps) {
   }
 
   const hasTabs = activeProject && activeProject.tabs.length > 0;
-  const shouldShowDashboard = activeProject && (showDashboard || !hasTabs);
-  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard;
+  const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage;
+  const shouldShowInsights = activePage === 'insights';
 
   return (
     <div className="app-layout" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
@@ -338,11 +359,13 @@ function AppContent({ token, loading }: AppContentProps) {
           onCloseTab={handleCloseTab}
           sidebarWidth={sidebarWidth}
           onSidebarWidthChange={handleSidebarWidthChange}
+          onNavigate={handleNavigate}
+          activePage={activePage}
         />
       </div>
 
       <div className="panel-main">
-        {activeProject && hasTabs && (
+        {activeProject && hasTabs && !activePage && (
           <TabBar
             tabs={activeProject.tabs}
             activeTabId={activeProject.activeTabId}
@@ -352,8 +375,10 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${shouldShowDashboard ? 'full-width' : ''}`}>
-            {activeProject ? (
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights) ? 'full-width' : ''}`}>
+            {shouldShowInsights ? (
+              <InsightsPanel />
+            ) : activeProject ? (
               shouldShowDashboard ? (
                 <ProjectDashboard
                   projectPath={activeProject.path}
