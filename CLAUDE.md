@@ -648,16 +648,35 @@ Tests are mandatory for all implementations:
 
 ## Claude Code Workflow
 
+### Deploying Changes While the App Is Running
+
+The desktop app (and web server) serve the frontend from `static/chat/`, not from `frontend/src/`. You must deploy for changes to take effect.
+
+**Frontend changes** (while the app is already running):
+```bash
+./ccplus frontend    # Builds + deploys to static/chat/ (no restart)
+```
+Then hard refresh in the app (Cmd+Shift+R). The running backend is not affected.
+
+**Backend TypeScript changes** (while the app is already running):
+```bash
+cd backend-ts && npm run build   # Compile TypeScript to dist/
+```
+Then restart the server: `./ccplus server` (web mode) or relaunch the desktop app.
+
+**Full rebuild + launch** (from scratch or when both changed):
+```bash
+./ccplus             # Build backend + frontend + deploy + launch desktop app
+./ccplus web         # Same but starts web server instead of desktop app
+```
+
+**Config changes** (`.env`, `config.ts`): Requires backend restart.
+
 ### Auto-Deploy After Changes
 
-**After any frontend or backend changes, automatically run `./ccplus`** to build, deploy, and launch. The deploy script behavior:
-- **Frontend changes**: Builds and deploys static files. Launches desktop app (default) or starts web server (`./ccplus web`).
-- **Backend TypeScript changes**: Compiles TypeScript to `dist/`, launches desktop app or starts web server. Active SDK sessions are interrupted (they run in-process).
-- **Config changes** (`config.ts`, `.env`): Backend restart required (either desktop app or web server).
+When working as a Claude Code agent, **automatically run `./ccplus frontend`** after frontend changes and **`cd backend-ts && npm run build`** after backend changes. Only run full `./ccplus` if the user is not currently running the app or explicitly asks for a full redeploy.
 
-This prevents the common pitfall of editing code but not deploying it, leading to stale views.
-
-**When to skip**: Only skip auto-deploy if the user explicitly says "don't deploy" or the change is in `tests/`, `docs/`, or `.env`.
+**When to skip**: Only skip deploy if the user explicitly says "don't deploy" or the change is in `tests/`, `docs/`, or `.env`.
 
 ## Never Commit
 

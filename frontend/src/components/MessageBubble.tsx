@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message } from '../types';
-import { ToolLog } from './ToolLog';
+import { AmbientIndicator } from './AmbientIndicator';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -182,6 +182,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     },
   }), [copiedId, copyToClipboard, previewMarkdown]);
 
+  // Determine ambient indicator state from tool events
+  const toolState = useMemo(() => {
+    if (!message.toolLog || message.toolLog.length === 0) {
+      return { isActive: false, hasError: false };
+    }
+
+    const rootEvents = message.toolLog.filter(event => event.parent_agent_id === null);
+    const hasRunning = rootEvents.some(event =>
+      event.type === 'tool_start' || event.type === 'agent_start'
+    );
+    const hasError = rootEvents.some(event =>
+      event.success === false || (event.error != null && event.error !== 'Worker restarted')
+    );
+
+    return { isActive: hasRunning, hasError };
+  }, [message.toolLog]);
+
   // Build CSS classes for animation states
   const bubbleClasses = [
     'message-bubble',
@@ -191,9 +208,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
 
   return (
     <div className={bubbleClasses}>
-      {message.toolLog && message.toolLog.length > 0 && (
-        <ToolLog events={message.toolLog} />
-      )}
+      <AmbientIndicator
+        isActive={toolState.isActive}
+        hasError={toolState.hasError}
+      />
       <div className="message-bubble-inner">
         {message.images && message.images.length > 0 && (
           <div className="message-images">

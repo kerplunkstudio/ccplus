@@ -1,0 +1,263 @@
+.ambient-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  margin: 12px 0 8px 0;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.streaming-ambient-container {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 16px;
+  margin: 8px 0;
+}
+
+.ambient-indicator.active {
+  opacity: 1;
+  transform: scale(1);
+  animation: ambientEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ambient-indicator.error {
+  opacity: 0.8;
+  transform: scale(0.95);
+}
+
+/* Core breathing structure */
+.ambient-core {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Inner pulse - the heart of the animation */
+.ambient-inner {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,
+    color-mix(in oklch, var(--accent) 90%, white),
+    color-mix(in oklch, var(--accent) 70%, transparent)
+  );
+  box-shadow:
+    0 0 8px color-mix(in oklch, var(--accent) 40%, transparent),
+    inset 0 0 4px color-mix(in oklch, var(--accent) 20%, white);
+  animation: ambientHeartbeat 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Breathing rings */
+.ambient-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--accent) 25%, transparent);
+  animation: ambientRingPulse 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.ambient-ring:first-of-type {
+  width: 12px;
+  height: 12px;
+  animation-delay: -0.8s;
+}
+
+.ambient-ring-outer {
+  width: 20px;
+  height: 20px;
+  animation-delay: -1.6s;
+  border-color: color-mix(in oklch, var(--accent) 15%, transparent);
+}
+
+/* Error state styling */
+.ambient-indicator.error .ambient-inner {
+  background: linear-gradient(135deg,
+    color-mix(in oklch, var(--error) 90%, white),
+    color-mix(in oklch, var(--error) 70%, transparent)
+  );
+  box-shadow:
+    0 0 8px color-mix(in oklch, var(--error) 40%, transparent),
+    inset 0 0 4px color-mix(in oklch, var(--error) 20%, white);
+  animation: ambientErrorPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.ambient-indicator.error .ambient-ring {
+  border-color: color-mix(in oklch, var(--error) 25%, transparent);
+  animation: ambientErrorRing 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.ambient-indicator.error .ambient-ring-outer {
+  border-color: color-mix(in oklch, var(--error) 15%, transparent);
+}
+
+/* Sophisticated entrance animation */
+@keyframes ambientEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-180deg);
+    filter: blur(2px);
+  }
+  30% {
+    opacity: 0.6;
+    transform: scale(0.8) rotate(-60deg);
+    filter: blur(0.8px);
+  }
+  60% {
+    opacity: 0.9;
+    transform: scale(1.1) rotate(20deg);
+    filter: blur(0.2px);
+  }
+  85% {
+    opacity: 1;
+    transform: scale(0.98) rotate(-5deg);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0);
+  }
+}
+
+/* Organic heartbeat - the core breathing animation */
+@keyframes ambientHeartbeat {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow:
+      0 0 8px color-mix(in oklch, var(--accent) 40%, transparent),
+      inset 0 0 4px color-mix(in oklch, var(--accent) 20%, white);
+  }
+  15% {
+    transform: scale(1.2);
+    opacity: 0.9;
+    box-shadow:
+      0 0 12px color-mix(in oklch, var(--accent) 60%, transparent),
+      inset 0 0 6px color-mix(in oklch, var(--accent) 30%, white);
+  }
+  30% {
+    transform: scale(0.8);
+    opacity: 0.7;
+    box-shadow:
+      0 0 6px color-mix(in oklch, var(--accent) 30%, transparent),
+      inset 0 0 3px color-mix(in oklch, var(--accent) 15%, white);
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.85;
+    box-shadow:
+      0 0 10px color-mix(in oklch, var(--accent) 50%, transparent),
+      inset 0 0 5px color-mix(in oklch, var(--accent) 25%, white);
+  }
+  75% {
+    transform: scale(0.9);
+    opacity: 0.8;
+    box-shadow:
+      0 0 7px color-mix(in oklch, var(--accent) 35%, transparent),
+      inset 0 0 4px color-mix(in oklch, var(--accent) 18%, white);
+  }
+}
+
+/* Concentric ring breathing */
+@keyframes ambientRingPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+    border-width: 1px;
+  }
+  25% {
+    transform: scale(1.3);
+    opacity: 0.3;
+    border-width: 0.5px;
+  }
+  50% {
+    transform: scale(0.7);
+    opacity: 0.8;
+    border-width: 1.5px;
+  }
+  75% {
+    transform: scale(1.1);
+    opacity: 0.4;
+    border-width: 0.8px;
+  }
+}
+
+/* Error state animations */
+@keyframes ambientErrorPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+}
+
+@keyframes ambientErrorRing {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.2;
+  }
+}
+
+/* Accessibility: Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-indicator {
+    animation: ambientEntranceReduced 0.3s ease-out !important;
+  }
+
+  .ambient-inner {
+    animation: ambientPulseReduced 2.5s ease-in-out infinite !important;
+  }
+
+  .ambient-ring {
+    animation: none !important;
+    opacity: 0.3 !important;
+  }
+
+  .ambient-indicator.error .ambient-inner {
+    animation: ambientErrorReduced 2s ease-in-out infinite !important;
+  }
+}
+
+@keyframes ambientEntranceReduced {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ambientPulseReduced {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes ambientErrorReduced {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+}
