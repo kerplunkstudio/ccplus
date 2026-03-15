@@ -64,6 +64,7 @@ interface ChatPanelProps {
     toolUseId: string;
 } | null;
   onRespondToQuestion?: (response: string) => void;
+  isRestoringSession?: boolean;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({

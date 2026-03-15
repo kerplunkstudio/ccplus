@@ -52,6 +52,7 @@ function AppContent({ token, loading }: AppContentProps) {
     cancelQuery,
     pendingQuestion,
     respondToQuestion,
+    isRestoringSession,
   } = useTabSocket(token, activeTab?.sessionId || '');
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -379,6 +380,7 @@ function AppContent({ token, loading }: AppContentProps) {
                   sessionId={activeTab?.sessionId}
                   pendingQuestion={pendingQuestion}
                   onRespondToQuestion={respondToQuestion}
+                  isRestoringSession={isRestoringSession}
                 />
               ) : null
             ) : (
