@@ -389,6 +389,12 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
           >
             Insights
           </button>
+          <button
+            className={`sidebar-nav-item ${activePage === 'profile' ? 'active' : ''}`}
+            onClick={() => onNavigate('profile')}
+          >
+            Profile
+          </button>
         </div>
 
         <button

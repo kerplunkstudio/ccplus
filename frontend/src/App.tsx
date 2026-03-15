@@ -6,6 +6,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
+import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
@@ -40,6 +41,7 @@ interface AppContentProps {
 function AppContent({ token, loading }: AppContentProps) {
   const workspace = useWorkspace();
   const { activeProject, activeTab } = workspace;
+  const profile = useProfile();
 
   const {
     connected,
@@ -335,9 +337,14 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
   const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage;
   const shouldShowInsights = activePage === 'insights';
+  const shouldShowProfile = activePage === 'profile';
 
   return (
-    <div className="app-layout" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
+    <div
+      className="app-layout"
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      data-chat-font={profile.chatFont}
+    >
       {mobileDrawer && (
         <div
           className="mobile-overlay"
@@ -375,9 +382,11 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile) ? 'full-width' : ''}`}>
             {shouldShowInsights ? (
               <InsightsPanel />
+            ) : shouldShowProfile ? (
+              <ProfilePanel />
             ) : activeProject ? (
               shouldShowDashboard ? (
                 <ProjectDashboard

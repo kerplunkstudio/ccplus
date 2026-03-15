@@ -69,6 +69,31 @@
   font-size: var(--text-base);
 }
 
+/* Chat font customization */
+[data-chat-font="system"] .message-bubble-inner,
+[data-chat-font="system"] .message-markdown,
+[data-chat-font="system"] .message-text {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+[data-chat-font="mono"] .message-bubble-inner,
+[data-chat-font="mono"] .message-markdown,
+[data-chat-font="mono"] .message-text {
+  font-family: var(--font-mono);
+}
+
+[data-chat-font="sans"] .message-bubble-inner,
+[data-chat-font="sans"] .message-markdown,
+[data-chat-font="sans"] .message-text {
+  font-family: var(--font-sans);
+}
+
+[data-chat-font="serif"] .message-bubble-inner,
+[data-chat-font="serif"] .message-markdown,
+[data-chat-font="serif"] .message-text {
+  font-family: var(--font-serif);
+}
+
 .message-markdown p {
   margin: 0 0 4px 0;
 }
