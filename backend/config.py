@@ -14,6 +14,15 @@ DATA_DIR = PROJECT_ROOT / "data"
 LOG_DIR = PROJECT_ROOT / "logs"
 STATIC_DIR = PROJECT_ROOT / "static" / "chat"
 
+# Version and channel
+VERSION_FILE = PROJECT_ROOT / "VERSION"
+try:
+    VERSION = VERSION_FILE.read_text().strip()
+except Exception:
+    VERSION = "dev"
+
+CCPLUS_CHANNEL = os.environ.get("CCPLUS_CHANNEL", "stable")
+
 # Ensure dirs exist
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -54,3 +63,6 @@ WORKER_SOCKET_PATH = str(DATA_DIR / "sdk_worker.sock")
 WORKER_PID_PATH = str(DATA_DIR / "sdk_worker.pid")
 WORKER_LOG = str(LOG_DIR / "worker.log")
 WORKER_EVENT_BUFFER_SIZE = 1000
+
+# Server process paths
+SERVER_PID_PATH = str(DATA_DIR / "flask_server.pid")

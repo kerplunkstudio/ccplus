@@ -7,6 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Read version from VERSION file
+VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "dev")
+
 PORT="${PORT:-4000}"
 
 # Colors (graceful degradation for non-interactive terminals)
@@ -32,6 +35,74 @@ header() {
     echo "${BOLD}--- $* ---${RESET}"
 }
 
+# Run command with spinner/progress indicator
+# Usage: run_with_spinner "message" command args...
+run_with_spinner() {
+    local message="$1"
+    shift
+    local cmd="$*"
+
+    # Create temp log file
+    local log_file
+    log_file=$(mktemp)
+    trap "rm -f $log_file" RETURN
+
+    # Non-interactive terminal: fall back to simple logging
+    if [ ! -t 1 ]; then
+        info "$message"
+        if eval "$cmd" >"$log_file" 2>&1; then
+            ok "$message (completed)"
+            return 0
+        else
+            error "$message (failed)"
+            echo "Last 20 lines of output:" >&2
+            tail -20 "$log_file" >&2
+            return 1
+        fi
+    fi
+
+    # Interactive terminal: show spinner
+    local spinner_chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    local spin_delay=0.1
+    local pid
+    local start_time
+    start_time=$(date +%s)
+
+    # Start command in background
+    eval "$cmd" >"$log_file" 2>&1 &
+    pid=$!
+
+    # Spinner loop
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        local elapsed=$(($(date +%s) - start_time))
+        local spinner_char="${spinner_chars:i++%${#spinner_chars}:1}"
+        printf "\r${BLUE}%s${RESET} %s (%ds)" "$spinner_char" "$message" "$elapsed" >&2
+        sleep "$spin_delay"
+    done
+
+    # Clear spinner line
+    printf "\r\033[K" >&2
+
+    # Check exit status
+    wait $pid
+    local exit_code=$?
+
+    local elapsed=$(($(date +%s) - start_time))
+
+    if [ $exit_code -eq 0 ]; then
+        ok "$message (${elapsed}s)"
+        return 0
+    else
+        error "$message (failed after ${elapsed}s)"
+        echo ""
+        echo "Last 20 lines of output:" >&2
+        tail -20 "$log_file" >&2
+        echo ""
+        return 1
+    fi
+}
+
 # Detect Python (prefer venv)
 detect_python() {
     if [ -f "$SCRIPT_DIR/venv/bin/python" ]; then
@@ -49,6 +120,9 @@ detect_python() {
 # Worker PID file
 WORKER_PID_FILE="$SCRIPT_DIR/data/sdk_worker.pid"
 
+# Server PID file
+SERVER_PID_FILE="$SCRIPT_DIR/data/flask_server.pid"
+
 # Worker checksum file
 WORKER_CHECKSUM_FILE="$SCRIPT_DIR/data/worker_checksums.md5"
 
@@ -64,6 +138,18 @@ worker_running() {
     if [ -f "$WORKER_PID_FILE" ]; then
         local pid
         pid=$(cat "$WORKER_PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Check if server is running
+server_running() {
+    if [ -f "$SERVER_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$SERVER_PID_FILE" 2>/dev/null)
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             return 0
         fi
@@ -199,14 +285,18 @@ build_frontend() {
 
     if [ ! -d "node_modules" ]; then
         warn "node_modules not found, running npm install..."
-        npm install || { error "npm install failed"; exit 1; }
+        run_with_spinner "Installing frontend dependencies..." "npm install --silent" || { error "npm install failed"; exit 1; }
     fi
 
-    info "Running npm run build..."
-    npm run build || { error "Frontend build failed"; exit 1; }
+    # Determine if this is first build (heuristic: no build dir yet)
+    local build_msg="Building frontend..."
+    if [ ! -d "build" ]; then
+        build_msg="Building frontend (this may take 30-60s on first run)..."
+    fi
+
+    run_with_spinner "$build_msg" "npm run build" || { error "Frontend build failed"; exit 1; }
 
     cd "$SCRIPT_DIR"
-    ok "Frontend build complete"
 }
 
 # Deploy build output to static/chat/
@@ -229,7 +319,45 @@ deploy_static() {
 kill_server() {
     header "Stopping existing server"
 
+    if ! server_running && ! lsof -ti:$PORT >/dev/null 2>&1; then
+        ok "Server not running"
+        return 0
+    fi
+
+    # Try PID file first
+    if [ -f "$SERVER_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$SERVER_PID_FILE" 2>/dev/null)
+        if [ -n "$pid" ]; then
+            info "Stopping server (PID: $pid)..."
+            kill -TERM "$pid" 2>/dev/null || true
+
+            # Wait up to 5s for process to exit
+            local waited=0
+            while [ $waited -lt 5 ]; do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                    rm -f "$SERVER_PID_FILE"
+                    ok "Server stopped"
+                    return 0
+                fi
+                sleep 1
+                waited=$((waited + 1))
+            done
+
+            # Force kill if still alive
+            if kill -0 "$pid" 2>/dev/null; then
+                warn "Force killing server (PID: $pid)..."
+                kill -9 "$pid" 2>/dev/null || true
+                sleep 1
+            fi
+
+            rm -f "$SERVER_PID_FILE"
+        fi
+    fi
+
+    # Fallback to lsof for orphaned processes
     if lsof -ti:$PORT >/dev/null 2>&1; then
+        warn "Found orphaned process on port $PORT (PID file was stale/missing)"
         info "Killing processes on port $PORT..."
         lsof -ti:$PORT | xargs kill -TERM 2>/dev/null || true
         sleep 2
@@ -272,7 +400,7 @@ start_server() {
         if [ "$status" = "200" ]; then
             ok "Server is healthy (PID: $SERVER_PID)"
             echo ""
-            echo "${GREEN}${BOLD}Deployment complete!${RESET}"
+            echo "${GREEN}${BOLD}cc+ v${VERSION} deployed!${RESET}"
             echo ""
             echo "  URL:  ${BOLD}http://localhost:$PORT${RESET}"
             echo "  Logs: tail -f logs/server.log"
@@ -294,9 +422,8 @@ install_electron() {
     header "Installing Electron dependencies"
 
     if [ ! -d "$SCRIPT_DIR/node_modules" ]; then
-        info "Running npm install in project root..."
         cd "$SCRIPT_DIR"
-        npm install || { error "npm install failed"; exit 1; }
+        run_with_spinner "Installing Electron dependencies..." "npm install --silent" || { error "npm install failed"; exit 1; }
     else
         ok "Electron dependencies already installed"
     fi
@@ -411,21 +538,15 @@ run_setup() {
 
     # Create venv if needed
     if [ ! -d "venv" ]; then
-        info "Creating Python virtual environment..."
-        python3 -m venv venv || exit 1
+        run_with_spinner "Creating Python virtual environment..." python3 -m venv venv || exit 1
     fi
 
     # Install Python dependencies
-    info "Installing Python dependencies..."
     source venv/bin/activate
-    pip install -q --upgrade pip
-    pip install -q -r requirements.txt || exit 1
+    run_with_spinner "Installing Python dependencies..." "pip install -q --upgrade pip && pip install -q -r requirements.txt" || exit 1
 
     # Install frontend dependencies
-    info "Installing frontend dependencies..."
-    cd frontend
-    npm install --silent || exit 1
-    cd "$SCRIPT_DIR"
+    run_with_spinner "Installing frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
 
     # Setup .env file
     if [ ! -f ".env" ]; then
@@ -459,6 +580,9 @@ SDK_MODEL=$SDK_MODEL
 PORT=4000
 CCPLUS_AUTH=local
 SECRET_KEY=$SECRET_KEY
+
+# Channel for updates (stable = production releases, latest = bleeding edge)
+CCPLUS_CHANNEL=stable
 EOF
         ok ".env created with defaults"
         return
@@ -504,6 +628,9 @@ SDK_MODEL=$SDK_MODEL
 PORT=4000
 CCPLUS_AUTH=local
 SECRET_KEY=$SECRET_KEY
+
+# Channel for updates (stable = production releases, latest = bleeding edge)
+CCPLUS_CHANNEL=stable
 EOF
 
     ok ".env created successfully"
@@ -691,6 +818,363 @@ run_doctor() {
     exit $exit_code
 }
 
+# Calculate uptime from PID
+get_uptime() {
+    local pid=$1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "N/A"
+        return
+    fi
+
+    # Get process start time (macOS compatible)
+    local start_time
+    start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    if [ -z "$start_time" ]; then
+        echo "N/A"
+        return
+    fi
+
+    local now
+    now=$(date +%s)
+    local elapsed=$((now - start_time))
+
+    # Format uptime
+    local days=$((elapsed / 86400))
+    local hours=$(( (elapsed % 86400) / 3600 ))
+    local minutes=$(( (elapsed % 3600) / 60 ))
+
+    if [ $days -gt 0 ]; then
+        echo "${days}d ${hours}h ${minutes}m"
+    elif [ $hours -gt 0 ]; then
+        echo "${hours}h ${minutes}m"
+    else
+        echo "${minutes}m"
+    fi
+}
+
+# Run status command
+run_status() {
+    header "cc+ Status"
+
+    echo ""
+    echo "${BOLD}Version${RESET}"
+    echo "  $VERSION"
+    echo ""
+
+    echo "${BOLD}Services${RESET}"
+    echo ""
+
+    # Worker status
+    if worker_running; then
+        local worker_pid
+        worker_pid=$(cat "$WORKER_PID_FILE")
+        local worker_uptime
+        worker_uptime=$(get_uptime "$worker_pid")
+        echo "  ${GREEN}●${RESET} SDK Worker"
+        echo "    PID:    $worker_pid"
+        echo "    Uptime: $worker_uptime"
+    else
+        echo "  ${RED}●${RESET} SDK Worker"
+        echo "    Status: ${RED}not running${RESET}"
+    fi
+
+    echo ""
+
+    # Server status
+    if server_running; then
+        local server_pid
+        server_pid=$(cat "$SERVER_PID_FILE")
+        local server_uptime
+        server_uptime=$(get_uptime "$server_pid")
+        echo "  ${GREEN}●${RESET} Flask Server"
+        echo "    PID:    $server_pid"
+        echo "    Port:   $PORT"
+        echo "    Uptime: $server_uptime"
+
+        # Try to get connected clients count from health endpoint
+        local clients
+        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('connected_clients', 0))" 2>/dev/null || echo "N/A")
+        echo "    Clients: $clients"
+    else
+        echo "  ${RED}●${RESET} Flask Server"
+        echo "    Status: ${RED}not running${RESET}"
+        echo "    Port:   $PORT"
+    fi
+
+    echo ""
+}
+
+# Run logs command
+run_logs() {
+    local target="${1:-all}"
+
+    case "$target" in
+        server)
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ]; then
+                error "Server log not found: $SCRIPT_DIR/logs/server.log"
+                exit 1
+            fi
+            info "Tailing server log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
+            ;;
+        worker)
+            if [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
+                error "Worker log not found: $SCRIPT_DIR/logs/worker.log"
+                exit 1
+            fi
+            info "Tailing worker log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /"
+            ;;
+        all|*)
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ] && [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
+                error "No log files found in $SCRIPT_DIR/logs/"
+                exit 1
+            fi
+
+            info "Tailing all logs (Ctrl+C to stop)..."
+            (
+                [ -f "$SCRIPT_DIR/logs/server.log" ] && tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /" &
+                [ -f "$SCRIPT_DIR/logs/worker.log" ] && tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /" &
+                wait
+            )
+            ;;
+    esac
+}
+
+# Check for updates
+check_for_updates() {
+    header "Checking for updates"
+
+    # Read channel from .env
+    CHANNEL="${CCPLUS_CHANNEL:-stable}"
+    if [ -f ".env" ]; then
+        source .env 2>/dev/null || true
+        CHANNEL="${CCPLUS_CHANNEL:-stable}"
+    fi
+
+    # Read current version
+    CURRENT_VERSION="$VERSION"
+    info "Current version: $CURRENT_VERSION"
+    info "Channel: $CHANNEL"
+
+    # Fetch latest tags from git
+    info "Fetching latest updates..."
+    if ! git fetch --tags --quiet 2>/dev/null; then
+        warn "Failed to fetch updates (not a git repo or no network)"
+        return 1
+    fi
+
+    if [ "$CHANNEL" = "stable" ]; then
+        # For stable: compare against latest git tag
+        LATEST_VERSION=$(git tag --sort=-v:refname 2>/dev/null | head -1)
+        if [ -z "$LATEST_VERSION" ]; then
+            info "No tagged releases found"
+            return 1
+        fi
+
+        # Strip 'v' prefix from tag for comparison
+        LATEST_VERSION_CLEAN="${LATEST_VERSION#v}"
+
+        if [ "$CURRENT_VERSION" = "$LATEST_VERSION_CLEAN" ]; then
+            ok "You are up to date ($LATEST_VERSION)"
+            return 1
+        else
+            info "${GREEN}Update available: v$CURRENT_VERSION → $LATEST_VERSION${RESET}"
+            return 0
+        fi
+    else
+        # For latest: compare against origin/main
+        if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
+            warn "Cannot find origin/main branch"
+            return 1
+        fi
+
+        COMMITS_BEHIND=$(git rev-list HEAD..origin/main --count 2>/dev/null || echo "0")
+        if [ "$COMMITS_BEHIND" = "0" ]; then
+            ok "You are up to date (latest from main)"
+            return 1
+        else
+            info "${GREEN}Update available: $COMMITS_BEHIND commit(s) behind origin/main${RESET}"
+            return 0
+        fi
+    fi
+}
+
+# Run update
+run_update() {
+    # Check if update is available
+    if ! check_for_updates; then
+        echo ""
+        ok "No update needed"
+        return 0
+    fi
+
+    echo ""
+    header "Updating cc+"
+
+    # Read channel from .env
+    CHANNEL="${CCPLUS_CHANNEL:-stable}"
+    if [ -f ".env" ]; then
+        source .env 2>/dev/null || true
+        CHANNEL="${CCPLUS_CHANNEL:-stable}"
+    fi
+
+    # Check for local modifications
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        error "You have uncommitted changes. Commit or stash them before updating."
+        echo ""
+        git status --short
+        echo ""
+        exit 1
+    fi
+
+    # Record versions before update
+    BEFORE_VERSION="$VERSION"
+
+    # Pull updates based on channel
+    if [ "$CHANNEL" = "stable" ]; then
+        LATEST_VERSION=$(git tag --sort=-v:refname 2>/dev/null | head -1)
+        info "Updating to stable release: $LATEST_VERSION"
+        if ! git checkout "$LATEST_VERSION" 2>&1; then
+            error "Failed to checkout $LATEST_VERSION"
+            exit 1
+        fi
+    else
+        info "Updating to latest from main branch"
+        if ! git pull --rebase origin main 2>&1; then
+            error "Failed to pull from origin/main"
+            exit 1
+        fi
+    fi
+
+    # Read new version
+    AFTER_VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "dev")
+
+    # Check if requirements.txt changed
+    if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "^requirements.txt$"; then
+        info "Dependencies changed, reinstalling Python packages..."
+        source venv/bin/activate 2>/dev/null || true
+        run_with_spinner "Reinstalling Python dependencies..." "pip install -q --upgrade pip && pip install -q -r requirements.txt" || exit 1
+    fi
+
+    # Check if frontend/package.json changed
+    if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "^frontend/package.json$"; then
+        info "Frontend dependencies changed, reinstalling npm packages..."
+        run_with_spinner "Reinstalling frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
+    fi
+
+    # Always rebuild frontend
+    build_frontend
+    deploy_static
+
+    # Restart services
+    smart_worker_restart
+    kill_server
+    start_server
+
+    echo ""
+    ok "Update complete: v$BEFORE_VERSION → v$AFTER_VERSION"
+    echo ""
+}
+
+# Run release command
+run_release() {
+    local bump_type="${1:-}"
+
+    if [ -z "$bump_type" ]; then
+        error "Version bump type required"
+        echo ""
+        echo "Usage: ./ccplus release [patch|minor|major]"
+        echo ""
+        echo "Examples:"
+        echo "  ./ccplus release patch    # 1.1.0 -> 1.1.1"
+        echo "  ./ccplus release minor    # 1.1.0 -> 1.2.0"
+        echo "  ./ccplus release major    # 1.1.0 -> 2.0.0"
+        echo ""
+        exit 1
+    fi
+
+    # Validate bump type
+    if [[ ! "$bump_type" =~ ^(patch|minor|major)$ ]]; then
+        error "Invalid bump type: $bump_type"
+        echo ""
+        echo "Valid types: patch, minor, major"
+        echo ""
+        exit 1
+    fi
+
+    # Check for uncommitted changes
+    if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+        error "You have uncommitted changes. Commit or stash them before creating a release."
+        echo ""
+        git status --short
+        echo ""
+        exit 1
+    fi
+
+    # Read current version
+    CURRENT_VERSION="$VERSION"
+    info "Current version: $CURRENT_VERSION"
+
+    # Parse version components
+    if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        error "Invalid version format in VERSION file: $CURRENT_VERSION"
+        exit 1
+    fi
+
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+
+    # Bump version
+    case "$bump_type" in
+        patch)
+            patch=$((patch + 1))
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+    esac
+
+    NEW_VERSION="${major}.${minor}.${patch}"
+
+    header "Creating release v$NEW_VERSION"
+
+    # Update VERSION file
+    echo "$NEW_VERSION" > "$SCRIPT_DIR/VERSION"
+    ok "Updated VERSION file: $CURRENT_VERSION -> $NEW_VERSION"
+
+    # Create git tag
+    local tag="v$NEW_VERSION"
+
+    info "Creating git tag: $tag"
+    if git tag -a "$tag" -m "Release $NEW_VERSION"; then
+        ok "Tag created: $tag"
+    else
+        error "Failed to create tag"
+        # Restore VERSION file
+        echo "$CURRENT_VERSION" > "$SCRIPT_DIR/VERSION"
+        exit 1
+    fi
+
+    echo ""
+    ok "Release v$NEW_VERSION ready!"
+    echo ""
+    echo "To publish this release:"
+    echo "  1. Review the changes: git show $tag"
+    echo "  2. Push the tag:       git push origin $tag"
+    echo ""
+    echo "After pushing the tag, users can update to this version with:"
+    echo "  ./ccplus update"
+    echo ""
+}
+
 # Usage
 show_usage() {
     cat <<EOF
@@ -702,7 +1186,13 @@ Commands:
   (none) or start  Full deploy: build frontend + deploy + restart server
                    On first run: setup + configure + build + start
                    Worker only restarts if code changed.
+  status           Show service status (version, uptime, PID, clients)
+  logs [target]    Tail logs (target: all, server, worker. default: all)
   doctor           Run system diagnostics
+  version          Show version information
+  check-update     Check if an update is available
+  update           Update cc+ to the latest version
+  release [type]   Create a new release (type: patch, minor, major)
   server           Restart Flask server only (worker stays alive)
   frontend         Build + deploy frontend only (no server restart)
   worker           Force restart the SDK worker (kills active sessions)
@@ -712,10 +1202,21 @@ Commands:
   setup            Force re-run setup
   help             Show this help message
 
+Installation:
+  One-line installer (clones repo, runs setup, starts server):
+    curl -fsSL https://raw.githubusercontent.com/mjfuentes/ccplus/main/install.sh | bash
+
 Examples:
   ./ccplus              # First run: setup + build + start
   ./ccplus              # Subsequent: smart deploy
+  ./ccplus status       # Show service status
+  ./ccplus logs         # Tail all logs
+  ./ccplus logs server  # Tail server log only
   ./ccplus doctor       # Check system health
+  ./ccplus version      # Show version
+  ./ccplus check-update # Check for updates
+  ./ccplus update       # Update to latest version
+  ./ccplus release patch # Create patch release (1.1.0 -> 1.1.1)
   ./ccplus frontend     # Rebuild frontend only
   ./ccplus desktop      # Launch desktop app
   ./ccplus stop         # Stop everything
@@ -736,8 +1237,47 @@ case "$COMMAND" in
         kill_server
         start_server
         ;;
+    status)
+        run_status
+        ;;
+    logs)
+        run_logs "${2:-all}"
+        ;;
     doctor)
         run_doctor
+        ;;
+    version)
+        # Read channel from .env if exists
+        CHANNEL="${CCPLUS_CHANNEL:-stable}"
+        if [ -f ".env" ]; then
+            source .env 2>/dev/null || true
+            CHANNEL="${CCPLUS_CHANNEL:-stable}"
+        fi
+
+        # Get git SHA if in git repo
+        GIT_SHA=""
+        if git rev-parse --short HEAD >/dev/null 2>&1; then
+            GIT_SHA=$(git rev-parse --short HEAD)
+        fi
+
+        echo "${BOLD}cc+ version ${VERSION}${RESET}"
+        echo "Channel: ${CHANNEL}"
+        if [ -n "$GIT_SHA" ]; then
+            echo "Git SHA: ${GIT_SHA}"
+        fi
+        ;;
+    check-update)
+        if check_for_updates; then
+            echo ""
+            echo "Run ${BOLD}./ccplus update${RESET} to install the update"
+            echo ""
+        fi
+        ;;
+    update)
+        run_update
+        ;;
+    release)
+        run_release "${2:-}"
         ;;
     frontend)
         build_frontend
@@ -781,3 +1321,126 @@ case "$COMMAND" in
         exit 1
         ;;
 esac
+
+# Calculate uptime from PID
+get_uptime() {
+    local pid=$1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "N/A"
+        return
+    fi
+
+    # Get process start time (macOS compatible)
+    local start_time
+    start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    if [ -z "$start_time" ]; then
+        echo "N/A"
+        return
+    fi
+
+    local now
+    now=$(date +%s)
+    local elapsed=$((now - start_time))
+
+    # Format uptime
+    local days=$((elapsed / 86400))
+    local hours=$(( (elapsed % 86400) / 3600 ))
+    local minutes=$(( (elapsed % 3600) / 60 ))
+
+    if [ $days -gt 0 ]; then
+        echo "${days}d ${hours}h ${minutes}m"
+    elif [ $hours -gt 0 ]; then
+        echo "${hours}h ${minutes}m"
+    else
+        echo "${minutes}m"
+    fi
+}
+
+# Run status command
+run_status() {
+    header "cc+ Status"
+
+    echo ""
+    echo "${BOLD}Version${RESET}"
+    echo "  $VERSION"
+    echo ""
+
+    echo "${BOLD}Services${RESET}"
+    echo ""
+
+    # Worker status
+    if worker_running; then
+        local worker_pid
+        worker_pid=$(cat "$WORKER_PID_FILE")
+        local worker_uptime
+        worker_uptime=$(get_uptime "$worker_pid")
+        echo "  ${GREEN}●${RESET} SDK Worker"
+        echo "    PID:    $worker_pid"
+        echo "    Uptime: $worker_uptime"
+    else
+        echo "  ${RED}●${RESET} SDK Worker"
+        echo "    Status: ${RED}not running${RESET}"
+    fi
+
+    echo ""
+
+    # Server status
+    if server_running; then
+        local server_pid
+        server_pid=$(cat "$SERVER_PID_FILE")
+        local server_uptime
+        server_uptime=$(get_uptime "$server_pid")
+        echo "  ${GREEN}●${RESET} Flask Server"
+        echo "    PID:    $server_pid"
+        echo "    Port:   $PORT"
+        echo "    Uptime: $server_uptime"
+
+        # Try to get connected clients count from health endpoint
+        local clients
+        clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | python3 -c "import sys, json; print(json.load(sys.stdin).get('connected_clients', 0))" 2>/dev/null || echo "N/A")
+        echo "    Clients: $clients"
+    else
+        echo "  ${RED}●${RESET} Flask Server"
+        echo "    Status: ${RED}not running${RESET}"
+        echo "    Port:   $PORT"
+    fi
+
+    echo ""
+}
+
+# Run logs command
+run_logs() {
+    local target="${1:-all}"
+
+    case "$target" in
+        server)
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ]; then
+                error "Server log not found: $SCRIPT_DIR/logs/server.log"
+                exit 1
+            fi
+            info "Tailing server log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /"
+            ;;
+        worker)
+            if [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
+                error "Worker log not found: $SCRIPT_DIR/logs/worker.log"
+                exit 1
+            fi
+            info "Tailing worker log (Ctrl+C to stop)..."
+            tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /"
+            ;;
+        all|*)
+            if [ ! -f "$SCRIPT_DIR/logs/server.log" ] && [ ! -f "$SCRIPT_DIR/logs/worker.log" ]; then
+                error "No log files found in $SCRIPT_DIR/logs/"
+                exit 1
+            fi
+
+            info "Tailing all logs (Ctrl+C to stop)..."
+            (
+                [ -f "$SCRIPT_DIR/logs/server.log" ] && tail -f "$SCRIPT_DIR/logs/server.log" | sed "s/^/${BLUE}[server]${RESET} /" &
+                [ -f "$SCRIPT_DIR/logs/worker.log" ] && tail -f "$SCRIPT_DIR/logs/worker.log" | sed "s/^/${GREEN}[worker]${RESET} /" &
+                wait
+            )
+            ;;
+    esac
+}

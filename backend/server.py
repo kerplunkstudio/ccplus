@@ -12,9 +12,11 @@ Architecture:
       (the SDK session manager runs its own asyncio loop internally)
 """
 
+import atexit
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -34,13 +36,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.auth import auto_login, verify_token
 from backend.config import (
+    CCPLUS_CHANNEL,
     DATABASE_PATH,
     HOST,
     LOCAL_MODE,
     LOG_DIR,
     PORT,
     SECRET_KEY,
+    SERVER_PID_PATH,
     STATIC_DIR,
+    VERSION,
     WORKSPACE_PATH,
 )
 from backend.database import (
@@ -253,6 +258,8 @@ def health():
 
     return jsonify({
         "status": "ok",
+        "version": VERSION,
+        "channel": CCPLUS_CHANNEL,
         "uptime_seconds": int(time.time() - START_TIME),
         "active_sessions": len(session_manager.get_active_sessions()),
         "connected_clients": len(connected_clients),
@@ -298,6 +305,125 @@ def auth_verify():
         "valid": True,
         "user": {"id": user_id, "username": user_id},
     })
+
+
+# -- Version ----------------------------------------------------------------
+
+
+@app.route("/api/version")
+def get_version():
+    """Return version information."""
+    git_sha = None
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        if result.returncode == 0:
+            git_sha = result.stdout.strip()
+    except Exception:
+        pass
+
+    return jsonify({
+        "version": VERSION,
+        "channel": CCPLUS_CHANNEL,
+        "git_sha": git_sha,
+    })
+
+
+# Cache for update check (max once per hour)
+_update_check_cache = {"timestamp": 0, "result": None}
+
+
+@app.route("/api/update-check")
+def check_for_update():
+    """Check if an update is available.
+
+    Returns:
+        {
+            "update_available": bool,
+            "current_version": str,
+            "latest_version": str,
+            "channel": str
+        }
+    """
+    global _update_check_cache
+
+    # Return cached result if less than 1 hour old
+    now = time.time()
+    if _update_check_cache["result"] and (now - _update_check_cache["timestamp"]) < 3600:
+        return jsonify(_update_check_cache["result"])
+
+    current_version = VERSION
+    channel = CCPLUS_CHANNEL
+
+    try:
+        # Fetch latest tags from git
+        subprocess.run(
+            ["git", "fetch", "--tags", "--quiet"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+            cwd=Path(__file__).parent.parent,
+        )
+
+        if channel == "stable":
+            # For stable: compare against latest git tag
+            result = subprocess.run(
+                ["git", "tag", "--sort=-v:refname"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+                cwd=Path(__file__).parent.parent,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                latest_version = result.stdout.strip().split("\n")[0]
+                update_available = current_version != latest_version
+            else:
+                # No tags found
+                latest_version = current_version
+                update_available = False
+        else:
+            # For latest: compare against origin/main
+            result = subprocess.run(
+                ["git", "rev-list", "HEAD..origin/main", "--count"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+                cwd=Path(__file__).parent.parent,
+            )
+
+            if result.returncode == 0:
+                commits_behind = int(result.stdout.strip() or "0")
+                update_available = commits_behind > 0
+                latest_version = f"main (+{commits_behind})" if commits_behind > 0 else current_version
+            else:
+                latest_version = current_version
+                update_available = False
+
+    except Exception as exc:
+        # On any error (no git, no network, etc), return no update available
+        logger.debug(f"Update check failed: {exc}")
+        latest_version = current_version
+        update_available = False
+
+    response = {
+        "update_available": update_available,
+        "current_version": current_version,
+        "latest_version": latest_version,
+        "channel": channel,
+    }
+
+    # Cache the result
+    _update_check_cache = {"timestamp": now, "result": response}
+
+    return jsonify(response)
 
 
 # -- Status -----------------------------------------------------------------
@@ -476,6 +602,215 @@ def clone_project():
     except Exception as exc:
         logger.error(f"Failed to clone repository: {exc}")
         return jsonify({"error": f"Failed to clone repository: {str(exc)}"}), 500
+
+
+@app.route("/api/browse")
+def browse_filesystem():
+    """Browse filesystem directories within user's home directory.
+
+    Query params:
+        path: directory path to browse (defaults to home directory)
+
+    Returns:
+        path: current directory path
+        parent: parent directory path (null if at home)
+        entries: list of directories with {name, path, is_dir, is_git}
+
+    Security:
+        Only allows browsing within the user's home directory
+    """
+    requested_path = request.args.get("path", "").strip()
+
+    # Default to home directory if no path provided
+    if not requested_path:
+        requested_path = str(Path.home())
+
+    try:
+        current_path = Path(requested_path).resolve()
+    except Exception:
+        return jsonify({"error": "Invalid path"}), 400
+
+    # Security: validate path is within user's home directory
+    home_dir = Path.home().resolve()
+    try:
+        current_path.relative_to(home_dir)
+    except ValueError:
+        return jsonify({"error": "Access denied: path is outside home directory"}), 403
+
+    # Check path exists and is a directory
+    if not current_path.exists():
+        return jsonify({"error": "Path does not exist"}), 404
+
+    if not current_path.is_dir():
+        return jsonify({"error": "Path is not a directory"}), 400
+
+    # Get parent directory (null if we're at home)
+    parent_path = None
+    if current_path != home_dir:
+        parent_path = str(current_path.parent)
+
+    # List directories only (not files)
+    entries = []
+    try:
+        for child in sorted(current_path.iterdir()):
+            # Skip hidden directories and files
+            if child.name.startswith('.'):
+                continue
+
+            # Only include directories
+            if not child.is_dir():
+                continue
+
+            # Check if directory contains .git
+            is_git = (child / '.git').exists()
+
+            entries.append({
+                "name": child.name,
+                "path": str(child),
+                "is_dir": True,
+                "is_git": is_git,
+            })
+    except PermissionError:
+        return jsonify({"error": "Permission denied"}), 403
+    except Exception as exc:
+        logger.error(f"Failed to list directory: {exc}")
+        return jsonify({"error": "Failed to list directory"}), 500
+
+    return jsonify({
+        "path": str(current_path),
+        "parent": parent_path,
+        "entries": entries,
+    })
+
+
+@app.route("/api/scan-projects")
+def scan_projects():
+    """Scan common project locations for git repositories.
+
+    Scans up to 2 levels deep in:
+        - ~/Workspace
+        - ~/Projects
+        - ~/Developer
+        - ~/Code
+        - ~/repos
+        - ~/Documents/GitHub
+        - ~/src
+
+    Returns:
+        projects: list of detected git repos with {name, path}
+    """
+    home = Path.home()
+    common_locations = [
+        home / "Workspace",
+        home / "Projects",
+        home / "Developer",
+        home / "Code",
+        home / "repos",
+        home / "Documents" / "GitHub",
+        home / "src",
+    ]
+
+    detected_projects = []
+    max_results = 50
+
+    def scan_directory(directory: Path, depth: int = 0) -> None:
+        """Recursively scan directory for git repos."""
+        if len(detected_projects) >= max_results:
+            return
+
+        if depth > 2:
+            return
+
+        try:
+            for child in directory.iterdir():
+                if len(detected_projects) >= max_results:
+                    break
+
+                # Skip hidden directories
+                if child.name.startswith('.'):
+                    continue
+
+                if not child.is_dir():
+                    continue
+
+                # Check if this directory is a git repo
+                if (child / '.git').exists():
+                    detected_projects.append({
+                        "name": child.name,
+                        "path": str(child),
+                    })
+                    # Don't scan inside git repos
+                    continue
+
+                # Recursively scan subdirectories
+                scan_directory(child, depth + 1)
+
+        except (PermissionError, OSError):
+            # Silently skip directories we can't access
+            pass
+
+    # Scan each common location
+    for location in common_locations:
+        if len(detected_projects) >= max_results:
+            break
+
+        if location.exists() and location.is_dir():
+            scan_directory(location)
+
+    return jsonify({"projects": detected_projects})
+
+
+@app.route("/api/set-workspace", methods=["POST"])
+def set_workspace():
+    """Update the workspace path.
+
+    Request body:
+        path: absolute path to new workspace directory
+
+    Returns:
+        workspace: the updated workspace path
+
+    Note:
+        This updates the runtime config but does NOT persist to .env file.
+        To persist, users must manually update their .env file.
+    """
+    data = request.get_json()
+    if not data or "path" not in data:
+        return jsonify({"error": "Missing 'path' in request body"}), 400
+
+    new_path = data["path"].strip()
+    if not new_path:
+        return jsonify({"error": "Empty path"}), 400
+
+    try:
+        workspace_dir = Path(new_path).resolve()
+    except Exception:
+        return jsonify({"error": "Invalid path"}), 400
+
+    # Validate path exists and is a directory
+    if not workspace_dir.exists():
+        return jsonify({"error": "Path does not exist"}), 404
+
+    if not workspace_dir.is_dir():
+        return jsonify({"error": "Path is not a directory"}), 400
+
+    # Security: validate path is within user's home directory
+    home_dir = Path.home().resolve()
+    try:
+        workspace_dir.relative_to(home_dir)
+    except ValueError:
+        return jsonify({"error": "Workspace must be within home directory"}), 403
+
+    # Update the runtime config
+    global WORKSPACE_PATH
+    WORKSPACE_PATH = str(workspace_dir)
+    os.environ["WORKSPACE_PATH"] = str(workspace_dir)
+
+    logger.info(f"Updated workspace path to: {workspace_dir}")
+
+    return jsonify({
+        "workspace": str(workspace_dir),
+    })
 
 
 @app.route("/api/git/context")
@@ -1497,6 +1832,38 @@ def handle_question_response(data):
 
 
 # =========================================================================
+# PID file management
+# =========================================================================
+
+def _write_pid_file():
+    """Write server PID to file for process management."""
+    try:
+        pid_path = Path(SERVER_PID_PATH)
+        pid_path.write_text(str(os.getpid()))
+        logger.info(f"PID file written: {SERVER_PID_PATH}")
+    except Exception as e:
+        logger.error(f"Failed to write PID file: {e}")
+
+
+def _remove_pid_file():
+    """Remove PID file on clean shutdown."""
+    try:
+        pid_path = Path(SERVER_PID_PATH)
+        if pid_path.exists():
+            pid_path.unlink()
+            logger.info("PID file removed")
+    except Exception as e:
+        logger.error(f"Failed to remove PID file: {e}")
+
+
+def _handle_shutdown_signal(signum, frame):
+    """Handle SIGTERM gracefully."""
+    logger.info(f"Received signal {signum}, shutting down...")
+    _remove_pid_file()
+    sys.exit(0)
+
+
+# =========================================================================
 # Entrypoint
 # =========================================================================
 
@@ -1506,6 +1873,11 @@ if __name__ == "__main__":
     logger.info(f"Workspace: {WORKSPACE_PATH}")
     logger.info(f"Database: {DATABASE_PATH}")
     logger.info(f"Static dir: {STATIC_DIR}")
+
+    # Write PID file and register cleanup handlers
+    _write_pid_file()
+    atexit.register(_remove_pid_file)
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
 
     socketio.run(
         app,

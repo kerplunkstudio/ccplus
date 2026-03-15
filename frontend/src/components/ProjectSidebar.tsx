@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ProjectEntry } from '../types';
+import { WorkspaceBrowser } from './WorkspaceBrowser';
 import './ProjectSidebar.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
@@ -23,6 +24,7 @@ interface ProjectSidebarProps {
   onSidebarWidthChange: (width: number) => void;
   onNavigate: (page: string) => void;
   activePage: string | null;
+  version?: string | null;
 }
 
 const MIN_WIDTH = 180;
@@ -43,8 +45,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onSidebarWidthChange,
   onNavigate,
   activePage,
+  version,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
+  const [showWorkspaceBrowser, setShowWorkspaceBrowser] = useState(false);
   const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([]);
   const [filterQuery, setFilterQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -209,6 +213,28 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     setFilterQuery('');
   };
 
+  const handleSelectWorkspace = async (path: string) => {
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/set-workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+
+      if (response.ok) {
+        // Workspace updated, now add as a project
+        const name = path.split('/').pop() || 'Project';
+        onAddProject(path, name);
+        setShowWorkspaceBrowser(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to set workspace: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Failed to set workspace: ${error}`);
+    }
+  };
+
   const handleRemoveProject = (event: React.MouseEvent, path: string) => {
     event.stopPropagation();
     onRemoveProject(path);
@@ -280,6 +306,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
   return (
     <div className="project-sidebar">
+      {showWorkspaceBrowser && (
+        <WorkspaceBrowser
+          onSelectWorkspace={handleSelectWorkspace}
+          onClose={() => setShowWorkspaceBrowser(false)}
+        />
+      )}
+
       <div className="project-sidebar-header">
         <h1 className="sidebar-brand-title">CC+</h1>
       </div>
@@ -450,29 +483,57 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   </div>
                 </div>
               ) : filteredProjects.length === 0 ? (
-                <div className="project-picker-empty">No available projects</div>
-              ) : (
-                filteredProjects.map(project => (
-                  <div
-                    key={project.path}
-                    className="project-picker-item"
-                    onClick={() => handleSelectProject(project.path, project.name)}
-                    title={project.path}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleSelectProject(project.path, project.name);
-                      }
+                <>
+                  <div className="project-picker-empty">No available projects</div>
+                  <button
+                    className="project-picker-browse-button"
+                    onClick={() => {
+                      setShowPicker(false);
+                      setShowWorkspaceBrowser(true);
                     }}
                   >
-                    <span className="project-picker-item-name">{project.name}</span>
-                    <span className="project-picker-item-path">{project.path}</span>
-                  </div>
-                ))
+                    Browse for workspace...
+                  </button>
+                </>
+              ) : (
+                <>
+                  {filteredProjects.map(project => (
+                    <div
+                      key={project.path}
+                      className="project-picker-item"
+                      onClick={() => handleSelectProject(project.path, project.name)}
+                      title={project.path}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectProject(project.path, project.name);
+                        }
+                      }}
+                    >
+                      <span className="project-picker-item-name">{project.name}</span>
+                      <span className="project-picker-item-path">{project.path}</span>
+                    </div>
+                  ))}
+                  <button
+                    className="project-picker-browse-button"
+                    onClick={() => {
+                      setShowPicker(false);
+                      setShowWorkspaceBrowser(true);
+                    }}
+                  >
+                    Browse for workspace...
+                  </button>
+                </>
               )}
             </div>
+          </div>
+        )}
+
+        {version && (
+          <div className="sidebar-version">
+            v{version}
           </div>
         )}
 
