@@ -42,13 +42,6 @@ interface GitInfo {
   dirty_count: number;
 }
 
-interface RecentActivityItem {
-  tool_name: string;
-  timestamp: string;
-  success: boolean;
-  session_id: string;
-}
-
 interface SessionItem {
   session_id: string;
   last_user_message: string | null;
@@ -85,7 +78,6 @@ interface ProjectOverview {
   tech_stack: string[];
   languages: LanguageInfo[];
   claude_md: ClaudeMdInfo;
-  recent_activity: RecentActivityItem[];
   sessions: SessionItem[];
   stats: ProjectStats;
 }
@@ -221,47 +213,8 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
       {/* Two-column layout */}
       <div className="dashboard-columns">
-        {/* Left column: Session history */}
+        {/* Left column: Project info + Tech stack + Languages + CLAUDE.md */}
         <div className="dashboard-column-left">
-          {overview.sessions.length > 0 ? (
-            <>
-              <div className="dashboard-section-label">SESSION HISTORY</div>
-              <div className="dashboard-session-list">
-                {overview.sessions.slice(0, 10).map((session) => (
-                  <button
-                    key={session.session_id}
-                    className="dashboard-session-item"
-                    onClick={() => onLoadSession(session.session_id)}
-                  >
-                    <div className="dashboard-session-header">
-                      <span className="dashboard-session-label">
-                        {session.last_user_message?.substring(0, 60) || 'Untitled session'}
-                        {(session.last_user_message?.length || 0) > 60 ? '...' : ''}
-                      </span>
-                    </div>
-                    <div className="dashboard-session-meta">
-                      <span className="dashboard-session-time">
-                        {formatTimeAgo(session.last_activity)}
-                      </span>
-                      <span className="dashboard-separator">·</span>
-                      <span className="dashboard-session-count">
-                        {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="dashboard-empty-state">
-              <p>No sessions yet</p>
-              <p className="dashboard-empty-hint">Start a new session to begin coding</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right column: Project info + Tech stack + Languages */}
-        <div className="dashboard-column-right">
           {/* Project info cards */}
           <div className="dashboard-section">
             <div className="dashboard-section-label">PROJECT INFO</div>
@@ -346,25 +299,43 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               </div>
             </div>
           )}
+        </div>
 
-          {/* Recent activity */}
-          {overview.recent_activity.length > 0 && (
-            <div className="dashboard-section">
-              <div className="dashboard-section-label">RECENT ACTIVITY</div>
-              <div className="dashboard-activity-list">
-                {overview.recent_activity.slice(0, 8).map((event, idx) => (
-                  <div key={idx} className="dashboard-activity-item">
-                    <span
-                      className="dashboard-activity-status"
-                      data-success={event.success}
-                    />
-                    <span className="dashboard-activity-tool">{event.tool_name}</span>
-                    <span className="dashboard-activity-time">
-                      {formatTimeAgo(event.timestamp)}
-                    </span>
-                  </div>
+        {/* Right column: Recent sessions */}
+        <div className="dashboard-column-right">
+          {overview.sessions.length > 0 ? (
+            <>
+              <div className="dashboard-section-label">RECENT SESSIONS</div>
+              <div className="dashboard-session-list">
+                {overview.sessions.slice(0, 5).map((session) => (
+                  <button
+                    key={session.session_id}
+                    className="dashboard-session-item"
+                    onClick={() => onLoadSession(session.session_id)}
+                  >
+                    <div className="dashboard-session-header">
+                      <span className="dashboard-session-label">
+                        {session.last_user_message?.substring(0, 60) || 'Untitled session'}
+                        {(session.last_user_message?.length || 0) > 60 ? '...' : ''}
+                      </span>
+                    </div>
+                    <div className="dashboard-session-meta">
+                      <span className="dashboard-session-time">
+                        {formatTimeAgo(session.last_activity)}
+                      </span>
+                      <span className="dashboard-separator">·</span>
+                      <span className="dashboard-session-count">
+                        {session.message_count} msg{session.message_count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </button>
                 ))}
               </div>
+            </>
+          ) : (
+            <div className="dashboard-empty-state">
+              <p>No sessions yet</p>
+              <p className="dashboard-empty-hint">Start a new session to begin coding</p>
             </div>
           )}
         </div>

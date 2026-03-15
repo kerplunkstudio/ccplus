@@ -59,14 +59,6 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
   const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
-  const hasRunningAgent = useCallback((nodes: ActivityNode[]): boolean => {
-    for (const node of nodes) {
-      if (node.status === 'running') return true;
-      if (isAgentNode(node) && hasRunningAgent((node as AgentNode).children)) return true;
-    }
-    return false;
-  }, []);
-
   useEffect(() => {
     if (tree.length === 0) {
       userOverrideRef.current = false;
@@ -76,12 +68,9 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
 
     if (userOverrideRef.current) return;
 
-    if (hasRunningAgent(tree)) {
-      setActiveTab('agents');
-    } else if (toolNodes.length > 0) {
-      setActiveTab('tools');
-    }
-  }, [tree, toolNodes.length, hasRunningAgent]);
+    const lastNode = tree[tree.length - 1];
+    setActiveTab(isAgentNode(lastNode) ? 'agents' : 'tools');
+  }, [tree]);
 
   useEffect(() => {
     if (containerRef.current && !selectedNode) {

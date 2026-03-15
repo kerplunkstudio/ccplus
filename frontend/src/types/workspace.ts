@@ -26,6 +26,7 @@ export type WorkspaceAction =
   | { type: 'ADD_TAB'; projectPath: string; sessionId: string }
   | { type: 'CLOSE_TAB'; projectPath: string; sessionId: string }
   | { type: 'SELECT_TAB'; projectPath: string; sessionId: string }
+  | { type: 'SELECT_TAB_QUIET'; projectPath: string; sessionId: string }
   | { type: 'UPDATE_TAB_LABEL'; projectPath: string; sessionId: string; label: string }
   | { type: 'SET_TAB_STREAMING'; projectPath: string; sessionId: string; streaming: boolean }
   | { type: 'SET_TAB_RUNNING'; projectPath: string; sessionId: string; running: boolean }
