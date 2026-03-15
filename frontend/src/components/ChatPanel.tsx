@@ -85,6 +85,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   sessionId,
   pendingQuestion,
   onRespondToQuestion,
+  isRestoringSession = false,
 }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -420,7 +421,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
 
         <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isRestoringSession && (
             <NewSessionDashboard
               projectPath={projectPath || null}
               usageStats={usageStats}
