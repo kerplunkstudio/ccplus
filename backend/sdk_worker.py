@@ -61,11 +61,10 @@ from claude_code_sdk import (
     ResultMessage,
     SystemMessage,
     TextBlock,
+    ThinkingBlock,
     ToolUseBlock,
 )
 from claude_code_sdk.types import HookMatcher, HookContext, HookJSONOutput, PermissionResultAllow, ToolPermissionContext
-from claude_code_sdk._errors import MessageParseError
-from claude_code_sdk._internal.message_parser import parse_message as sdk_parse_message
 
 # These may not be exported from top-level
 try:
@@ -478,6 +477,7 @@ class SDKWorker:
             can_use_tool=can_use_tool_cb,
             settings=sdk_settings_path,
             debug_stderr=sdk_stderr,
+            include_partial_messages=True,
         )
 
         client = ClaudeSDKClient(options)
@@ -696,9 +696,84 @@ class SDKWorker:
 
             return HookJSONOutput()
 
+        async def post_tool_use_failure(
+            hook_input: dict[str, Any],
+            tool_use_id_param: str | None,
+            context: HookContext,
+        ) -> HookJSONOutput:
+            """Handle tool execution failures."""
+            actual_tool_name = hook_input.get("tool_name", "unknown")
+            tool_use_id = tool_use_id_param or hook_input.get("tool_use_id", "")
+            error_msg = hook_input.get("error", "Unknown error")
+            start = tool_timers.pop(tool_use_id, None)
+            duration_ms = (time.monotonic() - start) * 1000 if start else None
+
+            is_agent = actual_tool_name in ("Agent", "Task")
+            parent_id = hook_input.get("agent_id")
+
+            if is_agent:
+                event = {
+                    "type": "agent_stop",
+                    "tool_name": actual_tool_name,
+                    "tool_use_id": tool_use_id,
+                    "success": False,
+                    "error": str(error_msg),
+                    "duration_ms": duration_ms,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session_id,
+                }
+            else:
+                event = {
+                    "type": "tool_complete",
+                    "tool_name": actual_tool_name,
+                    "tool_use_id": tool_use_id,
+                    "parent_agent_id": parent_id,
+                    "success": False,
+                    "error": str(error_msg),
+                    "duration_ms": duration_ms,
+                    "timestamp": datetime.now().isoformat(),
+                    "session_id": session_id,
+                }
+
+            await self.send_event({
+                "type": "tool_event",
+                "session_id": session_id,
+                "event": event,
+            })
+
+            try:
+                update_tool_event(
+                    session_id=session_id,
+                    tool_use_id=tool_use_id,
+                    success=False,
+                    error=str(error_msg),
+                    duration_ms=duration_ms,
+                )
+            except Exception as e:
+                logger.error(f"Database write failed (post_tool_use_failure): {e}")
+
+            return HookJSONOutput()
+
+        async def subagent_stop(
+            hook_input: dict[str, Any],
+            tool_use_id_param: str | None,
+            context: HookContext,
+        ) -> HookJSONOutput:
+            """Track subagent completion with transcript path."""
+            agent_id = hook_input.get("agent_id", "")
+            agent_type = hook_input.get("agent_type", "")
+            transcript_path = hook_input.get("agent_transcript_path", "")
+            logger.info(
+                f"[subagent_stop] agent_id={agent_id}, type={agent_type}, "
+                f"transcript={transcript_path}"
+            )
+            return HookJSONOutput()
+
         return {
             "PreToolUse": [HookMatcher(hooks=[pre_tool_use])],
             "PostToolUse": [HookMatcher(hooks=[post_tool_use])],
+            "PostToolUseFailure": [HookMatcher(hooks=[post_tool_use_failure])],
+            "SubagentStop": [HookMatcher(hooks=[subagent_stop])],
         }
 
     async def stream_query(
@@ -784,41 +859,17 @@ class SDKWorker:
             await ps.client.query(query_content, session_id=query_session_id)
             logger.info(f"Query sent to SDK for session {session_id}, starting receive loop")
 
-            # Stream response with error recovery
-            raw_iter = ps.client._query.receive_messages().__aiter__()
+            # Stream response using public API
             last_completion_data = {}
 
-            while True:
-                try:
-                    raw_data = await raw_iter.__anext__()
-                except StopAsyncIteration:
-                    break
-
-                # Parse with error recovery
-                try:
-                    message = sdk_parse_message(raw_data)
-                except MessageParseError as mpe:
-                    logger.info(f"Skipping unparseable SDK message: {mpe}")
-                    continue
-
+            async for message in ps.client.receive_response():
                 logger.info(f"Received message type: {type(message).__name__} for session {session_id}")
 
                 # Check for cancellation
                 if ps.cancel_requested:
                     logger.info(f"Query cancelled for session {session_id}")
                     await ps.client.interrupt()
-                    try:
-                        async for leftover in raw_iter:
-                            try:
-                                leftover_msg = sdk_parse_message(leftover)
-                                if isinstance(leftover_msg, ResultMessage):
-                                    got_result = True
-                                    ps.sdk_session_id = leftover_msg.session_id
-                                    break
-                            except MessageParseError:
-                                continue
-                    except Exception:
-                        pass
+                    # receive_response() handles cleanup after interrupt
                     break
 
                 if isinstance(message, AssistantMessage):
@@ -834,6 +885,14 @@ class SDKWorker:
                                 "text": block.text,
                             })
                             has_text = True
+                        elif isinstance(block, ThinkingBlock):
+                            # Surface extended thinking to the frontend
+                            if block.thinking:
+                                await self.send_event({
+                                    "type": "thinking_delta",
+                                    "session_id": session_id,
+                                    "text": block.thinking,
+                                })
                         elif isinstance(block, ToolUseBlock):
                             pass
 
@@ -886,14 +945,34 @@ class SDKWorker:
                         "output_tokens": usage.get("output_tokens"),
                         "model": ps.model,
                     }
+                    # receive_response() stops after ResultMessage automatically
 
-                    # Note: We now create separate database records for each AssistantMessage,
-                    # so we don't need to update with accumulated text here.
-                    # The sdk_session_id will be set on the final response_complete event.
+                elif isinstance(message, StreamEvent):
+                    # Token-level streaming events (when include_partial_messages=True)
+                    # Extract content_block_delta events for real-time text streaming
+                    event_data = message.event or {}
+                    event_type = event_data.get("type", "")
+                    if event_type == "content_block_delta":
+                        delta = event_data.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            text = delta.get("text", "")
+                            if text:
+                                result_text.append(text)
+                                await self.send_event({
+                                    "type": "text_delta",
+                                    "session_id": session_id,
+                                    "text": text,
+                                })
+                        elif delta.get("type") == "thinking_delta":
+                            thinking_text = delta.get("thinking", "")
+                            if thinking_text:
+                                await self.send_event({
+                                    "type": "thinking_delta",
+                                    "session_id": session_id,
+                                    "text": thinking_text,
+                                })
 
-                    break
-
-                elif isinstance(message, (SystemMessage, StreamEvent, UserMessage)):
+                elif isinstance(message, (SystemMessage, UserMessage)):
                     pass
 
                 else:
