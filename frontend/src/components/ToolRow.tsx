@@ -18,6 +18,8 @@ const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
       return <span className="tool-status-icon tool-status-completed" aria-label="Completed" />;
     case 'failed':
       return <span className="tool-status-icon tool-status-failed" aria-label="Failed" />;
+    case 'stopped':
+      return <span className="tool-status-icon tool-status-stopped" aria-label="Stopped" />;
     default:
       return null;
   }

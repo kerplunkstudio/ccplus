@@ -79,6 +79,10 @@
   background: var(--error);
 }
 
+.agent-card-stopped::before {
+  background: #8b8b8b;
+}
+
 @keyframes agentShimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -164,6 +168,12 @@
   background: var(--error-bg);
   color: var(--error);
   border: 1px solid var(--error-border);
+}
+
+.status-stopped {
+  background: color-mix(in oklch, #8b8b8b 12%, var(--bg-tertiary));
+  color: #8b8b8b;
+  border: 1px solid color-mix(in oklch, #8b8b8b 20%, transparent);
 }
 
 /* Toggle — now a subtle text button, not in a footer section */

@@ -102,8 +102,85 @@
   color: var(--text-secondary);
 }
 
+.message-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.message-markdown th {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message-markdown td {
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.message-markdown tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .message-text p {
-  margin: 0;
+  margin: 0 0 4px 0;
+}
+
+.message-text p:last-child {
+  margin-bottom: 0;
+}
+
+.message-text ul,
+.message-text ol {
+  margin: 2px 0 4px 16px;
+}
+
+.message-text li {
+  margin-bottom: 2px;
+}
+
+.message-text a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.message-text a:hover {
+  text-decoration: underline;
+}
+
+.message-text blockquote {
+  border-left: 3px solid var(--accent-dim);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+}
+
+.message-text table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.message-text th {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message-text td {
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.message-text tr:hover {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .inline-code {

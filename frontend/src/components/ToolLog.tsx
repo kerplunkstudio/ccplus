@@ -30,7 +30,8 @@ interface ToolLogItemProps {
 
 const ToolLogItem: React.FC<ToolLogItemProps> = ({ event }) => {
   const isRunning = event.type === 'tool_start' || event.type === 'agent_start';
-  const isFailed = event.success === false || event.error != null;
+  const isWorkerRestart = event.error === 'Worker restarted';
+  const isFailed = (event.success === false || event.error != null) && !isWorkerRestart;
   const isCompleted = (event.type === 'tool_complete' || event.type === 'agent_stop') && !isFailed;
 
   let className = 'tool-log-item';

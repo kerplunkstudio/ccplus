@@ -38,7 +38,7 @@ export interface AgentNode {
   description?: string;
   timestamp: string;
   children: ActivityNode[];
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'stopped';
   duration_ms?: number;
   error?: string;
   sequence?: number;
@@ -48,7 +48,7 @@ export interface ToolNode {
   tool_use_id: string;
   tool_name: string;
   timestamp: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'stopped';
   duration_ms?: number;
   error?: string;
   sequence?: number;

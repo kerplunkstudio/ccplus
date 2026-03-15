@@ -25,6 +25,7 @@ build/
 electron/assets/icon.icns
 electron/assets/icon.png
 electron/assets/icon.ico
+cc+ Desktop.app/
 
 # Secrets and credentials
 *.pem
@@ -45,3 +46,4 @@ credentials.json
 htmlcov/
 .coverage
 coverage.xml
+.claude/

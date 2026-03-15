@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import threading
+from pathlib import Path
 from typing import Optional
 
 import backend.config as config
@@ -524,3 +525,254 @@ def save_workspace_state(user_id: str, state: dict) -> None:
         (user_id, state_json),
     )
     conn.commit()
+
+
+def get_insights(days: int = 30, project_path: Optional[str] = None) -> dict:
+    """Return insights data for daily usage statistics.
+
+    Queries conversations and tool_usage tables SEPARATELY to avoid
+    cross-product inflation from JOINs.
+
+    Args:
+        days: Number of days to include (default 30)
+        project_path: Optional project path filter
+
+    Returns:
+        Dictionary with period info, summary stats, daily breakdown, and aggregations
+    """
+    conn = _get_connection()
+
+    # Calculate date range
+    end_date = conn.execute("SELECT date('now', 'localtime')").fetchone()[0]
+    start_date = conn.execute(
+        "SELECT date('now', 'localtime', ?)",
+        (f"-{days} days",)
+    ).fetchone()[0]
+
+    # Previous period for comparison
+    prev_start = conn.execute(
+        "SELECT date('now', 'localtime', ?)",
+        (f"-{days * 2} days",)
+    ).fetchone()[0]
+    prev_end = conn.execute(
+        "SELECT date('now', 'localtime', ?)",
+        (f"-{days + 1} days",)
+    ).fetchone()[0]
+
+    # Build project filter for conversations (uses project_path column)
+    conv_project_filter = ""
+    conv_project_params: list = []
+    if project_path:
+        conv_project_filter = "AND project_path = ?"
+        conv_project_params = [project_path]
+
+    # --- Conversation stats (queries, sessions) ---
+    conv_summary = conn.execute(
+        f"""
+        SELECT
+            COUNT(DISTINCT session_id) as total_sessions,
+            COUNT(CASE WHEN role = 'user' THEN 1 END) as total_queries
+        FROM conversations
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        AND (archived = 0 OR archived IS NULL)
+        {conv_project_filter}
+        """,
+        [start_date, end_date] + conv_project_params
+    ).fetchone()
+
+    # --- Tool stats (tool calls, tokens) ---
+    # For project filtering on tools, we need to find sessions that belong to the project
+    tool_project_filter = ""
+    tool_project_params: list = []
+    if project_path:
+        tool_project_filter = """AND session_id IN (
+            SELECT DISTINCT session_id FROM conversations
+            WHERE project_path = ? AND (archived = 0 OR archived IS NULL)
+        )"""
+        tool_project_params = [project_path]
+
+    tool_summary = conn.execute(
+        f"""
+        SELECT
+            COUNT(*) as total_tool_calls,
+            COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+            COALESCE(SUM(output_tokens), 0) as total_output_tokens
+        FROM tool_usage
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        {tool_project_filter}
+        """,
+        [start_date, end_date] + tool_project_params
+    ).fetchone()
+
+    # --- Previous period queries for comparison ---
+    prev_summary = conn.execute(
+        f"""
+        SELECT COUNT(CASE WHEN role = 'user' THEN 1 END) as prev_queries
+        FROM conversations
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        AND (archived = 0 OR archived IS NULL)
+        {conv_project_filter}
+        """,
+        [prev_start, prev_end] + conv_project_params
+    ).fetchone()
+
+    # Calculate cost estimate (Claude Sonnet 4 pricing: $3/1M input, $15/1M output)
+    input_tokens = tool_summary["total_input_tokens"] or 0
+    output_tokens = tool_summary["total_output_tokens"] or 0
+    total_cost = (input_tokens / 1_000_000 * 3.0) + (output_tokens / 1_000_000 * 15.0)
+
+    current_queries = conv_summary["total_queries"] or 0
+    prev_queries = prev_summary["prev_queries"] or 0
+    change_pct = 0
+    if prev_queries > 0:
+        change_pct = int(((current_queries - prev_queries) / prev_queries) * 100)
+
+    # --- Daily breakdown (separate queries, then merge) ---
+    daily_conv_rows = conn.execute(
+        f"""
+        SELECT
+            date(timestamp) as date,
+            COUNT(CASE WHEN role = 'user' THEN 1 END) as queries,
+            COUNT(DISTINCT session_id) as sessions
+        FROM conversations
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        AND (archived = 0 OR archived IS NULL)
+        {conv_project_filter}
+        GROUP BY date(timestamp)
+        ORDER BY date(timestamp) ASC
+        """,
+        [start_date, end_date] + conv_project_params
+    ).fetchall()
+
+    daily_tool_rows = conn.execute(
+        f"""
+        SELECT
+            date(timestamp) as date,
+            COUNT(*) as tool_calls,
+            COALESCE(SUM(input_tokens), 0) as input_tokens,
+            COALESCE(SUM(output_tokens), 0) as output_tokens
+        FROM tool_usage
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        {tool_project_filter}
+        GROUP BY date(timestamp)
+        ORDER BY date(timestamp) ASC
+        """,
+        [start_date, end_date] + tool_project_params
+    ).fetchall()
+
+    # Merge daily data
+    conv_by_date = {row["date"]: dict(row) for row in daily_conv_rows}
+    tool_by_date = {row["date"]: dict(row) for row in daily_tool_rows}
+    all_dates = sorted(set(list(conv_by_date.keys()) + list(tool_by_date.keys())))
+
+    daily = []
+    for date in all_dates:
+        c = conv_by_date.get(date, {})
+        t = tool_by_date.get(date, {})
+        day_input = t.get("input_tokens", 0) or 0
+        day_output = t.get("output_tokens", 0) or 0
+        day_cost = (day_input / 1_000_000 * 3.0) + (day_output / 1_000_000 * 15.0)
+        daily.append({
+            "date": date,
+            "queries": c.get("queries", 0) or 0,
+            "tool_calls": t.get("tool_calls", 0) or 0,
+            "cost": round(day_cost, 2),
+            "input_tokens": day_input,
+            "output_tokens": day_output,
+            "sessions": c.get("sessions", 0) or 0,
+        })
+
+    # --- By project breakdown (conversations only, no JOIN) ---
+    by_project_rows = conn.execute(
+        f"""
+        SELECT
+            project_path,
+            COUNT(CASE WHEN role = 'user' THEN 1 END) as queries,
+            COUNT(DISTINCT session_id) as sessions
+        FROM conversations
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        AND (archived = 0 OR archived IS NULL)
+        AND project_path IS NOT NULL
+        {conv_project_filter}
+        GROUP BY project_path
+        ORDER BY queries DESC
+        """,
+        [start_date, end_date] + conv_project_params
+    ).fetchall()
+
+    by_project = []
+    for row in by_project_rows:
+        project_name = Path(row["project_path"]).name if row["project_path"] else "Unknown"
+        # Get token cost for this project's sessions
+        proj_tokens = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens
+            FROM tool_usage
+            WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+            AND session_id IN (
+                SELECT DISTINCT session_id FROM conversations
+                WHERE project_path = ? AND (archived = 0 OR archived IS NULL)
+            )
+            """,
+            [start_date, end_date, row["project_path"]]
+        ).fetchone()
+        proj_input = proj_tokens["input_tokens"] or 0
+        proj_output = proj_tokens["output_tokens"] or 0
+        proj_cost = (proj_input / 1_000_000 * 3.0) + (proj_output / 1_000_000 * 15.0)
+        by_project.append({
+            "project": project_name,
+            "path": row["project_path"],
+            "queries": row["queries"],
+            "cost": round(proj_cost, 2),
+        })
+
+    # --- By tool breakdown (tool_usage only, no JOIN) ---
+    # Filter out toolu_* entries which are tool_use_ids mistakenly stored as tool_names
+    by_tool_rows = conn.execute(
+        f"""
+        SELECT
+            tool_name,
+            COUNT(*) as count,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count
+        FROM tool_usage
+        WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+        AND tool_name NOT LIKE 'toolu_%'
+        {tool_project_filter}
+        GROUP BY tool_name
+        ORDER BY count DESC
+        """,
+        [start_date, end_date] + tool_project_params
+    ).fetchall()
+
+    by_tool = []
+    for row in by_tool_rows:
+        total = row["count"] or 0
+        success = row["success_count"] or 0
+        success_rate = round(success / total, 2) if total > 0 else 0.0
+        by_tool.append({
+            "tool": row["tool_name"],
+            "count": total,
+            "success_rate": success_rate,
+        })
+
+    return {
+        "period": {
+            "start": start_date,
+            "end": end_date,
+            "days": days,
+        },
+        "summary": {
+            "total_queries": current_queries,
+            "total_cost": round(total_cost, 2),
+            "total_input_tokens": input_tokens,
+            "total_output_tokens": output_tokens,
+            "total_tool_calls": tool_summary["total_tool_calls"] or 0,
+            "total_sessions": conv_summary["total_sessions"] or 0,
+            "change_pct": change_pct,
+        },
+        "daily": daily,
+        "by_project": by_project,
+        "by_tool": by_tool,
+    }

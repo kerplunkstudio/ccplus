@@ -303,7 +303,7 @@ All modes use identical backend and frontend code. Desktop modes provide:
 
 - Python 3.12+
 - Node.js 18+ (for frontend build)
-- `ANTHROPIC_API_KEY` environment variable (or Claude Code configured in terminal)
+- Claude Code CLI installed and authenticated (uses your subscription)
 
 ### Initial Setup
 
@@ -327,7 +327,6 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | (none) | API key for Claude Code SDK |
 | `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
 | `SDK_MODEL` | `sonnet` | Default model for SDK queries |
 | `PORT` | `3000` | Server port |

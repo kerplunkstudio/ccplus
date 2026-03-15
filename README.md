@@ -21,7 +21,7 @@ cc+ wraps the Claude Code SDK in a lightweight IDE — tabbed sessions, a live a
 **Requirements:** Python 3.12+, Node.js 18+, Claude Code CLI configured.
 
 ```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
+git clone https://github.com/Kerplunk-Studio/ccplus.git && cd ccplus
 ./setup.sh    # one-time install
 ./ccplus      # build, deploy, launch
 ```

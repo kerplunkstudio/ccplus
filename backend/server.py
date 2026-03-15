@@ -12,6 +12,7 @@ Architecture:
       (the SDK session manager runs its own asyncio loop internally)
 """
 
+import json
 import logging
 import os
 import subprocess
@@ -34,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from backend.auth import auto_login, verify_token
 from backend.config import (
     DATABASE_PATH,
+    HOST,
     LOCAL_MODE,
     LOG_DIR,
     PORT,
@@ -81,12 +83,17 @@ logger = logging.getLogger("ccplus")
 app = Flask(__name__, static_folder=str(STATIC_DIR))
 app.secret_key = SECRET_KEY
 
-CORS(app, origins="*")
+ALLOWED_ORIGINS = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:4000,http://localhost:4001,http://localhost:3001,http://127.0.0.1:4000,http://127.0.0.1:4001,http://127.0.0.1:3001"
+).split(",")
+
+CORS(app, origins=ALLOWED_ORIGINS)
 
 socketio = SocketIO(
     app,
     async_mode="threading",
-    cors_allowed_origins="*",
+    cors_allowed_origins=ALLOWED_ORIGINS,
     ping_timeout=60,
     ping_interval=25,
 )
@@ -344,6 +351,32 @@ def get_user_stats_endpoint():
     except Exception as exc:
         logger.error(f"Failed to fetch user stats: {exc}")
         return jsonify({"error": "Failed to load user stats"}), 500
+
+
+@app.route("/api/insights")
+def insights_endpoint():
+    """Return daily usage insights and analytics.
+
+    Query params:
+        days: Number of days to include (default 30)
+        project: Optional project path filter
+    """
+    try:
+        days_param = request.args.get("days", "30")
+        try:
+            days = int(days_param)
+            if days < 1 or days > 365:
+                days = 30
+        except ValueError:
+            days = 30
+
+        project = request.args.get("project") or None
+
+        insights = get_insights(days=days, project_path=project)
+        return jsonify(insights)
+    except Exception as exc:
+        logger.error(f"Failed to fetch insights: {exc}")
+        return jsonify({"error": "Failed to load insights"}), 500
 
 
 @app.route("/api/projects")
@@ -1395,7 +1428,7 @@ if __name__ == "__main__":
 
     socketio.run(
         app,
-        host="0.0.0.0",
+        host=HOST,
         port=PORT,
         debug=False,
         allow_unsafe_werkzeug=True,

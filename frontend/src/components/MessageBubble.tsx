@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message } from '../types';
@@ -88,7 +89,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
           </div>
           {showPreview ? (
             <div className="markdown-preview">
-              <ReactMarkdown components={markdownComponents}>
+              <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                 {codeString}
               </ReactMarkdown>
             </div>
@@ -123,7 +124,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         )}
         {message.role === 'assistant' ? (
           <div className="message-markdown">
-            <ReactMarkdown components={markdownComponents}>
+            <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
               {message.content}
             </ReactMarkdown>
             {message.streaming && <span className="streaming-cursor" />}
@@ -131,7 +132,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         ) : (
           <>
             <div className="message-text">
-              <p>{message.content}</p>
+              <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+                {message.content || ''}
+              </ReactMarkdown>
             </div>
             {message.content && (
               <button

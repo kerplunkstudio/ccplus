@@ -19,6 +19,8 @@ const getStatusBadge = (status: string) => {
       return <span className="status-badge status-completed">Completed</span>;
     case 'failed':
       return <span className="status-badge status-failed">Failed</span>;
+    case 'stopped':
+      return <span className="status-badge status-stopped">Stopped</span>;
     default:
       return null;
   }
