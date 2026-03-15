@@ -1,7 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import './ProjectDashboard.css';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+
+const LANGUAGE_COLORS: Record<string, string> = {
+  TypeScript: '#3178C6',
+  JavaScript: '#F7DF1E',
+  Python: '#3572A5',
+  CSS: '#563D7C',
+  SCSS: '#C6538C',
+  HTML: '#E34C26',
+  Rust: '#DEA584',
+  Go: '#00ADD8',
+  Java: '#B07219',
+  Ruby: '#701516',
+  Swift: '#F05138',
+  Kotlin: '#A97BFF',
+  C: '#555555',
+  'C++': '#F34B7D',
+  Shell: '#89E051',
+  SQL: '#E38C00',
+  JSON: '#A0A0A0',
+  YAML: '#CB171E',
+  Markdown: '#083FA1',
+  Vue: '#42B883',
+  XML: '#FF6600',
+  TOML: '#9C4121',
+  INI: '#6E4C13',
+};
+const DEFAULT_LANG_COLOR = '#8B8B8B';
 
 interface ProjectDashboardProps {
   projectPath: string;
@@ -37,11 +64,27 @@ interface ProjectStats {
   lines_of_code: number;
 }
 
+interface LanguageInfo {
+  name: string;
+  files: number;
+  percentage: number;
+}
+
+interface ClaudeMdInfo {
+  exists: boolean;
+  excerpt: string | null;
+}
+
 interface ProjectOverview {
   name: string;
   path: string;
   git: GitInfo | null;
   file_tree: string[];
+  file_count: number;
+  commit_count: number;
+  tech_stack: string[];
+  languages: LanguageInfo[];
+  claude_md: ClaudeMdInfo;
   recent_activity: RecentActivityItem[];
   sessions: SessionItem[];
   stats: ProjectStats;
@@ -90,18 +133,23 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(
-          `${SOCKET_URL}/api/project/overview?project=${encodeURIComponent(projectPath)}`
-        );
+        const url = `${SOCKET_URL}/api/project/overview?project=${encodeURIComponent(projectPath)}`;
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setOverview(data);
         } else {
-          const errorData = await response.json();
-          setError(errorData.error || 'Failed to load project overview');
+          const text = await response.text();
+          try {
+            const errorData = JSON.parse(text);
+            setError(errorData.error || `HTTP ${response.status}`);
+          } catch {
+            setError(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+          }
         }
-      } catch (err) {
-        setError('Failed to load project overview');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(`Network error: ${message}`);
       } finally {
         setLoading(false);
       }
@@ -212,23 +260,89 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
           )}
         </div>
 
-        {/* Right column: Files + Activity + Stats */}
+        {/* Right column: Project info + Tech stack + Languages */}
         <div className="dashboard-column-right">
-          {/* File tree */}
-          {overview.file_tree.length > 0 && (
+          {/* Project info cards */}
+          <div className="dashboard-section">
+            <div className="dashboard-section-label">PROJECT INFO</div>
+            <div className="dashboard-info-grid">
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-value">{formatNumber(overview.file_count)}</div>
+                <div className="dashboard-info-label">Files</div>
+              </div>
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-value">{formatNumber(overview.commit_count)}</div>
+                <div className="dashboard-info-label">Commits</div>
+              </div>
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-value">{overview.languages.length}</div>
+                <div className="dashboard-info-label">Languages</div>
+              </div>
+              <div className="dashboard-info-card">
+                <div className="dashboard-info-value">{overview.stats.total_sessions}</div>
+                <div className="dashboard-info-label">Sessions</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tech stack */}
+          {overview.tech_stack.length > 0 && (
             <div className="dashboard-section">
-              <div className="dashboard-section-label">FILES</div>
-              <div className="dashboard-file-tree">
-                {overview.file_tree.map((entry, idx) => (
-                  <div
-                    key={idx}
-                    className={`dashboard-file-entry ${
-                      entry.endsWith('/') ? 'directory' : 'file'
-                    }`}
-                  >
-                    {entry}
+              <div className="dashboard-section-label">TECH STACK</div>
+              <div className="dashboard-tech-stack">
+                {overview.tech_stack.map((tech) => (
+                  <div key={tech} className="dashboard-tech-pill">
+                    {tech}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Languages */}
+          {overview.languages.length > 0 && (
+            <div className="dashboard-section">
+              <div className="dashboard-section-label">LANGUAGES</div>
+              <div className="dashboard-languages">
+                {/* Language bar */}
+                <div className="dashboard-language-bar">
+                  {overview.languages.map((lang) => (
+                    <div
+                      key={lang.name}
+                      className="dashboard-language-segment"
+                      style={{
+                        width: `${lang.percentage}%`,
+                        background: LANGUAGE_COLORS[lang.name] || DEFAULT_LANG_COLOR,
+                      }}
+                      title={`${lang.name}: ${lang.percentage}%`}
+                    />
+                  ))}
+                </div>
+                {/* Language legend */}
+                <div className="dashboard-language-legend">
+                  {overview.languages.slice(0, 6).map((lang) => (
+                    <div key={lang.name} className="dashboard-language-item">
+                      <span
+                        className="dashboard-language-dot"
+                        style={{
+                          background: LANGUAGE_COLORS[lang.name] || DEFAULT_LANG_COLOR,
+                        }}
+                      />
+                      <span className="dashboard-language-name">{lang.name}</span>
+                      <span className="dashboard-language-percentage">{lang.percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CLAUDE.md */}
+          {overview.claude_md.exists && (
+            <div className="dashboard-section">
+              <div className="dashboard-section-label">CLAUDE.MD</div>
+              <div className="dashboard-claude-card">
+                {overview.claude_md.excerpt || 'Project has Claude Code configuration'}
               </div>
             </div>
           )}
@@ -238,7 +352,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             <div className="dashboard-section">
               <div className="dashboard-section-label">RECENT ACTIVITY</div>
               <div className="dashboard-activity-list">
-                {overview.recent_activity.slice(0, 10).map((event, idx) => (
+                {overview.recent_activity.slice(0, 8).map((event, idx) => (
                   <div key={idx} className="dashboard-activity-item">
                     <span
                       className="dashboard-activity-status"
@@ -253,35 +367,6 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               </div>
             </div>
           )}
-
-          {/* Stats */}
-          <div className="dashboard-section">
-            <div className="dashboard-section-label">STATS</div>
-            <div className="dashboard-stats">
-              <div className="dashboard-stat-row">
-                <span className="dashboard-stat-label">Sessions</span>
-                <span className="dashboard-stat-value">
-                  {overview.stats.total_sessions}
-                </span>
-              </div>
-              <div className="dashboard-stat-row">
-                <span className="dashboard-stat-label">Tools</span>
-                <span className="dashboard-stat-value">{overview.stats.total_tools}</span>
-              </div>
-              <div className="dashboard-stat-row">
-                <span className="dashboard-stat-label">Lines of code</span>
-                <span className="dashboard-stat-value">
-                  {formatNumber(overview.stats.lines_of_code)}
-                </span>
-              </div>
-              <div className="dashboard-stat-row">
-                <span className="dashboard-stat-label">Total time</span>
-                <span className="dashboard-stat-value">
-                  {formatDuration(overview.stats.total_duration_ms)}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

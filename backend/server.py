@@ -583,7 +583,7 @@ def project_overview():
 
     response["git"] = git_info
 
-    # File tree (top-level only)
+    # File tree (top-level only) - kept for backwards compat
     ignore_patterns = {".git", "node_modules", "__pycache__", "venv", ".env", "build", "dist", ".DS_Store", ".idea", ".vscode"}
     try:
         entries = []
@@ -597,6 +597,166 @@ def project_overview():
     except Exception as exc:
         logger.error(f"Failed to read file tree: {exc}")
         response["file_tree"] = []
+
+    # Language detection and file count
+    ext_to_lang = {
+        ".py": "Python", ".tsx": "TypeScript", ".ts": "TypeScript", ".jsx": "JavaScript",
+        ".js": "JavaScript", ".css": "CSS", ".scss": "SCSS", ".html": "HTML",
+        ".json": "JSON", ".md": "Markdown", ".sql": "SQL", ".sh": "Shell",
+        ".bash": "Shell", ".yml": "YAML", ".yaml": "YAML", ".rs": "Rust",
+        ".go": "Go", ".java": "Java", ".rb": "Ruby", ".swift": "Swift",
+        ".kt": "Kotlin", ".c": "C", ".h": "C", ".cpp": "C++", ".hpp": "C++",
+        ".xml": "XML", ".toml": "TOML", ".ini": "INI", ".vue": "Vue",
+    }
+
+    lang_counts = {}
+    total_files = 0
+
+    def scan_directory(path):
+        nonlocal total_files
+        try:
+            for item in path.iterdir():
+                if item.is_file():
+                    ext = item.suffix.lower()
+                    if ext in ext_to_lang:
+                        lang = ext_to_lang[ext]
+                        lang_counts[lang] = lang_counts.get(lang, 0) + 1
+                        total_files += 1
+                elif item.is_dir():
+                    # Skip ignored directories
+                    if item.name in ignore_patterns or item.name.startswith("."):
+                        continue
+                    scan_directory(item)
+        except (PermissionError, OSError):
+            pass
+
+    try:
+        scan_directory(project_dir)
+        total = sum(lang_counts.values())
+        languages = [
+            {
+                "name": lang,
+                "files": count,
+                "percentage": round((count / total * 100), 1) if total > 0 else 0
+            }
+            for lang, count in sorted(lang_counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+        response["languages"] = languages
+        response["file_count"] = total_files
+    except Exception as exc:
+        logger.error(f"Failed to scan languages: {exc}")
+        response["languages"] = []
+        response["file_count"] = 0
+
+    # Commit count
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_dir), "rev-list", "--count", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            response["commit_count"] = int(result.stdout.strip())
+        else:
+            response["commit_count"] = 0
+    except Exception:
+        response["commit_count"] = 0
+
+    # Tech stack detection
+    tech_stack = []
+
+    # Check for various config files
+    package_json = project_dir / "package.json"
+    if package_json.exists():
+        try:
+            import json as json_lib
+            with open(package_json, "r") as f:
+                pkg = json_lib.load(f)
+                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+
+                if "react" in deps:
+                    tech_stack.append("React")
+                if "vue" in deps:
+                    tech_stack.append("Vue")
+                if "angular" in deps or "@angular/core" in deps:
+                    tech_stack.append("Angular")
+                if "next" in deps:
+                    tech_stack.append("Next.js")
+                if "express" in deps:
+                    tech_stack.append("Express")
+                if "electron" in deps:
+                    tech_stack.append("Electron")
+                if "typescript" in deps or (project_dir / "tsconfig.json").exists():
+                    tech_stack.append("TypeScript")
+                if "vite" in deps:
+                    tech_stack.append("Vite")
+                if "webpack" in deps:
+                    tech_stack.append("Webpack")
+        except Exception:
+            pass
+
+    # Python projects
+    if (project_dir / "requirements.txt").exists() or (project_dir / "pyproject.toml").exists() or (project_dir / "Pipfile").exists():
+        tech_stack.append("Python")
+
+        # Check for Python frameworks
+        for req_file in ["requirements.txt", "Pipfile"]:
+            req_path = project_dir / req_file
+            if req_path.exists():
+                try:
+                    content = req_path.read_text().lower()
+                    if "flask" in content:
+                        tech_stack.append("Flask")
+                    if "django" in content:
+                        tech_stack.append("Django")
+                    if "fastapi" in content:
+                        tech_stack.append("FastAPI")
+                except Exception:
+                    pass
+
+    # Other languages
+    if (project_dir / "Cargo.toml").exists():
+        tech_stack.append("Rust")
+    if (project_dir / "go.mod").exists():
+        tech_stack.append("Go")
+    if (project_dir / "Gemfile").exists():
+        tech_stack.append("Ruby")
+    if (project_dir / "pom.xml").exists() or (project_dir / "build.gradle").exists():
+        tech_stack.append("Java")
+
+    # Docker
+    if (project_dir / "Dockerfile").exists():
+        tech_stack.append("Docker")
+
+    # GitHub Actions
+    if (project_dir / ".github" / "workflows").exists():
+        tech_stack.append("GitHub Actions")
+
+    response["tech_stack"] = tech_stack
+
+    # CLAUDE.md info
+    claude_md_path = project_dir / "CLAUDE.md"
+    if claude_md_path.exists():
+        try:
+            content = claude_md_path.read_text(encoding="utf-8")
+            # Strip frontmatter if present
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    content = parts[2].strip()
+            # Get first ~200 chars
+            excerpt = content[:200].strip()
+            if len(content) > 200:
+                excerpt = excerpt.rsplit(" ", 1)[0] + "..."
+            response["claude_md"] = {
+                "exists": True,
+                "excerpt": excerpt
+            }
+        except Exception:
+            response["claude_md"] = {"exists": True, "excerpt": None}
+    else:
+        response["claude_md"] = {"exists": False, "excerpt": None}
 
     # Recent activity (last 20 tool events for this project)
     try:
