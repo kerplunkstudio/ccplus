@@ -65,6 +65,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [mobileDrawer, setMobileDrawer] = useState<'sessions' | 'activity' | null>(null);
 
+  const [showDashboard, setShowDashboard] = useState<boolean>(false);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
@@ -81,25 +83,36 @@ function AppContent({ token, loading }: AppContentProps) {
   const handleSelectProject = useCallback((path: string) => {
     workspace.selectProject(path);
     setMobileDrawer(null);
+    setShowDashboard(true);
   }, [workspace]);
 
   const handleSelectTab = useCallback((projectPath: string, sessionId: string) => {
     workspace.selectProject(projectPath);
     workspace.selectTab(projectPath, sessionId);
+    setShowDashboard(false);
+  }, [workspace]);
+
+  const handleSelectTabQuiet = useCallback((projectPath: string, sessionId: string) => {
+    workspace.selectProject(projectPath);
+    workspace.selectTabQuiet(projectPath, sessionId);
+    setShowDashboard(false);
   }, [workspace]);
 
   const handleNewTab = useCallback(() => {
     if (!activeProject) return;
     workspace.addTab(activeProject.path);
+    setShowDashboard(false);
   }, [workspace, activeProject]);
 
   const handleNewTabForProject = useCallback((projectPath: string) => {
     workspace.addTab(projectPath);
+    setShowDashboard(false);
   }, [workspace]);
 
   const handleLoadSession = useCallback((sessionId: string) => {
     if (!activeProject) return;
     workspace.addTab(activeProject.path, sessionId);
+    setShowDashboard(false);
   }, [activeProject, workspace]);
 
   const handleCloseTabInActiveProject = useCallback((sessionId: string) => {
@@ -114,6 +127,13 @@ function AppContent({ token, loading }: AppContentProps) {
   const handleSelectTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
     workspace.selectTab(activeProject.path, sessionId);
+    setShowDashboard(false);
+  }, [workspace, activeProject]);
+
+  const handleSelectTabInActiveProjectQuiet = useCallback((sessionId: string) => {
+    if (!activeProject) return;
+    workspace.selectTabQuiet(activeProject.path, sessionId);
+    setShowDashboard(false);
   }, [workspace, activeProject]);
 
   const handleSidebarWidthChange = useCallback((width: number) => {
@@ -214,24 +234,24 @@ function AppContent({ token, loading }: AppContentProps) {
         if (nextIndex >= 0 && nextIndex < snapshot.length) {
           // Still within current project's MRU
           mruCycleIndexRef.current = nextIndex;
-          handleSelectTabInActiveProject(snapshot[nextIndex]);
+          handleSelectTabInActiveProjectQuiet(snapshot[nextIndex]);
         } else {
-          // Cross to next/previous project
+          // Cross to next/previous project, skipping projects with no tabs
           const projectIndex = projects.findIndex(p => p.path === activeProject.path);
-          const nextProjectIndex = forward
-            ? (projectIndex + 1) % projects.length
-            : (projectIndex - 1 + projects.length) % projects.length;
-          const nextProject = projects[nextProjectIndex];
-          const nextMru = ensureMruOrder(nextProject.tabs, nextProject.tabMruOrder);
-          if (nextMru.length > 0) {
-            const targetIdx = forward ? 0 : nextMru.length - 1;
-            mruSnapshotRef.current = nextMru;
-            mruSnapshotProjectRef.current = nextProject.path;
-            mruCycleIndexRef.current = targetIdx;
-            handleSelectTab(nextProject.path, nextMru[targetIdx]);
-          } else {
-            // Next project has no tabs, just select it (shows dashboard)
-            handleSelectProject(nextProject.path);
+          for (let i = 1; i < projects.length; i++) {
+            const candidateIndex = forward
+              ? (projectIndex + i) % projects.length
+              : (projectIndex - i + projects.length) % projects.length;
+            const candidateProject = projects[candidateIndex];
+            const candidateMru = ensureMruOrder(candidateProject.tabs, candidateProject.tabMruOrder);
+            if (candidateMru.length > 0) {
+              const targetIdx = forward ? 0 : candidateMru.length - 1;
+              mruSnapshotRef.current = candidateMru;
+              mruSnapshotProjectRef.current = candidateProject.path;
+              mruCycleIndexRef.current = targetIdx;
+              handleSelectTabQuiet(candidateProject.path, candidateMru[targetIdx]);
+              break;
+            }
           }
         }
       }
@@ -239,6 +259,10 @@ function AppContent({ token, loading }: AppContentProps) {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Control' && isCyclingRef.current) {
+        // Commit the final tab selection to MRU
+        if (activeProject && activeTab) {
+          workspace.selectTab(activeProject.path, activeTab.sessionId);
+        }
         isCyclingRef.current = false;
         mruCycleIndexRef.current = 0;
         mruSnapshotRef.current = [];
@@ -267,7 +291,7 @@ function AppContent({ token, loading }: AppContentProps) {
         electronAPI.removeMenuActionListener(handleMenuAction);
       }
     };
-  }, [activeProject, activeTab, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTab, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery]);
+  }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
@@ -287,6 +311,8 @@ function AppContent({ token, loading }: AppContentProps) {
   }
 
   const hasTabs = activeProject && activeProject.tabs.length > 0;
+  const shouldShowDashboard = activeProject && (showDashboard || !hasTabs);
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard;
 
   return (
     <div className="app-layout" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
@@ -325,9 +351,16 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${!hasTabs ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${shouldShowDashboard ? 'full-width' : ''}`}>
             {activeProject ? (
-              hasTabs ? (
+              shouldShowDashboard ? (
+                <ProjectDashboard
+                  projectPath={activeProject.path}
+                  projectName={activeProject.name}
+                  onNewSession={handleNewTab}
+                  onLoadSession={handleLoadSession}
+                />
+              ) : shouldShowChatPanel ? (
                 <ChatPanel
                   messages={messages}
                   connected={connected}
@@ -347,21 +380,14 @@ function AppContent({ token, loading }: AppContentProps) {
                   pendingQuestion={pendingQuestion}
                   onRespondToQuestion={respondToQuestion}
                 />
-              ) : (
-                <ProjectDashboard
-                  projectPath={activeProject.path}
-                  projectName={activeProject.name}
-                  onNewSession={handleNewTab}
-                  onLoadSession={handleLoadSession}
-                />
-              )
+              ) : null
             ) : (
               <div className="no-project-state">
                 <p>Open a project from the sidebar to get started</p>
               </div>
             )}
           </div>
-          {hasTabs && (
+          {shouldShowChatPanel && (
             <div className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
               <ActivityTree tree={activityTree} usageStats={usageStats} />
             </div>
