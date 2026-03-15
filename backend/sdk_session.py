@@ -123,7 +123,7 @@ class SessionManager:
             self._active_sessions.discard(session_id)
         self._client.disconnect_session(session_id)
 
-    def send_question_response(self, session_id: str, response: str) -> None:
+    def send_question_response(self, session_id: str, response: dict) -> None:
         """Forward user's question response to the worker."""
         self._client.send_question_response(session_id, response)
 

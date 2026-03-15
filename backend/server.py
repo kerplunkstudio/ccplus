@@ -1410,7 +1410,7 @@ def handle_question_response(data):
         return
 
     session_id = client["session_id"]
-    response = data.get("response", "") if isinstance(data, dict) else ""
+    response = data.get("response", {}) if isinstance(data, dict) else {}
     session_manager.send_question_response(session_id, response)
     logger.info(f"Question response forwarded for session={session_id}")
 

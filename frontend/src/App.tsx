@@ -202,11 +202,18 @@ function AppContent({ token, loading }: AppContentProps) {
         return;
       }
 
-      // Escape: Cancel streaming query
-      if (e.key === 'Escape' && streaming) {
-        e.preventDefault();
-        cancelQuery();
-        return;
+      // Escape: Close active page (profile, insights) or cancel streaming query
+      if (e.key === 'Escape') {
+        if (activePage) {
+          e.preventDefault();
+          setActivePage(null);
+          return;
+        }
+        if (streaming) {
+          e.preventDefault();
+          cancelQuery();
+          return;
+        }
       }
 
       // Ctrl+Tab / Ctrl+Shift+Tab: MRU tab switching (cycles through tabs by recency, then crosses projects)
@@ -310,7 +317,7 @@ function AppContent({ token, loading }: AppContentProps) {
         electronAPI.removeMenuActionListener(handleMenuAction);
       }
     };
-  }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery]);
+  }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery, activePage]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);

@@ -158,7 +158,7 @@ class SDKWorker:
         self._socket_path = config.WORKER_SOCKET_PATH
         self._pid_path = config.WORKER_PID_PATH
         self._pending_questions: dict[str, asyncio.Event] = {}
-        self._question_responses: dict[str, str] = {}
+        self._question_responses: dict[str, dict] = {}
         self._pending_question_data: dict[str, dict] = {}
         self._event_buffer: dict[str, list[dict]] = {}  # per-session event buffer for disconnect gaps
         self._buffer_overflow_warned: set[str] = set()  # sessions that have logged overflow warning
@@ -304,7 +304,7 @@ class SDKWorker:
 
         elif msg_type == "question_response":
             session_id = msg.get("session_id")
-            response = msg.get("response", "")
+            response = msg.get("response", {})
             await self.handle_question_response(session_id, response)
 
         else:
@@ -341,7 +341,7 @@ class SDKWorker:
             # Unblock any pending AskUserQuestion wait
             event = self._pending_questions.get(session_id)
             if event:
-                self._question_responses[session_id] = "User cancelled the query"
+                self._question_responses[session_id] = {}
                 event.set()
                 logger.info(f"Unblocked pending AskUserQuestion for cancelled session {session_id}")
 
@@ -349,9 +349,9 @@ class SDKWorker:
         """Disconnect and tear down a session."""
         await self._disconnect_session(session_id)
 
-    async def handle_question_response(self, session_id: str, response: str) -> None:
+    async def handle_question_response(self, session_id: str, response: dict) -> None:
         """Handle user's response to an AskUserQuestion."""
-        logger.info(f"[question_response] Received response for session {session_id}: {response[:100]}")
+        logger.info(f"[question_response] Received response for session {session_id}: {repr(response)[:200]}")
         logger.info(f"[question_response] Pending questions: {list(self._pending_questions.keys())}")
         self._question_responses[session_id] = response
         event = self._pending_questions.get(session_id)
@@ -532,29 +532,14 @@ class SDKWorker:
                 self._pending_questions[session_id] = wait_event
                 try:
                     await asyncio.wait_for(wait_event.wait(), timeout=300)
-                    user_response = self._question_responses.pop(session_id, "")
-                    logger.info(f"[AskUserQuestion] Got user response: {user_response[:100]}")
+                    answers = self._question_responses.pop(session_id, {})
+                    logger.info(f"[AskUserQuestion] Got user response: {answers}")
                 except asyncio.TimeoutError:
-                    user_response = "User did not respond in time"
+                    answers = {}
                     logger.warning(f"[AskUserQuestion] Timed out waiting for response")
                 finally:
                     self._pending_questions.pop(session_id, None)
                     self._pending_question_data.pop(session_id, None)
-
-                # Parse the response string into answers dict
-                # Frontend sends: "Header1: Selection1\nHeader2: Selection2"
-                answers = {}
-                for line in user_response.split('\n'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Match each answer line to its question by header
-                    for q in questions:
-                        header = q.get("header", "")
-                        if line.startswith(f"{header}: "):
-                            answer_text = line[len(f"{header}: "):]
-                            answers[q.get("question", header)] = answer_text
-                            break
 
                 # Return allow with updated input that includes answers
                 updated = {**tool_input, "answers": answers}
@@ -636,7 +621,7 @@ class SDKWorker:
             except Exception as e:
                 logger.error(f"Database write failed (pre_tool_use): {e}")
 
-            return HookJSONOutput()
+            return HookJSONOutput(continue_=True)
 
         async def post_tool_use(
             hook_input: dict[str, Any],

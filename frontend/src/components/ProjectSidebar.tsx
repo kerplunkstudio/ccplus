@@ -382,28 +382,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       </div>
 
       <div className="project-sidebar-footer">
-        <div className="sidebar-nav">
-          <button
-            className={`sidebar-nav-item ${activePage === 'insights' ? 'active' : ''}`}
-            onClick={() => onNavigate('insights')}
-          >
-            Insights
-          </button>
-          <button
-            className={`sidebar-nav-item ${activePage === 'profile' ? 'active' : ''}`}
-            onClick={() => onNavigate('profile')}
-          >
-            Profile
-          </button>
-        </div>
-
-        <button
-          className="project-add-btn"
-          onClick={handleOpenPicker}
-        >
-          + Open project
-        </button>
-
         {showPicker && (
           <div className="project-picker" ref={pickerRef}>
             <input
@@ -443,6 +421,33 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             </div>
           </div>
         )}
+
+        <div className="sidebar-footer-nav">
+          <button
+            className={`footer-nav-item ${activePage === 'insights' ? 'active' : ''}`}
+            onClick={() => onNavigate('insights')}
+            aria-label="Insights"
+          >
+            <span className="footer-nav-icon">◈</span>
+            <span className="footer-nav-label">Insights</span>
+          </button>
+          <button
+            className={`footer-nav-item ${activePage === 'profile' ? 'active' : ''}`}
+            onClick={() => onNavigate('profile')}
+            aria-label="Profile"
+          >
+            <span className="footer-nav-icon">◇</span>
+            <span className="footer-nav-label">Profile</span>
+          </button>
+          <button
+            className="footer-nav-item"
+            onClick={handleOpenPicker}
+            aria-label="Open project"
+          >
+            <span className="footer-nav-icon">+</span>
+            <span className="footer-nav-label">Open</span>
+          </button>
+        </div>
       </div>
 
       <div

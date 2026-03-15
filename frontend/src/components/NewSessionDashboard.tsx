@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UsageStats } from '../types';
+import { useProfile } from './ProfilePanel';
 import './NewSessionDashboard.css';
 
 interface GitContext {
@@ -40,7 +41,14 @@ const getGreeting = (): string => {
   const now = new Date();
   const hour = now.getHours();
   const day = now.getDay();
-  const isWeekend = day === 0 || day === 6;
+  const isSaturday = day === 6;
+  const isSunday = day === 0;
+
+  // Seed from date + time-of-day slot so greeting is stable
+  // within the same time period but varies day to day
+  const timeSlot = hour < 5 ? 0 : hour < 12 ? 1 : hour < 17 ? 2 : hour < 21 ? 3 : 4;
+  const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  const pick = (pool: string[]) => pool[(seed + timeSlot) % pool.length];
 
   const greetings = {
     morning: [
@@ -61,8 +69,8 @@ const getGreeting = (): string => {
       'Evening session',
       'Winding down?',
       'One more thing?',
-      'Late afternoon vibes',
       'Evening energy',
+      'Almost there',
     ],
     lateNight: [
       'Late night coding',
@@ -71,30 +79,28 @@ const getGreeting = (): string => {
       'After hours',
       'Deep work hours',
     ],
-    weekend: [
-      'Weekend session?',
-      'Saturday vibes',
-      'Sunday session?',
+    saturday: [
+      'Saturday session?',
       'Weekend warrior',
+      'Saturday vibes',
       'Weekend deep dive',
+      'Saturday energy',
+    ],
+    sunday: [
+      'Sunday session?',
+      'Sunday vibes',
+      'Lazy Sunday coding',
+      'Sunday deep dive',
+      'Easy Sunday',
     ],
   };
 
-  let pool: string[];
-
-  if (isWeekend && Math.random() > 0.4) {
-    pool = greetings.weekend;
-  } else if (hour >= 5 && hour < 12) {
-    pool = greetings.morning;
-  } else if (hour >= 12 && hour < 17) {
-    pool = greetings.afternoon;
-  } else if (hour >= 17 && hour < 21) {
-    pool = greetings.evening;
-  } else {
-    pool = greetings.lateNight;
-  }
-
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (isSaturday) return pick(greetings.saturday);
+  if (isSunday) return pick(greetings.sunday);
+  if (hour >= 5 && hour < 12) return pick(greetings.morning);
+  if (hour >= 12 && hour < 17) return pick(greetings.afternoon);
+  if (hour >= 17 && hour < 21) return pick(greetings.evening);
+  return pick(greetings.lateNight);
 };
 
 export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
@@ -105,9 +111,13 @@ export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
 }) => {
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
   const [showSessions, setShowSessions] = useState(false);
+  const profile = useProfile();
 
   // Generate greeting once per component mount
-  const greeting = useMemo(() => getGreeting(), []);
+  const baseGreeting = useMemo(() => getGreeting(), []);
+  const greeting = profile.name
+    ? `${baseGreeting}, ${profile.name}`
+    : baseGreeting;
 
   // Fetch git context on mount / when projectPath changes
   useEffect(() => {

@@ -125,7 +125,7 @@ class WorkerClient:
         """Send keepalive ping."""
         self._send({"type": "ping"})
 
-    def send_question_response(self, session_id: str, response: str) -> None:
+    def send_question_response(self, session_id: str, response: dict) -> None:
         """Send user's response to an AskUserQuestion."""
         self._send({
             "type": "question_response",

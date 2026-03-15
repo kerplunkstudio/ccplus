@@ -335,6 +335,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
             {insights.daily.map((day, idx) => {
               const queryHeight = Math.max((day.queries / chartMax) * 100, 0.5);
               const toolHeight = Math.max((day.tool_calls / chartMax) * 100, 0.5);
+              // Parse as local date (noon) to avoid UTC-to-local day shift
+              const localDate = new Date(day.date + 'T12:00:00');
+              const tooltipLabel = localDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
               return (
                 <div key={day.date} className="insights-bar-wrapper">
@@ -342,17 +345,17 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
                     <div
                       className="insights-bar insights-bar-secondary"
                       style={{ height: `${toolHeight}%` }}
-                      data-tooltip={`${new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${day.queries} queries · ${day.tool_calls} tool calls · ${day.sessions} sessions`}
+                      data-tooltip={`${tooltipLabel} · ${day.queries} queries · ${day.tool_calls} tool calls · ${day.sessions} sessions`}
                     />
                     <div
                       className="insights-bar insights-bar-primary"
                       style={{ height: `${queryHeight}%` }}
-                      data-tooltip={`${new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${day.queries} queries · ${day.tool_calls} tool calls · ${day.sessions} sessions`}
+                      data-tooltip={`${tooltipLabel} · ${day.queries} queries · ${day.tool_calls} tool calls · ${day.sessions} sessions`}
                     />
                   </div>
                   {idx % labelFrequency === 0 && (
                     <div className="insights-bar-label">
-                      {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </div>
                   )}
                 </div>
