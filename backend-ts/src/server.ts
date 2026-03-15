@@ -18,6 +18,24 @@ import * as sdkSession from "./sdk-session.js";
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
 
+/** Find the Claude CLI binary path (mirrors Python PluginManager._find_claude_binary). */
+function findClaudeBinary(): string | null {
+  const candidates = [
+    path.join(homedir(), ".local", "bin", "claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  try {
+    const result = execFileSync("which", ["claude"], { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    const p = result.trim();
+    if (p) return p;
+  } catch { /* not in PATH */ }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Application setup
 // ---------------------------------------------------------------------------
@@ -784,8 +802,10 @@ app.get("/api/plugins/marketplace", (_req: Request, res: Response) => {
   res.json({ plugins: [] });
 });
 
-app.get("/api/skills", (_req: Request, res: Response) => {
-  res.json({ skills: [] });
+app.get("/api/skills", (req: Request, res: Response) => {
+  const projectPath = req.query.project as string | undefined;
+  const skills = sdkSession.discoverSkills(projectPath);
+  res.json({ skills });
 });
 
 // =========================================================================
@@ -821,7 +841,6 @@ io.on("connection", (socket) => {
     }
   }
 
-  console.log(`Client connected: user=${userId} session=${sessionId}`);
   socket.emit("connected", { session_id: sessionId });
 
   // -- Message handler --
@@ -970,9 +989,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         tool_use_id: data.tool_use_id ?? "",
       });
     },
-    onThinkingDelta: (text: string) => {
-      io.to(sessionId).emit("thinking_delta", { text });
-    },
+    // Thinking deltas intentionally not emitted to frontend
   };
 }
 
