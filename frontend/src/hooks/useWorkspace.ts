@@ -139,6 +139,13 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
       });
     }
 
+    case 'SELECT_TAB_QUIET': {
+      return updateProject(state, action.projectPath, (project) => ({
+        ...project,
+        activeTabId: action.sessionId,
+      }));
+    }
+
     case 'UPDATE_TAB_LABEL':
       return updateProject(state, action.projectPath, (project) =>
         updateTab(project, action.sessionId, (tab) => ({
@@ -327,6 +334,10 @@ export function useWorkspace() {
     dispatch({ type: 'SELECT_TAB', projectPath, sessionId });
   }, []);
 
+  const selectTabQuiet = useCallback((projectPath: string, sessionId: string) => {
+    dispatch({ type: 'SELECT_TAB_QUIET', projectPath, sessionId });
+  }, []);
+
   const updateTabLabel = useCallback((projectPath: string, sessionId: string, label: string) => {
     dispatch({ type: 'UPDATE_TAB_LABEL', projectPath, sessionId, label });
   }, []);
@@ -349,6 +360,7 @@ export function useWorkspace() {
     addTab,
     closeTab,
     selectTab,
+    selectTabQuiet,
     updateTabLabel,
     setTabStreaming,
     setTabRunning,

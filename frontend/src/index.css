@@ -73,6 +73,7 @@
   --space-lg: clamp(0.75rem, 0.6rem + 0.6vw, 1.25rem);
   --space-xl: clamp(1rem, 0.8rem + 0.8vw, 1.75rem);
   --space-2xl: clamp(1.5rem, 1.2rem + 1.2vw, 2.5rem);
+  --space-3xl: clamp(2.5rem, 2rem + 2vw, 4rem);
 
   /* === Layout === */
   --content-width: 85ch;
