@@ -384,7 +384,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 </svg>
               </button>
             )}
-            <span className={`connection-dot ${connected ? 'online' : 'offline'}`} role="status" aria-label={connected ? 'Connected' : 'Disconnected'} />
+            <span className={`connection-status ${connected ? 'online' : 'offline'}`} role="status" aria-label={connected ? 'Connected' : 'Disconnected'}>
+              <span className="dot" />
+              {!connected && <span className="label">Offline</span>}
+            </span>
           </div>
           <div className="header-right">
             <ModelSelector
@@ -556,20 +559,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 disabled={!connected || uploading}
                 aria-label="Attach image"
                 title="Attach image"
-                data-state={uploading ? 'uploading' : 'idle'}
               >
-                <div className="attach-btn-inner">
-                  <div className="attach-icon">
-                    <div className="attach-square attach-square-1" />
-                    <div className="attach-square attach-square-2" />
-                    <div className="attach-square attach-square-3" />
-                  </div>
-                  <div className="attach-plus">
-                    <div className="attach-plus-h" />
-                    <div className="attach-plus-v" />
-                  </div>
-                </div>
-                {uploading && <div className="attach-spinner" />}
+                {uploading ? (
+                  <div className="attach-spinner" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                )}
               </button>
               {streaming ? (
                 <button className="cancel-btn" onClick={onCancel} aria-label="Cancel">
