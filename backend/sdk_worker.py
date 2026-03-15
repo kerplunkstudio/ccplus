@@ -589,7 +589,7 @@ class SDKWorker:
                     "type": "agent_start",
                     "tool_name": actual_tool_name,
                     "tool_use_id": tool_use_id,
-                    "parent_agent_id": parent_id,
+                    "parent_agent_id": None,
                     "agent_type": tool_params.get("subagent_type", "agent"),
                     "description": tool_params.get("description", tool_params.get("prompt", "")[:100]),
                     "timestamp": datetime.now().isoformat(),
