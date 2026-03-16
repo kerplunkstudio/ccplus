@@ -950,6 +950,12 @@ io.on("connection", (socket) => {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
     io.to(sessionId).emit("stream_active", {});
 
+    // Send accumulated streaming content so client can catch up on missed deltas
+    const bufferedContent = sdkSession.getStreamingContent(sessionId);
+    if (bufferedContent) {
+      io.to(sessionId).emit("stream_content_sync", { content: bufferedContent });
+    }
+
     const pq = sdkSession.getPendingQuestion(sessionId);
     if (pq) {
       io.to(sessionId).emit("user_question", {
