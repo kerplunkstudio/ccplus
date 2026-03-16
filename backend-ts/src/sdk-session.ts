@@ -616,6 +616,7 @@ async function streamQuery(
   const resultText: string[] = [];
   let gotResult = false;
   let assistantMsgId: number | null = null;
+  let streamEventsActive = false;
 
   const { sessionId } = session;
   const callbacks = session.callbacks;
@@ -770,9 +771,11 @@ async function streamQuery(
 
         for (const block of (msg.message?.content ?? [])) {
           if (block.type === "text") {
-            resultText.push(block.text);
+            if (!streamEventsActive) {
+              resultText.push(block.text);
+              callbacks.onText(block.text);
+            }
             currentMessageText.push(block.text);
-            callbacks.onText(block.text);
             hasText = true;
           } else if (block.type === "thinking" && block.thinking) {
             callbacks.onThinkingDelta?.(block.thinking);
@@ -848,6 +851,7 @@ async function streamQuery(
         if (eventType === "content_block_delta") {
           const delta = eventData.delta ?? {};
           if (delta.type === "text_delta" && delta.text) {
+            streamEventsActive = true;
             resultText.push(delta.text);
             callbacks.onText(delta.text);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
