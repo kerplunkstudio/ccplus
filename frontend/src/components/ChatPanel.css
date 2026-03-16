@@ -293,6 +293,41 @@
   max-height: 200px;
   padding: var(--space-xs) 0;
   width: 100%;
+  overflow-y: auto;
+  /* Firefox scrollbar support */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+/* Firefox: show scrollbar on hover */
+.message-input:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Webkit scrollbar (Chrome, Safari, Edge) */
+.message-input::-webkit-scrollbar {
+  width: var(--space-sm);
+}
+
+.message-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hidden by default */
+.message-input::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-normal);
+}
+
+/* Show on textarea hover */
+.message-input:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+/* Darker when hovering the thumb itself */
+.message-input::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
 }
 
 .message-input:focus-visible {
