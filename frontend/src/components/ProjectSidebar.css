@@ -325,7 +325,7 @@
 
 .sidebar-footer-nav {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 0;
   padding: 0;
   background: var(--bg-secondary);
