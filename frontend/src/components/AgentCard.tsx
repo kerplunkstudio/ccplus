@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AgentNode } from '../types';
 import { ToolIcon } from './ToolIcon';
 import { formatDuration } from '../utils/formatDuration';
@@ -11,23 +11,39 @@ interface AgentCardProps {
   children?: React.ReactNode;
 }
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'running':
-      return <span className="status-badge status-running">Running</span>;
-    case 'completed':
-      return <span className="status-badge status-completed">Completed</span>;
-    case 'failed':
-      return <span className="status-badge status-failed">Failed</span>;
-    case 'stopped':
-      return <span className="status-badge status-stopped">Stopped</span>;
-    default:
-      return null;
-  }
+/**
+ * Truncates text to ~120 chars (roughly 1-2 lines), breaking at word boundary
+ */
+const truncateSummary = (text: string, maxLength: number = 120): string => {
+  if (text.length <= maxLength) return text;
+  // Try to break at a word boundary
+  const truncated = text.substring(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated) + '...';
 };
 
 export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, onSelect, children }) => {
   const [expanded, setExpanded] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState<number | undefined>(undefined);
+
+  // Running state: track elapsed time
+  useEffect(() => {
+    if (node.status === 'running' && node.duration_ms === undefined && node.timestamp) {
+      const startTime = new Date(node.timestamp).getTime();
+
+      const updateElapsed = () => {
+        const now = Date.now();
+        setElapsedMs(now - startTime);
+      };
+
+      updateElapsed();
+      const interval = setInterval(updateElapsed, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setElapsedMs(undefined);
+    }
+  }, [node.status, node.duration_ms, node.timestamp]);
 
   const toggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -42,6 +58,21 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
   const toolCount = node.children.filter((child) => !('children' in child)).length;
   const agentCount = node.children.filter((child) => 'children' in child).length;
 
+  // Determine which duration to show: completed duration or elapsed time
+  const displayDuration = node.duration_ms !== undefined ? node.duration_ms : elapsedMs;
+
+  // Build meta line parts
+  const metaParts: string[] = [];
+  if (displayDuration !== undefined) {
+    metaParts.push(formatDuration(displayDuration));
+  }
+  if (toolCount > 0) {
+    metaParts.push(`${toolCount} tool${toolCount > 1 ? 's' : ''}`);
+  }
+  if (agentCount > 0) {
+    metaParts.push(`${agentCount} agent${agentCount > 1 ? 's' : ''}`);
+  }
+
   return (
     <div className="agent-card-container" style={{ '--depth': depth } as React.CSSProperties}>
       <div
@@ -51,47 +82,49 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && handleCardClick()}
       >
-        {/* Agent type — full width, no competition */}
-        <div className="agent-card-type">
-          {node.sequence !== undefined && (
-            <span className="node-sequence">#{node.sequence}</span>
-          )}{' '}
-          {node.agent_type}
-        </div>
+        {/* Agent type — subtle label above description */}
+        {node.description ? (
+          <div className="agent-card-type">
+            {node.sequence !== undefined && `#${node.sequence} `}
+            {node.agent_type}
+          </div>
+        ) : (
+          <div className="agent-card-type agent-card-type-primary">
+            {node.sequence !== undefined && `#${node.sequence} `}
+            {node.agent_type}
+          </div>
+        )}
 
-        {/* Description */}
+        {/* Description — primary text when present */}
         {node.description && (
           <div className="agent-card-description">{node.description}</div>
         )}
 
-        {/* Summary (only when completed/failed) */}
-        {node.summary && node.status !== 'running' && (
-          <div className="agent-card-summary">
-            {node.summary.length > 150
-              ? node.summary.slice(0, 150) + '...'
-              : node.summary}
+        {/* Summary preview (truncated, always visible when summary exists and not running) */}
+        {node.summary && node.status !== 'running' && !expanded && (
+          <div className="agent-summary-preview">
+            {truncateSummary(node.summary)}
           </div>
         )}
 
-        {/* Meta row: status + duration + child breakdown */}
-        <div className="agent-card-meta-row">
-          {getStatusBadge(node.status)}
-          {node.duration_ms !== undefined && (
-            <span className="agent-card-chip">
-              {formatDuration(node.duration_ms)}
-            </span>
-          )}
-          {toolCount > 0 && (
-            <span className="agent-card-chip">
-              {toolCount} tool{toolCount > 1 ? 's' : ''}
-            </span>
-          )}
-          {agentCount > 0 && (
-            <span className="agent-card-chip agent-card-chip-accent">
-              {agentCount} agent{agentCount > 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
+        {/* Summary full (only when expanded) */}
+        {node.summary && node.status !== 'running' && expanded && (
+          <div className="agent-summary-full">
+            {node.summary}
+          </div>
+        )}
+
+        {/* Meta line: plain text metadata */}
+        {metaParts.length > 0 && (
+          <div className="agent-card-meta">
+            {metaParts.map((part, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <span className="agent-card-meta-sep">·</span>}
+                {part}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
 
         {/* Expand toggle */}
         {childCount > 0 && (
