@@ -368,6 +368,104 @@ app.get("/api/browse", (req: Request, res: Response) => {
   res.json({ path: currentPath, parent: parentPath, entries });
 });
 
+// -- Path completion --
+
+app.get("/api/path-complete", (req: Request, res: Response) => {
+  let partialPath = (req.query.partial as string ?? "").trim();
+  if (!partialPath) {
+    res.json({ entries: [], basePath: "" });
+    return;
+  }
+
+  // Resolve ~ to home directory
+  if (partialPath.startsWith("~/")) {
+    partialPath = path.join(homedir(), partialPath.slice(2));
+  } else if (partialPath === "~") {
+    partialPath = homedir();
+  }
+
+  // Security: ensure path is within home directory
+  const homeDir = path.resolve(homedir());
+  let resolvedBase: string;
+  try {
+    resolvedBase = path.resolve(partialPath);
+  } catch {
+    res.json({ entries: [], basePath: "" });
+    return;
+  }
+
+  // If path doesn't start with home dir, reject
+  if (!resolvedBase.startsWith(homeDir)) {
+    res.json({ entries: [], basePath: "" });
+    return;
+  }
+
+  // Determine the directory to list and the filename prefix to match
+  let dirToList: string;
+  let filePrefix: string;
+
+  if (existsSync(resolvedBase) && statSync(resolvedBase).isDirectory()) {
+    // Path is a complete directory - list its contents
+    dirToList = resolvedBase;
+    filePrefix = "";
+  } else {
+    // Path is partial - list parent directory and filter by filename
+    dirToList = path.dirname(resolvedBase);
+    filePrefix = path.basename(resolvedBase);
+  }
+
+  // Ensure directory exists and is accessible
+  if (!existsSync(dirToList) || !statSync(dirToList).isDirectory()) {
+    res.json({ entries: [], basePath: "" });
+    return;
+  }
+
+  // Read directory entries
+  const entries: Array<{ name: string; path: string; isDir: boolean }> = [];
+  try {
+    const items = readdirSync(dirToList);
+
+    for (const name of items) {
+      // Skip hidden files by default
+      if (name.startsWith(".")) continue;
+
+      // Filter by prefix
+      if (filePrefix && !name.toLowerCase().startsWith(filePrefix.toLowerCase())) {
+        continue;
+      }
+
+      const fullPath = path.join(dirToList, name);
+      try {
+        const stat = statSync(fullPath);
+        entries.push({
+          name: stat.isDirectory() ? `${name}/` : name,
+          path: fullPath,
+          isDir: stat.isDirectory(),
+        });
+
+        // Limit results
+        if (entries.length >= 20) break;
+      } catch {
+        // Skip inaccessible entries
+        continue;
+      }
+    }
+
+    // Sort: directories first, then alphabetically
+    entries.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  } catch {
+    // Permission denied or other error
+    res.json({ entries: [], basePath: dirToList });
+    return;
+  }
+
+  res.json({ entries, basePath: dirToList });
+});
+
 // -- Scan projects --
 
 app.get("/api/scan-projects", (_req: Request, res: Response) => {

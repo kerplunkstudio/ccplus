@@ -130,3 +130,55 @@
   color: var(--text-secondary);
   background: transparent;
 }
+
+/* Context Menu */
+
+.tab-context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--dropdown-shadow);
+  padding: var(--space-sm);
+  min-width: 180px;
+  animation: contextMenuFadeIn 0.12s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.tab-context-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.tab-context-menu-item:hover:not(:disabled) {
+  background: var(--hover-bg-secondary);
+  color: var(--text-primary);
+}
+
+.tab-context-menu-item:disabled {
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.5;
+}

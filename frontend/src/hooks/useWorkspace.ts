@@ -1,8 +1,9 @@
-import { useReducer, useEffect, useCallback, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { WorkspaceState, WorkspaceAction, ProjectEntry, TabState } from '../types';
 
 const STORAGE_KEY = 'ccplus_workspace';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
+const MAX_CLOSED_TABS = 10;
 
 const generateSessionId = (): string =>
   `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -147,6 +148,43 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
       });
     }
 
+    case 'CLOSE_OTHER_TABS': {
+      return updateProject(state, action.projectPath, (project) => {
+        const targetTab = project.tabs.find((t) => t.sessionId === action.sessionId);
+        if (!targetTab) return project;
+
+        return {
+          ...project,
+          tabs: [targetTab],
+          activeTabId: targetTab.sessionId,
+          tabMruOrder: [targetTab.sessionId],
+        };
+      });
+    }
+
+    case 'REOPEN_TAB': {
+      return updateProject(state, action.projectPath, (project) => {
+        const newTab = { ...action.tab };
+        const position = action.position !== undefined ? action.position : project.tabs.length;
+        const insertIndex = Math.min(position, project.tabs.length);
+
+        const updatedTabs = [
+          ...project.tabs.slice(0, insertIndex),
+          newTab,
+          ...project.tabs.slice(insertIndex),
+        ];
+
+        const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
+
+        return {
+          ...project,
+          tabs: updatedTabs,
+          activeTabId: newTab.sessionId,
+          tabMruOrder: updatedMru,
+        };
+      });
+    }
+
     case 'SELECT_TAB': {
       return updateProject(state, action.projectPath, (project) => {
         const mru = ensureMruOrder(project.tabs, project.tabMruOrder);
@@ -226,11 +264,19 @@ const stripTransientFields = (state: WorkspaceState): WorkspaceState => ({
   })),
 });
 
+interface ClosedTabEntry {
+  projectPath: string;
+  tab: TabState;
+  position: number;
+}
+
 export function useWorkspace() {
   const [state, dispatch] = useReducer(workspaceReducer, null, loadInitialState);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
   const latestStateRef = useRef<WorkspaceState>(state);
+  const closedTabsStackRef = useRef<ClosedTabEntry[]>([]);
+  const [hasClosedTabs, setHasClosedTabs] = useState(false);
 
   // Fetch workspace from API on mount (source of truth for cross-client sync)
   useEffect(() => {
@@ -350,8 +396,21 @@ export function useWorkspace() {
   }, []);
 
   const closeTab = useCallback((projectPath: string, sessionId: string) => {
+    // Find the tab being closed and push it to the closed stack
+    const project = state.projects.find((p) => p.path === projectPath);
+    if (project) {
+      const tab = project.tabs.find((t) => t.sessionId === sessionId);
+      if (tab) {
+        const position = project.tabs.findIndex((t) => t.sessionId === sessionId);
+        closedTabsStackRef.current = [
+          { projectPath, tab, position },
+          ...closedTabsStackRef.current.slice(0, MAX_CLOSED_TABS - 1),
+        ];
+        setHasClosedTabs(true);
+      }
+    }
     dispatch({ type: 'CLOSE_TAB', projectPath, sessionId });
-  }, []);
+  }, [state.projects]);
 
   const selectTab = useCallback((projectPath: string, sessionId: string) => {
     dispatch({ type: 'SELECT_TAB', projectPath, sessionId });
@@ -378,6 +437,41 @@ export function useWorkspace() {
     dispatch({ type: 'ADD_BROWSER_TAB', projectPath, sessionId: newSessionId, url, label });
   }, []);
 
+  const closeOtherTabs = useCallback((projectPath: string, sessionId: string) => {
+    // Find the project and all tabs to be closed
+    const project = state.projects.find((p) => p.path === projectPath);
+    if (project) {
+      const tabsToClose = project.tabs.filter((t) => t.sessionId !== sessionId);
+      // Push all closed tabs to the stack (newest first)
+      tabsToClose.forEach((tab) => {
+        const position = project.tabs.findIndex((t) => t.sessionId === tab.sessionId);
+        closedTabsStackRef.current = [
+          { projectPath, tab, position },
+          ...closedTabsStackRef.current.slice(0, MAX_CLOSED_TABS - 1),
+        ];
+      });
+      if (tabsToClose.length > 0) {
+        setHasClosedTabs(true);
+      }
+    }
+    dispatch({ type: 'CLOSE_OTHER_TABS', projectPath, sessionId });
+  }, [state.projects]);
+
+  const reopenTab = useCallback(() => {
+    if (closedTabsStackRef.current.length === 0) return;
+
+    const entry = closedTabsStackRef.current[0];
+    closedTabsStackRef.current = closedTabsStackRef.current.slice(1);
+    setHasClosedTabs(closedTabsStackRef.current.length > 0);
+
+    dispatch({
+      type: 'REOPEN_TAB',
+      projectPath: entry.projectPath,
+      tab: entry.tab,
+      position: entry.position,
+    });
+  }, []);
+
   return {
     state,
     activeProject,
@@ -388,6 +482,9 @@ export function useWorkspace() {
     addTab,
     addBrowserTab,
     closeTab,
+    closeOtherTabs,
+    reopenTab,
+    hasClosedTabs,
     selectTab,
     selectTabQuiet,
     updateTabLabel,
