@@ -227,6 +227,7 @@ type SessionCache = {
   streaming: boolean;
   backgroundProcessing: boolean;
   thinking: string;
+  contextTokens: number | null;
 };
 
 export function useTabSocket(token: string | null, sessionId: string) {
@@ -384,6 +385,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
           streaming: streaming,
           backgroundProcessing: backgroundProcessing,
           thinking: thinking,
+          contextTokens: contextTokens,
         });
       }
 
@@ -416,6 +418,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       awaitingDeltaAfterRestore.current = false;
       setPendingRestore(false);
       setSignals({ status: null, plan: null });
+      setContextTokens(null);
     }
   }, [sessionId, streaming, backgroundProcessing, thinking]);
 
@@ -925,6 +928,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
           setStreaming(cachedSession.streaming);
           setBackgroundProcessing(cachedSession.backgroundProcessing);
           setThinking(cachedSession.thinking);
+          setContextTokens(cachedSession.contextTokens);
           sessionIsActive = cachedSession.streaming || cachedSession.backgroundProcessing;
 
           // Delete cache entry after restoring (data is now in current state)
