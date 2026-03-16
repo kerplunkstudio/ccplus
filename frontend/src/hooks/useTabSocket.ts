@@ -364,6 +364,24 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
+      const previousSessionId = prevSessionIdRef.current;
+
+      // Save current state to cache BEFORE resetting (if there are messages)
+      if (messagesRef.current.length > 0) {
+        sessionCacheRef.current.set(previousSessionId, {
+          messages: messagesRef.current,
+          streamingContent: streamingContentRef.current,
+          streamingId: streamingIdRef.current,
+          toolLog: [...toolLogRef.current],
+          activityTree: [...activityTreeRef.current],
+          sequenceCounter: sequenceRef.current,
+          seenIds: new Set(seenToolUseIds.current),
+          streaming: streaming,
+          backgroundProcessing: backgroundProcessing,
+          thinking: thinking,
+        });
+      }
+
       prevSessionIdRef.current = sessionId;
       setIsRestoringSession(true);
       setMessages([]);
@@ -371,6 +389,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       // Don't reset usage stats - they persist across sessions
       setStreaming(false);
       setBackgroundProcessing(false);
+      setThinking('');
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;
@@ -393,7 +412,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setPendingRestore(false);
       setSignals({ status: null, plan: null });
     }
-  }, [sessionId]);
+  }, [sessionId, streaming, backgroundProcessing, thinking]);
 
   useEffect(() => {
     if (!token) return;
@@ -673,6 +692,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
         setToolLog([]);
         setSignals({ status: null, plan: null });
         // Don't clear prompt suggestions on final completion - they're meant to be used after
+
+        // Delete cache entry for this session (data is now in DB)
+        sessionCacheRef.current.delete(sessionId);
       } else {
         // Intermediate completion: main response is done, but check for background agents
         setStreaming(false);
@@ -870,6 +892,29 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
     const restoreSession = async () => {
       try {
+        // Check if we have a cache entry for this session (more recent than DB)
+        const cachedSession = sessionCacheRef.current.get(sessionId);
+        if (cachedSession) {
+          // Restore from cache (has more recent data than DB during streaming)
+          setMessages(cachedSession.messages);
+          streamingContentRef.current = cachedSession.streamingContent;
+          streamingIdRef.current = cachedSession.streamingId;
+          toolLogRef.current = cachedSession.toolLog;
+          setToolLog(cachedSession.toolLog);
+          dispatchTree({ type: 'LOAD_HISTORY', events: cachedSession.toolLog });
+          sequenceRef.current = cachedSession.sequenceCounter;
+          seenToolUseIds.current = cachedSession.seenIds;
+          setStreaming(cachedSession.streaming);
+          setBackgroundProcessing(cachedSession.backgroundProcessing);
+          setThinking(cachedSession.thinking);
+
+          // Delete cache entry after restoring (data is now in current state)
+          sessionCacheRef.current.delete(sessionId);
+          setIsRestoringSession(false);
+          return;
+        }
+
+        // No cache entry, restore from DB
         let sessionIsActive = false;
         const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
         if (historyRes.ok) {
