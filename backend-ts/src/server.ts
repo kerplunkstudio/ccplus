@@ -1033,6 +1033,24 @@ io.on("connection", (socket) => {
     sdkSession.sendQuestionResponse(client.session_id, response);
   });
 
+  // -- Duplicate session --
+
+  socket.on("duplicate_session", (data: { sourceSessionId: string; newSessionId: string }, callback?: (response: { success: boolean; error?: string; conversations?: number; toolEvents?: number; images?: number }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    try {
+      const result = database.duplicateSession(data.sourceSessionId, data.newSessionId, client.user_id);
+      callback?.({ success: true, conversations: result.conversations, toolEvents: result.toolEvents, images: result.images });
+    } catch (err) {
+      console.error("Failed to duplicate session:", err);
+      callback?.({ success: false, error: String(err) });
+    }
+  });
+
   // -- Disconnect --
 
   socket.on("disconnect", () => {

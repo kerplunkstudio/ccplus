@@ -424,6 +424,39 @@ export function saveWorkspaceState(userId: string, state: Record<string, unknown
   `).run(userId, stateJson);
 }
 
+// --- Session duplication ---
+
+export function duplicateSession(sourceSessionId: string, newSessionId: string, userId: string): { conversations: number; toolEvents: number; images: number } {
+  const d = getDb();
+
+  // Copy conversations (update session_id to new, keep everything else)
+  const convResult = d.prepare(`
+    INSERT INTO conversations (session_id, user_id, role, content, timestamp, sdk_session_id, project_path, archived, images)
+    SELECT ?, user_id, role, content, timestamp, sdk_session_id, project_path, 0, images
+    FROM conversations WHERE session_id = ? ORDER BY id
+  `).run(newSessionId, sourceSessionId);
+
+  // Copy tool_usage (update session_id, keep parent relationships intact)
+  const toolResult = d.prepare(`
+    INSERT INTO tool_usage (timestamp, session_id, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens)
+    SELECT timestamp, ?, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens
+    FROM tool_usage WHERE session_id = ? ORDER BY id
+  `).run(newSessionId, sourceSessionId);
+
+  // Copy images (update session_id, keep image data)
+  const imageResult = d.prepare(`
+    INSERT INTO images (id, filename, mime_type, size, data, uploaded_at, session_id)
+    SELECT id, filename, mime_type, size, data, uploaded_at, ?
+    FROM images WHERE session_id = ?
+  `).run(newSessionId, sourceSessionId);
+
+  return {
+    conversations: convResult.changes,
+    toolEvents: toolResult.changes,
+    images: imageResult.changes,
+  };
+}
+
 // --- Utility ---
 
 export function markOrphanedToolEvents(): number {
