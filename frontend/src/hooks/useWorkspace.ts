@@ -1,12 +1,13 @@
 import { useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { WorkspaceState, WorkspaceAction, ProjectEntry, TabState } from '../types';
+import { ensureMruOrder } from '../utils/tabs';
 
 const STORAGE_KEY = 'ccplus_workspace';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
 const MAX_CLOSED_TABS = 10;
 
 const generateSessionId = (): string =>
-  `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  `session_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
 const updateProject = (
   state: WorkspaceState,
@@ -29,13 +30,6 @@ const updateTab = (
     t.sessionId === sessionId ? updater(t) : t
   ),
 });
-
-const ensureMruOrder = (tabs: TabState[], mruOrder?: string[]): string[] => {
-  const tabIds = new Set(tabs.map(t => t.sessionId));
-  const valid = (mruOrder || []).filter(id => tabIds.has(id));
-  const missing = tabs.filter(t => !valid.includes(t.sessionId)).map(t => t.sessionId);
-  return [...valid, ...missing];
-};
 
 const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): WorkspaceState => {
   switch (action.type) {
@@ -85,6 +79,23 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
 
     case 'ADD_TAB': {
       return updateProject(state, action.projectPath, (project) => {
+        // Check if a tab with this sessionId already exists
+        const existingTab = project.tabs.find((t) => t.sessionId === action.sessionId);
+        if (existingTab) {
+          // Tab already exists, just switch to it (update active and MRU)
+          const mru = ensureMruOrder(project.tabs, project.tabMruOrder);
+          const updatedMru = [
+            action.sessionId,
+            ...mru.filter(id => id !== action.sessionId)
+          ];
+          return {
+            ...project,
+            activeTabId: action.sessionId,
+            tabMruOrder: updatedMru,
+          };
+        }
+
+        // Create new tab if it doesn't exist
         const newTab: TabState = {
           sessionId: action.sessionId,
           label: 'New session',
