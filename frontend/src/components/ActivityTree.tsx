@@ -9,6 +9,7 @@ import './ActivityTree.css';
 interface ActivityTreeProps {
   tree: ActivityNode[];
   usageStats: UsageStats;
+  contextTokens?: number | null;
 }
 
 interface TreeNodeProps {
@@ -136,7 +137,7 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const userOverrideRef = useRef(false);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
@@ -269,6 +270,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
         elapsed={activityStats.elapsed}
         errorCount={activityStats.errorCount}
         hasRunning={activityStats.hasRunning}
+        contextTokens={contextTokens}
       />
     </div>
   );

@@ -8,6 +8,7 @@ interface UsageStatsBarProps {
   elapsed?: string;
   errorCount?: number;
   hasRunning?: boolean;
+  contextTokens?: number | null;
 }
 
 export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({
@@ -16,6 +17,7 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({
   elapsed,
   errorCount = 0,
   hasRunning = false,
+  contextTokens,
 }) => {
   const showActivityStats = totalTools !== undefined && elapsed !== undefined;
 
@@ -33,6 +35,18 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({
       </div>
     );
   }
+
+  // Calculate context usage percentage
+  const contextPercent = contextTokens != null && stats.contextWindowSize > 0
+    ? Math.round((contextTokens / stats.contextWindowSize) * 100)
+    : null;
+
+  // Determine color class based on percentage
+  const contextColorClass = contextPercent !== null && contextPercent >= 75
+    ? 'context-danger'
+    : contextPercent !== null && contextPercent >= 50
+      ? 'context-warn'
+      : '';
 
   return (
     <div className="usage-stats-bar">
@@ -53,8 +67,13 @@ export const UsageStatsBar: React.FC<UsageStatsBarProps> = ({
         </div>
       ) : (
         <div className="usage-stat">
-          <span className="usage-stat-value">{stats.model}</span>
-          <span className="usage-stat-label">MODEL</span>
+          <span className={`usage-stat-value ${contextColorClass}`}>
+            {contextPercent !== null ? `${contextPercent}%` : '—'}
+          </span>
+          <div className="context-bar">
+            <div className={`context-bar-fill ${contextColorClass}`} style={{ width: `${contextPercent ?? 0}%` }} />
+          </div>
+          <span className="usage-stat-label">CONTEXT</span>
         </div>
       )}
     </div>

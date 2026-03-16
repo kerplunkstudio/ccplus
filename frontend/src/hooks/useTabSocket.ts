@@ -211,6 +211,19 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
   }
 }
 
+type SessionCache = {
+  messages: Message[];
+  streamingContent: string;
+  streamingId: string | null;
+  toolLog: ToolEvent[];
+  activityTree: ActivityNode[];
+  sequenceCounter: number;
+  seenIds: Set<string>;
+  streaming: boolean;
+  backgroundProcessing: boolean;
+  thinking: string;
+};
+
 export function useTabSocket(token: string | null, sessionId: string) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -244,6 +257,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [signals, setSignals] = useState<SignalState>({ status: null, plan: null });
   const [promptSuggestions, setPromptSuggestions] = useState<string[]>([]);
   const [rateLimitState, setRateLimitState] = useState<{ active: boolean; retryAfterMs: number } | null>(null);
+  const [contextTokens, setContextTokens] = useState<number | null>(null);
+
+  // Session cache for preserving state during tab switches
+  const sessionCacheRef = useRef<Map<string, SessionCache>>(new Map());
+  // Keep messagesRef in sync with messages state for session-switch effect
+  const messagesRef = useRef<Message[]>([]);
 
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
@@ -332,6 +351,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
   useEffect(() => {
     activityTreeRef.current = activityTree;
   }, [activityTree]);
+
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Fetch persisted stats from backend on mount
   useEffect(() => {
@@ -618,6 +642,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
         streamingContentRef.current = '';
         streamingIdRef.current = null;
         // Don't clear toolLogRef.current and toolLog here - wait for tools to complete
+      }
+
+      // Store the latest input_tokens as context usage indicator
+      if (data.input_tokens !== undefined) {
+        setContextTokens(data.input_tokens);
       }
 
       // Check if this is the final completion (has sdk_session_id) or an intermediate one
@@ -1060,6 +1089,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     signals,
     promptSuggestions,
     rateLimitState,
+    contextTokens,
   };
 }
 
