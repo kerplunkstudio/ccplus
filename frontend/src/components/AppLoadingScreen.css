@@ -1,0 +1,55 @@
+.app-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  opacity: 1;
+  transition: opacity 300ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.app-loading-screen--exiting {
+  opacity: 0;
+}
+
+.app-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-loading-wordmark {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-loading-pulse {
+  width: 40px;
+  height: 1px;
+  background: var(--accent-dim);
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-loading-pulse {
+    animation: none;
+    opacity: 0.6;
+  }
+}

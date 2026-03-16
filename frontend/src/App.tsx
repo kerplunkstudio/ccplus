@@ -13,6 +13,7 @@ import { BrowserTab } from './components/BrowserTab';
 import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
+import { AppLoadingScreen } from './components/AppLoadingScreen';
 import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
@@ -431,12 +432,7 @@ function AppContent({ token, loading }: AppContentProps) {
   }, [workspace, activeProject, duplicateSession]);
 
   if (loading) {
-    return (
-      <div className="app-loading">
-        <div className="spinner" />
-        <p>Connecting...</p>
-      </div>
-    );
+    return null; // AppLoadingScreen handles this
   }
 
   const hasProjects = workspace.state.projects.length > 0;
@@ -589,6 +585,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
+          <AppLoadingScreen ready={!loading} />
           <AppContent token={token} loading={loading} />
         </ToastProvider>
       </ThemeProvider>
