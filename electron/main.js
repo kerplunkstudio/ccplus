@@ -7,6 +7,9 @@ const fs = require('fs');
 const store = new Store();
 const isDev = process.env.ELECTRON_IS_DEV === '1';
 
+// Set app name
+app.name = 'CC+';
+
 // Configuration
 const SERVER_PORT = process.env.PORT || 4000;
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
@@ -302,6 +305,11 @@ function createMenu() {
 app.whenReady().then(async () => {
   console.log('[App] Starting cc+ Desktop...');
   console.log('[App] Project root:', PROJECT_ROOT);
+
+  // Set dock icon on macOS
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.icns'));
+  }
 
   try {
     await startBackend();
