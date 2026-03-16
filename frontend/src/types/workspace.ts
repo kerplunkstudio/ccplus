@@ -6,6 +6,7 @@ export interface TabState {
   createdAt: number;
   type?: 'chat' | 'browser';
   url?: string;
+  projectPath?: string;
 }
 
 export interface ProjectEntry {

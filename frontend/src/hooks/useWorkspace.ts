@@ -50,6 +50,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
         hasRunningAgent: false,
         createdAt: Date.now(),
         type: 'chat',
+        projectPath: action.path,
       };
       const newProject: ProjectEntry = {
         path: action.path,
@@ -91,6 +92,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           hasRunningAgent: false,
           createdAt: Date.now(),
           type: 'chat',
+          projectPath: action.projectPath,
         };
         const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
         return {
@@ -112,6 +114,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           createdAt: Date.now(),
           type: 'browser',
           url: action.url,
+          projectPath: action.projectPath,
         };
         const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
         return {

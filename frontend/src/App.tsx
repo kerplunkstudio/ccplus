@@ -51,7 +51,6 @@ function AppContent({ token, loading }: AppContentProps) {
     messages,
     streaming,
     backgroundProcessing,
-    thinking,
     currentTool,
     activityTree,
     usageStats,
@@ -379,8 +378,8 @@ function AppContent({ token, loading }: AppContentProps) {
   }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery, activePage]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
-    sendMessage(content, workspace || activeProject?.path || undefined, model || selectedModel, imageIds);
-  }, [sendMessage, activeProject, selectedModel]);
+    sendMessage(content, workspace || activeTab?.projectPath || activeProject?.path || undefined, model || selectedModel, imageIds);
+  }, [sendMessage, activeTab, activeProject, selectedModel]);
 
   const toggleDrawer = useCallback((drawer: 'sessions' | 'activity') => {
     setMobileDrawer((prev) => (prev === drawer ? null : drawer));
@@ -539,7 +538,6 @@ function AppContent({ token, loading }: AppContentProps) {
                     connected={connected}
                     streaming={streaming}
                     backgroundProcessing={backgroundProcessing}
-                    thinking={thinking}
                     currentTool={currentTool}
                     toolLog={toolLog}
                     selectedModel={selectedModel}
