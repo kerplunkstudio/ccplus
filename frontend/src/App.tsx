@@ -486,7 +486,7 @@ function AppContent({ token, loading }: AppContentProps) {
       </div>
 
       <div className="panel-main">
-        {activeProject && hasTabs && !activePage && (
+        {activeProject && !activePage && (
           <TabBar
             tabs={activeProject.tabs}
             activeTabId={activeProject.activeTabId}
