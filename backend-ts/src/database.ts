@@ -378,6 +378,7 @@ export function archiveSession(sessionId: string): boolean {
   const d = getDb();
   try {
     d.prepare("UPDATE conversations SET archived = 1 WHERE session_id = ?").run(sessionId);
+    d.prepare("DELETE FROM images WHERE session_id = ?").run(sessionId);
     return true;
   } catch {
     return false;
@@ -592,6 +593,17 @@ export function markOrphanedToolEvents(): number {
     UPDATE tool_usage
     SET success = 0, error = 'Server restarted', duration_ms = 0
     WHERE success IS NULL
+  `).run();
+  return info.changes;
+}
+
+export function cleanupOrphanedImages(): number {
+  const d = getDb();
+  const info = d.prepare(`
+    DELETE FROM images
+    WHERE session_id NOT IN (
+      SELECT DISTINCT session_id FROM conversations
+    )
   `).run();
   return info.changes;
 }
