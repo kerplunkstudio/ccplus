@@ -6,6 +6,7 @@ import path from "path";
 import { z } from "zod";
 import * as config from "./config.js";
 import * as database from "./database.js";
+import { findClaudeBinary } from "./utils.js";
 
 // ---- Skills discovery (cached) ----
 
@@ -25,23 +26,6 @@ function parseDescription(filePath: string): string | null {
       const descMatch = match[1].match(/description:\s*(.+)/);
       if (descMatch) return descMatch[1].trim();
     }
-  } catch { /* ignore */ }
-  return null;
-}
-
-function findClaudeBinary(): string | null {
-  const candidates = [
-    path.join(homedir(), ".local", "bin", "claude"),
-    "/usr/local/bin/claude",
-    "/opt/homebrew/bin/claude",
-    path.join(homedir(), ".claude", "local", "claude"),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  try {
-    const result = execFileSync("which", ["claude"], { encoding: "utf-8", timeout: 5000 }).trim();
-    if (result) return result;
   } catch { /* ignore */ }
   return null;
 }
@@ -255,6 +239,7 @@ interface ActiveSession {
     data: Record<string, unknown>;
   } | null;
   streamingContent: string;
+  lastCompletedResponse: Record<string, unknown> | null;
 }
 
 // ---- Session Manager ----
@@ -271,7 +256,9 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     ) {
       // Interrupt existing query if running
       if (existing.activeQuery) {
-        existing.activeQuery.interrupt().catch(() => {});
+        existing.activeQuery.interrupt().catch((err) => {
+          console.error(`[sdk-session] Failed to interrupt query during session reset for ${sessionId}:`, err);
+        });
       }
       sessions.delete(sessionId);
     } else {
@@ -289,6 +276,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     cancelRequested: false,
     pendingQuestion: null,
     streamingContent: '',
+    lastCompletedResponse: null,
   };
   sessions.set(sessionId, session);
   return session;
@@ -594,7 +582,9 @@ export function cancelQuery(sessionId: string): void {
   if (session) {
     session.cancelRequested = true;
     if (session.activeQuery) {
-      session.activeQuery.interrupt().catch(() => {});
+      session.activeQuery.interrupt().catch((err) => {
+        console.error(`[sdk-session] Failed to interrupt query during cancellation for ${sessionId}:`, err);
+      });
     }
     // Unblock any pending question
     if (session.pendingQuestion) {
@@ -618,7 +608,9 @@ export function getActiveSessions(): string[] {
 export function disconnectSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session?.activeQuery) {
-    session.activeQuery.interrupt().catch(() => {});
+    session.activeQuery.interrupt().catch((err) => {
+      console.error(`[sdk-session] Failed to interrupt query during disconnect for ${sessionId}:`, err);
+    });
     session.activeQuery.close();
   }
   sessions.delete(sessionId);
@@ -640,6 +632,17 @@ export function getPendingQuestion(sessionId: string): Record<string, unknown> |
 export function getStreamingContent(sessionId: string): string {
   const session = sessions.get(sessionId);
   return session?.streamingContent ?? '';
+}
+
+export function getLastCompletedResponse(sessionId: string): Record<string, unknown> | null {
+  const session = sessions.get(sessionId);
+  if (!session) return null;
+  const response = session.lastCompletedResponse;
+  // Clear after retrieval (one-time recovery)
+  if (response) {
+    session.lastCompletedResponse = null;
+  }
+  return response;
 }
 
 // ---- MCP Signal Server ----
@@ -705,6 +708,7 @@ async function streamQuery(
   let gotResult = false;
   let assistantMsgId: number | null = null;
   let streamEventsActive = false;
+  let lastCompletionData: Record<string, unknown> = {};
 
   const { sessionId } = session;
   const callbacks = session.callbacks;
@@ -832,8 +836,8 @@ async function streamQuery(
         model: model ?? config.SDK_MODEL,
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: "bypassPermissions" as any,
-        allowDangerouslySkipPermissions: true,
+        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
+        allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
         env: cleanEnv,
         hooks: hooks as any,
         plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,
@@ -854,7 +858,6 @@ async function streamQuery(
     });
 
     session.activeQuery = q;
-    let lastCompletionData: Record<string, unknown> = {};
 
     for await (const message of q) {
       // Check cancellation
@@ -1001,6 +1004,12 @@ async function streamQuery(
     callbacks.onError(String(err));
     sessions.delete(sessionId);
   } finally {
+    // Store last completed response for tab-switch recovery
+    session.lastCompletedResponse = {
+      text: resultText.join(""),
+      ...lastCompletionData,
+    };
+
     session.activeQuery = null;
     session.streamingContent = '';
 

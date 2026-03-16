@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
+import helmet from "helmet";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import { execFileSync } from "child_process";
@@ -14,27 +15,10 @@ import * as config from "./config.js";
 import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
+import { findClaudeBinary } from "./utils.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
-
-/** Find the Claude CLI binary path (mirrors Python PluginManager._find_claude_binary). */
-function findClaudeBinary(): string | null {
-  const candidates = [
-    path.join(homedir(), ".local", "bin", "claude"),
-    "/usr/local/bin/claude",
-    "/opt/homebrew/bin/claude",
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  try {
-    const result = execFileSync("which", ["claude"], { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-    const p = result.trim();
-    if (p) return p;
-  } catch { /* not in PATH */ }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Application setup
@@ -49,6 +33,22 @@ const ALLOWED_ORIGINS = (
 ).split(",");
 
 app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", ...ALLOWED_ORIGINS],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(express.json());
 
 const io = new SocketIOServer(httpServer, {
@@ -656,7 +656,7 @@ app.get("/api/workspace", (_req: Request, res: Response) => {
 
 app.put("/api/workspace", (req: Request, res: Response) => {
   const state = req.body;
-  if (!state) {
+  if (!state || typeof state !== "object" || Object.keys(state).length === 0) {
     res.status(400).json({ error: "No state provided" });
     return;
   }
@@ -667,7 +667,7 @@ app.put("/api/workspace", (req: Request, res: Response) => {
 app.post("/api/workspace", (req: Request, res: Response) => {
   // POST variant for sendBeacon during page unload
   const state = req.body;
-  if (!state) {
+  if (!state || typeof state !== "object" || Object.keys(state).length === 0) {
     res.status(400).json({ error: "No state provided" });
     return;
   }
@@ -931,7 +931,7 @@ app.get("/api/skills", (req: Request, res: Response) => {
 // =========================================================================
 
 io.on("connection", (socket) => {
-  const token = socket.handshake.query.token as string ?? "";
+  const token = socket.handshake.auth.token as string ?? "";
   const userId = auth.verifyToken(token);
 
   if (!userId) {
@@ -940,7 +940,7 @@ io.on("connection", (socket) => {
     return;
   }
 
-  const sessionId = (socket.handshake.query.session_id as string) ?? socket.id;
+  const sessionId = (socket.handshake.auth.session_id as string) ?? socket.id;
 
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
   socket.join(sessionId);
@@ -961,6 +961,20 @@ io.on("connection", (socket) => {
       io.to(sessionId).emit("user_question", {
         questions: pq.questions ?? [],
         tool_use_id: pq.tool_use_id ?? "",
+      });
+    }
+  } else {
+    // Session not active - check if there's a missed response_complete
+    const missedResponse = sdkSession.getLastCompletedResponse(sessionId);
+    if (missedResponse) {
+      io.to(sessionId).emit("response_complete", {
+        cost: missedResponse.cost,
+        duration_ms: missedResponse.duration_ms,
+        input_tokens: missedResponse.input_tokens,
+        output_tokens: missedResponse.output_tokens,
+        model: missedResponse.model,
+        sdk_session_id: missedResponse.sdk_session_id,
+        content: missedResponse.text,
       });
     }
   }

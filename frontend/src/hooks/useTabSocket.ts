@@ -270,6 +270,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
   // Keep messagesRef in sync with messages state for session-switch effect
   const messagesRef = useRef<Message[]>([]);
 
+  // Fix 1: Refs to mirror state for cache saves (avoid stale closures)
+  const streamingRef = useRef(false);
+  const backgroundProcessingRef = useRef(false);
+  const thinkingRef = useRef('');
+
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
       clearTimeout(clearToolTimerRef.current);
@@ -363,6 +368,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
     messagesRef.current = messages;
   }, [messages]);
 
+  // Fix 1: Sync refs with state for cache saves
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
+  useEffect(() => { backgroundProcessingRef.current = backgroundProcessing; }, [backgroundProcessing]);
+  useEffect(() => { thinkingRef.current = thinking; }, [thinking]);
+
   // Fetch persisted stats from backend on mount
   useEffect(() => {
     fetchUserStats().then(setUsageStats);
@@ -372,7 +382,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
     if (prevSessionIdRef.current !== sessionId) {
       const previousSessionId = prevSessionIdRef.current;
 
-      // Save current state to cache BEFORE resetting (if there are messages)
+      // Fix 1: Save current state to cache BEFORE resetting (if there are messages)
+      // Use refs instead of state to avoid stale closure issues
       if (messagesRef.current.length > 0) {
         sessionCacheRef.current.set(previousSessionId, {
           messages: messagesRef.current,
@@ -382,9 +393,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
           activityTree: [...activityTreeRef.current],
           sequenceCounter: sequenceRef.current,
           seenIds: new Set(seenToolUseIds.current),
-          streaming: streaming,
-          backgroundProcessing: backgroundProcessing,
-          thinking: thinking,
+          streaming: streamingRef.current,
+          backgroundProcessing: backgroundProcessingRef.current,
+          thinking: thinkingRef.current,
           contextTokens: contextTokens,
         });
       }
@@ -420,7 +431,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setSignals({ status: null, plan: null });
       setContextTokens(null);
     }
-  }, [sessionId, streaming, backgroundProcessing, thinking]);
+  }, [sessionId]);
 
   useEffect(() => {
     if (!token) return;
@@ -576,7 +587,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
                     !completedIds.has(e.tool_use_id!)
                   );
                 if (lastRunning) {
-                  setCurrentToolDebounced(lastRunning);
+                  // Fix 3: Use direct setCurrentTool instead of debounced during restore
+                  setCurrentTool(lastRunning);
+                  // Fix 2: Set streaming=true when running tools detected during restore
+                  setStreaming(true);
                 }
               }
             }
@@ -798,6 +812,35 @@ export function useTabSocket(token: string | null, sessionId: string) {
           }
         }, 100);
       }
+
+      if (!msgId && data.content) {
+        // Tab switch recovery: response_complete arrived but no streaming message exists
+        // Create a finalized assistant message with the full content
+        const recoveryId = `recovery_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+        setMessages((prev) => {
+          // Check if last message already has this content (avoid duplicates)
+          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === data.content) {
+            return prev;
+          }
+          // Check if last assistant message is streaming and incomplete - update it
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+            return prev.map((m) =>
+              m.id === lastMsg.id ? { ...m, content: data.content, streaming: false } : m
+            );
+          }
+          return [
+            ...prev,
+            {
+              id: recoveryId,
+              content: data.content,
+              role: 'assistant' as const,
+              timestamp: Date.now(),
+              streaming: false,
+            },
+          ];
+        });
+      }
     });
 
     newSocket.on('tool_event', (event: ToolEvent) => {
@@ -999,8 +1042,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
           setContextTokens(cachedSession.contextTokens);
           sessionIsActive = cachedSession.streaming || cachedSession.backgroundProcessing;
 
-          // Delete cache entry after restoring (data is now in current state)
-          sessionCacheRef.current.delete(sessionId);
+          // Fix 4: Cache deletion moved to finally block (after restore completes)
         } else {
           // No cache entry, restore messages from DB
           const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
@@ -1120,7 +1162,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
                   !completedIds.has(e.tool_use_id!)
                 );
               if (lastRunning) {
-                setCurrentToolDebounced(lastRunning);
+                // Fix 3: Use direct setCurrentTool instead of debounced during restore
+                setCurrentTool(lastRunning);
+                // Fix 2: Set streaming=true when running tools detected during restore
+                setStreaming(true);
               }
             }
           }
@@ -1128,6 +1173,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
       } catch (err) {
       } finally {
         setIsRestoringSession(false);
+        // Fix 4: Delete cache entry after restore completes
+        sessionCacheRef.current.delete(sessionId);
       }
     };
 
