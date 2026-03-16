@@ -406,10 +406,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       const restoreAfterReconnect = async () => {
         try {
+          let sessionIsActive = false;
           const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
           if (historyRes.ok) {
             const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
-            const sessionIsActive = isStreaming || streamActiveRef.current;
+            sessionIsActive = isStreaming || streamActiveRef.current;
 
             if (dbMessages && dbMessages.length > 0) {
               const restored: Message[] = dbMessages.map((m: any) => ({
@@ -481,6 +482,29 @@ export function useTabSocket(token: string | null, sessionId: string) {
               toolEvents.forEach(e => {
                 if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
               });
+
+              // Restore currentTool from any still-running tool/agent
+              if (sessionIsActive) {
+                const startedIds = new Set<string>();
+                const completedIds = new Set<string>();
+                for (const e of toolEvents) {
+                  if (e.type === 'tool_start' || e.type === 'agent_start') {
+                    startedIds.add(e.tool_use_id!);
+                  } else if (e.type === 'tool_complete' || e.type === 'agent_stop') {
+                    completedIds.add(e.tool_use_id!);
+                  }
+                }
+                // Find the last tool that started but hasn't completed
+                const lastRunning = [...toolEvents]
+                  .reverse()
+                  .find(e =>
+                    (e.type === 'tool_start' || e.type === 'agent_start') &&
+                    !completedIds.has(e.tool_use_id!)
+                  );
+                if (lastRunning) {
+                  setCurrentToolDebounced(lastRunning);
+                }
+              }
             }
           }
         } catch (err) {
@@ -719,11 +743,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
     const restoreSession = async () => {
       try {
+        let sessionIsActive = false;
         const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
         if (historyRes.ok) {
           const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
           // Use API streaming flag OR socket stream_active event (whichever arrived first)
-          const sessionIsActive = isStreaming || streamActiveRef.current;
+          sessionIsActive = isStreaming || streamActiveRef.current;
 
           if (dbMessages && dbMessages.length > 0) {
             const restored: Message[] = dbMessages.map((m: any) => ({
@@ -797,6 +822,29 @@ export function useTabSocket(token: string | null, sessionId: string) {
             toolEvents.forEach(e => {
               if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
             });
+
+            // Restore currentTool from any still-running tool/agent
+            if (sessionIsActive) {
+              const startedIds = new Set<string>();
+              const completedIds = new Set<string>();
+              for (const e of toolEvents) {
+                if (e.type === 'tool_start' || e.type === 'agent_start') {
+                  startedIds.add(e.tool_use_id!);
+                } else if (e.type === 'tool_complete' || e.type === 'agent_stop') {
+                  completedIds.add(e.tool_use_id!);
+                }
+              }
+              // Find the last tool that started but hasn't completed
+              const lastRunning = [...toolEvents]
+                .reverse()
+                .find(e =>
+                  (e.type === 'tool_start' || e.type === 'agent_start') &&
+                  !completedIds.has(e.tool_use_id!)
+                );
+              if (lastRunning) {
+                setCurrentToolDebounced(lastRunning);
+              }
+            }
           }
         }
       } catch (err) {
