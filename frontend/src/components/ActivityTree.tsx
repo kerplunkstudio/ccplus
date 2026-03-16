@@ -241,7 +241,13 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats }) 
 
           <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-label={activeTab === 'agents' ? 'Agent activity' : 'Tool logs'}>
             {visibleNodes.length === 0 ? (
-              <p className="activity-empty-hint">Activity appears here</p>
+              <div className="activity-empty">
+                <div className="activity-empty-pulse" />
+                <p className="activity-empty-title">Standby</p>
+                <p className="activity-empty-sub">
+                  Agents and tools appear here as Claude works
+                </p>
+              </div>
             ) : (
               <div className="tree-root">
                 {visibleNodes.map((node) => (
