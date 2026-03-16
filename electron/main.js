@@ -308,7 +308,16 @@ app.whenReady().then(async () => {
 
   // Set dock icon on macOS
   if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.icns'));
+    try {
+      const { nativeImage } = require('electron');
+      const iconPath = path.join(__dirname, 'assets', 'icon.png');
+      const icon = nativeImage.createFromPath(iconPath);
+      if (!icon.isEmpty()) {
+        app.dock.setIcon(icon);
+      }
+    } catch (err) {
+      console.warn('[App] Could not set dock icon:', err.message);
+    }
   }
 
   try {

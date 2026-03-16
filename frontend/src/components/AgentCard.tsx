@@ -64,6 +64,15 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
           <div className="agent-card-description">{node.description}</div>
         )}
 
+        {/* Summary (only when completed/failed) */}
+        {node.summary && node.status !== 'running' && (
+          <div className="agent-card-summary">
+            {node.summary.length > 150
+              ? node.summary.slice(0, 150) + '...'
+              : node.summary}
+          </div>
+        )}
+
         {/* Meta row: status + duration + child breakdown */}
         <div className="agent-card-meta-row">
           {getStatusBadge(node.status)}
