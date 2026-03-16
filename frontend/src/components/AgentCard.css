@@ -112,6 +112,16 @@
   overflow: hidden;
 }
 
+/* Summary — subtle metadata shown when agent completes */
+.agent-card-summary {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.3;
+  margin-top: var(--space-xs);
+  opacity: 0.85;
+  font-style: italic;
+}
+
 /* Meta row: horizontal chip strip */
 .agent-card-meta-row {
   display: flex;

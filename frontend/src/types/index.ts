@@ -30,6 +30,8 @@ export interface ToolEvent {
   duration_ms?: number;
   parameters?: Record<string, unknown>;
   session_id?: string;
+  transcript_path?: string | null;
+  summary?: string | null;
 }
 
 export interface AgentNode {
@@ -43,6 +45,8 @@ export interface AgentNode {
   duration_ms?: number;
   error?: string;
   sequence?: number;
+  transcript_path?: string | null;
+  summary?: string | null;
 }
 
 export interface ToolNode {

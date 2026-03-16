@@ -141,6 +141,8 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
         status: (action.event.error && !isWorkerRestart) ? 'failed' : 'completed',
         duration_ms: action.event.duration_ms,
         error: isWorkerRestart ? undefined : action.event.error,
+        transcript_path: action.event.transcript_path,
+        summary: action.event.summary,
       }));
     }
 
@@ -187,6 +189,8 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
             status: (event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
             duration_ms: event.duration_ms,
             error: isWorkerRestart ? undefined : event.error,
+            transcript_path: event.type === 'agent_stop' ? event.transcript_path : undefined,
+            summary: event.type === 'agent_stop' ? event.summary : undefined,
           }));
         }
       }
