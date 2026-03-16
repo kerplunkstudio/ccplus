@@ -246,6 +246,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
   });
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
+  const responseCompleteRef = useRef(false);
+  const syncInProgressRef = useRef(false);
   const sequenceRef = useRef(0);
   const currentSessionIdRef = useRef<string>(sessionId);
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
@@ -436,6 +438,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setToolLog([]);
       streamingContentRef.current = '';
       streamingIdRef.current = null;
+      responseCompleteRef.current = false;
       streamActiveRef.current = false;
       sequenceRef.current = 0;
       seenToolUseIds.current.clear();
@@ -486,6 +489,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         }
         streamingContentRef.current = '';
         streamingIdRef.current = null;
+        responseCompleteRef.current = false;
         setStreaming(false);
         if (clearToolTimerRef.current) {
           clearTimeout(clearToolTimerRef.current);
@@ -641,6 +645,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       // Server sent the full accumulated streaming content for this session
       // This catches us up on any text_delta events we missed during tab switch
+
+      // Set flag to prevent duplicate content from text_delta during sync processing
+      syncInProgressRef.current = true;
       streamingContentRef.current = data.content;
 
       if (!streamingIdRef.current) {
@@ -680,6 +687,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
         );
       }
 
+      // Clear sync flag after state updates are queued
+      syncInProgressRef.current = false;
+
       // Clear pending restore since we now have up-to-date content
       if (awaitingDeltaAfterRestore.current) {
         awaitingDeltaAfterRestore.current = false;
@@ -696,6 +706,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
       if (data.session_id && data.session_id !== currentSessionIdRef.current) {
         return;
       }
+
+      // Skip deltas during sync to prevent duplicate content
+      if (syncInProgressRef.current) {
+        return;
+      }
+
       // Clear the pending restore flag - we've received actual deltas
       if (awaitingDeltaAfterRestore.current) {
         awaitingDeltaAfterRestore.current = false;
@@ -708,6 +724,19 @@ export function useTabSocket(token: string | null, sessionId: string) {
       // If we receive new text, we're actively streaming again
       setStreaming(true);
       setBackgroundProcessing(false);
+
+      // If response_complete happened recently, append to finalized message
+      if (responseCompleteRef.current && streamingIdRef.current) {
+        const msgId = streamingIdRef.current;
+        streamingContentRef.current += data.text;
+        const currentContent = streamingContentRef.current;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId ? { ...m, content: currentContent, streaming: true } : m
+          )
+        );
+        return;
+      }
 
       if (!streamingIdRef.current) {
         // Check if the last message is already a streaming assistant message
@@ -779,9 +808,18 @@ export function useTabSocket(token: string | null, sessionId: string) {
           )
         );
 
-        // Reset streaming content state but keep tool state until tools complete
+        // Set flag to catch late text_deltas and keep streamingId alive briefly
+        responseCompleteRef.current = true;
+
+        // Reset streaming content state but keep streamingId for 100ms to catch late deltas
         streamingContentRef.current = '';
-        streamingIdRef.current = null;
+
+        // Clear flag and streamingId after a short delay
+        setTimeout(() => {
+          responseCompleteRef.current = false;
+          streamingIdRef.current = null;
+        }, 100);
+
         // Don't clear toolLogRef.current and toolLog here - wait for tools to complete
       }
 
@@ -963,6 +1001,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setBackgroundProcessing(false);
       streamingContentRef.current = '';
       streamingIdRef.current = null;
+      responseCompleteRef.current = false;
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;
@@ -1225,6 +1264,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         );
         streamingContentRef.current = '';
         streamingIdRef.current = null;
+        responseCompleteRef.current = false;
         setThinking('');
       }
 
@@ -1260,6 +1300,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }
     streamingContentRef.current = '';
     streamingIdRef.current = null;
+    responseCompleteRef.current = false;
     setStreaming(false);
     setBackgroundProcessing(false);
     if (clearToolTimerRef.current) {
