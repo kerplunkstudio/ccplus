@@ -122,6 +122,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     }
   }, [onLinkClick]);
 
+  // Memoize markdown rendering to prevent re-parsing when only streaming flag changes
+  const renderedMarkdown = useMemo(() => (
+    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+      {message.content ?? ''}
+    </ReactMarkdown>
+  ), [message.content, markdownComponents]);
+
   // Handle compact boundary messages (after all hooks)
   if (message.isCompactBoundary) {
     return <div className="compact-boundary">{message.content}</div>;
@@ -148,9 +155,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         )}
         {message.role === 'assistant' ? (
           <div className="message-markdown" onClick={handleContentClick}>
-            <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-              {message.content ?? ''}
-            </ReactMarkdown>
+            {renderedMarkdown}
           </div>
         ) : (
           <>
