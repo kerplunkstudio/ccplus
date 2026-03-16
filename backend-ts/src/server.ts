@@ -1084,6 +1084,16 @@ io.on("connection", (socket) => {
     connectedClients.delete(socket.id);
     if (client) {
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
+
+      // Check if there are any remaining clients in this session's room
+      const room = io.sockets.adapter.rooms.get(client.session_id);
+      const remainingClients = room ? room.size : 0;
+
+      // If no clients remain for this session, cancel the active SDK query
+      if (remainingClients === 0 && sdkSession.isActive(client.session_id)) {
+        console.log(`No clients remaining for session ${client.session_id}, cancelling active query`);
+        sdkSession.cancelQuery(client.session_id);
+      }
     }
   });
 });

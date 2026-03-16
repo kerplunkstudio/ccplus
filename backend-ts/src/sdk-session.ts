@@ -191,12 +191,10 @@ When the user requests a slash command (e.g., "Run the /animate slash command"),
 When clarification is needed, use the AskUserQuestion tool. The UI renders these as interactive cards. Use it instead of listing options as text.
 
 ## Observability Tools
-cc+ provides custom tools for reporting your progress to the UI:
+cc+ provides a custom tool for reporting your progress to the UI:
 - **emit_status**: Report phase transitions (planning, implementing, testing, reviewing, debugging, researching). Call when you begin a new phase.
-- **emit_plan**: Share your work plan as a list of steps. Call before starting multi-step work.
-- **emit_progress**: Update individual step status (active/done/skipped). Call as you complete steps.
 
-These tools are lightweight and have no side effects. Use them to keep the user informed during longer tasks.
+This tool is lightweight and has no side effects. Use it to keep the user informed during longer tasks.
 
 ## When to Delegate
 Consider spawning a subagent (Agent tool, typically with subagent_type "code_agent") when:
@@ -586,6 +584,9 @@ export function submitQuery(
     return;
   }
 
+  // Clear last completed response when starting a new query
+  session.lastCompletedResponse = null;
+
   session.callbacks = callbacks;
   session.cancelRequested = false;
 
@@ -671,12 +672,7 @@ export function getStreamingContent(sessionId: string): string {
 export function getLastCompletedResponse(sessionId: string): Record<string, unknown> | null {
   const session = sessions.get(sessionId);
   if (!session) return null;
-  const response = session.lastCompletedResponse;
-  // Clear after retrieval (one-time recovery)
-  if (response) {
-    session.lastCompletedResponse = null;
-  }
-  return response;
+  return session.lastCompletedResponse;
 }
 
 // ---- MCP Signal Server ----
@@ -696,33 +692,6 @@ function buildSignalServer(sessionId: string, callbacks: SessionCallbacks) {
         async (args) => {
           callbacks.onSignal?.({ type: "status", data: args });
           return { content: [{ type: "text" as const, text: "Status reported." }] };
-        },
-      ),
-      tool(
-        "emit_plan",
-        "Report a structured work plan to the cc+ UI. Call this before starting multi-step work.",
-        {
-          steps: z.array(z.object({
-            label: z.string(),
-            status: z.enum(["pending", "active", "done", "skipped"]).optional(),
-          })),
-        },
-        async (args) => {
-          callbacks.onSignal?.({ type: "plan", data: args });
-          return { content: [{ type: "text" as const, text: "Plan reported." }] };
-        },
-      ),
-      tool(
-        "emit_progress",
-        "Update a specific step in your work plan in the cc+ UI. Call this as you complete steps.",
-        {
-          stepIndex: z.number().int().min(0),
-          status: z.enum(["active", "done", "skipped"]),
-          detail: z.string().optional(),
-        },
-        async (args) => {
-          callbacks.onSignal?.({ type: "progress", data: args });
-          return { content: [{ type: "text" as const, text: "Progress updated." }] };
         },
       ),
     ],
