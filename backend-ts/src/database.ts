@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS tool_usage (
     parent_agent_id TEXT,
     agent_type TEXT,
     input_tokens INTEGER,
-    output_tokens INTEGER
+    output_tokens INTEGER,
+    description TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tool_usage_session
     ON tool_usage(session_id, timestamp);
@@ -105,6 +106,13 @@ CREATE TABLE IF NOT EXISTS session_context (
     model TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+`,
+  },
+  {
+    version: 2,
+    sql: `
+-- Add description column for agent descriptions
+ALTER TABLE tool_usage ADD COLUMN description TEXT;
 `,
   },
 ];
@@ -261,6 +269,7 @@ export function recordToolEvent(
   parameters?: string | Record<string, unknown> | null,
   inputTokens?: number | null,
   outputTokens?: number | null,
+  description?: string | null,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -269,8 +278,8 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, description)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, toolName, toolUseId,
@@ -278,6 +287,7 @@ export function recordToolEvent(
     success === null || success === undefined ? null : (success ? 1 : 0),
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
+    description ?? null,
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -548,8 +558,8 @@ export function duplicateSession(sourceSessionId: string, newSessionId: string, 
 
   // Copy tool_usage (update session_id, keep parent relationships intact)
   const toolResult = d.prepare(`
-    INSERT INTO tool_usage (timestamp, session_id, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens)
-    SELECT timestamp, ?, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens
+    INSERT INTO tool_usage (timestamp, session_id, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description)
+    SELECT timestamp, ?, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description
     FROM tool_usage WHERE session_id = ? ORDER BY id
   `).run(newSessionId, sourceSessionId);
 

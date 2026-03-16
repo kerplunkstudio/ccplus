@@ -7,6 +7,7 @@ import { z } from "zod";
 import * as config from "./config.js";
 import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
+import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 
 // ---- Skills discovery (cached) ----
 
@@ -356,6 +357,10 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
 
+    const agentDescription = isAgent
+      ? ((toolParams.description as string) ?? ((toolParams.prompt as string) ?? "").slice(0, 100))
+      : undefined;
+
     if (isAgent) {
       pendingAgentToolUseIds.push(actualToolUseId);
       const event = {
@@ -364,7 +369,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         tool_use_id: actualToolUseId,
         parent_agent_id: parentId ?? null,
         agent_type: (toolParams.subagent_type as string) ?? "agent",
-        description: (toolParams.description as string) ?? ((toolParams.prompt as string) ?? "").slice(0, 100),
+        description: agentDescription,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
       };
@@ -394,6 +399,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         null,
         null,
         isAgent ? undefined : JSON.stringify(safeParams(toolParams)),
+        null,
+        null,
+        agentDescription,
       );
     } catch (e) {
       console.error("Database write failed (preToolUse):", e);
@@ -847,6 +855,10 @@ async function streamQuery(
     // Build signal server for progress reporting
     const signalServer = buildSignalServer(sessionId, callbacks);
 
+    // Load MCP servers from user and project configs
+    const mcpServerEntries = getAllMcpServers(workspace);
+    const userMcpServers = buildSdkMcpServers(mcpServerEntries);
+
     const q = query({
       prompt: queryContent as string,
       options: {
@@ -860,6 +872,7 @@ async function streamQuery(
         plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,
         mcpServers: {
           "ccplus-signals": signalServer,
+          ...userMcpServers,
         } as any,
         resume: resumeId ?? undefined,
         systemPrompt: {
