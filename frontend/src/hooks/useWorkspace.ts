@@ -48,6 +48,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
         isStreaming: false,
         hasRunningAgent: false,
         createdAt: Date.now(),
+        type: 'chat',
       };
       const newProject: ProjectEntry = {
         path: action.path,
@@ -88,6 +89,28 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           isStreaming: false,
           hasRunningAgent: false,
           createdAt: Date.now(),
+          type: 'chat',
+        };
+        const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
+        return {
+          ...project,
+          tabs: [...project.tabs, newTab],
+          activeTabId: newTab.sessionId,
+          tabMruOrder: updatedMru,
+        };
+      });
+    }
+
+    case 'ADD_BROWSER_TAB': {
+      return updateProject(state, action.projectPath, (project) => {
+        const newTab: TabState = {
+          sessionId: action.sessionId,
+          label: action.label,
+          isStreaming: false,
+          hasRunningAgent: false,
+          createdAt: Date.now(),
+          type: 'browser',
+          url: action.url,
         };
         const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
         return {
@@ -350,6 +373,11 @@ export function useWorkspace() {
     dispatch({ type: 'SET_TAB_RUNNING', projectPath, sessionId, running });
   }, []);
 
+  const addBrowserTab = useCallback((projectPath: string, url: string, label: string) => {
+    const newSessionId = generateSessionId();
+    dispatch({ type: 'ADD_BROWSER_TAB', projectPath, sessionId: newSessionId, url, label });
+  }, []);
+
   return {
     state,
     activeProject,
@@ -358,6 +386,7 @@ export function useWorkspace() {
     removeProject,
     selectProject,
     addTab,
+    addBrowserTab,
     closeTab,
     selectTab,
     selectTabQuiet,

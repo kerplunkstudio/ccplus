@@ -9,6 +9,7 @@ import './MessageBubble.css';
 
 interface MessageBubbleProps {
   message: Message;
+  onLinkClick?: (url: string, text: string) => void;
 }
 
 const codeBlockStyle = {
@@ -18,7 +19,7 @@ const codeBlockStyle = {
   fontSize: '13px',
 };
 
-export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, onLinkClick }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewMarkdown, setPreviewMarkdown] = useState<Record<string, boolean>>({});
 
@@ -106,7 +107,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         </div>
       );
     },
-  }), [copiedId, copyToClipboard, previewMarkdown]);
+    a({ href, children, ...props }: any) {
+      const handleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        if (href && onLinkClick) {
+          onLinkClick(href, String(children));
+        }
+      };
+      return (
+        <a href={href} onClick={handleClick} {...props}>
+          {children}
+        </a>
+      );
+    },
+  }), [copiedId, copyToClipboard, previewMarkdown, onLinkClick]);
 
   // Determine ambient indicator state from tool events
   const toolState = useMemo(() => {

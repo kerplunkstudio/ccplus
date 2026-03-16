@@ -50,6 +50,15 @@
   opacity: 1;
 }
 
+.tab-item-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.tab-item.active .tab-item-icon {
+  opacity: 1;
+}
+
 .tab-item-label {
   overflow: hidden;
   text-overflow: ellipsis;

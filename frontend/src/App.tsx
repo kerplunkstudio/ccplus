@@ -8,6 +8,7 @@ import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { BrowserTab } from './components/BrowserTab';
 import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
@@ -412,6 +413,15 @@ function AppContent({ token, loading }: AppContentProps) {
     }, 100);
   }, [activeProject, workspace, sendMessage]);
 
+  const handleOpenBrowserTab = useCallback((url: string, label: string) => {
+    if (!activeProject) return;
+
+    // Truncate label if too long
+    const truncatedLabel = label.length > 30 ? label.substring(0, 30) + '...' : label;
+
+    workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
+  }, [activeProject, workspace]);
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -425,7 +435,9 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
   const hasTabs = activeProject && activeProject.tabs.length > 0;
   const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
-  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage;
+  const isBrowserTab = activeTab?.type === 'browser';
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab;
+  const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
 
@@ -433,6 +445,7 @@ function AppContent({ token, loading }: AppContentProps) {
     : shouldShowInsights ? 'insights'
     : shouldShowProfile ? 'profile'
     : shouldShowDashboard ? 'dashboard'
+    : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
     : 'no-project';
 
@@ -483,7 +496,7 @@ function AppContent({ token, loading }: AppContentProps) {
         )}
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowWelcome) ? 'full-width' : ''}`}>
-            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' ? 'panel-chat-content--centered' : ''}`}>
+            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
                   onSelectPrompt={handleWelcomePrompt}
@@ -501,6 +514,8 @@ function AppContent({ token, loading }: AppContentProps) {
                     onNewSession={handleNewTab}
                     onLoadSession={handleLoadSession}
                   />
+                ) : shouldShowBrowserTab && activeTab?.url ? (
+                  <BrowserTab url={activeTab.url} />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel
                     messages={messages}
@@ -524,6 +539,7 @@ function AppContent({ token, loading }: AppContentProps) {
                     onRespondToQuestion={respondToQuestion}
                     isRestoringSession={isRestoringSession}
                     onSendToNewSession={handleSendToNewSession}
+                    onOpenBrowserTab={handleOpenBrowserTab}
                   />
                 ) : null
               ) : (
