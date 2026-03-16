@@ -107,20 +107,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         </div>
       );
     },
-    a({ href, children, ...props }: any) {
-      const handleClick = (e: React.MouseEvent) => {
+  }), [copiedId, copyToClipboard, previewMarkdown]);
+
+  // Intercept link clicks via event delegation (more reliable than react-markdown component override)
+  const handleContentClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest('a');
+    if (anchor && onLinkClick) {
+      const href = anchor.getAttribute('href');
+      if (href) {
         e.preventDefault();
-        if (href && onLinkClick) {
-          onLinkClick(href, String(children));
-        }
-      };
-      return (
-        <a href={href} onClick={handleClick} {...props}>
-          {children}
-        </a>
-      );
-    },
-  }), [copiedId, copyToClipboard, previewMarkdown, onLinkClick]);
+        e.stopPropagation();
+        onLinkClick(href, anchor.textContent || href);
+      }
+    }
+  }, [onLinkClick]);
 
   // Determine ambient indicator state from tool events
   const toolState = useMemo(() => {
@@ -163,14 +164,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
           </div>
         )}
         {message.role === 'assistant' ? (
-          <div className="message-markdown">
+          <div className="message-markdown" onClick={handleContentClick}>
             <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
               {message.content ?? ''}
             </ReactMarkdown>
           </div>
         ) : (
           <>
-            <div className="message-text">
+            <div className="message-text" onClick={handleContentClick}>
               <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
                 {message.content || ''}
               </ReactMarkdown>
