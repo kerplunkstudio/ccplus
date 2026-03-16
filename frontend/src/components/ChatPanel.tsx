@@ -20,40 +20,6 @@ import {
 } from '../utils/slashCommands';
 import './ChatPanel.css';
 
-/**
- * Derive a status label from the most recent tool activity.
- * Falls back to "Thinking..." when no tools have run yet.
- */
-function deriveStreamingStatus(toolLog: ToolEvent[], currentTool: ToolEvent | null | undefined): string {
-  if (currentTool) return formatToolLabelVerbose(currentTool);
-
-  // Look at the last completed tool to show what just finished
-  const lastCompleted = [...toolLog].reverse().find(
-    (t) => t.type === 'tool_complete' || t.type === 'agent_stop'
-  );
-
-  if (!lastCompleted) return 'Thinking...';
-
-  // After a tool completes, the model is deciding what to do next
-  switch (lastCompleted.tool_name) {
-    case 'Read':
-      return 'Reviewing code...';
-    case 'Grep':
-    case 'Glob':
-      return 'Processing results...';
-    case 'Bash':
-      return 'Reviewing output...';
-    case 'Edit':
-    case 'Write':
-      return 'Continuing...';
-    case 'Agent':
-    case 'Task':
-      return 'Coordinating...';
-    default:
-      return 'Thinking...';
-  }
-}
-
 const formatTimeAgo = (timestamp: string): string => {
   const diffMs = Date.now() - new Date(timestamp).getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -872,18 +838,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <div className="thinking-block">
               <div className="thinking-label">Thinking</div>
               <div className="thinking-content-text">{thinking}</div>
-            </div>
-          )}
-          {streaming && (currentTool || !messages.some((m) => m.streaming) || pendingRestore) && (
-            <div className="thinking-indicator">
-              <div className="thinking-content">
-                <span className="dot" />
-                <span className="dot" />
-                <span className="dot" />
-                <span className="thinking-text" role="status">
-                  {deriveStreamingStatus(toolLog, currentTool)}
-                </span>
-              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
