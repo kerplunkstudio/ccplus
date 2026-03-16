@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message, ToolEvent, UsageStats } from '../types';
+import { Message, ToolEvent, UsageStats, SignalState } from '../types';
+import { SignalBar } from './SignalBar';
 import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
@@ -96,6 +97,9 @@ interface ChatPanelProps {
   onSendToNewSession?: (text: string) => void;
   onOpenBrowserTab?: (url: string, label: string) => void;
   pendingRestore?: boolean;
+  signals?: SignalState;
+  promptSuggestions?: string[];
+  rateLimitState?: { active: boolean; retryAfterMs: number } | null;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -122,6 +126,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onSendToNewSession,
   onOpenBrowserTab,
   pendingRestore = false,
+  signals,
+  promptSuggestions = [],
+  rateLimitState,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -150,7 +157,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [pathSuggestions, setPathSuggestions] = useState<Array<{ name: string; path: string; isDir: boolean }>>([]);
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
-  const [inputFocused, setInputFocused] = useState(false);
 
   // Persist input drafts per session
   useEffect(() => {
@@ -803,6 +809,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               />
             </div>
           )}
+          {(streaming || backgroundProcessing) && signals && (signals.status || signals.plan) && (
+            <SignalBar signals={signals} />
+          )}
           {pendingQuestion && (
             <div className="user-question-prompt">
               {pendingQuestion.questions.map((q, qIndex) => (
@@ -886,6 +895,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {rateLimitState?.active && (
+            <div className="rate-limit-indicator">
+              Rate limited — retrying in {Math.ceil(rateLimitState.retryAfterMs / 1000)}s
+            </div>
+          )}
           {showAutocomplete && autocompleteSuggestions.length > 0 && (
             <SlashCommandAutocomplete
               suggestions={autocompleteSuggestions}
@@ -927,6 +941,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               ))}
             </div>
           )}
+          {promptSuggestions.length > 0 && !streaming && (
+            <div className="prompt-suggestions">
+              {promptSuggestions.map((suggestion, i) => (
+                <button
+                  key={i}
+                  className="prompt-suggestion-chip"
+                  onClick={() => onSendMessage(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="input-row">
             <div className="input-wrapper">
               <textarea
@@ -935,8 +962,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
                 placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
                 disabled={!connected || (streaming && !backgroundProcessing)}
                 rows={1}
@@ -993,11 +1018,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <span className="processing-text">Background agents running...</span>
             </div>
           )}
-          <div className={`input-hint-wrapper ${!streaming && !backgroundProcessing && inputFocused ? 'visible' : ''}`}>
-            <div className="input-hint">
-              <kbd className="kbd">Enter</kbd> to send · <kbd className="kbd">Shift + Enter</kbd> new line
-            </div>
-          </div>
         </div>
       </div>
     </>

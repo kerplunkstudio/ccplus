@@ -140,6 +140,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     return { isActive: hasRunning, hasError };
   }, [message.toolLog]);
 
+  // Handle compact boundary messages (after all hooks)
+  if (message.isCompactBoundary) {
+    return <div className="compact-boundary">{message.content}</div>;
+  }
+
   // Build CSS classes for animation states
   const bubbleClasses = [
     'message-bubble',

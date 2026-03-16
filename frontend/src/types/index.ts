@@ -14,6 +14,7 @@ export interface Message {
   streaming?: boolean;
   toolLog?: ToolEvent[];
   images?: ImageAttachment[];
+  isCompactBoundary?: boolean;
 }
 
 export interface ToolEvent {
@@ -54,6 +55,7 @@ export interface ToolNode {
   sequence?: number;
   parameters?: Record<string, unknown>;
   parent_agent_id: string | null;
+  elapsed_seconds?: number;
 }
 
 export type ActivityNode = AgentNode | ToolNode;
@@ -113,6 +115,32 @@ export interface PluginUninstallResult {
   success: boolean;
   plugin?: string;
   error?: string;
+}
+
+export interface SignalStatus {
+  phase: 'planning' | 'implementing' | 'testing' | 'reviewing' | 'debugging' | 'researching';
+  detail?: string;
+}
+
+export interface SignalStep {
+  label: string;
+  status?: 'pending' | 'active' | 'done' | 'skipped';
+}
+
+export interface SignalState {
+  status: SignalStatus | null;
+  plan: SignalStep[] | null;
+}
+
+export interface PromptSuggestion {
+  suggestions: string[];
+  timestamp: number;
+}
+
+export interface RateLimitState {
+  active: boolean;
+  retryAfterMs: number;
+  rateLimitedAt: string;
 }
 
 export * from './workspace';

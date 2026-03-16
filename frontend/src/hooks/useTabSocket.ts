@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats } from '../types';
+import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats, SignalState, SignalStep } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
@@ -49,7 +49,8 @@ type TreeAction =
   | { type: 'AGENT_STOP'; event: ToolEvent }
   | { type: 'CLEAR' }
   | { type: 'LOAD_HISTORY'; events: ToolEvent[] }
-  | { type: 'MARK_ALL_STOPPED' };
+  | { type: 'MARK_ALL_STOPPED' }
+  | { type: 'TOOL_PROGRESS'; toolUseId: string; elapsedSeconds: number };
 
 function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
   return nodes.map((node) => {
@@ -198,6 +199,13 @@ function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] 
     case 'MARK_ALL_STOPPED':
       return markRunningAsStopped(state);
 
+    case 'TOOL_PROGRESS': {
+      return findAndUpdate(state, action.toolUseId, (node) => ({
+        ...node,
+        elapsed_seconds: action.elapsedSeconds,
+      }));
+    }
+
     default:
       return state;
   }
@@ -233,6 +241,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingDeltaAfterRestore = useRef(false);
   const [pendingRestore, setPendingRestore] = useState(false);
+  const [signals, setSignals] = useState<SignalState>({ status: null, plan: null });
+  const [promptSuggestions, setPromptSuggestions] = useState<string[]>([]);
+  const [rateLimitState, setRateLimitState] = useState<{ active: boolean; retryAfterMs: number } | null>(null);
 
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
@@ -356,6 +367,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       awaitingDeltaAfterRestore.current = false;
       setPendingRestore(false);
+      setSignals({ status: null, plan: null });
     }
   }, [sessionId]);
 
@@ -627,9 +639,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
         awaitingDeltaAfterRestore.current = false;
         setPendingRestore(false);
 
-        // Clear tool log only on final completion
+        // Clear tool log and signals only on final completion
         toolLogRef.current = [];
         setToolLog([]);
+        setSignals({ status: null, plan: null });
+        // Don't clear prompt suggestions on final completion - they're meant to be used after
       } else {
         // Intermediate completion: main response is done, but check for background agents
         setStreaming(false);
@@ -733,6 +747,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       setCurrentTool(null);
       setPendingQuestion(null);
+      setSignals({ status: null, plan: null });
     });
 
     newSocket.on('user_question', (data: { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }>; tool_use_id: string }) => {
@@ -740,6 +755,70 @@ export function useTabSocket(token: string | null, sessionId: string) {
         questions: data.questions,
         toolUseId: data.tool_use_id,
       });
+    });
+
+    newSocket.on('signal', (signal: { type: string; data: Record<string, unknown> }) => {
+      switch (signal.type) {
+        case 'status':
+          setSignals(prev => ({
+            ...prev,
+            status: {
+              phase: signal.data.phase as SignalState['status'] extends null ? never : NonNullable<SignalState['status']>['phase'],
+              detail: signal.data.detail as string | undefined,
+            },
+          }));
+          break;
+        case 'plan':
+          setSignals(prev => ({
+            ...prev,
+            plan: (signal.data.steps as Array<{ label: string; status?: string }>).map(s => ({
+              label: s.label,
+              status: (s.status || 'pending') as SignalStep['status'],
+            })),
+          }));
+          break;
+        case 'progress': {
+          const stepIndex = signal.data.stepIndex as number;
+          const status = signal.data.status as NonNullable<SignalStep['status']>;
+          setSignals(prev => {
+            if (!prev.plan) return prev;
+            const updatedPlan = prev.plan.map((step, i) =>
+              i === stepIndex ? { ...step, status } : step
+            );
+            return { ...prev, plan: updatedPlan };
+          });
+          break;
+        }
+      }
+    });
+
+    newSocket.on('tool_progress', (data: { tool_use_id: string; elapsed_seconds: number }) => {
+      // Update the activity tree node with elapsed time
+      dispatchTree({ type: 'TOOL_PROGRESS', toolUseId: data.tool_use_id, elapsedSeconds: data.elapsed_seconds });
+    });
+
+    newSocket.on('rate_limit', (data: { retryAfterMs: number; rateLimitedAt: string }) => {
+      setRateLimitState({ active: true, retryAfterMs: data.retryAfterMs });
+      // Auto-clear rate limit state after the retry period
+      setTimeout(() => {
+        setRateLimitState(null);
+      }, data.retryAfterMs);
+    });
+
+    newSocket.on('prompt_suggestions', (data: { suggestions: string[] }) => {
+      setPromptSuggestions(data.suggestions);
+    });
+
+    newSocket.on('compact_boundary', () => {
+      // Emit a system-level notification that context was compacted
+      // We'll show this as a subtle divider in the chat
+      setMessages(prev => [...prev, {
+        id: `compact_${Date.now()}`,
+        content: '↻ Context compacted',
+        role: 'assistant' as const,
+        timestamp: Date.now(),
+        isCompactBoundary: true,
+      }]);
     });
 
     setSocket(newSocket);
@@ -885,6 +964,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
     (content: string, workspace?: string, model?: string, imageIds?: string[]) => {
       if (!socket || !connected) return;
 
+      // Clear prompt suggestions when sending a new message
+      setPromptSuggestions([]);
+
       // If background processing, cancel first
       if (backgroundProcessing) {
         socket.emit('cancel');
@@ -917,6 +999,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(true);
       toolLogRef.current = [];
       setToolLog([]);
+      setSignals({ status: null, plan: null });
       socket.emit('message', { content, workspace, model, image_ids: imageIds });
     },
     [socket, connected, backgroundProcessing]
@@ -946,6 +1029,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }
     setCurrentTool(null);
     setPendingQuestion(null);
+    setSignals({ status: null, plan: null });
   }, [socket, connected]);
 
   const respondToQuestion = useCallback(
@@ -973,6 +1057,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
     respondToQuestion,
     isRestoringSession,
     pendingRestore,
+    signals,
+    promptSuggestions,
+    rateLimitState,
   };
 }
 
