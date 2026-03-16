@@ -173,7 +173,15 @@ function createWindow() {
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:'];
+    try {
+      const parsedUrl = new URL(url);
+      if (SAFE_PROTOCOLS.includes(parsedUrl.protocol)) {
+        shell.openExternal(url);
+      }
+    } catch (err) {
+      console.warn('[Security] Blocked invalid URL:', url);
+    }
     return { action: 'deny' };
   });
 
@@ -352,5 +360,15 @@ ipcMain.handle('get-server-url', () => {
 });
 
 ipcMain.handle('open-external', async (event, url) => {
-  await shell.openExternal(url);
+  const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:'];
+  try {
+    const parsedUrl = new URL(url);
+    if (SAFE_PROTOCOLS.includes(parsedUrl.protocol)) {
+      await shell.openExternal(url);
+    } else {
+      console.warn('[Security] Blocked unsafe protocol:', parsedUrl.protocol);
+    }
+  } catch (err) {
+    console.warn('[Security] Blocked invalid URL:', url);
+  }
 });

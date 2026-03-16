@@ -49,16 +49,16 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Hi there!')).toBeInTheDocument();
   });
 
-  it('shows streaming cursor for streaming messages', () => {
+  it('adds streaming class for streaming messages', () => {
     const { container } = render(<MessageBubble message={streamingMessage} />);
-    const cursor = container.querySelector('.streaming-cursor');
-    expect(cursor).toBeInTheDocument();
+    const bubble = container.querySelector('.message-bubble');
+    expect(bubble).toHaveClass('streaming');
   });
 
-  it('does not show streaming cursor for non-streaming messages', () => {
+  it('does not add streaming class for non-streaming messages', () => {
     const { container } = render(<MessageBubble message={assistantMessage} />);
-    const cursor = container.querySelector('.streaming-cursor');
-    expect(cursor).not.toBeInTheDocument();
+    const bubble = container.querySelector('.message-bubble');
+    expect(bubble).not.toHaveClass('streaming');
   });
 
   it('displays formatted time', () => {

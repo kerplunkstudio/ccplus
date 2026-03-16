@@ -14,15 +14,10 @@ import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { TabState } from './types';
+import { ToastProvider } from './contexts/ToastContext';
+import { ToastContainer } from './components/ToastContainer';
+import { ensureMruOrder } from './utils/tabs';
 import './App.css';
-
-const ensureMruOrder = (tabs: TabState[], mruOrder?: string[]): string[] => {
-  const tabIds = new Set(tabs.map(t => t.sessionId));
-  const valid = (mruOrder || []).filter(id => tabIds.has(id));
-  const missing = tabs.filter(t => !valid.includes(t.sessionId)).map(t => t.sessionId);
-  return [...valid, ...missing];
-};
 
 // Console easter egg
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
@@ -463,6 +458,7 @@ function AppContent({ token, loading }: AppContentProps) {
 
   return (
     <>
+      <ToastContainer />
       <UpdateBanner />
       <div
         className="app-layout"
@@ -586,7 +582,9 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <AppContent token={token} loading={loading} />
+        <ToastProvider>
+          <AppContent token={token} loading={loading} />
+        </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

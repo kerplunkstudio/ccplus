@@ -7,7 +7,7 @@ To verify the desktop app works correctly:
 ### 1. Launch the app
 
 ```bash
-./deploy.sh desktop
+./ccplus desktop
 ```
 
 Or:
@@ -21,7 +21,7 @@ Or:
 - Electron window should open (not a browser tab)
 - Window title: "cc+ Desktop"
 - UI should load at localhost:4000
-- Flask server and SDK worker start automatically in background
+- Node.js server starts automatically in background
 - Activity tree and chat interface should be functional
 
 ### 3. Verify window features
@@ -35,19 +35,17 @@ Or:
 
 - Send a test message in chat
 - Activity tree should show tool events
-- Backend processes should be visible:
+- Backend process should be visible:
   ```bash
-  ps aux | grep "python.*server.py"
-  ps aux | grep "python.*sdk_worker.py"
+  lsof -ti:4000
   ```
 
 ### 5. Clean shutdown
 
 - Close the app window
-- Verify processes stopped:
+- Verify process stopped:
   ```bash
   lsof -ti:4000  # Should return nothing
-  ls data/sdk_worker.sock  # Should not exist
   ```
 
 ## Troubleshooting
@@ -57,21 +55,20 @@ Or:
 Check logs:
 ```bash
 tail -f logs/server.log
-tail -f logs/worker.log
 ```
 
 ### Frontend not loading
 
 Build frontend first:
 ```bash
-./deploy.sh frontend
+./ccplus frontend
 ```
 
 ### Port 4000 in use
 
 Kill existing processes:
 ```bash
-./deploy.sh stop
+./ccplus stop
 ```
 
 Or use a different port:
@@ -79,11 +76,11 @@ Or use a different port:
 PORT=5000 ./ccplus-desktop
 ```
 
-### Backend processes remain after quit
+### Backend process remains after quit
 
 Manual cleanup:
 ```bash
-./deploy.sh stop
+./ccplus stop
 ```
 
 ## Building distributables
@@ -139,7 +136,7 @@ ELECTRON_IS_DEV=1 npm run electron
 
 ## Notes
 
-- Desktop app and web UI cannot run simultaneously (both use port 4000)
-- Desktop app manages its own Flask + worker instances
+- Desktop app and web UI cannot run simultaneously on the same port (both use port 4000 by default)
+- Desktop app manages its own Node.js server instance
 - Closing the desktop window stops all backend processes
 - Window state stored in `~/Library/Application Support/ccplus/config.json` (macOS)

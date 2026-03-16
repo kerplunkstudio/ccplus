@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { WelcomeScreen } from './WelcomeScreen';
+import { ToastProvider } from '../contexts/ToastContext';
 
 describe('WelcomeScreen', () => {
   const mockOnSelectPrompt = jest.fn();
@@ -13,10 +14,12 @@ describe('WelcomeScreen', () => {
 
   it('renders heading and subtitle', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
     expect(screen.getByText('Welcome to cc+')).toBeInTheDocument();
@@ -25,10 +28,12 @@ describe('WelcomeScreen', () => {
 
   it('renders feature list', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
     expect(screen.getByText('Real-time activity tree')).toBeInTheDocument();
@@ -38,10 +43,12 @@ describe('WelcomeScreen', () => {
 
   it('renders example prompts', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
     expect(screen.getByText('Build a feature')).toBeInTheDocument();
@@ -52,10 +59,12 @@ describe('WelcomeScreen', () => {
 
   it('calls onSelectPrompt when clicking an example prompt', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
     const buildFeatureButton = screen.getByText('Build a feature').closest('button');
@@ -67,28 +76,30 @@ describe('WelcomeScreen', () => {
     );
   });
 
-  it('calls onAddProject when clicking the CTA button', () => {
+  it('shows workspace browse button', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
-    const addProjectButton = screen.getByText('Add a project').closest('button');
-    fireEvent.click(addProjectButton!);
-
-    expect(mockOnAddProject).toHaveBeenCalledTimes(1);
+    const browseButton = screen.getByText('Browse for workspace...');
+    expect(browseButton).toBeInTheDocument();
   });
 
   it('renders CTA hint text', () => {
     render(
-      <WelcomeScreen
-        onSelectPrompt={mockOnSelectPrompt}
-        onAddProject={mockOnAddProject}
-      />
+      <ToastProvider>
+        <WelcomeScreen
+          onSelectPrompt={mockOnSelectPrompt}
+          onAddProject={mockOnAddProject}
+        />
+      </ToastProvider>
     );
 
-    expect(screen.getByText(/Add a project folder to start using Claude Code/i)).toBeInTheDocument();
+    expect(screen.getByText(/Select a workspace or add a project to start using Claude Code/i)).toBeInTheDocument();
   });
 });

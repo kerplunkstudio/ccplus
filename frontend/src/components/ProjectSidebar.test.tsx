@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { ProjectEntry } from '../types';
+import { ToastProvider } from '../contexts/ToastContext';
 
 // Mock WorkspaceBrowser to avoid fetch calls
 jest.mock('./WorkspaceBrowser', () => ({
@@ -63,6 +64,11 @@ const defaultProps = {
   activePage: null,
 };
 
+// Helper to wrap renders in ToastProvider
+const renderWithToast = (ui: React.ReactElement) => {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+};
+
 describe('ProjectSidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -70,13 +76,13 @@ describe('ProjectSidebar', () => {
   });
 
   it('renders project headers', () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     expect(screen.getByText('Project 1')).toBeInTheDocument();
     expect(screen.getByText('Project 2')).toBeInTheDocument();
   });
 
   it('auto-expands active project on mount', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
       expect(screen.getByText('First session')).toBeInTheDocument();
     });
@@ -89,7 +95,7 @@ describe('ProjectSidebar', () => {
       activeProjectPath: null,
       activeTabId: null,
     };
-    render(<ProjectSidebar {...props} />);
+    renderWithToast(<ProjectSidebar {...props} />);
 
     await waitFor(() => {
       const project2Header = screen.getByText('Project 2');
@@ -117,7 +123,7 @@ describe('ProjectSidebar', () => {
       activeProjectPath: null,
       activeTabId: null,
     };
-    render(<ProjectSidebar {...props} />);
+    renderWithToast(<ProjectSidebar {...props} />);
 
     await waitFor(() => {
       const project2Header = screen.getByText('Project 2');
@@ -136,7 +142,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('highlights active session', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
       const activeSession = screen.getByText('First session').closest('.sb-session-item');
       expect(activeSession).toHaveClass('active');
@@ -144,7 +150,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('calls onSelectTab when clicking a session', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
       const session = screen.getByText('Second session');
       fireEvent.click(session);
@@ -153,7 +159,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('shows activity dot for streaming sessions', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
       const streamingSession = screen.getByText('Second session').closest('.sb-session-item');
       expect(streamingSession?.querySelector('.sb-session-dot')).toBeInTheDocument();
@@ -162,7 +168,7 @@ describe('ProjectSidebar', () => {
 
   it('shows activity dot for sessions with running agents', () => {
     // Expand project 2 by clicking it
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
     const project2Header = screen.getByText('Project 2');
     fireEvent.click(project2Header);
 
@@ -171,7 +177,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('filters sessions by search query', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const searchInput = screen.getByPlaceholderText('Search sessions...');
     fireEvent.change(searchInput, { target: { value: 'First' } });
@@ -190,7 +196,7 @@ describe('ProjectSidebar', () => {
       activeProjectPath: null,
       activeTabId: null,
     };
-    render(<ProjectSidebar {...props} />);
+    renderWithToast(<ProjectSidebar {...props} />);
 
     await waitFor(() => {
       const searchInput = screen.getByPlaceholderText('Search sessions...');
@@ -206,7 +212,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('clears search query when clicking X button', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const searchInput = screen.getByPlaceholderText('Search sessions...');
     fireEvent.change(searchInput, { target: { value: 'test' } });
@@ -218,7 +224,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('calls onNewTabForProject when clicking + button', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const project1Header = screen.getByText('Project 1').closest('.sb-project-header');
     fireEvent.mouseEnter(project1Header!);
@@ -232,7 +238,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('calls onRemoveProject when clicking X on project header', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const project1Header = screen.getByText('Project 1').closest('.sb-project-header');
     fireEvent.mouseEnter(project1Header!);
@@ -245,7 +251,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('calls onCloseTab when clicking X on session', async () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     await waitFor(() => {
       const session = screen.getByText('First session').closest('.sb-session-item');
@@ -260,7 +266,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('persists expanded state to localStorage', () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const project2Header = screen.getByText('Project 2');
     fireEvent.click(project2Header);
@@ -272,12 +278,12 @@ describe('ProjectSidebar', () => {
   });
 
   it('shows empty state when no projects', () => {
-    render(<ProjectSidebar {...defaultProps} projects={[]} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} projects={[]} />);
     expect(screen.getByText('No projects open')).toBeInTheDocument();
   });
 
   it('handles resize on drag', () => {
-    render(<ProjectSidebar {...defaultProps} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     const handle = screen.getByLabelText('Resize sidebar');
     fireEvent.mouseDown(handle, { clientX: 260 });
@@ -289,7 +295,7 @@ describe('ProjectSidebar', () => {
   });
 
   it('clamps resize width between min and max', () => {
-    render(<ProjectSidebar {...defaultProps} sidebarWidth={200} />);
+    renderWithToast(<ProjectSidebar {...defaultProps} sidebarWidth={200} />);
 
     const handle = screen.getByLabelText('Resize sidebar');
     fireEvent.mouseDown(handle, { clientX: 200 });

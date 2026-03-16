@@ -66,78 +66,24 @@ const PHASE_META: Record<string, { icon: React.ReactNode; label: string }> = {
   },
 };
 
-function StepIcon({ status }: { status: string }) {
-  switch (status) {
-    case 'done':
-      return (
-        <svg className="step-icon step-icon--done" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <polyline points="3 8 7 12 13 4" />
-        </svg>
-      );
-    case 'active':
-      return <span className="step-icon step-icon--active" />;
-    case 'skipped':
-      return (
-        <svg className="step-icon step-icon--skipped" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <line x1="4" y1="8" x2="12" y2="8" />
-        </svg>
-      );
-    default:
-      return <span className="step-icon step-icon--pending" />;
-  }
-}
-
 interface SignalBarProps {
   signals: SignalState;
 }
 
 export const SignalBar: React.FC<SignalBarProps> = ({ signals }) => {
-  const { status, plan } = signals;
-  const hasContent = status !== null || plan !== null;
+  const { status } = signals;
 
-  if (!hasContent) return null;
+  if (!status) return null;
 
-  const doneCount = plan ? plan.filter(s => s.status === 'done').length : 0;
-  const totalCount = plan ? plan.length : 0;
-  const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
-
-  const phaseMeta = status ? PHASE_META[status.phase] || { label: status.phase, icon: null } : null;
+  const phaseMeta = PHASE_META[status.phase] || { label: status.phase, icon: null };
 
   return (
     <div className="signal-bar" role="status" aria-label="Agent progress">
-      {plan && totalCount > 0 && (
-        <div className="signal-progress-track">
-          <div
-            className="signal-progress-fill"
-            style={{ transform: `scaleX(${progress / 100})` }}
-          />
-        </div>
-      )}
-
-      {status && phaseMeta && (
-        <div className="signal-status">
-          <span className="signal-phase-icon">{phaseMeta.icon}</span>
-          <span className="signal-phase-label">{phaseMeta.label}</span>
-          {status.detail && <span className="signal-phase-detail">{status.detail}</span>}
-          {plan && totalCount > 0 && (
-            <span className="signal-step-count">{doneCount}/{totalCount}</span>
-          )}
-        </div>
-      )}
-
-      {plan && plan.length > 0 && (
-        <ol className="signal-steps">
-          {plan.map((step, i) => (
-            <li
-              key={i}
-              className={`signal-step signal-step--${step.status || 'pending'}`}
-            >
-              <StepIcon status={step.status || 'pending'} />
-              <span className="signal-step-label">{step.label}</span>
-            </li>
-          ))}
-        </ol>
-      )}
+      <div className="signal-status">
+        <span className="signal-phase-icon">{phaseMeta.icon}</span>
+        <span className="signal-phase-label">{phaseMeta.label}</span>
+        {status.detail && <span className="signal-phase-detail">{status.detail}</span>}
+      </div>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ProjectEntry } from '../types';
 import { WorkspaceBrowser } from './WorkspaceBrowser';
+import { useToast } from '../contexts/ToastContext';
 import './ProjectSidebar.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
@@ -64,6 +65,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<number>(0);
@@ -161,10 +163,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         handleSelectProject(data.path, data.name);
       } else {
         const errorData = await response.json();
-        alert(`Failed to clone repository: ${errorData.error || 'Unknown error'}`);
+        showToast(`Failed to clone repository: ${errorData.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert(`Failed to clone repository: ${error}`);
+      showToast(`Failed to clone repository: ${error}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -228,10 +230,10 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         setShowWorkspaceBrowser(false);
       } else {
         const errorData = await response.json();
-        alert(`Failed to set workspace: ${errorData.error || 'Unknown error'}`);
+        showToast(`Failed to set workspace: ${errorData.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert(`Failed to set workspace: ${error}`);
+      showToast(`Failed to set workspace: ${error}`, 'error');
     }
   };
 
