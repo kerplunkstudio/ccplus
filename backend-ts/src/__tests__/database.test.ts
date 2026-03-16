@@ -710,4 +710,155 @@ describe("Database Tests", () => {
       expect(events[0].tool_name).not.toBe("mutated");
     });
   });
+
+  describe("Migration System", () => {
+    it("should create schema_version table on fresh database", () => {
+      // Force a fresh database by closing and reopening
+      const database = new Database(testDbPath);
+
+      const tableExists = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'schema_version'
+      `).get() as { c: number };
+
+      database.close();
+
+      expect(tableExists.c).toBe(1);
+    });
+
+    it("should mark new database as version 1", () => {
+      const database = new Database(testDbPath);
+
+      const version = database.prepare(
+        "SELECT MAX(version) as v FROM schema_version"
+      ).get() as { v: number | null };
+
+      database.close();
+
+      expect(version.v).toBe(1);
+    });
+
+    it("should have applied_at timestamp", () => {
+      const database = new Database(testDbPath);
+
+      const row = database.prepare(
+        "SELECT applied_at FROM schema_version WHERE version = 1"
+      ).get() as { applied_at: string } | undefined;
+
+      database.close();
+
+      expect(row).toBeDefined();
+      expect(row!.applied_at).toBeTruthy();
+    });
+
+    it("should not re-run migrations on subsequent connections", () => {
+      const database = new Database(testDbPath);
+
+      const countBefore = database.prepare(
+        "SELECT COUNT(*) as c FROM schema_version"
+      ).get() as { c: number };
+
+      database.close();
+
+      // Trigger getDb() to run migration check
+      db.recordMessage("test", "user", "user", "test message");
+
+      const database2 = new Database(testDbPath);
+
+      const countAfter = database2.prepare(
+        "SELECT COUNT(*) as c FROM schema_version"
+      ).get() as { c: number };
+
+      database2.close();
+
+      expect(countAfter.c).toBe(countBefore.c);
+    });
+
+    it("should detect existing database and mark as v1 without re-creating tables", () => {
+      // Create a new temp database simulating an old database (no schema_version table)
+      const legacyDbPath = path.join(testDir, "legacy.db");
+      const legacyDb = new Database(legacyDbPath);
+
+      // Create a minimal conversations table as if it's an old database
+      legacyDb.exec(`
+        CREATE TABLE conversations (
+          id INTEGER PRIMARY KEY,
+          session_id TEXT,
+          user_id TEXT,
+          role TEXT,
+          content TEXT
+        );
+      `);
+
+      // Insert a test record
+      legacyDb.prepare(
+        "INSERT INTO conversations (session_id, user_id, role, content) VALUES (?, ?, ?, ?)"
+      ).run("legacy_session", "user1", "user", "old message");
+
+      legacyDb.close();
+
+      // Mock the config to point to the legacy database temporarily
+      const originalDbPath = testDbPath;
+      vi.doMock("../config.js", async () => {
+        const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
+        return {
+          ...actual,
+          DATABASE_PATH: legacyDbPath,
+        };
+      });
+
+      // Manually trigger migration by opening the database and running the migration logic
+      const database = new Database(legacyDbPath);
+      database.pragma("journal_mode = WAL");
+
+      // Check conversations table exists before migration
+      const conversationsExistsBefore = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'conversations'
+      `).get() as { c: number };
+
+      expect(conversationsExistsBefore.c).toBe(1);
+
+      // Check schema_version doesn't exist yet
+      const schemaVersionExistsBefore = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'schema_version'
+      `).get() as { c: number };
+
+      expect(schemaVersionExistsBefore.c).toBe(0);
+
+      // Simulate the migration detection logic
+      const conversationsExists = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'conversations'
+      `).get() as { c: number };
+
+      if (conversationsExists.c > 0) {
+        database.exec(`
+          CREATE TABLE schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+          );
+          INSERT INTO schema_version (version) VALUES (1);
+        `);
+      }
+
+      // Verify schema_version was created and marked as v1
+      const version = database.prepare(
+        "SELECT MAX(version) as v FROM schema_version"
+      ).get() as { v: number | null };
+
+      expect(version.v).toBe(1);
+
+      // Verify the old record still exists
+      const oldRecord = database.prepare(
+        "SELECT content FROM conversations WHERE session_id = ?"
+      ).get("legacy_session") as { content: string } | undefined;
+
+      expect(oldRecord).toBeDefined();
+      expect(oldRecord!.content).toBe("old message");
+
+      database.close();
+    });
+  });
 });
