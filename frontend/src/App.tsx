@@ -60,6 +60,7 @@ function AppContent({ token, loading }: AppContentProps) {
     cancelQuery,
     pendingQuestion,
     respondToQuestion,
+    duplicateSession,
     isRestoringSession,
     pendingRestore,
     signals,
@@ -427,6 +428,13 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
   }, [activeProject, workspace]);
 
+  const handleDuplicateTab = useCallback((sessionId: string) => {
+    if (!activeProject) return;
+    const newSessionId = workspace.duplicateTab(activeProject.path, sessionId);
+    // Tell backend to copy conversation/tool data
+    duplicateSession(sessionId, newSessionId);
+  }, [workspace, activeProject, duplicateSession]);
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -499,6 +507,7 @@ function AppContent({ token, loading }: AppContentProps) {
             onCloseTab={handleCloseTabInActiveProject}
             onReopenTab={workspace.reopenTab}
             onCloseOtherTabs={(sessionId) => workspace.closeOtherTabs(activeProject.path, sessionId)}
+            onDuplicateTab={handleDuplicateTab}
             hasClosedTabs={workspace.hasClosedTabs}
           />
         )}

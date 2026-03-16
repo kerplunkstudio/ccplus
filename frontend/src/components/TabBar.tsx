@@ -10,6 +10,7 @@ interface TabBarProps {
   onCloseTab: (sessionId: string) => void;
   onReopenTab: () => void;
   onCloseOtherTabs: (sessionId: string) => void;
+  onDuplicateTab: (sessionId: string) => void;
   hasClosedTabs: boolean;
 }
 
@@ -28,6 +29,7 @@ const TabBar: React.FC<TabBarProps> = ({
   onCloseTab,
   onReopenTab,
   onCloseOtherTabs,
+  onDuplicateTab,
   hasClosedTabs,
 }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -73,6 +75,11 @@ const TabBar: React.FC<TabBarProps> = ({
 
   const handleMenuCloseOthers = () => {
     onCloseOtherTabs(contextMenu.sessionId);
+    closeContextMenu();
+  };
+
+  const handleMenuDuplicateTab = () => {
+    onDuplicateTab(contextMenu.sessionId);
     closeContextMenu();
   };
 
@@ -184,6 +191,12 @@ const TabBar: React.FC<TabBarProps> = ({
             top: `${contextMenu.y}px`,
           }}
         >
+          <button
+            className="tab-context-menu-item"
+            onClick={handleMenuDuplicateTab}
+          >
+            Duplicate Tab
+          </button>
           <button
             className="tab-context-menu-item"
             onClick={handleMenuCloseTab}

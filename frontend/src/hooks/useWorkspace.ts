@@ -472,6 +472,20 @@ export function useWorkspace() {
     });
   }, []);
 
+  const duplicateTab = useCallback((projectPath: string, sourceSessionId: string): string => {
+    const newSessionId = generateSessionId();
+    dispatch({ type: 'ADD_TAB', projectPath, sessionId: newSessionId });
+
+    // Copy label from source tab
+    const project = state.projects.find((p) => p.path === projectPath);
+    const sourceTab = project?.tabs.find((t) => t.sessionId === sourceSessionId);
+    if (sourceTab && sourceTab.label !== 'New session') {
+      dispatch({ type: 'UPDATE_TAB_LABEL', projectPath, sessionId: newSessionId, label: `${sourceTab.label} (copy)` });
+    }
+
+    return newSessionId;
+  }, [state.projects]);
+
   return {
     state,
     activeProject,
@@ -484,6 +498,7 @@ export function useWorkspace() {
     closeTab,
     closeOtherTabs,
     reopenTab,
+    duplicateTab,
     hasClosedTabs,
     selectTab,
     selectTabQuiet,
