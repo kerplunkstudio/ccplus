@@ -130,7 +130,19 @@ server_running() {
         local pid
         pid=$(cat "$SERVER_PID_FILE" 2>/dev/null)
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            return 0
+            # Verify it's actually a node process running server.js
+            local process_cmd
+            process_cmd=$(ps -p "$pid" -o command= 2>/dev/null || echo "")
+            if echo "$process_cmd" | grep -q "node.*server\.js"; then
+                return 0
+            else
+                # Stale PID file - process exists but isn't our server
+                rm -f "$SERVER_PID_FILE"
+                return 1
+            fi
+        else
+            # PID doesn't exist - clean up stale file
+            rm -f "$SERVER_PID_FILE"
         fi
     fi
     return 1
@@ -212,6 +224,8 @@ kill_server() {
 
     if ! server_running && ! lsof -ti:$PORT >/dev/null 2>&1; then
         ok "Server not running"
+        # Clean up any stale PID file
+        rm -f "$SERVER_PID_FILE"
         return 0
     fi
 
@@ -241,10 +255,11 @@ kill_server() {
                 kill -9 "$pid" 2>/dev/null || true
                 sleep 1
             fi
-
-            rm -f "$SERVER_PID_FILE"
         fi
     fi
+
+    # Always clean up PID file after attempting kill
+    rm -f "$SERVER_PID_FILE"
 
     # Fallback to lsof for orphaned processes
     if lsof -ti:$PORT >/dev/null 2>&1; then
