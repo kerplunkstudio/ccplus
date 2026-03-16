@@ -721,7 +721,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
       const msgId = streamingIdRef.current;
       if (msgId) {
         // Finalize the current streaming message content, but keep tool state active
-        const finalContent = data.content || streamingContentRef.current;
+        // Use client-side accumulated content first to avoid visual jumps from re-parsing
+        const finalContent = streamingContentRef.current || data.content || '';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === msgId ? { ...m, content: finalContent, streaming: false, toolLog: [...toolLogRef.current] } : m
