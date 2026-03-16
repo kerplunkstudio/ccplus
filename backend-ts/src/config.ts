@@ -1,4 +1,3 @@
-// test comment for debugging
 import { config as dotenvConfig } from "dotenv";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
