@@ -437,7 +437,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const fetchPathCompletions = async (partialPath: string) => {
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
     try {
-      const response = await fetch(`${SOCKET_URL}/api/path-complete?partial=${encodeURIComponent(partialPath)}`);
+      let url = `${SOCKET_URL}/api/path-complete?partial=${encodeURIComponent(partialPath)}`;
+      if (projectPath) {
+        url += `&project=${encodeURIComponent(projectPath)}`;
+      }
+      const response = await fetch(url);
       if (!response.ok) return;
       const data = await response.json();
       setPathSuggestions(data.entries || []);

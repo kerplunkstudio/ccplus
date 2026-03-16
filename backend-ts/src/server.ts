@@ -384,6 +384,20 @@ app.get("/api/path-complete", (req: Request, res: Response) => {
     partialPath = homedir();
   }
 
+  // Resolve ./ paths relative to project directory
+  if (partialPath.startsWith("./") || partialPath === ".") {
+    const projectDir = (req.query.project as string ?? "").trim();
+    if (projectDir) {
+      // Security: ensure project directory is within home directory
+      const homeDir = path.resolve(homedir());
+      const resolvedProject = path.resolve(projectDir);
+      if (resolvedProject.startsWith(homeDir)) {
+        // Resolve relative to project directory
+        partialPath = path.join(projectDir, partialPath.slice(partialPath === "." ? 1 : 2));
+      }
+    }
+  }
+
   // Security: ensure path is within home directory
   const homeDir = path.resolve(homedir());
   let resolvedBase: string;
