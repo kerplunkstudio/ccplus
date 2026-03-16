@@ -62,3 +62,8 @@ export const MAX_ACTIVITY_EVENTS = 200;
 
 // Server PID path (for process management)
 export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
+
+// Permission bypass (default: true in local mode, false otherwise)
+export const BYPASS_PERMISSIONS = process.env.CCPLUS_BYPASS_PERMISSIONS
+  ? process.env.CCPLUS_BYPASS_PERMISSIONS === 'true'
+  : LOCAL_MODE;

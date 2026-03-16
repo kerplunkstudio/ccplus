@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useReducer, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats, SignalState, SignalStep } from '../types';
+import { Message, ToolEvent, ActivityNode, AgentNode, ToolNode, isAgentNode, UsageStats, SignalState } from '../types';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
@@ -260,7 +260,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingDeltaAfterRestore = useRef(false);
   const [pendingRestore, setPendingRestore] = useState(false);
-  const [signals, setSignals] = useState<SignalState>({ status: null, plan: null });
+  const [signals, setSignals] = useState<SignalState>({ status: null });
   const [promptSuggestions, setPromptSuggestions] = useState<string[]>([]);
   const [rateLimitState, setRateLimitState] = useState<{ active: boolean; retryAfterMs: number } | null>(null);
   const [contextTokens, setContextTokens] = useState<number | null>(null);
@@ -428,7 +428,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       awaitingDeltaAfterRestore.current = false;
       setPendingRestore(false);
-      setSignals({ status: null, plan: null });
+      setSignals({ status: null });
       setContextTokens(null);
     }
   }, [sessionId]);
@@ -788,7 +788,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         // Clear tool log and signals only on final completion
         toolLogRef.current = [];
         setToolLog([]);
-        setSignals({ status: null, plan: null });
+        setSignals({ status: null });
         // Don't clear prompt suggestions on final completion - they're meant to be used after
 
         // Delete cache entry for this session (data is now in DB)
@@ -929,7 +929,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       setCurrentTool(null);
       setPendingQuestion(null);
-      setSignals({ status: null, plan: null });
+      setSignals({ status: null });
     });
 
     newSocket.on('user_question', (data: { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }>; tool_use_id: string }) => {
@@ -942,35 +942,13 @@ export function useTabSocket(token: string | null, sessionId: string) {
     newSocket.on('signal', (signal: { type: string; data: Record<string, unknown> }) => {
       switch (signal.type) {
         case 'status':
-          setSignals(prev => ({
-            ...prev,
+          setSignals({
             status: {
-              phase: signal.data.phase as SignalState['status'] extends null ? never : NonNullable<SignalState['status']>['phase'],
+              phase: signal.data.phase as NonNullable<SignalState['status']>['phase'],
               detail: signal.data.detail as string | undefined,
             },
-          }));
-          break;
-        case 'plan':
-          setSignals(prev => ({
-            ...prev,
-            plan: (signal.data.steps as Array<{ label: string; status?: string }>).map(s => ({
-              label: s.label,
-              status: (s.status || 'pending') as SignalStep['status'],
-            })),
-          }));
-          break;
-        case 'progress': {
-          const stepIndex = signal.data.stepIndex as number;
-          const status = signal.data.status as NonNullable<SignalStep['status']>;
-          setSignals(prev => {
-            if (!prev.plan) return prev;
-            const updatedPlan = prev.plan.map((step, i) =>
-              i === stepIndex ? { ...step, status } : step
-            );
-            return { ...prev, plan: updatedPlan };
           });
           break;
-        }
       }
     });
 
@@ -1220,7 +1198,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(true);
       toolLogRef.current = [];
       setToolLog([]);
-      setSignals({ status: null, plan: null });
+      setSignals({ status: null });
       socket.emit('message', { content, workspace, model, image_ids: imageIds });
     },
     [socket, connected, backgroundProcessing]
@@ -1250,7 +1228,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     }
     setCurrentTool(null);
     setPendingQuestion(null);
-    setSignals({ status: null, plan: null });
+    setSignals({ status: null });
   }, [socket, connected]);
 
   const respondToQuestion = useCallback(

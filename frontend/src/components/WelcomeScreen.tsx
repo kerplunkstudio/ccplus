@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WorkspaceBrowser } from './WorkspaceBrowser';
+import { useToast } from '../contexts/ToastContext';
 import './WelcomeScreen.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
@@ -41,6 +42,7 @@ export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenPro
   const [showBrowser, setShowBrowser] = useState(false);
   const [detectedProjects, setDetectedProjects] = useState<DetectedProject[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const fetchDetectedProjects = async () => {
@@ -76,10 +78,10 @@ export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenPro
         setShowBrowser(false);
       } else {
         const errorData = await response.json();
-        alert(`Failed to set workspace: ${errorData.error || 'Unknown error'}`);
+        showToast(`Failed to set workspace: ${errorData.error || 'Unknown error'}`, 'error');
       }
     } catch (error) {
-      alert(`Failed to set workspace: ${error}`);
+      showToast(`Failed to set workspace: ${error}`, 'error');
     }
   };
 

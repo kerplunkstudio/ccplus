@@ -126,14 +126,8 @@ export interface SignalStatus {
   detail?: string;
 }
 
-export interface SignalStep {
-  label: string;
-  status?: 'pending' | 'active' | 'done' | 'skipped';
-}
-
 export interface SignalState {
   status: SignalStatus | null;
-  plan: SignalStep[] | null;
 }
 
 export interface PromptSuggestion {

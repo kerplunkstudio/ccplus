@@ -5,7 +5,7 @@ Electron wrapper for the cc+ web interface, providing a native desktop app exper
 ## Features
 
 - **Standalone app**: No need to open a browser - cc+ runs in its own window
-- **Integrated backend**: Flask server and SDK worker start automatically with the app
+- **Integrated backend**: Node.js server (Express + Socket.IO) starts automatically with the app
 - **Window state persistence**: Remembers window size and position
 - **Native menus**: macOS, Linux, and Windows menu integration
 - **Dock integration**: Native app appearance in dock/taskbar
@@ -15,26 +15,24 @@ Electron wrapper for the cc+ web interface, providing a native desktop app exper
 
 The desktop app consists of:
 
-1. **Main process** (`main.js`): Manages the application lifecycle, starts backend processes, creates windows
+1. **Main process** (`main.js`): Manages the application lifecycle, starts the Node.js server, creates windows
 2. **Preload script** (`preload.js`): Provides secure IPC communication between renderer and main
-3. **Renderer process**: The React web UI loaded from the Flask server
+3. **Renderer process**: The React web UI loaded from the Express server
 
 ## How it works
 
 When you launch the desktop app:
 
 1. Electron starts the main process
-2. Main process starts the SDK worker (Python process)
-3. Main process starts the Flask server (Python process)
-4. Main process creates a browser window pointing to `http://localhost:4000`
-5. The React UI loads and connects via WebSocket
+2. Main process starts the Node.js server
+3. Main process creates a browser window pointing to `http://localhost:4000`
+4. The React UI loads and connects via WebSocket
 
 When you close the app:
 
 1. Window state is saved
-2. Flask server is stopped
-3. SDK worker is stopped
-4. Electron quits
+2. Node.js server is stopped
+3. Electron quits
 
 ## Running
 
@@ -42,7 +40,7 @@ When you close the app:
 
 ```bash
 # From project root
-./deploy.sh desktop
+./ccplus desktop
 ```
 
 Or manually:
@@ -124,18 +122,15 @@ Check logs:
 ```bash
 # Server log
 tail -f logs/server.log
-
-# Worker log
-tail -f logs/worker.log
 ```
 
-### Backend processes not stopping
+### Backend not stopping
 
-The app should automatically stop Flask and worker when quit. If they persist:
+The app should automatically stop the Node.js server when quit. If it persists:
 
 ```bash
 # From project root
-./deploy.sh stop
+./ccplus stop
 ```
 
 ### Port already in use
@@ -145,16 +140,6 @@ If port 4000 is occupied:
 ```bash
 # Set different port
 PORT=5000 npm run electron
-```
-
-### Python not found
-
-Ensure you have a virtual environment set up:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
 ```
 
 ## Packaging notes
