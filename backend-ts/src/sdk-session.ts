@@ -706,6 +706,7 @@ async function streamQuery(
   try {
     // Look up previous SDK session ID for resume
     const resumeId = database.getLastSdkSessionId(sessionId);
+    console.log(`[sdk-session] Query for ${sessionId}: resume=${resumeId ?? 'none'}, cwd=${workspace}`);
 
     // Build environment without CLAUDECODE
     const cleanEnv: Record<string, string> = {};
@@ -902,6 +903,7 @@ async function streamQuery(
         const result = message as any;
 
         session.sdkSessionId = result.session_id;
+        console.log(`[sdk-session] Result for ${sessionId}: sdk_session=${result.session_id}, resumed=${resumeId === result.session_id ? 'yes' : 'new_session'}`);
 
         // Persist SDK session ID so next query can resume
         if (assistantMsgId !== null && result.session_id) {
