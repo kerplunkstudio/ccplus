@@ -16,6 +16,7 @@ import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { findClaudeBinary } from "./utils.js";
+import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -956,6 +957,68 @@ app.get("/api/skills", (req: Request, res: Response) => {
   const projectPath = req.query.project as string | undefined;
   const skills = sdkSession.discoverSkills(projectPath);
   res.json({ skills });
+});
+
+// -- MCP Servers --
+
+app.get("/api/mcp/servers", (req: Request, res: Response) => {
+  try {
+    const projectPath = req.query.project as string | undefined;
+    const servers = getAllMcpServers(projectPath);
+    res.json({ servers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/mcp/servers", (req: Request, res: Response) => {
+  try {
+    const { name, config, scope, projectPath } = req.body;
+
+    if (!name || !config) {
+      res.status(400).json({ error: 'name and config are required' });
+      return;
+    }
+
+    if (!scope || !['user', 'project'].includes(scope)) {
+      res.status(400).json({ error: 'scope must be "user" or "project"' });
+      return;
+    }
+
+    if (scope === 'project' && !projectPath) {
+      res.status(400).json({ error: 'projectPath is required for project scope' });
+      return;
+    }
+
+    addMcpServer(name, config as McpServerConfig, scope, projectPath);
+    res.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete("/api/mcp/servers/:name", (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const { scope, projectPath } = req.query as { scope?: string; projectPath?: string };
+
+    if (!scope || !['user', 'project'].includes(scope)) {
+      res.status(400).json({ error: 'scope query param must be "user" or "project"' });
+      return;
+    }
+
+    const removed = removeMcpServer(name, scope as 'user' | 'project', projectPath);
+    if (removed) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: `Server "${name}" not found in ${scope} scope` });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
 });
 
 // =========================================================================
