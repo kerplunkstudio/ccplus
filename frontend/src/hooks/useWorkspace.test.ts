@@ -30,7 +30,7 @@ describe('useWorkspace', () => {
 
       const projectPath = '/test/project';
       const initialTabCount = result.current.state.projects[0]!.tabs.length;
-      const existingSessionId = result.current.state.projects[0]!.tabs[0].sessionId;
+      const existingSessionId = result.current.state.projects[0]!.tabs[0]!.sessionId;
 
       // Try to add a tab with the same sessionId
       act(() => {
@@ -44,7 +44,8 @@ describe('useWorkspace', () => {
       expect(result.current.state.projects[0]!.activeTabId).toBe(existingSessionId);
 
       // The sessionId should be at the front of MRU
-      expect(result.current.state.projects[0]!.tabMruOrder[0]).toBe(existingSessionId);
+      const project = result.current.state.projects[0]!;
+      expect(project.tabMruOrder?.[0]).toBe(existingSessionId);
     });
 
     it('should create new tab when ADD_TAB is called with new sessionId', () => {
@@ -86,7 +87,7 @@ describe('useWorkspace', () => {
       });
 
       const projectPath = '/test/project';
-      const firstSessionId = result.current.state.projects[0]!.tabs[0].sessionId;
+      const firstSessionId = result.current.state.projects[0]!.tabs[0]!.sessionId;
 
       // Add a second tab
       act(() => {
@@ -107,7 +108,8 @@ describe('useWorkspace', () => {
       expect(result.current.state.projects[0]!.tabs.length).toBe(3);
 
       // First session should now be at the front of MRU
-      expect(result.current.state.projects[0]!.tabMruOrder[0]).toBe(firstSessionId);
+      const project = result.current.state.projects[0]!;
+      expect(project.tabMruOrder?.[0]).toBe(firstSessionId);
 
       // And it should be active
       expect(result.current.state.projects[0]!.activeTabId).toBe(firstSessionId);

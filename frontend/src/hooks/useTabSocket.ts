@@ -426,7 +426,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     if (!token) return;
 
     const newSocket = io(SOCKET_URL, {
-      query: { token, session_id: sessionId },
+      auth: { token, session_id: sessionId },
       transports: ['polling', 'websocket'],
     });
 
@@ -604,7 +604,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
       if (!streamingIdRef.current) {
         // Create a new streaming message with the full content
-        const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const msgId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
         streamingIdRef.current = msgId;
         setStreaming(true);
         setMessages((prev) => {
@@ -679,7 +679,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
             );
           } else {
             // Create a new message for a genuinely new streaming sequence
-            const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const msgId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
             streamingContentRef.current = data.text;
             streamingIdRef.current = msgId;
             setThinking('');
@@ -813,6 +813,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           setCurrentToolDebounced(event);
+          // Ensure streaming is true when agent work begins (shows thinking bubble)
+          setStreaming(true);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
@@ -822,6 +824,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           setCurrentToolDebounced(event);
+          // Ensure streaming is true when tool work begins (shows thinking bubble)
+          setStreaming(true);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
