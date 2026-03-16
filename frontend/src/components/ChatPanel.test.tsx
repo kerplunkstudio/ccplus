@@ -3,6 +3,31 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatPanel } from './ChatPanel';
 import { Message, UsageStats } from '../types';
 
+// Mock sub-components that make fetch calls or have complex deps
+jest.mock('./NewSessionDashboard', () => ({
+  NewSessionDashboard: () => <div data-testid="new-session-dashboard">New session dashboard</div>,
+}));
+
+jest.mock('./ModelSelector', () => ({
+  ModelSelector: ({ selectedModel, onSelectModel }: any) => (
+    <select data-testid="model-selector" value={selectedModel} onChange={(e) => onSelectModel(e.target.value)}>
+      <option value="claude-sonnet-4-20250514">Sonnet</option>
+    </select>
+  ),
+}));
+
+jest.mock('./PluginButton', () => ({
+  PluginButton: () => null,
+}));
+
+jest.mock('./PluginModal', () => ({
+  PluginModal: () => null,
+}));
+
+jest.mock('../hooks/useSkills', () => ({
+  useSkills: () => ({ skills: [] }),
+}));
+
 describe('ChatPanel', () => {
   const mockUsageStats: UsageStats = {
     totalCost: 0,
@@ -22,12 +47,10 @@ describe('ChatPanel', () => {
     streaming: false,
     backgroundProcessing: false,
     sessionId: 'test_session',
-    toolLog: [],
-    selectedProject: null as string | null,
+    toolLog: [] as any[],
     selectedModel: 'claude-sonnet-4-20250514',
     usageStats: mockUsageStats,
     onSendMessage: jest.fn(),
-    onSelectProject: jest.fn(),
     onSelectModel: jest.fn(),
     onCancel: jest.fn(),
   };
@@ -38,12 +61,13 @@ describe('ChatPanel', () => {
 
   it('renders empty state when no messages', () => {
     render(<ChatPanel {...defaultProps} />);
-    expect(screen.getByText('Start a conversation')).toBeInTheDocument();
+    expect(screen.getByTestId('new-session-dashboard')).toBeInTheDocument();
   });
 
-  it('renders the header title', () => {
-    render(<ChatPanel {...defaultProps} />);
-    expect(screen.getByText('CC+')).toBeInTheDocument();
+  it('renders the connection status indicator', () => {
+    const { container } = render(<ChatPanel {...defaultProps} />);
+    const status = container.querySelector('.connection-status');
+    expect(status).toBeInTheDocument();
   });
 
   it('shows online connection status when connected', () => {
@@ -69,24 +93,24 @@ describe('ChatPanel', () => {
 
   it('calls onSendMessage when send button clicked', () => {
     render(<ChatPanel {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText('Send a message...');
+    const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
     fireEvent.change(textarea, { target: { value: 'Test message' } });
     const sendBtn = screen.getByLabelText('Send');
     fireEvent.click(sendBtn);
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, 'claude-sonnet-4-20250514');
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, undefined, undefined);
   });
 
   it('calls onSendMessage on Enter key', () => {
     render(<ChatPanel {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText('Send a message...');
+    const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
     fireEvent.change(textarea, { target: { value: 'Enter test' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test', undefined, 'claude-sonnet-4-20250514');
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test', undefined, undefined, undefined);
   });
 
   it('does not send on Shift+Enter', () => {
     render(<ChatPanel {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText('Send a message...');
+    const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
     fireEvent.change(textarea, { target: { value: 'Multiline' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
     expect(defaultProps.onSendMessage).not.toHaveBeenCalled();
@@ -113,13 +137,13 @@ describe('ChatPanel', () => {
 
   it('disables input when disconnected', () => {
     render(<ChatPanel {...defaultProps} connected={false} />);
-    const textarea = screen.getByPlaceholderText('Connecting...');
+    const textarea = screen.getByPlaceholderText('Reconnecting — hang tight...');
     expect(textarea).toBeDisabled();
   });
 
   it('clears input after sending', () => {
     render(<ChatPanel {...defaultProps} />);
-    const textarea = screen.getByPlaceholderText('Send a message...') as HTMLTextAreaElement;
+    const textarea = screen.getByPlaceholderText('Send a message or type / for commands...') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'To be cleared' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     expect(textarea.value).toBe('');
@@ -148,7 +172,7 @@ describe('ChatPanel', () => {
     fireEvent.change(textarea, { target: { value: 'New message' } });
     const sendBtn = screen.getByLabelText('Send');
     fireEvent.click(sendBtn);
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, 'claude-sonnet-4-20250514', undefined);
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, undefined, undefined);
   });
 
   it('hides background processing indicator when streaming is active', () => {
@@ -176,7 +200,7 @@ describe('ChatPanel', () => {
     expect(inputContainer).toHaveClass('drag-over');
   });
 
-  it('removes drag-over class when drag leaves input container', () => {
+  it('removes drag-over class when files are dropped', () => {
     const { container } = render(<ChatPanel {...defaultProps} />);
     const inputContainer = container.querySelector('.input-container');
 
@@ -187,12 +211,11 @@ describe('ChatPanel', () => {
 
     expect(inputContainer).toHaveClass('drag-over');
 
-    const rect = inputContainer!.getBoundingClientRect();
-    fireEvent.dragLeave(inputContainer!, {
+    // Drop event should reset drag-over state
+    fireEvent.drop(inputContainer!, {
       preventDefault: () => {},
       stopPropagation: () => {},
-      clientX: rect.left - 10,
-      clientY: rect.top - 10,
+      dataTransfer: { files: [] },
     });
 
     expect(inputContainer).not.toHaveClass('drag-over');

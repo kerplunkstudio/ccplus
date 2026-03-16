@@ -34,7 +34,7 @@ describe('TextSelectionPopup', () => {
     window.getSelection()?.removeAllRanges();
   });
 
-  it('does not render when no text is selected', () => {
+  it('renders hidden when no text is selected', () => {
     const onSendToNewSession = jest.fn();
     const { container: wrapper } = render(
       <TextSelectionPopup
@@ -43,7 +43,10 @@ describe('TextSelectionPopup', () => {
       />
     );
 
-    expect(wrapper.querySelector('.text-selection-popup')).not.toBeInTheDocument();
+    // The popup is always in the DOM but hidden via display: none
+    const popup = wrapper.querySelector('.text-selection-popup');
+    expect(popup).toBeInTheDocument();
+    expect(popup).toHaveStyle({ display: 'none' });
   });
 
   it('renders popup when text is selected', async () => {
@@ -110,7 +113,7 @@ describe('TextSelectionPopup', () => {
 
   it('hides popup when selection is cleared', async () => {
     const onSendToNewSession = jest.fn();
-    render(
+    const { container: wrapper } = render(
       <TextSelectionPopup
         onSendToNewSession={onSendToNewSession}
         containerRef={containerRef}
@@ -138,14 +141,16 @@ describe('TextSelectionPopup', () => {
       fireEvent.mouseUp(document);
 
       await waitFor(() => {
-        expect(screen.queryByText('Send to new session')).not.toBeInTheDocument();
+        // Popup is still in DOM but hidden via display: none
+        const popup = wrapper.querySelector('.text-selection-popup');
+        expect(popup).toHaveStyle({ display: 'none' });
       });
     }
   });
 
   it('does not show popup for selections outside container', async () => {
     const onSendToNewSession = jest.fn();
-    render(
+    const { container: wrapper } = render(
       <TextSelectionPopup
         onSendToNewSession={onSendToNewSession}
         containerRef={containerRef}
@@ -171,7 +176,9 @@ describe('TextSelectionPopup', () => {
       // Wait a bit to ensure popup doesn't appear
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      expect(screen.queryByText('Send to new session')).not.toBeInTheDocument();
+      // Popup should remain hidden
+      const popup = wrapper.querySelector('.text-selection-popup');
+      expect(popup).toHaveStyle({ display: 'none' });
     }
 
     document.body.removeChild(outsideElement);
