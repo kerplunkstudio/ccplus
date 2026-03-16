@@ -8,6 +8,7 @@ const { mockQuery, mockDatabase } = vi.hoisted(() => {
     recordToolEvent: vi.fn(),
     updateToolEvent: vi.fn(),
     recordMessage: vi.fn(() => ({ id: 1 })),
+    updateMessage: vi.fn(),
     getLastSdkSessionId: vi.fn(() => null),
     getImage: vi.fn(() => null),
   };
@@ -17,6 +18,13 @@ const { mockQuery, mockDatabase } = vi.hoisted(() => {
 // Mock the SDK before importing sdk-session
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: mockQuery,
+  createSdkMcpServer: vi.fn((config: any) => config),
+  tool: vi.fn((name: string, desc: string, schema: any, handler: any) => ({
+    name,
+    desc,
+    schema,
+    handler,
+  })),
 }));
 
 // Mock the database
@@ -80,6 +88,9 @@ describe("SDK Session", () => {
     });
 
     it("should track multiple active sessions", async () => {
+      // Use a long delay so both sessions stay active during the check
+      mockQuery.mockImplementation(() => createMockQuery(5000));
+
       const callbacks1 = {
         onText: vi.fn(),
         onToolEvent: vi.fn(),
@@ -106,12 +117,16 @@ describe("SDK Session", () => {
         callbacks2,
       );
 
-      // Wait for queries to start (needs time for async streamQuery to execute)
+      // Wait for both queries to start (activeQuery is set before the for-await loop)
       await new Promise((r) => setTimeout(r, 50));
 
       const active = sdkSession.getActiveSessions();
       expect(active).toContain("session-1");
       expect(active).toContain("session-2");
+
+      // Clean up the long-running sessions
+      sdkSession.disconnectSession("session-1");
+      sdkSession.disconnectSession("session-2");
     });
 
     it("should remove session from active list after disconnect", async () => {
