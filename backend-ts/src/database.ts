@@ -4,7 +4,16 @@ import * as config from "./config.js";
 
 let db: Database.Database | null = null;
 
-const SCHEMA_SQL = `
+// Migration definitions (version → SQL)
+interface Migration {
+  version: number;
+  sql: string;
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    sql: `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
@@ -96,15 +105,88 @@ CREATE TABLE IF NOT EXISTS session_context (
     model TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
-`;
+`,
+  },
+];
+
+function getCurrentSchemaVersion(database: Database.Database): number {
+  // Check if schema_version table exists
+  const tableExists = database.prepare(`
+    SELECT COUNT(*) as c FROM sqlite_master
+    WHERE type = 'table' AND name = 'schema_version'
+  `).get() as { c: number };
+
+  if (tableExists.c === 0) {
+    // Check if this is an existing database with tables already created
+    const conversationsExists = database.prepare(`
+      SELECT COUNT(*) as c FROM sqlite_master
+      WHERE type = 'table' AND name = 'conversations'
+    `).get() as { c: number };
+
+    if (conversationsExists.c > 0) {
+      // Existing database without schema_version table → mark as v1
+      database.exec(`
+        CREATE TABLE schema_version (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
+        INSERT INTO schema_version (version) VALUES (1);
+      `);
+      return 1;
+    }
+
+    // Brand new database
+    return 0;
+  }
+
+  // Schema version table exists, get current version
+  const row = database.prepare("SELECT MAX(version) as v FROM schema_version").get() as { v: number | null };
+  return row.v ?? 0;
+}
+
+function applyMigrations(database: Database.Database): void {
+  const currentVersion = getCurrentSchemaVersion(database);
+  const pendingMigrations = MIGRATIONS.filter((m) => m.version > currentVersion);
+
+  if (pendingMigrations.length === 0) {
+    return;
+  }
+
+  // Create schema_version table if it doesn't exist (for brand new databases)
+  if (currentVersion === 0) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+  }
+
+  // Apply each pending migration in a transaction
+  for (const migration of pendingMigrations) {
+    const transaction = database.transaction(() => {
+      database.exec(migration.sql);
+      database.prepare("INSERT INTO schema_version (version) VALUES (?)").run(migration.version);
+    });
+
+    transaction();
+  }
+}
 
 function getDb(): Database.Database {
   if (!db) {
     db = new Database(config.DATABASE_PATH);
     db.pragma("journal_mode = WAL");
-    db.exec(SCHEMA_SQL);
+    applyMigrations(db);
   }
   return db;
+}
+
+export function close(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
 }
 
 // --- Message operations ---
@@ -470,12 +552,30 @@ export function duplicateSession(sourceSessionId: string, newSessionId: string, 
     FROM tool_usage WHERE session_id = ? ORDER BY id
   `).run(newSessionId, sourceSessionId);
 
-  // Copy images (update session_id, keep image data)
-  const imageResult = d.prepare(`
+  // Copy images (generate new UUIDs to avoid UNIQUE constraint violations)
+  const sourceImages = d.prepare(`SELECT * FROM images WHERE session_id = ?`).all(sourceSessionId) as Array<{
+    id: string;
+    filename: string;
+    mime_type: string;
+    size: number;
+    data: Buffer;
+    uploaded_at: string;
+  }>;
+
+  let imagesCopied = 0;
+  const insertImage = d.prepare(`
     INSERT INTO images (id, filename, mime_type, size, data, uploaded_at, session_id)
-    SELECT id, filename, mime_type, size, data, uploaded_at, ?
-    FROM images WHERE session_id = ?
-  `).run(newSessionId, sourceSessionId);
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const img of sourceImages) {
+    // Generate new UUID for the duplicated image
+    const newImageId = `${img.id.split('-')[0]}-dup-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    insertImage.run(newImageId, img.filename, img.mime_type, img.size, img.data, img.uploaded_at, newSessionId);
+    imagesCopied++;
+  }
+
+  const imageResult = { changes: imagesCopied };
 
   return {
     conversations: convResult.changes,

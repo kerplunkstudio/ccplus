@@ -1205,11 +1205,34 @@ console.log(`Database: ${config.DATABASE_PATH}`);
 console.log(`Static dir: ${config.STATIC_DIR}`);
 
 writePidFile();
-process.on("SIGTERM", () => {
-  console.log("Received SIGTERM, shutting down...");
+
+function gracefulShutdown(signal: string): void {
+  console.log(`Received ${signal}, shutting down gracefully...`);
+
+  // 1. Stop accepting new connections
+  httpServer.close(() => {
+    console.log("HTTP server closed");
+  });
+
+  // 2. Close all active Socket.IO connections
+  io.close(() => {
+    console.log("Socket.IO server closed");
+  });
+
+  // 3. Close database connection
+  database.close();
+  console.log("Database closed");
+
+  // 4. Remove PID file
   removePidFile();
+
+  // 5. Exit
+  console.log("Shutdown complete");
   process.exit(0);
-});
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("exit", removePidFile);
 
 httpServer.listen(config.PORT, config.HOST, () => {
