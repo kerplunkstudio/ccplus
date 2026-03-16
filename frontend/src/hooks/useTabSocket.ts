@@ -247,6 +247,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const sequenceRef = useRef(0);
+  const currentSessionIdRef = useRef<string>(sessionId);
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
   const toolLogRef = useRef<ToolEvent[]>([]);
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
@@ -401,6 +402,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
 
       prevSessionIdRef.current = sessionId;
+      currentSessionIdRef.current = sessionId;
       setIsRestoringSession(true);
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
@@ -606,12 +608,20 @@ export function useTabSocket(token: string | null, sessionId: string) {
       window.dispatchEvent(new CustomEvent('ccplus_message_received'));
     });
 
-    newSocket.on('stream_active', () => {
+    newSocket.on('stream_active', (data?: { session_id?: string }) => {
+      // Guard: Ignore events from old sessions
+      if (data?.session_id && data.session_id !== currentSessionIdRef.current) {
+        return;
+      }
       streamActiveRef.current = true;
       setStreaming(true);
     });
 
-    newSocket.on('stream_content_sync', (data: { content: string }) => {
+    newSocket.on('stream_content_sync', (data: { content: string; session_id?: string }) => {
+      // Guard: Ignore events from old sessions
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) {
+        return;
+      }
       // Server sent the full accumulated streaming content for this session
       // This catches us up on any text_delta events we missed during tab switch
       streamingContentRef.current = data.content;
@@ -664,7 +674,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setThinking(prev => prev + data.text);
     });
 
-    newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
+    newSocket.on('text_delta', (data: { text: string; message_id?: string; session_id?: string }) => {
+      // Guard: Ignore events from old sessions
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) {
+        return;
+      }
       // Clear the pending restore flag - we've received actual deltas
       if (awaitingDeltaAfterRestore.current) {
         awaitingDeltaAfterRestore.current = false;
@@ -731,7 +745,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
       output_tokens?: number;
       model?: string;
       sdk_session_id?: string | null;
+      session_id?: string;
     }) => {
+      // Guard: Ignore events from old sessions
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) {
+        return;
+      }
       const msgId = streamingIdRef.current;
       if (msgId) {
         // Finalize the current streaming message content, but keep tool state active
@@ -844,6 +863,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     newSocket.on('tool_event', (event: ToolEvent) => {
+      // Guard: Ignore events from old sessions
+      if (event.session_id && event.session_id !== currentSessionIdRef.current) {
+        return;
+      }
       // Deduplicate start events to prevent duplicate tree nodes after reconnect
       if ((event.type === 'tool_start' || event.type === 'agent_start') && event.tool_use_id) {
         if (seenToolUseIds.current.has(event.tool_use_id)) {

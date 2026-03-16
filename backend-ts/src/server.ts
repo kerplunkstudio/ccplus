@@ -948,12 +948,12 @@ io.on("connection", (socket) => {
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
-    io.to(sessionId).emit("stream_active", {});
+    io.to(sessionId).emit("stream_active", { session_id: sessionId });
 
     // Send accumulated streaming content so client can catch up on missed deltas
     const bufferedContent = sdkSession.getStreamingContent(sessionId);
     if (bufferedContent) {
-      io.to(sessionId).emit("stream_content_sync", { content: bufferedContent });
+      io.to(sessionId).emit("stream_content_sync", { content: bufferedContent, session_id: sessionId });
     }
 
     const pq = sdkSession.getPendingQuestion(sessionId);
@@ -975,6 +975,7 @@ io.on("connection", (socket) => {
         model: missedResponse.model,
         sdk_session_id: missedResponse.sdk_session_id,
         content: missedResponse.text,
+        session_id: sessionId,
       });
     }
   }
@@ -1103,10 +1104,10 @@ io.on("connection", (socket) => {
 function buildSocketCallbacks(sessionId: string, userId: string) {
   return {
     onText: (text: string) => {
-      io.to(sessionId).emit("text_delta", { text });
+      io.to(sessionId).emit("text_delta", { text, session_id: sessionId });
     },
     onToolEvent: (event: Record<string, unknown>) => {
-      io.to(sessionId).emit("tool_event", event);
+      io.to(sessionId).emit("tool_event", { ...event, session_id: sessionId });
       // Count lines of code
       if (event.type === "tool_complete" && (event.tool_name === "Write" || event.tool_name === "Edit")) {
         const params = event.parameters as Record<string, unknown> | undefined;
@@ -1155,6 +1156,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         model: result.model,
         sdk_session_id: result.sdk_session_id,
         content: result.text,
+        session_id: sessionId,
       });
     },
     onError: (message: string) => {
