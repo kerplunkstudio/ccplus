@@ -261,6 +261,10 @@ interface ActiveSession {
 
 const sessions = new Map<string, ActiveSession>();
 
+// Maximum buffer size for streaming content (2MB)
+// This buffer is only used for reconnection sync, so trimming from the front is acceptable
+const MAX_STREAMING_BUFFER = 2 * 1024 * 1024;
+
 function getOrCreateSession(sessionId: string, workspace: string, model?: string): ActiveSession {
   const existing = sessions.get(sessionId);
   if (existing) {
@@ -876,6 +880,7 @@ async function streamQuery(
       // Check cancellation
       if (session.cancelRequested) {
         await q.interrupt();
+        try { q.close(); } catch { /* already closed */ }
         break;
       }
 
@@ -1017,6 +1022,11 @@ async function streamQuery(
     callbacks.onError(String(err));
     sessions.delete(sessionId);
   } finally {
+    // Close query to release resources
+    if (session.activeQuery) {
+      try { session.activeQuery.close(); } catch { /* already closed */ }
+    }
+
     // Store last completed response for tab-switch recovery
     session.lastCompletedResponse = {
       text: resultText.join(""),
