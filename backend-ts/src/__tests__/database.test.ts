@@ -30,6 +30,7 @@ describe("Database Tests", () => {
       database.exec("DELETE FROM images");
       database.exec("DELETE FROM user_stats");
       database.exec("DELETE FROM workspace_state");
+      database.exec("DELETE FROM session_context");
     } catch {
       // Tables might not exist yet, that's okay
     }
@@ -615,6 +616,50 @@ describe("Database Tests", () => {
       const stats = db.getUserStats("user1");
 
       expect(stats.total_sessions).toBe(1);
+    });
+  });
+
+  describe("updateSessionContext", () => {
+    it("should insert new session context", () => {
+      db.updateSessionContext("sess1", 10000, "sonnet");
+
+      const context = db.getSessionContext("sess1");
+      expect(context).toBeDefined();
+      expect(context?.input_tokens).toBe(10000);
+      expect(context?.model).toBe("sonnet");
+    });
+
+    it("should update existing session context", () => {
+      db.updateSessionContext("sess1", 10000, "sonnet");
+      db.updateSessionContext("sess1", 20000, "opus");
+
+      const context = db.getSessionContext("sess1");
+      expect(context?.input_tokens).toBe(20000);
+      expect(context?.model).toBe("opus");
+    });
+
+    it("should handle null model", () => {
+      db.updateSessionContext("sess1", 5000, null);
+
+      const context = db.getSessionContext("sess1");
+      expect(context?.input_tokens).toBe(5000);
+      expect(context?.model).toBeNull();
+    });
+  });
+
+  describe("getSessionContext", () => {
+    it("should return null for non-existent session", () => {
+      const context = db.getSessionContext("nonexistent");
+      expect(context).toBeNull();
+    });
+
+    it("should return context for existing session", () => {
+      db.updateSessionContext("sess1", 15000, "haiku");
+
+      const context = db.getSessionContext("sess1");
+      expect(context).toBeDefined();
+      expect(context?.input_tokens).toBe(15000);
+      expect(context?.model).toBe("haiku");
     });
   });
 

@@ -89,6 +89,13 @@ CREATE TABLE IF NOT EXISTS workspace_state (
     state TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS session_context (
+    session_id TEXT PRIMARY KEY,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    model TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 `;
 
 function getDb(): Database.Database {
@@ -422,6 +429,26 @@ export function saveWorkspaceState(userId: string, state: Record<string, unknown
       state = excluded.state,
       updated_at = datetime('now', 'localtime')
   `).run(userId, stateJson);
+}
+
+// --- Session context ---
+
+export function updateSessionContext(sessionId: string, inputTokens: number, model: string | null): void {
+  const d = getDb();
+  d.prepare(`
+    INSERT INTO session_context (session_id, input_tokens, model, updated_at)
+    VALUES (?, ?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(session_id) DO UPDATE SET
+      input_tokens = excluded.input_tokens,
+      model = excluded.model,
+      updated_at = excluded.updated_at
+  `).run(sessionId, inputTokens, model);
+}
+
+export function getSessionContext(sessionId: string): { input_tokens: number; model: string | null } | null {
+  const d = getDb();
+  const row = d.prepare(`SELECT input_tokens, model FROM session_context WHERE session_id = ?`).get(sessionId) as { input_tokens: number; model: string | null } | undefined;
+  return row ?? null;
 }
 
 // --- Session duplication ---
