@@ -493,6 +493,9 @@ function AppContent({ token, loading }: AppContentProps) {
             onSelectTab={handleSelectTabInActiveProject}
             onNewTab={handleNewTab}
             onCloseTab={handleCloseTabInActiveProject}
+            onReopenTab={workspace.reopenTab}
+            onCloseOtherTabs={(sessionId) => workspace.closeOtherTabs(activeProject.path, sessionId)}
+            hasClosedTabs={workspace.hasClosedTabs}
           />
         )}
         <div className="panel-content">

@@ -6,6 +6,7 @@ import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
 import { AmbientIndicator } from './AmbientIndicator';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
+import { PathAutocomplete } from './PathAutocomplete';
 import { NewSessionDashboard } from './NewSessionDashboard';
 import { TextSelectionPopup } from './TextSelectionPopup';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
@@ -142,6 +143,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const userScrolledUpRef = useRef(false);
   const programmaticScrollRef = useRef(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const historyIndexRef = useRef<number>(-1);
+  const savedDraftRef = useRef<string>('');
+  const [showPathAutocomplete, setShowPathAutocomplete] = useState(false);
+  const [pathAutocompleteIndex, setPathAutocompleteIndex] = useState(0);
+  const [pathSuggestions, setPathSuggestions] = useState<Array<{ name: string; path: string; isDir: boolean }>>([]);
+  const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
 
   // Persist input drafts per session
   useEffect(() => {
@@ -319,6 +328,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInput('');
     setUploadedImages([]);
     setShowAutocomplete(false);
+    historyIndexRef.current = -1; // Reset history navigation
+    savedDraftRef.current = ''; // Clear saved draft
     userScrolledUpRef.current = false; // Reset scroll intent on new message
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -396,19 +407,84 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const autocompleteSuggestions = getAutocompleteSuggestions();
 
+  // Extract path token at cursor position
+  const extractPathToken = (text: string, cursorPos: number): { start: number; end: number; path: string } | null => {
+    // Find word boundaries around cursor
+    let start = cursorPos;
+    let end = cursorPos;
+
+    // Scan backwards to find start of path token
+    while (start > 0 && !/\s/.test(text[start - 1])) {
+      start--;
+    }
+
+    // Scan forwards to find end of path token
+    while (end < text.length && !/\s/.test(text[end])) {
+      end++;
+    }
+
+    const token = text.slice(start, end);
+
+    // Check if token looks like a path
+    if (token.startsWith('~/') || token.startsWith('/') || token.startsWith('./')) {
+      return { start, end, path: token };
+    }
+
+    return null;
+  };
+
+  // Fetch path completions
+  const fetchPathCompletions = async (partialPath: string) => {
+    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/path-complete?partial=${encodeURIComponent(partialPath)}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setPathSuggestions(data.entries || []);
+      setPathAutocompleteIndex(0);
+    } catch (error) {
+      setPathSuggestions([]);
+    }
+  };
+
   // Handle input changes for autocomplete
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setInput(newValue);
 
     const cursorPosition = e.target.selectionStart || 0;
-    const shouldShow = shouldShowAutocomplete(newValue, cursorPosition);
 
+    // Check for slash command autocomplete first (takes priority)
+    const shouldShow = shouldShowAutocomplete(newValue, cursorPosition);
     if (shouldShow && newValue.startsWith('/')) {
       setShowAutocomplete(true);
       setAutocompleteIndex(0);
+      setShowPathAutocomplete(false);
+      return;
     } else {
       setShowAutocomplete(false);
+    }
+
+    // Check for path autocomplete
+    const pathToken = extractPathToken(newValue, cursorPosition);
+    if (pathToken) {
+      setCurrentPathToken(pathToken);
+      setShowPathAutocomplete(true);
+
+      // Debounce API call
+      if (pathDebounceRef.current) {
+        clearTimeout(pathDebounceRef.current);
+      }
+      pathDebounceRef.current = setTimeout(() => {
+        fetchPathCompletions(pathToken.path);
+      }, 200);
+    } else {
+      setShowPathAutocomplete(false);
+      setPathSuggestions([]);
+      setCurrentPathToken(null);
+      if (pathDebounceRef.current) {
+        clearTimeout(pathDebounceRef.current);
+      }
     }
   };
 
@@ -419,8 +495,83 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     textareaRef.current?.focus();
   };
 
+  // Handle path autocomplete selection
+  const handlePathAutocompleteSelect = (entry: { name: string; path: string; isDir: boolean }) => {
+    if (!currentPathToken) return;
+
+    const before = input.slice(0, currentPathToken.start);
+    const after = input.slice(currentPathToken.end);
+    const newPath = entry.path;
+
+    // If directory, append / and keep autocomplete open
+    if (entry.isDir) {
+      const newInput = before + newPath + '/' + after;
+      setInput(newInput);
+
+      // Update cursor position
+      const newCursorPos = currentPathToken.start + newPath.length + 1;
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+          textareaRef.current.focus();
+        }
+      }, 0);
+
+      // Fetch next level
+      fetchPathCompletions(newPath + '/');
+      setCurrentPathToken({ start: currentPathToken.start, end: newCursorPos, path: newPath + '/' });
+    } else {
+      // File selected - insert path and close autocomplete
+      const newInput = before + newPath + ' ' + after;
+      setInput(newInput);
+      setShowPathAutocomplete(false);
+      setPathSuggestions([]);
+      setCurrentPathToken(null);
+
+      // Update cursor position
+      const newCursorPos = currentPathToken.start + newPath.length + 1;
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+          textareaRef.current.focus();
+        }
+      }, 0);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle autocomplete navigation
+    // Handle path autocomplete navigation
+    if (showPathAutocomplete && pathSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setPathAutocompleteIndex((prev) =>
+          prev < pathSuggestions.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setPathAutocompleteIndex((prev) => (prev > 0 ? prev - 1 : 0));
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const selected = pathSuggestions[pathAutocompleteIndex];
+        if (selected) {
+          handlePathAutocompleteSelect(selected);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowPathAutocomplete(false);
+        setPathSuggestions([]);
+        setCurrentPathToken(null);
+        return;
+      }
+    }
+
+    // Handle slash command autocomplete navigation
     if (showAutocomplete && autocompleteSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -445,6 +596,60 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       if (e.key === 'Escape') {
         e.preventDefault();
         setShowAutocomplete(false);
+        return;
+      }
+    }
+
+    // Handle message history navigation with Up/Down arrows
+    if (!showAutocomplete && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const cursorPosition = textarea.selectionStart || 0;
+      const isAtStart = cursorPosition === 0;
+      const isEmpty = input.trim() === '';
+
+      // Extract user messages from history
+      const userMessages = messages
+        .filter(msg => msg.role === 'user')
+        .map(msg => msg.content);
+
+      if (userMessages.length === 0) return;
+
+      // Up arrow: navigate to older messages
+      if (e.key === 'ArrowUp' && (isEmpty || isAtStart)) {
+        e.preventDefault();
+
+        // Save current draft before entering history mode (first time only)
+        if (historyIndexRef.current === -1) {
+          savedDraftRef.current = input;
+        }
+
+        // Calculate new index (start from end of array, which is most recent)
+        const newIndex = historyIndexRef.current === -1
+          ? userMessages.length - 1
+          : Math.max(0, historyIndexRef.current - 1);
+
+        historyIndexRef.current = newIndex;
+        setInput(userMessages[newIndex] || '');
+        return;
+      }
+
+      // Down arrow: navigate to newer messages
+      if (e.key === 'ArrowDown' && historyIndexRef.current !== -1) {
+        e.preventDefault();
+
+        const newIndex = historyIndexRef.current + 1;
+
+        // If past the newest message, restore the saved draft
+        if (newIndex >= userMessages.length) {
+          historyIndexRef.current = -1;
+          setInput(savedDraftRef.current);
+          savedDraftRef.current = '';
+        } else {
+          historyIndexRef.current = newIndex;
+          setInput(userMessages[newIndex] || '');
+        }
         return;
       }
     }
@@ -686,6 +891,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               inputRef={textareaRef}
             />
           )}
+          {showPathAutocomplete && pathSuggestions.length > 0 && (
+            <PathAutocomplete
+              entries={pathSuggestions}
+              selectedIndex={pathAutocompleteIndex}
+              onSelect={handlePathAutocompleteSelect}
+              onClose={() => {
+                setShowPathAutocomplete(false);
+                setPathSuggestions([]);
+                setCurrentPathToken(null);
+              }}
+              inputRef={textareaRef}
+            />
+          )}
           {uploadedImages.length > 0 && (
             <div className="uploaded-images-preview">
               {uploadedImages.map(img => (
@@ -713,6 +931,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
                 disabled={!connected || (streaming && !backgroundProcessing)}
                 rows={1}
@@ -769,11 +989,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <span className="processing-text">Background agents running...</span>
             </div>
           )}
-          {!streaming && !backgroundProcessing && (input.trim() || uploadedImages.length > 0) && (
+          <div className={`input-hint-wrapper ${!streaming && !backgroundProcessing && inputFocused ? 'visible' : ''}`}>
             <div className="input-hint">
-              <kbd className="kbd">Enter</kbd> to send, <kbd className="kbd">Shift+Enter</kbd> for new line
+              <kbd className="kbd">Enter</kbd> to send · <kbd className="kbd">Shift + Enter</kbd> new line
             </div>
-          )}
+          </div>
         </div>
       </div>
     </>

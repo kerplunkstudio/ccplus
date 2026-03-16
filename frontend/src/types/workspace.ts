@@ -28,6 +28,8 @@ export type WorkspaceAction =
   | { type: 'ADD_TAB'; projectPath: string; sessionId: string }
   | { type: 'ADD_BROWSER_TAB'; projectPath: string; sessionId: string; url: string; label: string }
   | { type: 'CLOSE_TAB'; projectPath: string; sessionId: string }
+  | { type: 'CLOSE_OTHER_TABS'; projectPath: string; sessionId: string }
+  | { type: 'REOPEN_TAB'; projectPath: string; tab: TabState; position?: number }
   | { type: 'SELECT_TAB'; projectPath: string; sessionId: string }
   | { type: 'SELECT_TAB_QUIET'; projectPath: string; sessionId: string }
   | { type: 'UPDATE_TAB_LABEL'; projectPath: string; sessionId: string; label: string }
