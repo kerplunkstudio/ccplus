@@ -1119,6 +1119,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
     [socket, connected]
   );
 
+  const duplicateSession = useCallback(
+    (sourceSessionId: string, newSessionId: string) => {
+      if (!socket || !connected) return;
+      socket.emit('duplicate_session', { sourceSessionId, newSessionId });
+    },
+    [socket, connected]
+  );
+
   return {
     connected,
     messages,
@@ -1133,6 +1141,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     cancelQuery,
     pendingQuestion,
     respondToQuestion,
+    duplicateSession,
     isRestoringSession,
     pendingRestore,
     signals,
