@@ -597,6 +597,55 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setStreaming(true);
     });
 
+    newSocket.on('stream_content_sync', (data: { content: string }) => {
+      // Server sent the full accumulated streaming content for this session
+      // This catches us up on any text_delta events we missed during tab switch
+      streamingContentRef.current = data.content;
+
+      if (!streamingIdRef.current) {
+        // Create a new streaming message with the full content
+        const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        streamingIdRef.current = msgId;
+        setStreaming(true);
+        setMessages((prev) => {
+          // Check if the last message is already a streaming assistant message
+          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+            // Update existing streaming message with full content
+            streamingIdRef.current = lastMsg.id;
+            return prev.map((m) =>
+              m.id === lastMsg.id ? { ...m, content: data.content } : m
+            );
+          }
+          // Create new message with full buffered content
+          return [
+            ...prev,
+            {
+              id: msgId,
+              content: data.content,
+              role: 'assistant' as const,
+              timestamp: Date.now(),
+              streaming: true,
+            },
+          ];
+        });
+      } else {
+        // Update existing streaming message with full content from server
+        const msgId = streamingIdRef.current;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId ? { ...m, content: data.content } : m
+          )
+        );
+      }
+
+      // Clear pending restore since we now have up-to-date content
+      if (awaitingDeltaAfterRestore.current) {
+        awaitingDeltaAfterRestore.current = false;
+        setPendingRestore(false);
+      }
+    });
+
     newSocket.on('thinking_delta', (data: { text: string }) => {
       setThinking(prev => prev + data.text);
     });

@@ -254,6 +254,7 @@ interface ActiveSession {
     resolve: (value: Record<string, unknown>) => void;
     data: Record<string, unknown>;
   } | null;
+  streamingContent: string;
 }
 
 // ---- Session Manager ----
@@ -287,6 +288,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     callbacks: null,
     cancelRequested: false,
     pendingQuestion: null,
+    streamingContent: '',
   };
   sessions.set(sessionId, session);
   return session;
@@ -635,6 +637,11 @@ export function getPendingQuestion(sessionId: string): Record<string, unknown> |
   return session?.pendingQuestion?.data ?? null;
 }
 
+export function getStreamingContent(sessionId: string): string {
+  const session = sessions.get(sessionId);
+  return session?.streamingContent ?? '';
+}
+
 // ---- MCP Signal Server ----
 
 function buildSignalServer(sessionId: string, callbacks: SessionCallbacks) {
@@ -702,6 +709,9 @@ async function streamQuery(
   const { sessionId } = session;
   const callbacks = session.callbacks;
   if (!callbacks) return;
+
+  // Reset streaming content at the start of each query
+  session.streamingContent = '';
 
   try {
     // Look up previous SDK session ID for resume
@@ -862,6 +872,7 @@ async function streamQuery(
           if (block.type === "text") {
             if (!streamEventsActive) {
               resultText.push(block.text);
+              session.streamingContent += block.text;
               callbacks.onText(block.text);
             }
             currentMessageText.push(block.text);
@@ -919,6 +930,7 @@ async function streamQuery(
         const sdkResultText = result.result as string | undefined;
         if (sdkResultText && resultText.length === 0) {
           resultText.push(sdkResultText);
+          session.streamingContent += sdkResultText;
           callbacks.onText(sdkResultText);
         }
 
@@ -943,6 +955,7 @@ async function streamQuery(
           if (delta.type === "text_delta" && delta.text) {
             streamEventsActive = true;
             resultText.push(delta.text);
+            session.streamingContent += delta.text;
             callbacks.onText(delta.text);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
@@ -989,6 +1002,7 @@ async function streamQuery(
     sessions.delete(sessionId);
   } finally {
     session.activeQuery = null;
+    session.streamingContent = '';
 
     // Always send completion so frontend cursor clears
     if (!gotResult) {
