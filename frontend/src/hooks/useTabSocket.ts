@@ -231,6 +231,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const pendingWorkerRestartErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
   const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const awaitingDeltaAfterRestore = useRef(false);
+  const [pendingRestore, setPendingRestore] = useState(false);
 
   const setCurrentToolDebounced = (tool: ToolEvent | null) => {
     if (clearToolTimerRef.current) {
@@ -352,6 +354,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
         clearTimeout(workerRestartGraceTimerRef.current);
         workerRestartGraceTimerRef.current = null;
       }
+      awaitingDeltaAfterRestore.current = false;
+      setPendingRestore(false);
     }
   }, [sessionId]);
 
@@ -427,11 +431,15 @@ export function useTabSocket(token: string | null, sessionId: string) {
                   streamingIdRef.current = lastAssistant.id;
                   streamingContentRef.current = lastAssistant.content || '';
                   setStreaming(true);
+                  awaitingDeltaAfterRestore.current = true;
+                  setPendingRestore(true);
                   setMessages(restored.map((m) =>
                     m.id === lastAssistant.id ? { ...m, streaming: true } : m
                   ));
                 } else {
                   setStreaming(true);
+                  awaitingDeltaAfterRestore.current = true;
+                  setPendingRestore(true);
                   setMessages(restored);
                 }
               } else {
@@ -528,6 +536,12 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     newSocket.on('text_delta', (data: { text: string; message_id?: string }) => {
+      // Clear the pending restore flag - we've received actual deltas
+      if (awaitingDeltaAfterRestore.current) {
+        awaitingDeltaAfterRestore.current = false;
+        setPendingRestore(false);
+      }
+
       // Clear any pending worker restart error - streaming has resumed
       clearPendingWorkerRestartError();
 
@@ -607,6 +621,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
           clearToolTimerRef.current = null;
         }
         setCurrentTool(null);
+        awaitingDeltaAfterRestore.current = false;
+        setPendingRestore(false);
 
         // Clear tool log only on final completion
         toolLogRef.current = [];
@@ -765,12 +781,16 @@ export function useTabSocket(token: string | null, sessionId: string) {
                 streamingIdRef.current = lastAssistant.id;
                 streamingContentRef.current = lastAssistant.content || '';
                 setStreaming(true);
+                awaitingDeltaAfterRestore.current = true;
+                setPendingRestore(true);
                 setMessages(restored.map((m) =>
                   m.id === lastAssistant.id ? { ...m, streaming: true } : m
                 ));
               } else {
                 // Active but no assistant message yet (still thinking)
                 setStreaming(true);
+                awaitingDeltaAfterRestore.current = true;
+                setPendingRestore(true);
                 setMessages(restored);
               }
             } else {
@@ -932,6 +952,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     pendingQuestion,
     respondToQuestion,
     isRestoringSession,
+    pendingRestore,
   };
 }
 
