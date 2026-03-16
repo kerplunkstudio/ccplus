@@ -938,15 +938,19 @@ async function streamQuery(
         // Persist to DB
         if (hasText) {
           try {
-            const dbMsg = database.recordMessage(
-              sessionId, "assistant", "assistant",
-              currentMessageText.join(""),
-            );
             if (assistantMsgId === null) {
+              // First turn: create new record
+              const dbMsg = database.recordMessage(
+                sessionId, "assistant", "assistant",
+                currentMessageText.join(""),
+              );
               assistantMsgId = dbMsg.id as number;
+            } else {
+              // Subsequent turns: update existing record with accumulated text
+              database.updateMessage(assistantMsgId, resultText.join(""));
             }
           } catch (e) {
-            console.error("Failed to record assistant message:", e);
+            console.error("Failed to record/update assistant message:", e);
           }
 
           // Signal intermediate completion
