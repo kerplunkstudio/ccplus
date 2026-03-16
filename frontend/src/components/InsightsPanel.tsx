@@ -241,7 +241,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   if (loading) {
     return (
       <div className="insights-panel">
-        <div className="insights-loading">Loading insights...</div>
+        <div className="insights-container">
+          <div className="insights-loading">Loading insights...</div>
+        </div>
       </div>
     );
   }
@@ -249,7 +251,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   if (error || !insights) {
     return (
       <div className="insights-panel">
-        <div className="insights-error">{error || 'Failed to load insights'}</div>
+        <div className="insights-container">
+          <div className="insights-error">{error || 'Failed to load insights'}</div>
+        </div>
       </div>
     );
   }
@@ -263,8 +267,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
 
   return (
     <div className="insights-panel">
-      {showingStaleData && cacheTimestamp && (
-        <div className="insights-stale-indicator">
+      <div className="insights-container">
+        {showingStaleData && cacheTimestamp && (
+          <div className="insights-stale-indicator">
           <span className="insights-stale-text">
             Showing cached data · Last updated {new Date(cacheTimestamp).toLocaleTimeString()}
           </span>
@@ -409,6 +414,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
             <div className="insights-empty">No tool data</div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

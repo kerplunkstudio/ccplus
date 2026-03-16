@@ -214,14 +214,17 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
   if (loading) {
     return (
       <div className="mcp-panel">
-        <div className="mcp-loading">Loading servers...</div>
+        <div className="mcp-container">
+          <div className="mcp-loading">Loading servers...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mcp-panel">
-      <div className="mcp-header">
+      <div className="mcp-container">
+        <div className="mcp-header">
         <h1 className="mcp-title">MCP Servers</h1>
         <button
           className={`mcp-add-btn ${showAddForm ? 'active' : ''}`}
@@ -489,6 +492,7 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 };

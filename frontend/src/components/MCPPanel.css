@@ -3,17 +3,18 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 4vw, 2.5rem);
   background: var(--bg-primary);
   animation: mcpIn 0.4s var(--ease-default);
-  gap: clamp(2.5rem, 5vw, 4rem);
 }
 
-.mcp-panel > * {
-  max-width: 1080px;
+.mcp-container {
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 4vw, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2.5rem, 5vw, 4rem);
 }
 
 @keyframes mcpIn {
@@ -521,7 +522,7 @@
 /* Responsive */
 
 @media (max-width: 900px) {
-  .mcp-panel {
+  .mcp-container {
     padding: var(--space-xl) var(--space-lg);
   }
 
