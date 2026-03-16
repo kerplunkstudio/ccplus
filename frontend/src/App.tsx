@@ -560,6 +560,7 @@ function AppContent({ token, loading }: AppContentProps) {
                     signals={signals}
                     promptSuggestions={promptSuggestions}
                     rateLimitState={rateLimitState}
+                    activityTree={activityTree}
                   />
                 ) : null
               ) : (

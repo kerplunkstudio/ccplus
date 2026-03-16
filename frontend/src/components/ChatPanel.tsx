@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message, ToolEvent, UsageStats, SignalState } from '../types';
+import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, isAgentNode } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
@@ -28,6 +28,19 @@ const formatTimeAgo = (timestamp: string): string => {
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays}d ago`;
+};
+
+const countRunningAgents = (nodes: ActivityNode[]): number => {
+  let count = 0;
+  for (const node of nodes) {
+    if (isAgentNode(node)) {
+      if (node.status === 'running') {
+        count++;
+      }
+      count += countRunningAgents(node.children);
+    }
+  }
+  return count;
 };
 
 interface ChatPanelProps {
@@ -64,6 +77,7 @@ interface ChatPanelProps {
   signals?: SignalState;
   promptSuggestions?: string[];
   rateLimitState?: { active: boolean; retryAfterMs: number } | null;
+  activityTree?: ActivityNode[];
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -92,6 +106,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   signals,
   promptSuggestions = [],
   rateLimitState,
+  activityTree = [],
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -840,7 +855,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 <span className="dot" />
                 <span className="dot" />
                 <span className="thinking-text" role="status">
-                  {signals?.status?.detail || (signals?.status?.phase ? signals.status.phase.charAt(0).toUpperCase() + signals.status.phase.slice(1) : 'Thinking...')}
+                  {signals?.status?.detail || (signals?.status?.phase ? signals.status.phase.charAt(0).toUpperCase() + signals.status.phase.slice(1) : (() => {
+                    const runningAgents = countRunningAgents(activityTree);
+                    if (runningAgents === 0) return 'Thinking...';
+                    if (runningAgents === 1) return 'Running 1 agent...';
+                    return `Running ${runningAgents} agents...`;
+                  })())}
                 </span>
               </div>
             </div>
