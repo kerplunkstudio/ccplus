@@ -379,6 +379,23 @@ export function useTabSocket(token: string | null, sessionId: string) {
     fetchUserStats().then(setUsageStats);
   }, []);
 
+  // Safety cleanup: Clear backgroundProcessing if no agents are running
+  // This handles cases where final completion never arrives (error, cancel, disconnect)
+  useEffect(() => {
+    if (!backgroundProcessing || streaming) return;
+
+    const cleanupTimer = setTimeout(() => {
+      const hasRunning = hasRunningAgents(activityTree);
+      if (!hasRunning && backgroundProcessing) {
+        setBackgroundProcessing(false);
+        toolLogRef.current = [];
+        setToolLog([]);
+      }
+    }, 500); // Short delay to let final events arrive
+
+    return () => clearTimeout(cleanupTimer);
+  }, [backgroundProcessing, streaming, activityTree, hasRunningAgents]);
+
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
       const previousSessionId = prevSessionIdRef.current;
