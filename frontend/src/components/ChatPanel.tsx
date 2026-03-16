@@ -566,6 +566,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               containerRef={messagesContainerRef}
             />
           )}
+          {isRestoringSession && (
+            <div className="session-restore-loader">
+              <div className="restore-content">
+                <div className="restore-line restore-line-1" />
+                <div className="restore-line restore-line-2" />
+                <div className="restore-line restore-line-3" />
+              </div>
+            </div>
+          )}
           {messages.length === 0 && !isRestoringSession && (
             <NewSessionDashboard
               projectPath={projectPath || null}

@@ -228,7 +228,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
-  const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   const pendingWorkerRestartErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
   const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingDeltaAfterRestore = useRef(false);
