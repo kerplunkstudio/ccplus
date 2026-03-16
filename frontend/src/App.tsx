@@ -7,6 +7,7 @@ import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
+import { MCPPanel } from './components/MCPPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
 import UpdateBanner from './components/UpdateBanner';
@@ -447,10 +448,12 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
+  const shouldShowMcp = activePage === 'mcp';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
     : shouldShowProfile ? 'profile'
+    : shouldShowMcp ? 'mcp'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
@@ -507,7 +510,7 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -518,6 +521,8 @@ function AppContent({ token, loading }: AppContentProps) {
                 <InsightsPanel />
               ) : shouldShowProfile ? (
                 <ProfilePanel />
+              ) : shouldShowMcp ? (
+                <MCPPanel projectPath={activeProject?.path} />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard
