@@ -1104,6 +1104,18 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
     onSignal: (signal: { type: string; data: Record<string, unknown> }) => {
       io.to(sessionId).emit("signal", signal);
     },
+    onToolProgress: (data: { tool_use_id: string; elapsed_seconds: number }) => {
+      io.to(sessionId).emit("tool_progress", data);
+    },
+    onRateLimit: (data: { retryAfterMs: number; rateLimitedAt: string }) => {
+      io.to(sessionId).emit("rate_limit", data);
+    },
+    onPromptSuggestion: (suggestions: string[]) => {
+      io.to(sessionId).emit("prompt_suggestions", { suggestions });
+    },
+    onCompactBoundary: () => {
+      io.to(sessionId).emit("compact_boundary", { timestamp: new Date().toISOString() });
+    },
     // Thinking deltas intentionally not emitted to frontend
   };
 }

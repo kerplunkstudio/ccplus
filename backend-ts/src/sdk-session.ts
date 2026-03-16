@@ -236,6 +236,10 @@ interface SessionCallbacks {
   onUserQuestion?: (data: Record<string, unknown>) => void;
   onThinkingDelta?: (text: string) => void;
   onSignal?: (signal: { type: string; data: Record<string, unknown> }) => void;
+  onToolProgress?: (data: { tool_use_id: string; elapsed_seconds: number }) => void;
+  onRateLimit?: (data: { retryAfterMs: number; rateLimitedAt: string }) => void;
+  onPromptSuggestion?: (suggestions: string[]) => void;
+  onCompactBoundary?: () => void;
 }
 
 interface ActiveSession {
@@ -809,6 +813,7 @@ async function streamQuery(
         canUseTool: canUseTool as any,
         maxTurns: 50,
         includePartialMessages: true,
+        promptSuggestions: true,
       },
     });
 
@@ -916,6 +921,34 @@ async function streamQuery(
             callbacks.onThinkingDelta?.(delta.thinking);
           }
         }
+      }
+      // Tool progress: mid-tool elapsed time updates
+      else if (message.type === 'tool_progress') {
+        const msg = message as any;
+        callbacks.onToolProgress?.({
+          tool_use_id: msg.tool_use_id,
+          elapsed_seconds: msg.elapsed_time_seconds ?? 0,
+        });
+      }
+      // Rate limit events
+      else if (message.type === 'rate_limit_event') {
+        const msg = message as any;
+        callbacks.onRateLimit?.({
+          retryAfterMs: msg.retry_after_ms ?? 0,
+          rateLimitedAt: new Date().toISOString(),
+        });
+      }
+      // Prompt suggestions (predicted next prompts)
+      else if (message.type === 'prompt_suggestion') {
+        const msg = message as any;
+        const suggestions = msg.suggestions ?? [];
+        if (suggestions.length > 0) {
+          callbacks.onPromptSuggestion?.(suggestions);
+        }
+      }
+      // Context compaction boundary
+      else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
+        callbacks.onCompactBoundary?.();
       }
     }
 
