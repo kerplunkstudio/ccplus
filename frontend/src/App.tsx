@@ -65,6 +65,7 @@ function AppContent({ token, loading }: AppContentProps) {
     signals,
     promptSuggestions,
     rateLimitState,
+    contextTokens,
   } = useTabSocket(token, activeTab?.sessionId || '');
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -562,7 +563,7 @@ function AppContent({ token, loading }: AppContentProps) {
           </div>
           {shouldShowChatPanel && (
             <div key={activeTab?.sessionId} className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
-              <ActivityTree tree={activityTree} usageStats={usageStats} />
+              <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} />
             </div>
           )}
         </div>
