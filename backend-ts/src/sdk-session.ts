@@ -894,6 +894,9 @@ async function streamQuery(
             if (!streamEventsActive) {
               resultText.push(block.text);
               session.streamingContent += block.text;
+              if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
+                session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
+              }
               callbacks.onText(block.text);
             }
             currentMessageText.push(block.text);
@@ -952,6 +955,9 @@ async function streamQuery(
         if (sdkResultText && resultText.length === 0) {
           resultText.push(sdkResultText);
           session.streamingContent += sdkResultText;
+          if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
+            session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
+          }
           callbacks.onText(sdkResultText);
         }
 
@@ -977,6 +983,9 @@ async function streamQuery(
             streamEventsActive = true;
             resultText.push(delta.text);
             session.streamingContent += delta.text;
+            if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
+              session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
+            }
             callbacks.onText(delta.text);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
