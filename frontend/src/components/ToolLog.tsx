@@ -50,7 +50,6 @@ const ToolLogItem: React.FC<ToolLogItemProps> = ({ event }) => {
         {formatToolLabel(event)}
         {durationStr}
       </span>
-      {isRunning && <span className="tool-log-pulse" />}
     </div>
   );
 };
