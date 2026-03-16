@@ -561,7 +561,7 @@ function AppContent({ token, loading }: AppContentProps) {
             </div>
           </div>
           {shouldShowChatPanel && (
-            <div className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
+            <div key={activeTab?.sessionId} className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
               <ActivityTree tree={activityTree} usageStats={usageStats} />
             </div>
           )}
