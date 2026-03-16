@@ -161,4 +161,85 @@ describe('ChatPanel', () => {
     expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
     expect(screen.queryByLabelText('Send')).not.toBeInTheDocument();
   });
+
+  it('adds drag-over class when files are dragged over input container', () => {
+    const { container } = render(<ChatPanel {...defaultProps} />);
+    const inputContainer = container.querySelector('.input-container');
+
+    expect(inputContainer).not.toHaveClass('drag-over');
+
+    fireEvent.dragOver(inputContainer!, {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
+
+    expect(inputContainer).toHaveClass('drag-over');
+  });
+
+  it('removes drag-over class when drag leaves input container', () => {
+    const { container } = render(<ChatPanel {...defaultProps} />);
+    const inputContainer = container.querySelector('.input-container');
+
+    fireEvent.dragOver(inputContainer!, {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+    });
+
+    expect(inputContainer).toHaveClass('drag-over');
+
+    const rect = inputContainer!.getBoundingClientRect();
+    fireEvent.dragLeave(inputContainer!, {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      clientX: rect.left - 10,
+      clientY: rect.top - 10,
+    });
+
+    expect(inputContainer).not.toHaveClass('drag-over');
+  });
+
+  it('appends file paths to input when files are dropped', () => {
+    const { container } = render(<ChatPanel {...defaultProps} />);
+    const inputContainer = container.querySelector('.input-container');
+    const textarea = screen.getByPlaceholderText(/Send a message/) as HTMLTextAreaElement;
+
+    // Set initial value
+    fireEvent.change(textarea, { target: { value: 'Here are my files:' } });
+
+    // Create mock files with path property (Electron)
+    const mockFiles = [
+      { path: '/Users/test/file1.txt', name: 'file1.txt' },
+      { path: '/Users/test/file2.js', name: 'file2.js' },
+    ];
+
+    fireEvent.drop(inputContainer!, {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      dataTransfer: {
+        files: mockFiles,
+      },
+    });
+
+    expect(textarea.value).toContain('/Users/test/file1.txt');
+    expect(textarea.value).toContain('/Users/test/file2.js');
+    expect(textarea.value).toContain('Here are my files:');
+  });
+
+  it('handles drop with no files gracefully', () => {
+    const { container } = render(<ChatPanel {...defaultProps} />);
+    const inputContainer = container.querySelector('.input-container');
+    const textarea = screen.getByPlaceholderText(/Send a message/) as HTMLTextAreaElement;
+
+    fireEvent.change(textarea, { target: { value: 'Original text' } });
+
+    fireEvent.drop(inputContainer!, {
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      dataTransfer: {
+        files: [],
+      },
+    });
+
+    expect(textarea.value).toBe('Original text');
+  });
 });
