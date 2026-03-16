@@ -781,3 +781,76 @@
     font-size: 16px; /* Prevents iOS zoom on input focus */
   }
 }
+
+/* Session restore loader */
+.session-restore-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-3xl) var(--space-lg);
+  opacity: 0;
+  animation: restoreIn 0.3s ease-out 0.1s forwards;
+}
+
+.restore-content {
+  width: 100%;
+  max-width: 38ch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.restore-line {
+  height: 12px;
+  border-radius: 3px;
+  background: var(--border);
+  animation: restoreShimmer 1.8s ease-in-out infinite;
+}
+
+.restore-line-1 {
+  width: 70%;
+  animation-delay: 0s;
+}
+
+.restore-line-2 {
+  width: 100%;
+  animation-delay: 0.15s;
+}
+
+.restore-line-3 {
+  width: 45%;
+  animation-delay: 0.3s;
+}
+
+@keyframes restoreIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes restoreShimmer {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-restore-loader {
+    animation: none;
+    opacity: 1;
+  }
+  .restore-line {
+    animation: none;
+    opacity: 0.6;
+  }
+}
