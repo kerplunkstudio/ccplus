@@ -1098,7 +1098,7 @@ io.on("connection", (socket) => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
     if (client) {
-      console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
+      console.debug(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
 
       // Check if there are any remaining clients in this session's room
       const room = io.sockets.adapter.rooms.get(client.session_id);
@@ -1256,6 +1256,13 @@ writePidFile();
 function gracefulShutdown(signal: string): void {
   console.log(`Received ${signal}, shutting down gracefully...`);
 
+  // Force exit after timeout if graceful shutdown hangs
+  const forceExitTimeout = setTimeout(() => {
+    console.error("Shutdown timed out, forcing exit");
+    process.exit(1);
+  }, 5000);
+  forceExitTimeout.unref(); // Don't keep process alive just for this timer
+
   // 1. Clear all pending cancellation timers
   pendingCancellations.forEach((timer) => clearTimeout(timer));
   pendingCancellations.clear();
@@ -1279,6 +1286,7 @@ function gracefulShutdown(signal: string): void {
 
   // 6. Exit
   console.log("Shutdown complete");
+  clearTimeout(forceExitTimeout);
   process.exit(0);
 }
 
