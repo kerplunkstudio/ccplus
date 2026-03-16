@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const Store = require('electron-store');
 const fs = require('fs');
+const net = require('net');
 
 const store = new Store();
 const isDev = process.env.ELECTRON_IS_DEV === '1';
@@ -30,6 +31,29 @@ const getProjectRoot = () => {
 };
 
 const PROJECT_ROOT = getProjectRoot();
+
+// Check if port is available
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        resolve(false);
+      }
+    });
+
+    server.once('listening', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+
+    server.listen(port, '127.0.0.1');
+  });
+}
 
 // Start Node.js backend
 async function startBackend() {
@@ -326,6 +350,21 @@ app.whenReady().then(async () => {
     } catch (err) {
       console.warn('[App] Could not set dock icon:', err.message);
     }
+  }
+
+  // Check if port is available before starting backend
+  console.log(`[App] Checking if port ${SERVER_PORT} is available...`);
+  const portAvailable = await isPortAvailable(SERVER_PORT);
+
+  if (!portAvailable) {
+    console.error(`[App] Port ${SERVER_PORT} is already in use`);
+    dialog.showErrorBox(
+      'Port Already in Use',
+      `cc+ cannot start because port ${SERVER_PORT} is already in use.\n\n` +
+      `Please close the application using this port or set a different PORT in your environment variables.`
+    );
+    app.quit();
+    return;
   }
 
   try {
