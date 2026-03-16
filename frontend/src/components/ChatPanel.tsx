@@ -5,7 +5,6 @@ import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
 import { PluginButton } from './PluginButton';
 import { PluginModal } from './PluginModal';
-import { AmbientIndicator } from './AmbientIndicator';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { PathAutocomplete } from './PathAutocomplete';
 import { NewSessionDashboard } from './NewSessionDashboard';
@@ -70,7 +69,6 @@ interface ChatPanelProps {
   connected: boolean;
   streaming: boolean;
   backgroundProcessing?: boolean;
-  thinking?: string;
   currentTool?: ToolEvent | null;
   toolLog: ToolEvent[];
   selectedModel: string;
@@ -107,7 +105,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   connected,
   streaming,
   backgroundProcessing = false,
-  thinking,
   currentTool,
   toolLog,
   selectedModel,
@@ -234,8 +231,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
-    } else if (hasStreamingMessage || streaming || thinking || currentTool) {
-      // During streaming, thinking, or tool activity: instant scroll unless user scrolled up
+    } else if (hasStreamingMessage || streaming || currentTool) {
+      // During streaming or tool activity: instant scroll unless user scrolled up
       if (!userScrolledUpRef.current) {
         scrollToBottom(true);
       }
@@ -246,7 +243,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, thinking, currentTool, toolLog]);
+  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, currentTool, toolLog]);
 
   // Always snap to bottom on session switch
   useEffect(() => {
@@ -801,14 +798,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} onLinkClick={onOpenBrowserTab} />
           ))}
-          {(streaming || backgroundProcessing) && toolLog.length > 0 && (
-            <div className="streaming-ambient-container">
-              <AmbientIndicator
-                isActive={toolLog.some(event => event.type === 'tool_start' || event.type === 'agent_start')}
-                hasError={toolLog.some(event => event.success === false || (event.error != null && event.error !== 'Worker restarted'))}
-              />
-            </div>
-          )}
           {(streaming || backgroundProcessing) && signals && (signals.status || signals.plan) && (
             <SignalBar signals={signals} />
           )}
@@ -866,12 +855,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               >
                 Confirm
               </button>
-            </div>
-          )}
-          {thinking && (
-            <div className="thinking-block">
-              <div className="thinking-label">Thinking</div>
-              <div className="thinking-content-text">{thinking}</div>
             </div>
           )}
           {streaming && (currentTool || !messages.some((m) => m.streaming) || pendingRestore) && (
