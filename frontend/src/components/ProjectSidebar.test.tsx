@@ -4,6 +4,11 @@ import '@testing-library/jest-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { ProjectEntry } from '../types';
 
+// Mock WorkspaceBrowser to avoid fetch calls
+jest.mock('./WorkspaceBrowser', () => ({
+  WorkspaceBrowser: () => null,
+}));
+
 const mockProjects: ProjectEntry[] = [
   {
     path: '/test/project1',
@@ -61,10 +66,7 @@ const defaultProps = {
 describe('ProjectSidebar', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Clear all localStorage keys used by the component
     localStorage.clear();
-    localStorage.removeItem('ccplus_sidebar_expanded');
-    localStorage.removeItem('ccplus_sidebar_width');
   });
 
   it('renders project headers', () => {
@@ -95,8 +97,8 @@ describe('ProjectSidebar', () => {
     });
 
     const project2Header = screen.getByText('Project 2');
-    const projectGroup = project2Header.closest('.project-group');
-    const sessionList = projectGroup?.querySelector('.session-list');
+    const projectGroup = project2Header.closest('.sb-project-group');
+    const sessionList = projectGroup?.querySelector('.sb-session-list');
 
     // Test that clicking toggles the expanded class
     const initiallyExpanded = sessionList?.classList.contains('expanded');
@@ -123,8 +125,8 @@ describe('ProjectSidebar', () => {
     });
 
     const project2Header = screen.getByText('Project 2').closest('[role="button"]');
-    const projectGroup = project2Header?.closest('.project-group');
-    const sessionList = projectGroup?.querySelector('.session-list');
+    const projectGroup = project2Header?.closest('.sb-project-group');
+    const sessionList = projectGroup?.querySelector('.sb-session-list');
 
     const initiallyExpanded = sessionList?.classList.contains('expanded');
 
@@ -136,7 +138,7 @@ describe('ProjectSidebar', () => {
   it('highlights active session', async () => {
     render(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
-      const activeSession = screen.getByText('First session').closest('.session-item');
+      const activeSession = screen.getByText('First session').closest('.sb-session-item');
       expect(activeSession).toHaveClass('active');
     });
   });
@@ -153,18 +155,19 @@ describe('ProjectSidebar', () => {
   it('shows activity dot for streaming sessions', async () => {
     render(<ProjectSidebar {...defaultProps} />);
     await waitFor(() => {
-      const streamingSession = screen.getByText('Second session').closest('.session-item');
-      expect(streamingSession?.querySelector('.session-activity-dot')).toBeInTheDocument();
+      const streamingSession = screen.getByText('Second session').closest('.sb-session-item');
+      expect(streamingSession?.querySelector('.sb-session-dot')).toBeInTheDocument();
     });
   });
 
   it('shows activity dot for sessions with running agents', () => {
+    // Expand project 2 by clicking it
     render(<ProjectSidebar {...defaultProps} />);
     const project2Header = screen.getByText('Project 2');
     fireEvent.click(project2Header);
 
-    const runningSession = screen.getByText('Third session').closest('.session-item');
-    expect(runningSession?.querySelector('.session-activity-dot')).toBeInTheDocument();
+    const runningSession = screen.getByText('Third session').closest('.sb-session-item');
+    expect(runningSession?.querySelector('.sb-session-dot')).toBeInTheDocument();
   });
 
   it('filters sessions by search query', async () => {
@@ -198,8 +201,6 @@ describe('ProjectSidebar', () => {
     fireEvent.change(searchInput, { target: { value: 'Third' } });
 
     await waitFor(() => {
-      // Searching should auto-expand projects with matching sessions
-      // We can verify by checking if the matching session is visible
       expect(screen.getByText('Third session')).toBeInTheDocument();
     });
   });
@@ -219,12 +220,13 @@ describe('ProjectSidebar', () => {
   it('calls onNewTabForProject when clicking + button', async () => {
     render(<ProjectSidebar {...defaultProps} />);
 
-    const project1Header = screen.getByText('Project 1').closest('.project-header');
+    const project1Header = screen.getByText('Project 1').closest('.sb-project-header');
     fireEvent.mouseEnter(project1Header!);
 
     await waitFor(() => {
-      const newButton = screen.getByLabelText('New session');
-      fireEvent.click(newButton);
+      const newButtons = screen.getAllByLabelText('New session');
+      // Click the first one (for Project 1)
+      fireEvent.click(newButtons[0]);
       expect(defaultProps.onNewTabForProject).toHaveBeenCalledWith('/test/project1');
     });
   });
@@ -232,7 +234,7 @@ describe('ProjectSidebar', () => {
   it('calls onRemoveProject when clicking X on project header', async () => {
     render(<ProjectSidebar {...defaultProps} />);
 
-    const project1Header = screen.getByText('Project 1').closest('.project-header');
+    const project1Header = screen.getByText('Project 1').closest('.sb-project-header');
     fireEvent.mouseEnter(project1Header!);
 
     await waitFor(() => {
@@ -246,7 +248,7 @@ describe('ProjectSidebar', () => {
     render(<ProjectSidebar {...defaultProps} />);
 
     await waitFor(() => {
-      const session = screen.getByText('First session').closest('.session-item');
+      const session = screen.getByText('First session').closest('.sb-session-item');
       fireEvent.mouseEnter(session!);
     });
 
@@ -271,7 +273,7 @@ describe('ProjectSidebar', () => {
 
   it('shows empty state when no projects', () => {
     render(<ProjectSidebar {...defaultProps} projects={[]} />);
-    expect(screen.getByText('Open a project to start')).toBeInTheDocument();
+    expect(screen.getByText('No projects open')).toBeInTheDocument();
   });
 
   it('handles resize on drag', () => {
@@ -297,7 +299,7 @@ describe('ProjectSidebar', () => {
 
     // Should clamp to MAX_WIDTH (400)
     const calls = defaultProps.onSidebarWidthChange.mock.calls;
-    const widths = calls.map(call => call[0]);
+    const widths = calls.map((call: any) => call[0]);
     expect(Math.max(...widths)).toBeLessThanOrEqual(400);
   });
 });
