@@ -76,8 +76,19 @@ const pendingCancellations = new Map<string, NodeJS.Timeout>();
 // Disconnect grace period in milliseconds
 const DISCONNECT_GRACE_PERIOD_MS = 5000;
 
-// Track mutable workspace path
+// Track mutable workspace path (global default for new sessions)
 let workspacePath = config.WORKSPACE_PATH;
+
+// Per-session workspace paths (session_id -> workspace_path)
+const sessionWorkspaces = new Map<string, string>();
+
+// Helper: Get workspace path for a session (falls back to global default)
+function getWorkspaceForSession(sessionId: string | undefined): string {
+  if (sessionId && sessionWorkspaces.has(sessionId)) {
+    return sessionWorkspaces.get(sessionId)!;
+  }
+  return workspacePath;
+}
 
 // =========================================================================
 // HTTP Routes
@@ -280,9 +291,11 @@ app.get("/api/insights", (req: Request, res: Response) => {
 
 // -- Projects --
 
-app.get("/api/projects", (_req: Request, res: Response) => {
+app.get("/api/projects", (req: Request, res: Response) => {
   try {
-    const ws = path.resolve(workspacePath);
+    const sessionId = (req.query.session_id as string) || undefined;
+    const workspaceForSession = getWorkspaceForSession(sessionId);
+    const ws = path.resolve(workspaceForSession);
     const projects: { name: string; path: string }[] = [];
     for (const name of readdirSync(ws).sort()) {
       const fullPath = path.join(ws, name);
@@ -290,7 +303,7 @@ app.get("/api/projects", (_req: Request, res: Response) => {
         projects.push({ name, path: fullPath });
       }
     }
-    res.json({ projects, workspace: workspacePath });
+    res.json({ projects, workspace: workspaceForSession });
   } catch (err) {
     console.error("Failed to list projects:", err);
     res.status(500).json({ error: "Failed to list projects" });
@@ -298,7 +311,7 @@ app.get("/api/projects", (_req: Request, res: Response) => {
 });
 
 app.post("/api/projects/clone", (req: Request, res: Response) => {
-  const { url } = req.body ?? {};
+  const { url, session_id: sessionId } = req.body ?? {};
   if (!url?.trim()) {
     res.status(400).json({ error: "Missing 'url' in request body" });
     return;
@@ -312,7 +325,8 @@ app.post("/api/projects/clone", (req: Request, res: Response) => {
   }
 
   const repoName = repoUrl.replace(/\/$/, "").replace(/\.git$/, "").split("/").pop()!;
-  const targetPath = path.join(path.resolve(workspacePath), repoName);
+  const workspaceForSession = getWorkspaceForSession(sessionId);
+  const targetPath = path.join(path.resolve(workspaceForSession), repoName);
 
   if (existsSync(targetPath)) {
     res.status(409).json({ error: `Directory '${repoName}' already exists in workspace` });
@@ -539,7 +553,7 @@ app.get("/api/scan-projects", (_req: Request, res: Response) => {
 // -- Set workspace --
 
 app.post("/api/set-workspace", (req: Request, res: Response) => {
-  const { path: newPath } = req.body ?? {};
+  const { path: newPath, session_id: sessionId } = req.body ?? {};
   if (!newPath?.trim()) {
     res.status(400).json({ error: "Missing 'path' in request body" });
     return;
@@ -557,8 +571,16 @@ app.post("/api/set-workspace", (req: Request, res: Response) => {
     return;
   }
 
-  workspacePath = resolved;
-  process.env.WORKSPACE_PATH = resolved;
+  // If session_id provided, store per-session; otherwise update global default
+  if (sessionId?.trim()) {
+    sessionWorkspaces.set(sessionId.trim(), resolved);
+    console.log(`Set workspace for session ${sessionId}: ${resolved}`);
+  } else {
+    workspacePath = resolved;
+    process.env.WORKSPACE_PATH = resolved;
+    console.log(`Set global workspace: ${resolved}`);
+  }
+
   res.json({ workspace: resolved });
 });
 
@@ -571,8 +593,10 @@ app.get("/api/git/context", (req: Request, res: Response) => {
     return;
   }
 
+  const sessionId = (req.query.session_id as string) || undefined;
+  const workspaceForSession = getWorkspaceForSession(sessionId);
   const projectDir = path.resolve(projectPath);
-  const wsDir = path.resolve(workspacePath);
+  const wsDir = path.resolve(workspaceForSession);
   if (!projectDir.startsWith(wsDir)) {
     res.status(403).json({ error: "Project path is outside the configured workspace" });
     return;
@@ -748,8 +772,10 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
     return;
   }
 
+  const sessionId = (req.query.session_id as string) || undefined;
+  const workspaceForSession = getWorkspaceForSession(sessionId);
   const projectDir = path.resolve(projectPath);
-  const wsDir = path.resolve(workspacePath);
+  const wsDir = path.resolve(workspaceForSession);
   if (!projectDir.startsWith(wsDir)) {
     res.status(403).json({ error: "Project path is outside the configured workspace" });
     return;
@@ -951,14 +977,6 @@ io.on("connection", (socket) => {
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
   socket.join(sessionId);
 
-  // Clear any pending cancellation timer for this session
-  const pendingTimer = pendingCancellations.get(sessionId);
-  if (pendingTimer) {
-    clearTimeout(pendingTimer);
-    pendingCancellations.delete(sessionId);
-    console.log(`Client reconnected to session ${sessionId}, cancelled pending query cancellation`);
-  }
-
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
@@ -1008,7 +1026,7 @@ io.on("connection", (socket) => {
     const sid = client.session_id;
     const uid = client.user_id;
     const content = ((data?.content as string) ?? "").trim();
-    const workspace = (data?.workspace as string) ?? workspacePath;
+    const workspace = (data?.workspace as string) ?? getWorkspaceForSession(sid);
     const model = (data?.model as string) || undefined;
     const imageIdsData = (data?.image_ids as string[]) ?? [];
     const projectPathData = (data?.workspace as string) ?? "";
@@ -1104,31 +1122,8 @@ io.on("connection", (socket) => {
       const room = io.sockets.adapter.rooms.get(client.session_id);
       const remainingClients = room ? room.size : 0;
 
-      // If no clients remain for this session and there's an active query, schedule cancellation with grace period
-      if (remainingClients === 0 && sdkSession.isActive(client.session_id)) {
-        // Clear any existing pending cancellation
-        const existingTimer = pendingCancellations.get(client.session_id);
-        if (existingTimer) {
-          clearTimeout(existingTimer);
-        }
-
-        // Schedule cancellation after grace period
-        console.log(`No clients remaining for session ${client.session_id}, scheduling query cancellation in ${DISCONNECT_GRACE_PERIOD_MS}ms`);
-        const timer = setTimeout(() => {
-          // Double-check no clients reconnected during grace period
-          const roomAfterDelay = io.sockets.adapter.rooms.get(client.session_id);
-          const clientsAfterDelay = roomAfterDelay ? roomAfterDelay.size : 0;
-
-          if (clientsAfterDelay === 0 && sdkSession.isActive(client.session_id)) {
-            console.log(`Grace period elapsed for session ${client.session_id}, cancelling active query`);
-            sdkSession.cancelQuery(client.session_id);
-          }
-
-          // Clean up timer from map
-          pendingCancellations.delete(client.session_id);
-        }, DISCONNECT_GRACE_PERIOD_MS);
-
-        pendingCancellations.set(client.session_id, timer);
+      if (remainingClients === 0) {
+        console.debug(`No clients remaining for session ${client.session_id}`);
       }
     }
   });
@@ -1263,28 +1258,24 @@ function gracefulShutdown(signal: string): void {
   }, 5000);
   forceExitTimeout.unref(); // Don't keep process alive just for this timer
 
-  // 1. Clear all pending cancellation timers
-  pendingCancellations.forEach((timer) => clearTimeout(timer));
-  pendingCancellations.clear();
-
-  // 2. Stop accepting new connections
+  // 1. Stop accepting new connections
   httpServer.close(() => {
     console.log("HTTP server closed");
   });
 
-  // 3. Close all active Socket.IO connections
+  // 2. Close all active Socket.IO connections
   io.close(() => {
     console.log("Socket.IO server closed");
   });
 
-  // 4. Close database connection
+  // 3. Close database connection
   database.close();
   console.log("Database closed");
 
-  // 5. Remove PID file
+  // 4. Remove PID file
   removePidFile();
 
-  // 6. Exit
+  // 5. Exit
   console.log("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
