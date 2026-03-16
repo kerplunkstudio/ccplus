@@ -219,7 +219,13 @@ app.get("/api/status/first-run", (req: Request, res: Response) => {
 app.get("/api/history/:sessionId", (req: Request, res: Response) => {
   try {
     const messages = database.getConversationHistory(req.params.sessionId);
-    res.json({ messages, streaming: sdkSession.isActive(req.params.sessionId) });
+    const context = database.getSessionContext(req.params.sessionId);
+    res.json({
+      messages,
+      streaming: sdkSession.isActive(req.params.sessionId),
+      context_tokens: context?.input_tokens ?? null,
+      model: context?.model ?? null,
+    });
   } catch (err) {
     console.error("Failed to fetch history:", err);
     res.status(500).json({ error: "Failed to load history" });
@@ -1098,6 +1104,17 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         );
       } catch (e) {
         console.error("Failed to increment user stats:", e);
+      }
+
+      // Persist session context for tab restoration
+      try {
+        database.updateSessionContext(
+          sessionId,
+          (result.input_tokens as number) ?? 0,
+          (result.model as string) ?? null
+        );
+      } catch (e) {
+        console.error("Failed to update session context:", e);
       }
 
       io.to(sessionId).emit("response_complete", {

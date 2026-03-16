@@ -937,9 +937,19 @@ export function useTabSocket(token: string | null, sessionId: string) {
           // No cache entry, restore messages from DB
           const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
           if (historyRes.ok) {
-            const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
+            const data = await historyRes.json();
+            const { messages: dbMessages, streaming: isStreaming, context_tokens, model } = data;
             // Use API streaming flag OR socket stream_active event (whichever arrived first)
             sessionIsActive = isStreaming || streamActiveRef.current;
+
+            // Restore context tokens and model from DB
+            if (context_tokens != null) {
+              setContextTokens(context_tokens);
+            }
+            if (model) {
+              const windowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
+              setUsageStats(prev => ({ ...prev, contextWindowSize: windowSize, model: model }));
+            }
 
             if (dbMessages && dbMessages.length > 0) {
               const restored: Message[] = dbMessages.map((m: any) => ({
