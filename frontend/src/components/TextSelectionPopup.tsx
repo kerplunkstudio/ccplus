@@ -45,8 +45,8 @@ export const TextSelectionPopup: React.FC<TextSelectionPopupProps> = ({
       const rect = range.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
 
-      // Position popup above the selection, centered
-      const top = rect.top - containerRect.top - 45; // 45px above selection
+      // Position popup above the selection, centered, accounting for scroll offset
+      const top = rect.top - containerRect.top + container.scrollTop - 45; // 45px above selection
       const left = rect.left - containerRect.left + (rect.width / 2);
 
       setPosition({ top, left });
@@ -86,17 +86,17 @@ export const TextSelectionPopup: React.FC<TextSelectionPopupProps> = ({
     }
   }, [selectedText, onSendToNewSession]);
 
-  if (!selectedText || !position) {
-    return null;
-  }
+  // Always render the div to prevent DOM mount/unmount during text selection
+  const isVisible = selectedText && position;
 
   return (
     <div
       ref={popupRef}
       className="text-selection-popup"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        display: isVisible ? 'block' : 'none',
+        top: position ? `${position.top}px` : '0px',
+        left: position ? `${position.left}px` : '0px',
       }}
     >
       <button
