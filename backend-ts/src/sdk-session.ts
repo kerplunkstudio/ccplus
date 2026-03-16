@@ -329,6 +329,7 @@ function safeParams(params: Record<string, unknown>): Record<string, unknown> {
 function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
   const toolTimers = new Map<string, number>();
   const agentIdToToolUseId = new Map<string, string>();
+  const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
 
   const preToolUse: HookCallback = async (hookInput, toolUseId) => {
@@ -408,6 +409,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     if (!session?.callbacks) return {};
 
     if (isAgent) {
+      const stopData = agentStopData.get(actualToolUseId);
       const event: Record<string, unknown> = {
         type: "agent_stop",
         tool_name: toolName,
@@ -416,16 +418,19 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         duration_ms: durationMs,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
+        transcript_path: stopData?.transcriptPath ?? null,
+        summary: stopData?.lastMessage ?? null,
       };
       session.callbacks.onToolEvent(event);
 
-      // Clean up agent_id mapping
+      // Clean up agent_id mapping and stop data
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
         if (tuId === actualToolUseId) {
           agentIdToToolUseId.delete(agentId);
           break;
         }
       }
+      agentStopData.delete(actualToolUseId);
     } else {
       const event: Record<string, unknown> = {
         type: "tool_complete",
@@ -475,6 +480,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     if (!session?.callbacks) return {};
 
     if (isAgent) {
+      const stopData = agentStopData.get(actualToolUseId);
       session.callbacks.onToolEvent({
         type: "agent_stop",
         tool_name: toolName,
@@ -484,15 +490,18 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         duration_ms: durationMs,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
+        transcript_path: stopData?.transcriptPath ?? null,
+        summary: stopData?.lastMessage ?? null,
       });
 
-      // Clean up agent_id mapping
+      // Clean up agent_id mapping and stop data
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
         if (tuId === actualToolUseId) {
           agentIdToToolUseId.delete(agentId);
           break;
         }
       }
+      agentStopData.delete(actualToolUseId);
     } else {
       session.callbacks.onToolEvent({
         type: "tool_complete",
@@ -526,11 +535,27 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     return {};
   };
 
+  const subagentStop: HookCallback = async (hookInput) => {
+    const input = hookInput as Record<string, unknown>;
+    const agentId = input.agent_id as string;
+    if (agentId) {
+      const toolUseId = agentIdToToolUseId.get(agentId);
+      if (toolUseId) {
+        agentStopData.set(toolUseId, {
+          transcriptPath: input.agent_transcript_path as string | undefined,
+          lastMessage: input.last_assistant_message as string | undefined,
+        });
+      }
+    }
+    return {};
+  };
+
   return {
     PreToolUse: [{ hooks: [preToolUse] }],
     PostToolUse: [{ hooks: [postToolUse] }],
     PostToolUseFailure: [{ hooks: [postToolUseFailure] }],
     SubagentStart: [{ hooks: [subagentStart] }],
+    SubagentStop: [{ hooks: [subagentStop] }],
   };
 }
 
