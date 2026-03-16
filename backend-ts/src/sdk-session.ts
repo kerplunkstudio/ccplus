@@ -26,7 +26,9 @@ function parseDescription(filePath: string): string | null {
       const descMatch = match[1].match(/description:\s*(.+)/);
       if (descMatch) return descMatch[1].trim();
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error('Failed to parse description from', filePath, ':', err);
+  }
   return null;
 }
 
@@ -46,7 +48,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         const desc = parseDescription(path.join(userCmdDir, file));
         skills.push({ name, plugin: "user", description: desc || "" });
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('Failed to discover user commands:', err);
+    }
   }
 
   // 2. User skills
@@ -59,7 +63,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         const desc = parseDescription(skillFile);
         skills.push({ name: dir, plugin: "skill", description: desc || "" });
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('Failed to discover user skills:', err);
+    }
   }
 
   // 3. Plugin skills via Claude CLI
@@ -85,7 +91,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
                   const desc = existsSync(skillFile) ? parseDescription(skillFile) : null;
                   skills.push({ name: dir, plugin: pluginName, description: desc || "" });
                 }
-              } catch { /* ignore */ }
+              } catch (err) {
+                console.error(`Failed to discover skills from plugin ${pluginName}:`, err);
+              }
             }
             const cmdDir = path.join(installPath, "commands");
             if (existsSync(cmdDir)) {
@@ -97,7 +105,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
                   const desc = parseDescription(path.join(cmdDir, file));
                   skills.push({ name, plugin: pluginName, description: desc || "" });
                 }
-              } catch { /* ignore */ }
+              } catch (err) {
+                console.error(`Failed to discover commands from plugin ${pluginName}:`, err);
+              }
             }
           }
           if (Array.isArray(plugin.skills)) {
@@ -109,7 +119,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         }
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error('Failed to discover plugin skills via Claude CLI:', err);
+  }
 
   // 4. Project-level commands
   if (projectPath) {
@@ -123,7 +135,9 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
           const desc = parseDescription(path.join(projCmdDir, file));
           skills.push({ name, plugin: "project", description: desc || "" });
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.error('Failed to discover project commands:', err);
+      }
     }
   }
 
@@ -154,7 +168,9 @@ function getInstalledPlugins(): Array<{ type: "local"; path: string }> {
         }
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    console.error('Failed to get installed plugins via Claude CLI:', err);
+  }
 
   cachedPluginPaths = result;
   return result;
@@ -238,6 +254,7 @@ interface ActiveSession {
     resolve: (value: Record<string, unknown>) => void;
     data: Record<string, unknown>;
   } | null;
+  questionTimeout: NodeJS.Timeout | null;
   streamingContent: string;
   lastCompletedResponse: Record<string, unknown> | null;
 }
@@ -275,6 +292,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     callbacks: null,
     cancelRequested: false,
     pendingQuestion: null,
+    questionTimeout: null,
     streamingContent: '',
     lastCompletedResponse: null,
   };
@@ -560,6 +578,14 @@ export function submitQuery(
   imageIds?: string[],
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
+
+  // Guard against concurrent submits
+  if (session.activeQuery !== null) {
+    console.warn(`[sdk-session] Rejecting concurrent query for ${sessionId} (already active)`);
+    callbacks.onError('A query is already running for this session. Please wait or cancel the current query.');
+    return;
+  }
+
   session.callbacks = callbacks;
   session.cancelRequested = false;
 
@@ -586,7 +612,11 @@ export function cancelQuery(sessionId: string): void {
         console.error(`[sdk-session] Failed to interrupt query during cancellation for ${sessionId}:`, err);
       });
     }
-    // Unblock any pending question
+    // Clear question timeout and unblock any pending question
+    if (session.questionTimeout) {
+      clearTimeout(session.questionTimeout);
+      session.questionTimeout = null;
+    }
     if (session.pendingQuestion) {
       session.pendingQuestion.resolve({});
       session.pendingQuestion = null;
@@ -619,6 +649,10 @@ export function disconnectSession(sessionId: string): void {
 export function sendQuestionResponse(sessionId: string, response: Record<string, unknown>): void {
   const session = sessions.get(sessionId);
   if (session?.pendingQuestion) {
+    if (session.questionTimeout) {
+      clearTimeout(session.questionTimeout);
+      session.questionTimeout = null;
+    }
     session.pendingQuestion.resolve(response);
     session.pendingQuestion = null;
   }
@@ -722,10 +756,19 @@ async function streamQuery(
     const resumeId = database.getLastSdkSessionId(sessionId);
     console.log(`[sdk-session] Query for ${sessionId}: resume=${resumeId ?? 'none'}, cwd=${workspace}`);
 
-    // Build environment without CLAUDECODE
+    // Build environment with whitelist approach (only pass known-safe env vars)
+    // Legacy blacklist: k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY"
+    const envWhitelist = [
+      'PATH', 'HOME', 'SHELL', 'USER', 'LANG', 'TERM', 'NODE_ENV',
+      'WORKSPACE_PATH', 'SDK_MODEL', 'PORT', 'CCPLUS_AUTH',
+      'TMPDIR', 'TEMP', 'TMP',
+      'EDITOR', 'VISUAL', 'PAGER',
+      'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES',
+      'DISPLAY', 'COLORTERM',
+    ];
     const cleanEnv: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) {
-      if (k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY" && v !== undefined) {
+      if (v !== undefined && (envWhitelist.includes(k) || k.startsWith('XDG_'))) {
         cleanEnv[k] = v;
       }
     }
@@ -757,9 +800,10 @@ async function streamQuery(
         // Wait for user response (up to 5 minutes)
         const answers = await new Promise<Record<string, unknown>>((resolve) => {
           session.pendingQuestion = { resolve, data: questionData };
-          setTimeout(() => {
+          session.questionTimeout = setTimeout(() => {
             if (session.pendingQuestion) {
               session.pendingQuestion = null;
+              session.questionTimeout = null;
               resolve({});
             }
           }, 300_000);
