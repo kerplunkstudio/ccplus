@@ -239,25 +239,28 @@ export function getToolEvents(sessionId: string, limit: number = 200): Record<st
 export function getSessionsList(limit: number = 50, projectPath?: string, includeArchived: boolean = false): Record<string, unknown>[] {
   const d = getDb();
   const archivedClause = includeArchived ? "" : "AND (c1.archived = 0 OR c1.archived IS NULL)";
-  const havingClause = projectPath ? "HAVING project_path = ?" : "";
+  const projectFilter = projectPath ? "WHERE project_path = ?" : "";
   const params: unknown[] = projectPath ? [projectPath, limit] : [limit];
 
   const rows = d.prepare(`
-    SELECT
-      session_id,
-      COUNT(*) as message_count,
-      MAX(timestamp) as last_activity,
-      (SELECT content FROM conversations c2
-       WHERE c2.session_id = c1.session_id AND c2.role = 'user'
-       ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message,
-      (SELECT project_path FROM conversations c3
-       WHERE c3.session_id = c1.session_id AND c3.role = 'user'
-       AND c3.project_path IS NOT NULL
-       ORDER BY c3.timestamp DESC LIMIT 1) as project_path
-    FROM conversations c1
-    WHERE 1=1 ${archivedClause}
-    GROUP BY session_id
-    ${havingClause}
+    WITH session_data AS (
+      SELECT
+        session_id,
+        COUNT(*) as message_count,
+        MAX(timestamp) as last_activity,
+        (SELECT content FROM conversations c2
+         WHERE c2.session_id = c1.session_id AND c2.role = 'user'
+         ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message,
+        (SELECT project_path FROM conversations c3
+         WHERE c3.session_id = c1.session_id AND c3.role = 'user'
+         AND c3.project_path IS NOT NULL
+         ORDER BY c3.timestamp DESC LIMIT 1) as project_path
+      FROM conversations c1
+      WHERE 1=1 ${archivedClause}
+      GROUP BY session_id
+    )
+    SELECT * FROM session_data
+    ${projectFilter}
     ORDER BY last_activity DESC
     LIMIT ?
   `).all(...params) as Record<string, unknown>[];

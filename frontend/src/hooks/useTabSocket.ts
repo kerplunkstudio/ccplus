@@ -426,17 +426,20 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
               if (sessionIsActive) {
                 streamActiveRef.current = false;
-                const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
-                if (lastAssistant) {
-                  streamingIdRef.current = lastAssistant.id;
-                  streamingContentRef.current = lastAssistant.content || '';
+                const lastMsg = restored[restored.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant') {
+                  // Last message is assistant — resume streaming into it
+                  streamingIdRef.current = lastMsg.id;
+                  streamingContentRef.current = lastMsg.content || '';
                   setStreaming(true);
                   awaitingDeltaAfterRestore.current = true;
                   setPendingRestore(true);
                   setMessages(restored.map((m) =>
-                    m.id === lastAssistant.id ? { ...m, streaming: true } : m
+                    m.id === lastMsg.id ? { ...m, streaming: true } : m
                   ));
                 } else {
+                  // Last message is from user — response not saved yet
+                  // Don't set streamingIdRef; text_delta will create a new message after the user's message
                   setStreaming(true);
                   awaitingDeltaAfterRestore.current = true;
                   setPendingRestore(true);
@@ -776,18 +779,20 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
             if (sessionIsActive) {
               streamActiveRef.current = false;
-              const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant');
-              if (lastAssistant) {
-                streamingIdRef.current = lastAssistant.id;
-                streamingContentRef.current = lastAssistant.content || '';
+              const lastMsg = restored[restored.length - 1];
+              if (lastMsg && lastMsg.role === 'assistant') {
+                // Last message is assistant — resume streaming into it
+                streamingIdRef.current = lastMsg.id;
+                streamingContentRef.current = lastMsg.content || '';
                 setStreaming(true);
                 awaitingDeltaAfterRestore.current = true;
                 setPendingRestore(true);
                 setMessages(restored.map((m) =>
-                  m.id === lastAssistant.id ? { ...m, streaming: true } : m
+                  m.id === lastMsg.id ? { ...m, streaming: true } : m
                 ));
               } else {
-                // Active but no assistant message yet (still thinking)
+                // Last message is from user — response not saved yet
+                // Don't set streamingIdRef; text_delta will create a new message after the user's message
                 setStreaming(true);
                 awaitingDeltaAfterRestore.current = true;
                 setPendingRestore(true);
@@ -885,6 +890,21 @@ export function useTabSocket(token: string | null, sessionId: string) {
         socket.emit('cancel');
         setBackgroundProcessing(false);
         dispatchTree({ type: 'MARK_ALL_STOPPED' });
+      }
+
+      // Finalize any currently streaming message before adding user message
+      // This prevents streamed content from appearing above the sent message
+      const currentStreamingId = streamingIdRef.current;
+      if (currentStreamingId) {
+        const finalContent = streamingContentRef.current;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === currentStreamingId ? { ...m, content: finalContent, streaming: false } : m
+          )
+        );
+        streamingContentRef.current = '';
+        streamingIdRef.current = null;
+        setThinking('');
       }
 
       const userMessage: Message = {
