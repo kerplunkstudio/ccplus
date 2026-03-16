@@ -93,6 +93,7 @@ interface ChatPanelProps {
   onRespondToQuestion?: (response: Record<string, string>) => void;
   isRestoringSession?: boolean;
   onSendToNewSession?: (text: string) => void;
+  onOpenBrowserTab?: (url: string, label: string) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -117,6 +118,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onRespondToQuestion,
   isRestoringSession = false,
   onSendToNewSession,
+  onOpenBrowserTab,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -519,7 +521,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             />
           )}
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble key={msg.id} message={msg} onLinkClick={onOpenBrowserTab} />
           ))}
           {(streaming || backgroundProcessing) && toolLog.length > 0 && (
             <div className="streaming-ambient-container">

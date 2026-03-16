@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeMenuActionListener: (callback) => {
     ipcRenderer.removeListener('menu-action', callback);
   },
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
 });
 
 // Keep legacy 'electron' for backward compatibility

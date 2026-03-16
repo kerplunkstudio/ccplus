@@ -142,6 +142,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true,
     },
     show: false, // Don't show until ready
   });
@@ -331,4 +332,8 @@ app.on('will-quit', () => {
 // Handle IPC messages
 ipcMain.handle('get-server-url', () => {
   return SERVER_URL;
+});
+
+ipcMain.handle('open-external', async (event, url) => {
+  await shell.openExternal(url);
 });
