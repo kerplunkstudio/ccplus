@@ -355,6 +355,47 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
               const expanded = isExpanded(project.path);
               const hasActivity = hasRunningActivity(project);
 
+              // Render simplified single-row for projects with no tabs
+              if (project.tabs.length === 0) {
+                return (
+                  <div key={project.path} className="sb-project-group">
+                    <div
+                      className="sb-project-header sb-project-header-no-tabs"
+                      onMouseEnter={() => setHoveredProject(project.path)}
+                      onMouseLeave={() => setHoveredProject(null)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Project: ${project.name}`}
+                    >
+                      <span className="sb-project-header-name" title={project.path}>
+                        {project.name}
+                      </span>
+                      {hoveredProject === project.path && (
+                        <>
+                          <button
+                            className="sb-project-header-new"
+                            onClick={(e) => handleNewTab(e, project.path)}
+                            aria-label="New session"
+                            title="New session"
+                          >
+                            +
+                          </button>
+                          <button
+                            className="sb-project-header-close"
+                            onClick={(e) => handleRemoveProject(e, project.path)}
+                            aria-label={`Close ${project.name}`}
+                            title="Close project"
+                          >
+                            ×
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Normal rendering for projects with tabs
               return (
                 <div key={project.path} className="sb-project-group">
                   <div
@@ -404,54 +445,42 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   </div>
 
                   <div className={`sb-session-list ${expanded ? 'expanded' : ''}`}>
-                    {project.tabs.length === 0 ? (
-                      <div className="sb-session-empty">
-                        <span className="sb-session-empty-text">No active sessions</span>
-                        <button
-                          className="sb-session-empty-action"
-                          onClick={(e) => handleNewTab(e, project.path)}
+                    {project.tabs
+                      .filter(tab => matchesSearchQuery(tab.label))
+                      .map(tab => (
+                        <div
+                          key={tab.sessionId}
+                          className={`sb-session-item ${isSessionActive(project.path, tab.sessionId) ? 'active' : ''}`}
+                          onClick={() => handleSelectSession(project.path, tab.sessionId)}
+                          onMouseEnter={() => setHoveredSession(tab.sessionId)}
+                          onMouseLeave={() => setHoveredSession(null)}
+                          title={tab.label}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleSelectSession(project.path, tab.sessionId);
+                            }
+                          }}
                         >
-                          + New session
-                        </button>
-                      </div>
-                    ) : (
-                      project.tabs
-                        .filter(tab => matchesSearchQuery(tab.label))
-                        .map(tab => (
-                          <div
-                            key={tab.sessionId}
-                            className={`sb-session-item ${isSessionActive(project.path, tab.sessionId) ? 'active' : ''}`}
-                            onClick={() => handleSelectSession(project.path, tab.sessionId)}
-                            onMouseEnter={() => setHoveredSession(tab.sessionId)}
-                            onMouseLeave={() => setHoveredSession(null)}
-                            title={tab.label}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                handleSelectSession(project.path, tab.sessionId);
-                              }
-                            }}
-                          >
-                            <span className="sb-session-label">
-                              {tab.label}
-                            </span>
-                            {(tab.isStreaming || tab.hasRunningAgent) && (
-                              <span className="sb-session-dot" />
-                            )}
-                            {hoveredSession === tab.sessionId && (
-                              <button
-                                className="sb-session-close"
-                                onClick={(e) => handleCloseSession(e, project.path, tab.sessionId)}
-                                aria-label={`Close ${tab.label}`}
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        ))
-                    )}
+                          <span className="sb-session-label">
+                            {tab.label}
+                          </span>
+                          {(tab.isStreaming || tab.hasRunningAgent) && (
+                            <span className="sb-session-dot" />
+                          )}
+                          {hoveredSession === tab.sessionId && (
+                            <button
+                              className="sb-session-close"
+                              onClick={(e) => handleCloseSession(e, project.path, tab.sessionId)}
+                              aria-label={`Close ${tab.label}`}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
                   </div>
                 </div>
               );
