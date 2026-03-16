@@ -363,6 +363,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                       className="sb-project-header sb-project-header-no-tabs"
                       onMouseEnter={() => setHoveredProject(project.path)}
                       onMouseLeave={() => setHoveredProject(null)}
+                      onClick={() => onSelectProject(project.path)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSelectProject(project.path);
+                        }
+                      }}
                       role="button"
                       tabIndex={0}
                       aria-label={`Project: ${project.name}`}

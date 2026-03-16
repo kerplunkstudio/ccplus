@@ -1,0 +1,180 @@
+.signal-bar {
+  margin: 0 16px 8px;
+  border-left: 2px solid color-mix(in oklch, var(--accent) 50%, transparent);
+  background: color-mix(in oklch, var(--accent) 3%, var(--bg-tertiary));
+  border-radius: 0 4px 4px 0;
+  overflow: hidden;
+  animation: signalEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes signalEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Progress track ---- */
+
+.signal-progress-track {
+  height: 2px;
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  overflow: hidden;
+}
+
+.signal-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- Status row ---- */
+
+.signal-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.signal-phase-icon {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.signal-phase-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+}
+
+.signal-phase-detail {
+  color: var(--text-secondary);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.signal-step-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* ---- Steps list ---- */
+
+.signal-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.signal-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.signal-step--active {
+  color: var(--text-primary);
+}
+
+.signal-step--done {
+  opacity: 0.5;
+}
+
+.signal-step--done .signal-step-label {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklch, var(--text-secondary) 40%, transparent);
+}
+
+.signal-step--skipped {
+  opacity: 0.35;
+}
+
+.signal-step--skipped .signal-step-label {
+  text-decoration: line-through;
+}
+
+/* ---- Step icons ---- */
+
+.step-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-icon--pending {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-secondary);
+  opacity: 0.4;
+  margin: 2px;
+}
+
+.step-icon--active {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  border-top-color: transparent;
+  margin: 2px;
+  animation: stepSpin 0.8s linear infinite;
+}
+
+@keyframes stepSpin {
+  to { transform: rotate(360deg); }
+}
+
+.step-icon--done {
+  color: var(--success);
+}
+
+.step-icon--skipped {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+/* ---- Reduced motion ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .signal-bar {
+    animation: none;
+  }
+
+  .step-icon--active {
+    animation: none;
+    border-color: var(--accent);
+  }
+
+  .signal-progress-fill {
+    transition: none;
+  }
+}

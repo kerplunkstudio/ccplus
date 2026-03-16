@@ -142,7 +142,7 @@
 
 .sb-project-header-no-tabs {
   padding-left: calc(var(--space-md) + 16px);
-  cursor: default;
+  cursor: pointer;
 }
 
 .sb-project-header-no-tabs:hover {
