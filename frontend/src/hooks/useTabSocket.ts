@@ -50,7 +50,8 @@ type TreeAction =
   | { type: 'CLEAR' }
   | { type: 'LOAD_HISTORY'; events: ToolEvent[] }
   | { type: 'MARK_ALL_STOPPED' }
-  | { type: 'TOOL_PROGRESS'; toolUseId: string; elapsedSeconds: number };
+  | { type: 'TOOL_PROGRESS'; toolUseId: string; elapsedSeconds: number }
+  | { type: 'SET_TREE'; tree: ActivityNode[] };
 
 function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
   return nodes.map((node) => {
@@ -672,12 +673,24 @@ export function useTabSocket(token: string | null, sessionId: string) {
         setContextTokens(data.input_tokens);
       }
 
+      // Update context window size based on model
+      if (data.model) {
+        const windowSize = MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW;
+        setUsageStats(prev => ({ ...prev, contextWindowSize: windowSize, model: data.model || prev.model }));
+      }
+
       // Check if this is the final completion (has sdk_session_id) or an intermediate one
       const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
 
       if (isFinalCompletion) {
         // Final completion: re-fetch stats from backend to stay in sync
-        fetchUserStats().then(setUsageStats);
+        fetchUserStats().then(stats => {
+          setUsageStats(prev => ({
+            ...stats,
+            contextWindowSize: prev.contextWindowSize,
+            model: prev.model || stats.model,
+          }));
+        });
 
         // End streaming session completely and clear background processing
         setStreaming(false);
@@ -898,71 +911,72 @@ export function useTabSocket(token: string | null, sessionId: string) {
       try {
         // Check if we have a cache entry for this session (more recent than DB)
         const cachedSession = sessionCacheRef.current.get(sessionId);
+        let sessionIsActive = false;
+
         if (cachedSession) {
-          // Restore from cache (has more recent data than DB during streaming)
+          // Restore messages and streaming state from cache
           setMessages(cachedSession.messages);
           streamingContentRef.current = cachedSession.streamingContent;
           streamingIdRef.current = cachedSession.streamingId;
           toolLogRef.current = cachedSession.toolLog;
           setToolLog(cachedSession.toolLog);
-          dispatchTree({ type: 'LOAD_HISTORY', events: cachedSession.toolLog });
           sequenceRef.current = cachedSession.sequenceCounter;
           seenToolUseIds.current = cachedSession.seenIds;
           setStreaming(cachedSession.streaming);
           setBackgroundProcessing(cachedSession.backgroundProcessing);
           setThinking(cachedSession.thinking);
+          sessionIsActive = cachedSession.streaming || cachedSession.backgroundProcessing;
 
           // Delete cache entry after restoring (data is now in current state)
           sessionCacheRef.current.delete(sessionId);
-          setIsRestoringSession(false);
-          return;
-        }
+        } else {
+          // No cache entry, restore messages from DB
+          const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
+          if (historyRes.ok) {
+            const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
+            // Use API streaming flag OR socket stream_active event (whichever arrived first)
+            sessionIsActive = isStreaming || streamActiveRef.current;
 
-        // No cache entry, restore from DB
-        let sessionIsActive = false;
-        const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
-        if (historyRes.ok) {
-          const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
-          // Use API streaming flag OR socket stream_active event (whichever arrived first)
-          sessionIsActive = isStreaming || streamActiveRef.current;
+            if (dbMessages && dbMessages.length > 0) {
+              const restored: Message[] = dbMessages.map((m: any) => ({
+                id: `db_${m.id}`,
+                content: m.content,
+                role: m.role as 'user' | 'assistant',
+                timestamp: new Date(m.timestamp).getTime(),
+              }));
 
-          if (dbMessages && dbMessages.length > 0) {
-            const restored: Message[] = dbMessages.map((m: any) => ({
-              id: `db_${m.id}`,
-              content: m.content,
-              role: m.role as 'user' | 'assistant',
-              timestamp: new Date(m.timestamp).getTime(),
-            }));
-
-            if (sessionIsActive) {
-              streamActiveRef.current = false;
-              const lastMsg = restored[restored.length - 1];
-              if (lastMsg && lastMsg.role === 'assistant') {
-                // Last message is assistant — resume streaming into it
-                streamingIdRef.current = lastMsg.id;
-                streamingContentRef.current = lastMsg.content || '';
-                setStreaming(true);
-                awaitingDeltaAfterRestore.current = true;
-                setPendingRestore(true);
-                setMessages(restored.map((m) =>
-                  m.id === lastMsg.id ? { ...m, streaming: true } : m
-                ));
+              if (sessionIsActive) {
+                streamActiveRef.current = false;
+                const lastMsg = restored[restored.length - 1];
+                if (lastMsg && lastMsg.role === 'assistant') {
+                  // Last message is assistant — resume streaming into it
+                  streamingIdRef.current = lastMsg.id;
+                  streamingContentRef.current = lastMsg.content || '';
+                  setStreaming(true);
+                  awaitingDeltaAfterRestore.current = true;
+                  setPendingRestore(true);
+                  setMessages(restored.map((m) =>
+                    m.id === lastMsg.id ? { ...m, streaming: true } : m
+                  ));
+                } else {
+                  // Last message is from user — response not saved yet
+                  // Don't set streamingIdRef; text_delta will create a new message after the user's message
+                  setStreaming(true);
+                  awaitingDeltaAfterRestore.current = true;
+                  setPendingRestore(true);
+                  setMessages(restored);
+                }
               } else {
-                // Last message is from user — response not saved yet
-                // Don't set streamingIdRef; text_delta will create a new message after the user's message
-                setStreaming(true);
-                awaitingDeltaAfterRestore.current = true;
-                setPendingRestore(true);
                 setMessages(restored);
               }
-            } else {
-              setMessages(restored);
+            } else if (sessionIsActive) {
+              // No messages in DB but session is active (very early in thinking)
+              setStreaming(true);
             }
-          } else if (sessionIsActive) {
-            // No messages in DB but session is active (very early in thinking)
-            setStreaming(true);
           }
         }
+
+        // ALWAYS restore activity tree from DB (activity events are persisted in real-time)
 
         const activityRes = await fetch(`${SOCKET_URL}/api/activity/${sessionId}`);
         if (activityRes.ok) {
