@@ -11,6 +11,7 @@ import { NewSessionDashboard } from './NewSessionDashboard';
 import { TextSelectionPopup } from './TextSelectionPopup';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
+import { useToast } from '../contexts/ToastContext';
 import {
   parseSlashCommand,
   shouldShowAutocomplete,
@@ -138,6 +139,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
   const { skills } = useSkills();
+  const { showToast } = useToast();
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
   const [questionSelections, setQuestionSelections] = useState<Record<number, string[]>>({});
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; filename: string; url: string }>>([]);
@@ -161,10 +163,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
     // Save current input to drafts map when session changes
     if (previousSessionIdRef.current && previousSessionIdRef.current !== sessionId) {
-      inputDraftsRef.current = {
+      const updatedDrafts = {
         ...inputDraftsRef.current,
         [previousSessionIdRef.current]: input,
       };
+
+      // Cap the map size to prevent memory leak (keep only the 50 most recent drafts)
+      const MAX_DRAFTS = 50;
+      const draftEntries = Object.entries(updatedDrafts);
+      if (draftEntries.length > MAX_DRAFTS) {
+        // Remove oldest entries (simple FIFO approach)
+        const excessCount = draftEntries.length - MAX_DRAFTS;
+        const trimmedDrafts = Object.fromEntries(draftEntries.slice(excessCount));
+        inputDraftsRef.current = trimmedDrafts;
+      } else {
+        inputDraftsRef.current = updatedDrafts;
+      }
 
       // Restore input for new session
       const savedDraft = inputDraftsRef.current[sessionId] || '';
@@ -356,13 +370,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     for (const file of Array.from(files)) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert(`${file.name} is not an image file`);
+        showToast('Please choose a PNG, JPG, GIF, or WebP image', 'error');
         continue;
       }
 
       // Validate file size (10MB max)
       if (file.size > 10 * 1024 * 1024) {
-        alert(`${file.name} is too large (max 10MB)`);
+        showToast(`${file.name} is too large. Maximum file size is 10MB`, 'error');
         continue;
       }
 
@@ -384,7 +398,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         const imageData = await response.json();
         setUploadedImages(prev => [...prev, imageData]);
       } catch (error) {
-        alert(`Failed to upload ${file.name}`);
+        showToast(`Failed to upload ${file.name}. Please try again`, 'error');
       }
     }
 
@@ -857,7 +871,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             </div>
           )}
-          {streaming && (currentTool || !messages.some((m) => m.streaming) || pendingRestore) && (
+          {streaming && (
             <div className="thinking-indicator">
               <div className="thinking-content">
                 <span className="dot" />
