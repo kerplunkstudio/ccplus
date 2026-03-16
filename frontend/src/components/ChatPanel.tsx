@@ -141,6 +141,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [lastMessageCount, setLastMessageCount] = useState(0);
   const userScrolledUpRef = useRef(false);
   const programmaticScrollRef = useRef(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Persist input drafts per session
   useEffect(() => {
@@ -456,6 +457,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set isDragOver to false if we're leaving the input-container entirely
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    // Extract file paths from dropped files
+    const paths: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // In Electron, files have a 'path' property with the absolute path
+      const filePath = (file as any).path;
+      if (filePath) {
+        paths.push(filePath);
+      }
+    }
+
+    if (paths.length === 0) return;
+
+    // Append paths to the current input
+    const currentValue = input;
+    const separator = currentValue && !currentValue.endsWith('\n') && !currentValue.endsWith(' ') ? '\n' : '';
+    const newValue = currentValue + separator + paths.join('\n');
+    setInput(newValue);
+
+    // Focus the textarea after drop
+    textareaRef.current?.focus();
+  };
+
   return (
     <>
       <PluginModal isOpen={pluginModalOpen} onClose={() => setPluginModalOpen(false)} />
@@ -610,7 +662,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="input-container">
+        <div
+          className={`input-container ${isDragOver ? 'drag-over' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           {showAutocomplete && autocompleteSuggestions.length > 0 && (
             <SlashCommandAutocomplete
               suggestions={autocompleteSuggestions}
