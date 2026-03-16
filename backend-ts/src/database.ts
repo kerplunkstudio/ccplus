@@ -115,6 +115,13 @@ CREATE TABLE IF NOT EXISTS session_context (
 ALTER TABLE tool_usage ADD COLUMN description TEXT;
 `,
   },
+  {
+    version: 3,
+    sql: `
+-- Add summary column for agent output/summary
+ALTER TABLE tool_usage ADD COLUMN summary TEXT;
+`,
+  },
 ];
 
 function getCurrentSchemaVersion(database: Database.Database): number {
@@ -173,7 +180,15 @@ function applyMigrations(database: Database.Database): void {
   // Apply each pending migration in a transaction
   for (const migration of pendingMigrations) {
     const transaction = database.transaction(() => {
-      database.exec(migration.sql);
+      try {
+        database.exec(migration.sql);
+      } catch (err) {
+        // If column already exists, this is fine (idempotent migrations)
+        const errMsg = String(err);
+        if (!errMsg.includes("duplicate column name")) {
+          throw err;
+        }
+      }
       database.prepare("INSERT INTO schema_version (version) VALUES (?)").run(migration.version);
     });
 
@@ -299,15 +314,16 @@ export function updateToolEvent(
   success?: boolean | null,
   error?: string | null,
   durationMs?: number | null,
+  summary?: string | null,
 ): void {
   const d = getDb();
   d.prepare(`
     UPDATE tool_usage
-    SET success = ?, error = ?, duration_ms = ?
+    SET success = ?, error = ?, duration_ms = ?, summary = COALESCE(?, summary)
     WHERE session_id = ? AND tool_use_id = ?
   `).run(
     success === null || success === undefined ? null : (success ? 1 : 0),
-    error ?? null, durationMs ?? null, sessionId, toolUseId
+    error ?? null, durationMs ?? null, summary ?? null, sessionId, toolUseId
   );
 }
 

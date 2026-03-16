@@ -449,6 +449,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         }
       }
       agentStopData.delete(actualToolUseId);
+
+      // Update database with summary
+      try {
+        database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs, stopData?.lastMessage ?? null);
+      } catch (e) {
+        console.error("Database write failed (postToolUse agent):", e);
+      }
     } else {
       const event: Record<string, unknown> = {
         type: "tool_complete",
@@ -470,12 +477,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       }
 
       session.callbacks.onToolEvent(event);
-    }
 
-    try {
-      database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
-    } catch (e) {
-      console.error("Database write failed (postToolUse):", e);
+      // Update database (tools only, agents updated above)
+      try {
+        database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
+      } catch (e) {
+        console.error("Database write failed (postToolUse tool):", e);
+      }
     }
 
     return {};
@@ -520,6 +528,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         }
       }
       agentStopData.delete(actualToolUseId);
+
+      // Update database with summary (for failed agents)
+      try {
+        database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs, stopData?.lastMessage ?? null);
+      } catch (e) {
+        console.error("Database write failed (postToolUseFailure agent):", e);
+      }
     } else {
       session.callbacks.onToolEvent({
         type: "tool_complete",
@@ -532,12 +547,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         timestamp: new Date().toISOString(),
         session_id: sessionId,
       });
-    }
 
-    try {
-      database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs);
-    } catch (e) {
-      console.error("Database write failed (postToolUseFailure):", e);
+      // Update database (tools only, agents updated above)
+      try {
+        database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs);
+      } catch (e) {
+        console.error("Database write failed (postToolUseFailure tool):", e);
+      }
     }
 
     return {};
