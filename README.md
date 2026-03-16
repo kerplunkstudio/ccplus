@@ -87,8 +87,7 @@ cp .env.example .env
 
 **Desktop app** (default):
 ```bash
-./ccplus              # Exclusive mode (stops web server)
-./ccplus desktop      # Same as above
+./ccplus              # Build + deploy + launch desktop app
 ```
 
 **Desktop app (parallel)** — recommended for development:
@@ -286,7 +285,7 @@ ccplus/
 |---------|-------------|
 | `./ccplus` or `./ccplus start` | Full deploy: build backend + frontend, launch desktop app. First run = interactive setup. |
 | `./ccplus web` | Full deploy: build backend + frontend, start web server. |
-| `./ccplus desktop` | Launch Electron desktop app (stops web server). Same as `./ccplus`. |
+| `./ccplus desktop` | Launch Electron desktop app directly (skips build/deploy). |
 | `./ccplus desktop-parallel` | Launch Electron app alongside web server (port 4001). **Recommended for development.** |
 | `./ccplus server` | Restart Node.js server (interrupts active SDK sessions). |
 | `./ccplus backend` | Build TypeScript backend only (compile to `dist/`). |
