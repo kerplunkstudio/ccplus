@@ -1101,6 +1101,9 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         tool_use_id: data.tool_use_id ?? "",
       });
     },
+    onSignal: (signal: { type: string; data: Record<string, unknown> }) => {
+      io.to(sessionId).emit("signal", signal);
+    },
     // Thinking deltas intentionally not emitted to frontend
   };
 }
