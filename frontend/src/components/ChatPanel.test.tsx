@@ -28,6 +28,10 @@ jest.mock('../hooks/useSkills', () => ({
   useSkills: () => ({ skills: [] }),
 }));
 
+jest.mock('../contexts/ToastContext', () => ({
+  useToast: () => ({ showToast: jest.fn() }),
+}));
+
 describe('ChatPanel', () => {
   const mockUsageStats: UsageStats = {
     totalCost: 0,
@@ -264,5 +268,52 @@ describe('ChatPanel', () => {
     });
 
     expect(textarea.value).toBe('Original text');
+  });
+
+  it('preserves input drafts across session switches', () => {
+    const { rerender } = render(<ChatPanel {...defaultProps} sessionId="session1" />);
+    const textarea = screen.getByPlaceholderText(/Send a message/) as HTMLTextAreaElement;
+
+    // Type in session1
+    fireEvent.change(textarea, { target: { value: 'Draft for session 1' } });
+
+    // Switch to session2
+    rerender(<ChatPanel {...defaultProps} sessionId="session2" />);
+    expect(textarea.value).toBe('');
+
+    // Type in session2
+    fireEvent.change(textarea, { target: { value: 'Draft for session 2' } });
+
+    // Switch back to session1
+    rerender(<ChatPanel {...defaultProps} sessionId="session1" />);
+    expect(textarea.value).toBe('Draft for session 1');
+
+    // Switch back to session2
+    rerender(<ChatPanel {...defaultProps} sessionId="session2" />);
+    expect(textarea.value).toBe('Draft for session 2');
+  });
+
+  it('caps input drafts at 50 sessions to prevent memory leak', () => {
+    const { rerender } = render(<ChatPanel {...defaultProps} sessionId="session_0" />);
+    const textarea = screen.getByPlaceholderText(/Send a message/) as HTMLTextAreaElement;
+
+    // Create 60 session switches with drafts
+    // For each i, we type "Draft ${i}" in session_i, then switch to session_${i+1}
+    for (let i = 0; i < 60; i++) {
+      fireEvent.change(textarea, { target: { value: `Draft ${i}` } });
+      rerender(<ChatPanel {...defaultProps} sessionId={`session_${i + 1}`} />);
+    }
+
+    // After the loop, we've saved drafts for session_0 through session_59
+    // The draft map should be capped at 50 entries
+    // The first 10 drafts (session_0 through session_9) should be evicted
+
+    // Switch back to session_9 (which should be evicted)
+    rerender(<ChatPanel {...defaultProps} sessionId="session_9" />);
+    expect(textarea.value).toBe(''); // Draft was cleaned up
+
+    // Switch to session_50 (should still have draft "Draft 50")
+    rerender(<ChatPanel {...defaultProps} sessionId="session_50" />);
+    expect(textarea.value).toBe('Draft 50'); // Draft preserved
   });
 });
