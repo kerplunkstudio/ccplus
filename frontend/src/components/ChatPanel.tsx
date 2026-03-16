@@ -94,6 +94,7 @@ interface ChatPanelProps {
   isRestoringSession?: boolean;
   onSendToNewSession?: (text: string) => void;
   onOpenBrowserTab?: (url: string, label: string) => void;
+  pendingRestore?: boolean;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -119,6 +120,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isRestoringSession = false,
   onSendToNewSession,
   onOpenBrowserTab,
+  pendingRestore = false,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -216,8 +218,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
-    } else if (hasStreamingMessage || streaming) {
-      // During streaming or tool activity: instant scroll unless user scrolled up
+    } else if (hasStreamingMessage || streaming || thinking || currentTool) {
+      // During streaming, thinking, or tool activity: instant scroll unless user scrolled up
       if (!userScrolledUpRef.current) {
         scrollToBottom(true);
       }
@@ -228,7 +230,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion]);
+  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, thinking, currentTool, toolLog]);
 
   // Always snap to bottom on session switch
   useEffect(() => {
@@ -593,7 +595,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               <div className="thinking-content-text">{thinking}</div>
             </div>
           )}
-          {streaming && (currentTool || !messages.some((m) => m.streaming)) && (
+          {streaming && (currentTool || !messages.some((m) => m.streaming) || pendingRestore) && (
             <div className="thinking-indicator">
               <div className="thinking-content">
                 <span className="dot" />
