@@ -616,22 +616,36 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setBackgroundProcessing(false);
 
       if (!streamingIdRef.current) {
-        // Create a new message for each new streaming sequence
-        // This ensures consecutive Claude responses appear as separate messages
-        const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        streamingContentRef.current = data.text;
-        streamingIdRef.current = msgId;
-        setThinking('');
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: msgId,
-            content: data.text,
-            role: 'assistant' as const,
-            timestamp: Date.now(),
-            streaming: true,
-          },
-        ]);
+        // Check if the last message is already a streaming assistant message
+        // (can happen during tab switch when streamingIdRef was reset but streaming continues)
+        setMessages((prev) => {
+          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+            // Resume the existing streaming message
+            streamingIdRef.current = lastMsg.id;
+            streamingContentRef.current = lastMsg.content + data.text;
+            const updatedContent = streamingContentRef.current;
+            return prev.map((m) =>
+              m.id === lastMsg.id ? { ...m, content: updatedContent } : m
+            );
+          } else {
+            // Create a new message for a genuinely new streaming sequence
+            const msgId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            streamingContentRef.current = data.text;
+            streamingIdRef.current = msgId;
+            setThinking('');
+            return [
+              ...prev,
+              {
+                id: msgId,
+                content: data.text,
+                role: 'assistant' as const,
+                timestamp: Date.now(),
+                streaming: true,
+              },
+            ];
+          }
+        });
       } else {
         // Append to existing streaming message
         streamingContentRef.current += data.text;
