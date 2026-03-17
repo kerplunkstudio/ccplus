@@ -18,6 +18,7 @@ import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
+import { WindowWithElectron } from './types';
 import { ensureMruOrder } from './utils/tabs';
 import './App.css';
 
@@ -356,8 +357,8 @@ function AppContent({ token, loading }: AppContentProps) {
     };
 
     // Electron menu integration
-    const electronAPI = (window as any).electronAPI;
-    const handleMenuAction = (_event: any, action: string) => {
+    const electronAPI = (window as WindowWithElectron).electronAPI;
+    const handleMenuAction = (_event: unknown, action: string) => {
       if (action === 'new-tab') handleNewTab();
       if (action === 'close-tab' && activeTab) {
         handleCloseTabInActiveProject(activeTab.sessionId);

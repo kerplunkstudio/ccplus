@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -39,8 +39,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
   };
 
 
-  const markdownComponents = useMemo(() => ({
-    code({ className, children, ...props }: any) {
+  const markdownComponents = useMemo<Partial<Components>>(() => ({
+    code(props) {
+      const { className, children, ...rest } = props;
       const isInline = !className;
       const match = /language-(\w+)/.exec(className || '');
       const language = match ? match[1] : '';
@@ -48,7 +49,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
 
       if (isInline) {
         return (
-          <code className="inline-code" {...props}>
+          <code className="inline-code" {...rest}>
             {children}
           </code>
         );
