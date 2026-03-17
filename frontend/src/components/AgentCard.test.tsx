@@ -26,7 +26,7 @@ describe('AgentCard', () => {
   });
 
   it('shows truncated summary when collapsed', () => {
-    const longSummary = 'This is a very long summary that should be truncated when collapsed because it exceeds the maximum length of 120 characters and we want to show only a preview to the user';
+    const longSummary = 'This is a very long summary that should be truncated when collapsed because it exceeds the maximum length of 200 characters and we want to show only a preview to the user without displaying the entire text which would make the card too large and hard to scan quickly';
     const nodeWithSummary: AgentNode = {
       ...baseNode,
       summary: longSummary,
@@ -42,7 +42,7 @@ describe('AgentCard', () => {
   });
 
   it('shows full summary when expanded', () => {
-    const longSummary = 'This is a very long summary that should be truncated when collapsed because it exceeds the maximum length of 120 characters and we want to show only a preview to the user';
+    const longSummary = 'This is a very long summary that should be truncated when collapsed because it exceeds the maximum length of 200 characters and we want to show only a preview to the user without displaying the entire text which would make the card too large and hard to scan quickly';
     const nodeWithChildren: AgentNode = {
       ...baseNode,
       summary: longSummary,

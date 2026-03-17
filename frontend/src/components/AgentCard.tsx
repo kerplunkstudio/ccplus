@@ -142,7 +142,7 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
             aria-expanded={expanded}
             aria-label={expanded ? 'Collapse children' : 'Expand children'}
           >
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" className={`toggle-arrow ${expanded ? 'expanded' : ''}`}>
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="currentColor" className={`toggle-arrow ${expanded ? 'expanded' : ''}`} aria-hidden="true">
               <path d="M3 2L7 5L3 8Z" />
             </svg>
             {expanded ? 'Collapse' : 'Expand'}

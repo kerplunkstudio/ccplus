@@ -38,12 +38,12 @@ export const QuestionPrompt: React.FC<QuestionPromptProps> = ({
                       Object.values(questionSelections).every(s => s.length === 0);
 
   return (
-    <div className="user-question-prompt">
+    <div className="user-question-prompt" role="form" aria-label="Answer required questions">
       {pendingQuestion.questions.map((q, qIndex) => (
-        <div key={qIndex} className="question-block">
-          <div className="question-header">{q.header}</div>
+        <fieldset key={qIndex} className="question-block">
+          <legend className="question-header">{q.header}</legend>
           <div className="question-text">{q.question}</div>
-          <div className="question-options">
+          <div className="question-options" role={q.multiSelect ? 'group' : 'radiogroup'} aria-label={q.question}>
             {q.options.map((option, oIndex) => {
               const selected = (questionSelections[qIndex] || []).includes(option.label);
               return (
@@ -62,8 +62,10 @@ export const QuestionPrompt: React.FC<QuestionPromptProps> = ({
                       return { ...prev, [qIndex]: [option.label] };
                     });
                   }}
+                  role={q.multiSelect ? 'checkbox' : 'radio'}
+                  aria-checked={selected}
                 >
-                  <span className="option-indicator">
+                  <span className="option-indicator" aria-hidden="true">
                     {q.multiSelect ? (selected ? '☑' : '☐') : (selected ? '●' : '○')}
                   </span>
                   <span className="option-content">
@@ -74,12 +76,13 @@ export const QuestionPrompt: React.FC<QuestionPromptProps> = ({
               );
             })}
           </div>
-        </div>
+        </fieldset>
       ))}
       <button
         className="question-submit"
         onClick={handleConfirm}
         disabled={isDisabled}
+        aria-label="Confirm selections"
       >
         Confirm
       </button>

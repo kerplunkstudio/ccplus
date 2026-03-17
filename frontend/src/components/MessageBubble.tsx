@@ -68,7 +68,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
                 <button
                   className={`toggle-preview-btn ${showPreview ? 'active' : ''}`}
                   onClick={() => setPreviewMarkdown(prev => ({ ...prev, [blockId]: !prev[blockId] }))}
-                  aria-label="Toggle preview"
+                  aria-label={showPreview ? 'Show code view' : 'Show preview'}
+                  aria-pressed={showPreview}
                 >
                   {showPreview ? 'Code' : 'Preview'}
                 </button>
@@ -76,11 +77,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
               <button
                 className={`copy-code-btn ${copiedId === blockId ? 'copied' : ''}`}
                 onClick={() => copyToClipboard(codeString, blockId)}
-                aria-label="Copy code"
+                aria-label={copiedId === blockId ? 'Code copied' : 'Copy code to clipboard'}
               >
                 {copiedId === blockId ? (
                   <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="copy-check-icon">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="copy-check-icon" aria-hidden="true">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                     Copied
@@ -169,14 +170,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
               <button
                 className={`copy-message-btn ${copiedId === `msg_${message.id}` ? 'copied' : ''}`}
                 onClick={() => copyToClipboard(message.content!, `msg_${message.id}`)}
-                aria-label="Copy message"
+                aria-label={copiedId === `msg_${message.id}` ? 'Message copied' : 'Copy message to clipboard'}
               >
                 {copiedId === `msg_${message.id}` ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                   </svg>
