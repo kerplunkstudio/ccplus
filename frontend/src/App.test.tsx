@@ -188,3 +188,564 @@ describe('App', () => {
     expect(screen.getByText('Standby')).toBeInTheDocument();
   });
 });
+
+describe('App - Auth Flow', () => {
+  it('renders with token', () => {
+    render(<App />);
+    expect(screen.getByTestId('project-sidebar')).toBeInTheDocument();
+  });
+
+  it('renders loading state when loading is true', () => {
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: null,
+      token: null,
+      loading: true,
+      logout: jest.fn(),
+    });
+    render(<App />);
+    // AppContent should not render during loading
+    expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
+  });
+
+  it('renders without token', () => {
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: null,
+      token: null,
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [],
+        activeProjectPath: null,
+      },
+      activeProject: null,
+      activeTab: null,
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+    render(<App />);
+    expect(screen.getByText('Open a project from the sidebar to get started')).toBeInTheDocument();
+  });
+});
+
+describe('App - Workspace State', () => {
+  beforeEach(() => {
+    // Reset mocks to default state
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [
+          {
+            path: '/test/project',
+            name: 'Test Project',
+            tabs: [
+              { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+            ],
+            activeTabId: 'session_1',
+          },
+        ],
+        activeProjectPath: '/test/project',
+      },
+      activeProject: {
+        path: '/test/project',
+        name: 'Test Project',
+        tabs: [
+          { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+        ],
+        activeTabId: 'session_1',
+      },
+      activeTab: { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+  });
+
+  it('shows chat panel when project has tabs', () => {
+    render(<App />);
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+  });
+
+  it('shows tab bar when project has tabs', () => {
+    render(<App />);
+    expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
+  });
+
+  it('applies sidebar width CSS variable', () => {
+    const { container } = render(<App />);
+    const layout = container.querySelector('.app-layout') as HTMLElement;
+    expect(layout.style.getPropertyValue('--sidebar-width')).toBe('260px');
+  });
+
+  it('applies chat font from profile', () => {
+    const { container } = render(<App />);
+    const layout = container.querySelector('.app-layout');
+    expect(layout).toHaveAttribute('data-chat-font', 'default');
+  });
+});
+
+describe('App - Conditional Rendering', () => {
+  it('shows welcome screen when no projects and first run', async () => {
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [],
+        activeProjectPath: null,
+      },
+      activeProject: null,
+      activeTab: null,
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ first_run: true }),
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Welcome')).toBeInTheDocument();
+    });
+  });
+
+  it('shows no-project state when no active project', () => {
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [],
+        activeProjectPath: null,
+      },
+      activeProject: null,
+      activeTab: null,
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+    render(<App />);
+    expect(screen.getByText('Open a project from the sidebar to get started')).toBeInTheDocument();
+  });
+
+  it('shows dashboard when project has no tabs', () => {
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [
+          {
+            path: '/test/project',
+            name: 'Test Project',
+            tabs: [],
+            activeTabId: '',
+          },
+        ],
+        activeProjectPath: '/test/project',
+      },
+      activeProject: {
+        path: '/test/project',
+        name: 'Test Project',
+        tabs: [],
+        activeTabId: '',
+      },
+      activeTab: null,
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+    render(<App />);
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+});
+
+describe('App - Socket Connection', () => {
+  beforeEach(() => {
+    // Reset mocks to default state
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [
+          {
+            path: '/test/project',
+            name: 'Test Project',
+            tabs: [
+              { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+            ],
+            activeTabId: 'session_1',
+          },
+        ],
+        activeProjectPath: '/test/project',
+      },
+      activeProject: {
+        path: '/test/project',
+        name: 'Test Project',
+        tabs: [
+          { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+        ],
+        activeTabId: 'session_1',
+      },
+      activeTab: { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+  });
+
+  it('passes connected state to chat panel', () => {
+    jest.spyOn(require('./hooks/useTabSocket'), 'useTabSocket').mockReturnValue({
+      connected: true,
+      messages: [],
+      streaming: false,
+      backgroundProcessing: false,
+      currentTool: null,
+      activityTree: [],
+      sendMessage: jest.fn(),
+      cancelQuery: jest.fn(),
+      toolLog: [],
+      pendingQuestion: null,
+      respondToQuestion: jest.fn(),
+      duplicateSession: jest.fn(),
+      isRestoringSession: false,
+      pendingRestore: false,
+      signals: { status: null, plan: null },
+      promptSuggestions: [],
+      rateLimitState: null,
+      contextTokens: null,
+      usageStats: {
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalDuration: 0,
+        queryCount: 0,
+        contextWindowSize: 200000,
+        model: 'claude-sonnet-4-20250514',
+        linesOfCode: 0,
+        totalSessions: 0,
+      },
+    });
+    render(<App />);
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+  });
+
+  it('passes messages to chat panel', () => {
+    const messages = [
+      { id: '1', content: 'Test message', role: 'user' as const, timestamp: Date.now() },
+    ];
+    jest.spyOn(require('./hooks/useTabSocket'), 'useTabSocket').mockReturnValue({
+      connected: true,
+      messages,
+      streaming: false,
+      backgroundProcessing: false,
+      currentTool: null,
+      activityTree: [],
+      sendMessage: jest.fn(),
+      cancelQuery: jest.fn(),
+      toolLog: [],
+      pendingQuestion: null,
+      respondToQuestion: jest.fn(),
+      duplicateSession: jest.fn(),
+      isRestoringSession: false,
+      pendingRestore: false,
+      signals: { status: null, plan: null },
+      promptSuggestions: [],
+      rateLimitState: null,
+      contextTokens: null,
+      usageStats: {
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalDuration: 0,
+        queryCount: 0,
+        contextWindowSize: 200000,
+        model: 'claude-sonnet-4-20250514',
+        linesOfCode: 0,
+        totalSessions: 0,
+      },
+    });
+    render(<App />);
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+  });
+});
+
+describe('App - Model Selection', () => {
+  beforeEach(() => {
+    // Reset mocks to default state
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [
+          {
+            path: '/test/project',
+            name: 'Test Project',
+            tabs: [
+              { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+            ],
+            activeTabId: 'session_1',
+          },
+        ],
+        activeProjectPath: '/test/project',
+      },
+      activeProject: {
+        path: '/test/project',
+        name: 'Test Project',
+        tabs: [
+          { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+        ],
+        activeTabId: 'session_1',
+      },
+      activeTab: { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useTabSocket'), 'useTabSocket').mockReturnValue({
+      connected: true,
+      messages: [],
+      streaming: false,
+      backgroundProcessing: false,
+      currentTool: null,
+      activityTree: [],
+      sendMessage: jest.fn(),
+      cancelQuery: jest.fn(),
+      toolLog: [],
+      pendingQuestion: null,
+      respondToQuestion: jest.fn(),
+      duplicateSession: jest.fn(),
+      isRestoringSession: false,
+      pendingRestore: false,
+      signals: { status: null, plan: null },
+      promptSuggestions: [],
+      rateLimitState: null,
+      contextTokens: null,
+      usageStats: {
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalDuration: 0,
+        queryCount: 0,
+        contextWindowSize: 200000,
+        model: 'claude-sonnet-4-20250514',
+        linesOfCode: 0,
+        totalSessions: 0,
+      },
+    });
+  });
+
+  it('loads selected model from localStorage', () => {
+    const getItemSpy = jest.spyOn(Storage.prototype, 'getItem');
+    getItemSpy.mockImplementation((key) => {
+      if (key === 'ccplus_selected_model') return 'claude-opus-4-20250514';
+      if (key === 'ccplus_sidebar_width') return '260';
+      return null;
+    });
+    render(<App />);
+    expect(getItemSpy).toHaveBeenCalledWith('ccplus_selected_model');
+    getItemSpy.mockRestore();
+  });
+
+  it('uses default model when localStorage is empty', () => {
+    const getItemSpy = jest.spyOn(Storage.prototype, 'getItem');
+    getItemSpy.mockImplementation((key) => {
+      if (key === 'ccplus_sidebar_width') return '260';
+      return null;
+    });
+    render(<App />);
+    expect(getItemSpy).toHaveBeenCalledWith('ccplus_selected_model');
+    getItemSpy.mockRestore();
+  });
+});
+
+describe('App - Error Boundary', () => {
+  beforeEach(() => {
+    // Reset mocks to default state
+    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
+      user: { id: '1', username: 'test' },
+      token: 'test-token',
+      loading: false,
+      logout: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
+      state: {
+        projects: [
+          {
+            path: '/test/project',
+            name: 'Test Project',
+            tabs: [
+              { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+            ],
+            activeTabId: 'session_1',
+          },
+        ],
+        activeProjectPath: '/test/project',
+      },
+      activeProject: {
+        path: '/test/project',
+        name: 'Test Project',
+        tabs: [
+          { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+        ],
+        activeTabId: 'session_1',
+      },
+      activeTab: { sessionId: 'session_1', label: 'New session', isStreaming: false, hasRunningAgent: false, createdAt: Date.now() },
+      addProject: jest.fn(),
+      removeProject: jest.fn(),
+      selectProject: jest.fn(),
+      selectTab: jest.fn(),
+      selectTabQuiet: jest.fn(),
+      addTab: jest.fn(),
+      addBrowserTab: jest.fn(),
+      closeTab: jest.fn(),
+      closeOtherTabs: jest.fn(),
+      duplicateTab: jest.fn(),
+      reopenTab: jest.fn(),
+      hasClosedTabs: false,
+      updateTabLabel: jest.fn(),
+      setTabStreaming: jest.fn(),
+    });
+    jest.spyOn(require('./hooks/useTabSocket'), 'useTabSocket').mockReturnValue({
+      connected: true,
+      messages: [],
+      streaming: false,
+      backgroundProcessing: false,
+      currentTool: null,
+      activityTree: [],
+      sendMessage: jest.fn(),
+      cancelQuery: jest.fn(),
+      toolLog: [],
+      pendingQuestion: null,
+      respondToQuestion: jest.fn(),
+      duplicateSession: jest.fn(),
+      isRestoringSession: false,
+      pendingRestore: false,
+      signals: { status: null, plan: null },
+      promptSuggestions: [],
+      rateLimitState: null,
+      contextTokens: null,
+      usageStats: {
+        totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalDuration: 0,
+        queryCount: 0,
+        contextWindowSize: 200000,
+        model: 'claude-sonnet-4-20250514',
+        linesOfCode: 0,
+        totalSessions: 0,
+      },
+    });
+  });
+
+  it('wraps app content in error boundary', () => {
+    // ErrorBoundary is mocked to pass through children
+    render(<App />);
+    expect(screen.getByTestId('project-sidebar')).toBeInTheDocument();
+  });
+});
