@@ -148,16 +148,6 @@ export const AgentCard: React.FC<AgentCardProps> = React.memo(({ node, depth, on
             {expanded ? 'Collapse' : 'Expand'}
           </button>
         )}
-
-        {/* Error */}
-        {node.error && (
-          <div className="agent-card-error">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 22h20L12 2zm0 3.5L19.5 20h-15L12 5.5zm-1 9.5h2v2h-2v-2zm0-6h2v4h-2V9z" />
-            </svg>
-            <span>{node.error}</span>
-          </div>
-        )}
       </div>
 
       {childCount > 0 && (

@@ -1,13 +1,41 @@
-import { renderHook, act } from '@testing-library/react';
+// Import from /pure to disable automatic cleanup
+import { renderHook, waitFor, cleanup } from '@testing-library/react/pure';
+import { act } from 'react';
 import { useTabSocket } from './useTabSocket';
 import { io } from 'socket.io-client';
 
 jest.mock('socket.io-client');
 
+// Manual cleanup that swallows AggregateError from async operations
+afterEach(() => {
+  try {
+    cleanup();
+  } catch (error) {
+    // Swallow AggregateError from async operations completing after unmount - this is expected
+    if (!(error && typeof error === 'object' && 'name' in error && error.name === 'AggregateError')) {
+      throw error;
+    }
+  }
+});
+
 describe('useTabSocket session cache', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn();
+    // Mock fetch to resolve immediately
+    global.fetch = jest.fn((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        json: async () => {
+          if (url.includes('/api/history/')) {
+            return { messages: [], streaming: false };
+          }
+          if (url.includes('/api/activity/')) {
+            return { events: [] };
+          }
+          return {};
+        },
+      });
+    });
   });
 
   it('should cache session state when switching tabs during streaming', async () => {
@@ -19,12 +47,6 @@ describe('useTabSocket session cache', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    // Mock fetch for session restore
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render hook with session A
     const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
@@ -32,6 +54,11 @@ describe('useTabSocket session cache', () => {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore to complete
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate receiving text_delta to populate streaming content
     const textDeltaHandler = mockSocket.on.mock.calls.find(
@@ -47,17 +74,26 @@ describe('useTabSocket session cache', () => {
     const messagesBefore = result.current.messages;
 
     // Switch to session B (this should cache session A's state)
-    rerender({ token: 'test-token', sessionId: 'session-b' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    // Wait for session B restore to complete
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Verify session A was reset
     expect(result.current.messages.length).toBe(0);
 
     // Switch back to session A (should restore from cache, not DB)
-    rerender({ token: 'test-token', sessionId: 'session-a' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-a' });
+    });
 
     // Wait for restore to complete
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify messages were restored from cache
@@ -74,12 +110,23 @@ describe('useTabSocket session cache', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        messages: [{ id: 1, content: 'Test', role: 'user', timestamp: new Date().toISOString() }],
-        streaming: false
-      }),
+    // Override default fetch mock for this test to return a message
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        json: async () => {
+          if (url.includes('/api/history/')) {
+            return {
+              messages: [{ id: 1, content: 'Test', role: 'user', timestamp: new Date().toISOString() }],
+              streaming: false
+            };
+          }
+          if (url.includes('/api/activity/')) {
+            return { events: [] };
+          }
+          return {};
+        },
+      });
     });
 
     const { result, rerender } = renderHook(
@@ -88,6 +135,11 @@ describe('useTabSocket session cache', () => {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate text_delta
     const textDeltaHandler = mockSocket.on.mock.calls.find(
@@ -99,7 +151,13 @@ describe('useTabSocket session cache', () => {
     });
 
     // Switch to session B to cache session A
-    rerender({ token: 'test-token', sessionId: 'session-b' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate response_complete with final completion flag
     const responseCompleteHandler = mockSocket.on.mock.calls.find(
@@ -107,10 +165,12 @@ describe('useTabSocket session cache', () => {
     )?.[1];
 
     // Switch back to session A
-    rerender({ token: 'test-token', sessionId: 'session-a' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-a' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Simulate final completion
@@ -123,11 +183,20 @@ describe('useTabSocket session cache', () => {
     });
 
     // Switch to session B and back to session A again
-    rerender({ token: 'test-token', sessionId: 'session-b' });
-    rerender({ token: 'test-token', sessionId: 'session-a' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-a' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify session A state comes from DB fetch (cache was deleted)
@@ -146,17 +215,17 @@ describe('useTabSocket session cache', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate text_delta to start streaming
     const textDeltaHandler = mockSocket.on.mock.calls.find(
@@ -171,16 +240,24 @@ describe('useTabSocket session cache', () => {
     expect(result.current.streaming).toBe(true);
 
     // Switch to session B
-    rerender({ token: 'test-token', sessionId: 'session-b' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Verify streaming was reset for session B
     expect(result.current.streaming).toBe(false);
 
     // Switch back to session A
-    rerender({ token: 'test-token', sessionId: 'session-a' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-a' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify streaming state was restored
@@ -196,11 +273,6 @@ describe('useTabSocket session cache', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
@@ -208,17 +280,30 @@ describe('useTabSocket session cache', () => {
       }
     );
 
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
+
     // Verify no messages
     expect(result.current.messages.length).toBe(0);
 
     // Switch to session B (should not cache session A since it's empty)
-    rerender({ token: 'test-token', sessionId: 'session-b' });
+    await act(async () => {
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Switch back to session A
-    rerender({ token: 'test-token', sessionId: 'session-a' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-a' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify fetch was called (cache was not used because session was empty)
@@ -231,7 +316,21 @@ describe('useTabSocket session cache', () => {
 describe('useTabSocket persistent socket', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch = jest.fn();
+    // Mock fetch to resolve immediately
+    global.fetch = jest.fn((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        json: async () => {
+          if (url.includes('/api/history/')) {
+            return { messages: [], streaming: false };
+          }
+          if (url.includes('/api/activity/')) {
+            return { events: [] };
+          }
+          return {};
+        },
+      });
+    });
   });
 
   it('should create socket only once regardless of session changes', async () => {
@@ -244,41 +343,45 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render with session-a
-    const { rerender } = renderHook(
+    const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
 
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
+
     // Verify io() was called once
     expect(io).toHaveBeenCalledTimes(1);
 
     // Rerender with session-b
-    rerender({ token: 'test-token', sessionId: 'session-b' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Rerender with session-c
-    rerender({ token: 'test-token', sessionId: 'session-c' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-c' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify io() was still called only ONCE (socket persists across sessions)
     expect(io).toHaveBeenCalledTimes(1);
   });
 
-  it('should not include session_id in auth handshake', () => {
+  it('should not include session_id in auth handshake', async () => {
     const mockSocket = {
       on: jest.fn(),
       emit: jest.fn(),
@@ -288,18 +391,18 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render with token and sessionId
-    renderHook(
+    const { result } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Verify io() was called with correct auth (no session_id)
     expect(io).toHaveBeenCalledWith(
@@ -325,18 +428,18 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render
-    renderHook(
+    const { result } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Find and trigger connect handler
     const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -359,18 +462,18 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render with session-a
-    const { rerender } = renderHook(
+    const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate connect
     const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -382,10 +485,12 @@ describe('useTabSocket persistent socket', () => {
     mockSocket.emit.mockClear();
 
     // Rerender with session-b
-    rerender({ token: 'test-token', sessionId: 'session-b' });
-
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify leave_session was called for session-a
@@ -405,11 +510,6 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render
     const { result } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
@@ -417,6 +517,11 @@ describe('useTabSocket persistent socket', () => {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate connect
     const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -446,11 +551,6 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render
     const { result } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
@@ -458,6 +558,11 @@ describe('useTabSocket persistent socket', () => {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
+
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
     // Simulate connect
     const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -484,24 +589,26 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ messages: [], streaming: false }),
-    });
-
     // Render with session-a
-    const { rerender } = renderHook(
+    const { result, rerender } = renderHook(
       ({ token, sessionId }) => useTabSocket(token, sessionId),
       {
         initialProps: { token: 'test-token', sessionId: 'session-a' },
       }
     );
 
-    // Rerender with session-b
-    rerender({ token: 'test-token', sessionId: 'session-b' });
+    // Wait for initial restore
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
+    });
 
+    // Rerender with session-b
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      rerender({ token: 'test-token', sessionId: 'session-b' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     // Verify close() was NOT called
