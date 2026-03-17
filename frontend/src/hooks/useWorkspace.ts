@@ -300,8 +300,8 @@ export function useWorkspace() {
         if (apiState && apiState.projects && apiState.projects.length > 0) {
           // Compare timestamps: localStorage might be newer (e.g., after hard refresh where
           // sendBeacon races with the GET request)
-          const localSavedAt = (state as any).savedAt || 0;
-          const apiSavedAt = apiState.savedAt || 0;
+          const localSavedAt = (state as WorkspaceState & { savedAt?: number }).savedAt || 0;
+          const apiSavedAt = (apiState as WorkspaceState & { savedAt?: number }).savedAt || 0;
 
           if (apiSavedAt >= localSavedAt) {
             // API is same age or newer — use it as source of truth

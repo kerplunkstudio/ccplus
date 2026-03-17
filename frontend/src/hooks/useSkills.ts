@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SkillSuggestion } from '../utils/slashCommands';
+import { SkillData } from '../types';
 
 const API_BASE = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
@@ -18,7 +19,7 @@ export function useSkills() {
       }
       const data = await response.json();
 
-      const skillSuggestions: SkillSuggestion[] = (data.skills || []).map((skill: any) => ({
+      const skillSuggestions: SkillSuggestion[] = (data.skills || []).map((skill: SkillData) => ({
         name: skill.name,
         plugin: skill.plugin,
         description: skill.description || `From ${skill.plugin}`,

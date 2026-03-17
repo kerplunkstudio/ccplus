@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message } from '../types';
+import { Message, FileWithPath } from '../types';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { PathAutocomplete } from './PathAutocomplete';
 import { useSkills } from '../hooks/useSkills';
@@ -529,9 +529,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Extract file paths from dropped files
     const paths: string[] = [];
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+      const file = files[i] as FileWithPath;
       // In Electron, files have a 'path' property with the absolute path
-      const filePath = (file as any).path;
+      const filePath = file.path;
       if (filePath) {
         paths.push(filePath);
       }

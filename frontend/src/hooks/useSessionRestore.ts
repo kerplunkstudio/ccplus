@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode } from '../types';
+import { Message, ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMessage, DBToolEvent } from '../types';
 import { TreeAction } from './useActivityTree';
 import { fetchUserStats } from './useStreamingMessages';
 
@@ -63,11 +63,11 @@ interface UseSessionRestoreProps {
   setThinking: (thinking: string) => void;
   setToolLog: Dispatch<React.SetStateAction<ToolEvent[]>>;
   setCurrentTool: (tool: ToolEvent | null) => void;
-  setPendingQuestion: (question: any) => void;
+  setPendingQuestion: (question: PendingQuestion | null) => void;
   setPendingRestore: (pending: boolean) => void;
-  setSignals: (signals: any) => void;
+  setSignals: (signals: SignalState) => void;
   setContextTokens: (tokens: number | null) => void;
-  setUsageStats: Dispatch<React.SetStateAction<any>>;
+  setUsageStats: Dispatch<React.SetStateAction<UsageStats>>;
   dispatchTree: Dispatch<TreeAction>;
   clearToolTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   pendingWorkerRestartErrorRef: MutableRefObject<{ message: string; timestamp: number } | null>;
@@ -219,11 +219,11 @@ export function useSessionRestore({
             }
             if (model) {
               const windowSize = MODEL_CONTEXT_WINDOWS[model] || DEFAULT_CONTEXT_WINDOW;
-              setUsageStats((prev: any) => ({ ...prev, contextWindowSize: windowSize, model: model }));
+              setUsageStats((prev) => ({ ...prev, contextWindowSize: windowSize, model: model }));
             }
 
             if (dbMessages && dbMessages.length > 0) {
-              const restored: Message[] = dbMessages.map((m: any) => ({
+              const restored: Message[] = dbMessages.map((m: DBMessage) => ({
                 id: `db_${m.id}`,
                 content: m.content,
                 role: m.role as 'user' | 'assistant',
@@ -362,7 +362,7 @@ export function useSessionRestore({
             sessionIsActive = isStreaming || streamActiveRef.current;
 
             if (dbMessages && dbMessages.length > 0) {
-              const restored: Message[] = dbMessages.map((m: any) => ({
+              const restored: Message[] = dbMessages.map((m: DBMessage) => ({
                 id: `db_${m.id}`,
                 content: m.content,
                 role: m.role as 'user' | 'assistant',

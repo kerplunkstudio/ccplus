@@ -1,6 +1,6 @@
 import { useCallback, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message } from '../types';
+import { Message, ToolEvent, PendingQuestion, SignalState } from '../types';
 import { TreeAction } from './useActivityTree';
 
 interface UseSessionActionsProps {
@@ -17,12 +17,12 @@ interface UseSessionActionsProps {
   setStreaming: (streaming: boolean) => void;
   setBackgroundProcessing: (processing: boolean) => void;
   setThinking: (thinking: string) => void;
-  setCurrentTool: (tool: any) => void;
-  setPendingQuestion: (question: any) => void;
+  setCurrentTool: (tool: ToolEvent | null) => void;
+  setPendingQuestion: (question: PendingQuestion | null) => void;
   setPromptSuggestions: (suggestions: string[]) => void;
-  setSignals: (signals: any) => void;
-  toolLogRef: MutableRefObject<any[]>;
-  setToolLog: Dispatch<React.SetStateAction<any[]>>;
+  setSignals: (signals: SignalState) => void;
+  toolLogRef: MutableRefObject<ToolEvent[]>;
+  setToolLog: Dispatch<React.SetStateAction<ToolEvent[]>>;
   dispatchTree: Dispatch<TreeAction>;
   clearToolTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
 }
