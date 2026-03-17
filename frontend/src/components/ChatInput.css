@@ -1,0 +1,392 @@
+.input-container {
+  padding: var(--space-lg) var(--space-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.input-container.drag-over {
+  background: color-mix(in oklch, var(--accent) 8%, var(--bg-tertiary));
+  border-top: 2px solid var(--accent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--accent) 20%, transparent);
+}
+
+.input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md) var(--space-md);
+  box-shadow: none;
+  transition: border-color var(--duration-normal) var(--ease-default), box-shadow var(--duration-normal) var(--ease-default);
+  flex: 1;
+}
+
+.input-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.input-wrapper:focus-within {
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 10%, transparent);
+}
+
+.message-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  resize: none;
+  max-height: 200px;
+  padding: var(--space-xs) 0;
+  width: 100%;
+  overflow-y: auto;
+  /* Firefox scrollbar support */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+/* Firefox: show scrollbar on hover */
+.message-input:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Webkit scrollbar (Chrome, Safari, Edge) */
+.message-input::-webkit-scrollbar {
+  width: var(--space-sm);
+}
+
+.message-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hidden by default */
+.message-input::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-normal);
+}
+
+/* Show on textarea hover */
+.message-input:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+/* Darker when hovering the thumb itself */
+.message-input::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+.message-input:focus-visible {
+  outline: none;
+}
+
+.message-input:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.message-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.message-input:disabled {
+  opacity: 0.5;
+}
+
+/* Slash command styling */
+.input-wrapper:has(.message-input[value^="/"]) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
+}
+
+.uploaded-images-preview {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  flex-wrap: wrap;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.image-preview-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.image-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.9;
+  transition: all var(--transition-fast);
+}
+
+.remove-image-btn:hover {
+  opacity: 1;
+  background: var(--error);
+  border-color: var(--error);
+  color: var(--bg-primary);
+}
+
+.attach-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+
+.attach-btn:hover:not(:disabled) {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.attach-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.attach-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.attach-btn.uploading {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.attach-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid transparent;
+  border-top: 1.5px solid var(--accent);
+  border-radius: 50%;
+  animation: attachSpin 1s linear infinite;
+}
+
+@keyframes attachSpin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.send-btn,
+.cancel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--text-primary);
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-normal);
+  border-radius: var(--radius-sm);
+}
+
+.send-btn {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.send-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.send-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: var(--error);
+  color: var(--bg-primary);
+  border-color: var(--error);
+}
+
+.cancel-btn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.cancel-btn:active {
+  transform: translateY(1px);
+}
+
+.background-processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 16px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.processing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+.processing-text {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* Prompt Suggestions */
+.prompt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.prompt-suggestion-chip {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-suggestion-chip:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  border-color: var(--border-hover, rgba(255, 255, 255, 0.2));
+  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+}
+
+/* Rate Limit Indicator */
+.rate-limit-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(255, 170, 0, 0.08);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  color: rgba(255, 170, 0, 0.85);
+  margin: 4px 16px;
+  animation: pulse-subtle 2s ease-in-out infinite;
+  max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
+  width: fit-content;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@media (max-width: 900px) {
+  .input-container {
+    padding: 6px 8px 8px;
+  }
+
+  .input-row {
+    gap: var(--space-sm);
+  }
+
+  .input-actions {
+    gap: var(--space-xs);
+  }
+
+  .attach-btn,
+  .send-btn,
+  .cancel-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .message-input {
+    font-size: 16px; /* Prevents iOS zoom on input focus */
+  }
+}

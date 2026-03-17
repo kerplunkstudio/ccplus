@@ -1,0 +1,124 @@
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg) var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+  position: relative;
+  /* Firefox scrollbar support */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+/* Firefox: show scrollbar on hover */
+.messages-container:hover {
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Webkit scrollbar (Chrome, Safari, Edge) */
+.messages-container::-webkit-scrollbar {
+  width: var(--space-sm);
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hidden by default */
+.messages-container::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-normal);
+}
+
+/* Show on container hover */
+.messages-container:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+/* Darker when hovering the thumb itself */
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Session restore loader */
+.session-restore-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-3xl) var(--space-lg);
+  opacity: 0;
+  animation: restoreIn 0.3s ease-out 0.1s forwards;
+}
+
+.restore-content {
+  width: 100%;
+  max-width: 38ch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.restore-line {
+  height: 12px;
+  border-radius: 3px;
+  background: var(--border);
+  animation: restoreShimmer 1.8s ease-in-out infinite;
+}
+
+.restore-line-1 {
+  width: 70%;
+  animation-delay: 0s;
+}
+
+.restore-line-2 {
+  width: 100%;
+  animation-delay: 0.15s;
+}
+
+.restore-line-3 {
+  width: 45%;
+  animation-delay: 0.3s;
+}
+
+@keyframes restoreIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes restoreShimmer {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-restore-loader {
+    animation: none;
+    opacity: 1;
+  }
+  .restore-line {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+@media (max-width: 900px) {
+  .messages-container {
+    padding: 8px;
+  }
+}

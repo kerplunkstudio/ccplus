@@ -22,7 +22,8 @@ describe('useTabSocket session cache', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Mock fetch to resolve immediately
-    global.fetch = jest.fn((url: string) => {
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
       return Promise.resolve({
         ok: true,
         json: async () => {
@@ -34,7 +35,7 @@ describe('useTabSocket session cache', () => {
           }
           return {};
         },
-      });
+      }) as Promise<Response>;
     });
   });
 
@@ -317,7 +318,8 @@ describe('useTabSocket persistent socket', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Mock fetch to resolve immediately
-    global.fetch = jest.fn((url: string) => {
+    global.fetch = jest.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
       return Promise.resolve({
         ok: true,
         json: async () => {
@@ -329,7 +331,7 @@ describe('useTabSocket persistent socket', () => {
           }
           return {};
         },
-      });
+      }) as Promise<Response>;
     });
   });
 

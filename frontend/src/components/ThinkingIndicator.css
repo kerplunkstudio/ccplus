@@ -1,0 +1,91 @@
+.thinking-indicator {
+  align-self: flex-start;
+  padding: var(--space-sm) 0;
+  animation: thinkingFadeIn 0.3s ease-out;
+}
+
+.thinking-indicator.fade-out {
+  animation: thinkingFadeOut 0.2s ease-out forwards;
+}
+
+@keyframes thinkingFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinkingFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.thinking-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+}
+
+.thinking-content .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.thinking-content .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.thinking-content .dot:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.thinking-content .dot:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Accessibility: Reduced motion support for thinking indicators */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-indicator,
+  .thinking-indicator.fade-out {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  .thinking-content .dot {
+    animation: none !important;
+    opacity: 0.6;
+  }
+}
+
+.thinking-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-left: 4px;
+  font-style: italic;
+  transition: opacity 0.3s ease;
+  min-width: 140px;
+}
