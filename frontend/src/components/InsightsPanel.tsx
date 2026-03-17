@@ -358,11 +358,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
                       data-tooltip={`${tooltipLabel} · ${day.queries} queries · ${day.tool_calls} tool calls · ${day.sessions} sessions`}
                     />
                   </div>
-                  {idx % labelFrequency === 0 && (
-                    <div className="insights-bar-label">
-                      {localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </div>
-                  )}
+                  <div className="insights-bar-label">
+                    {localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
                 </div>
               );
             })}
