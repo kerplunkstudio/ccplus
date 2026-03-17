@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { Query } from "@anthropic-ai/claude-agent-sdk";
+import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { homedir } from "os";
+import path from "path";
 
 // Hoist mock functions to avoid initialization errors
-const { mockQuery, mockDatabase } = vi.hoisted(() => {
+const { mockQuery, mockDatabase, mockExecFileSync } = vi.hoisted(() => {
   const mockQuery = vi.fn();
   const mockDatabase = {
     recordToolEvent: vi.fn(),
@@ -12,7 +15,8 @@ const { mockQuery, mockDatabase } = vi.hoisted(() => {
     getLastSdkSessionId: vi.fn(() => null),
     getImage: vi.fn(() => null),
   };
-  return { mockQuery, mockDatabase };
+  const mockExecFileSync = vi.fn(() => "[]");
+  return { mockQuery, mockDatabase, mockExecFileSync };
 });
 
 // Mock the SDK before importing sdk-session
@@ -32,7 +36,7 @@ vi.mock("../database.js", () => mockDatabase);
 
 // Mock child_process to prevent actual Claude CLI execution
 vi.mock("child_process", () => ({
-  execFileSync: vi.fn(() => "[]"), // Return empty array of plugins
+  execFileSync: mockExecFileSync,
 }));
 
 import * as sdkSession from "../sdk-session.js";
@@ -54,6 +58,18 @@ function createMockQuery(delayMs = 100): Partial<Query> {
         is_error: false,
         num_turns: 1,
         usage: { input_tokens: 10, output_tokens: 20 },
+        modelUsage: {
+          "claude-sonnet-4-5": {
+            inputTokens: 150,
+            outputTokens: 20,
+            cacheReadInputTokens: 0,
+            cacheCreationInputTokens: 0,
+            webSearchRequests: 0,
+            costUSD: 0.001,
+            contextWindow: 200000,
+            maxOutputTokens: 8192,
+          },
+        },
       } as any;
     },
   };
@@ -1954,6 +1970,1288 @@ describe("SDK Session", () => {
           is_error: true,
         }),
       );
+    });
+  });
+
+  describe("Skills Discovery", () => {
+    it("should discover skills from user commands directory", async () => {
+      const { discoverSkills } = await import("../sdk-session.js");
+
+      // Mock fs functions
+      vi.spyOn(require('fs'), 'existsSync').mockReturnValue(true);
+      vi.spyOn(require('fs'), 'readdirSync').mockReturnValue(['test-command.md']);
+      vi.spyOn(require('fs'), 'readFileSync').mockReturnValue(`---
+description: Test command description
+---
+Command content`);
+
+      const skills = discoverSkills();
+
+      // Should include user commands
+      expect(skills).toBeDefined();
+      expect(Array.isArray(skills)).toBe(true);
+    });
+
+    it("should handle errors when reading skill files", async () => {
+      const { discoverSkills } = await import("../sdk-session.js");
+
+      vi.spyOn(require('fs'), 'existsSync').mockReturnValue(true);
+      vi.spyOn(require('fs'), 'readdirSync').mockImplementation(() => {
+        throw new Error("Permission denied");
+      });
+
+      // Should not throw, just log error
+      expect(() => discoverSkills()).not.toThrow();
+    });
+
+    it("should discover project-level commands when projectPath provided", async () => {
+      const { discoverSkills } = await import("../sdk-session.js");
+
+      vi.spyOn(require('fs'), 'existsSync').mockImplementation((p) => {
+        return p.includes('.claude');
+      });
+      vi.spyOn(require('fs'), 'readdirSync').mockReturnValue(['project-cmd.md']);
+      vi.spyOn(require('fs'), 'readFileSync').mockReturnValue(`---
+description: Project command
+---`);
+
+      const skills = discoverSkills('/tmp/project');
+
+      expect(skills).toBeDefined();
+    });
+  });
+
+  describe("Agent Hooks", () => {
+    it("should track agent lifecycle with SubagentStart and SubagentStop", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "agent-lifecycle-test",
+        "Test agent",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify hooks were set up (query was called with hooks)
+      expect(queryMock).toHaveBeenCalled();
+      const callArgs = queryMock.mock.calls[0][0];
+      expect(callArgs.options.hooks).toBeDefined();
+      expect(callArgs.options.hooks.SubagentStart).toBeDefined();
+      expect(callArgs.options.hooks.SubagentStop).toBeDefined();
+    });
+
+    it("should handle agent_start with agent_type from parameters", async () => {
+      const toolEventCallback = vi.fn();
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: toolEventCallback,
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "agent-type-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Get the hooks from the query call
+      const callArgs = queryMock.mock.calls[0][0];
+      const hooks = callArgs.options.hooks;
+
+      // Simulate PreToolUse for an Agent
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "code_agent", description: "Test agent" },
+            agent_id: undefined,
+          },
+          "toolu_agent123"
+        );
+      }
+
+      // Verify agent_start event was emitted with correct agent_type
+      expect(toolEventCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "agent_start",
+          tool_name: "Agent",
+          agent_type: "code_agent",
+          description: "Test agent",
+        })
+      );
+    });
+
+    it("should use default agent type when subagent_type not provided", async () => {
+      const toolEventCallback = vi.fn();
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: toolEventCallback,
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "default-agent-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const callArgs = queryMock.mock.calls[0][0];
+      const hooks = callArgs.options.hooks;
+
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { description: "Test" },
+            agent_id: undefined,
+          },
+          "toolu_agent456"
+        );
+      }
+
+      expect(toolEventCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "agent_start",
+          agent_type: "agent", // default value
+        })
+      );
+    });
+
+    it("should include LOC parameters for Write/Edit tools in tool_complete", async () => {
+      const toolEventCallback = vi.fn();
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: toolEventCallback,
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "loc-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const callArgs = queryMock.mock.calls[0][0];
+      const hooks = callArgs.options.hooks;
+
+      // Simulate Write tool
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Write",
+            tool_input: { file_path: "/test.js", content: "console.log('test');" },
+            agent_id: undefined,
+          },
+          "toolu_write123"
+        );
+      }
+
+      if (hooks?.PostToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PostToolUse[0].hooks[0](
+          {
+            tool_name: "Write",
+            tool_input: { file_path: "/test.js", content: "console.log('test');" },
+            agent_id: undefined,
+          },
+          "toolu_write123"
+        );
+      }
+
+      // Verify tool_complete includes LOC parameters
+      expect(toolEventCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "tool_complete",
+          tool_name: "Write",
+          parameters: expect.objectContaining({
+            content: "console.log('test');",
+          }),
+        })
+      );
+    });
+  });
+
+  describe("Error Handling - API Errors", () => {
+    it("should handle overloaded_error in stream", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "error",
+            error: {
+              type: "overloaded_error",
+              message: "API is overloaded",
+            },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "overloaded-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        "Claude is currently overloaded. Please try again in a moment."
+      );
+    });
+
+    it("should handle api_error in stream", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "error",
+            error: {
+              type: "api_error",
+              message: "Internal server error",
+            },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "api-error-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        "Claude API encountered an internal error. Please try again."
+      );
+    });
+
+    it("should handle generic error in stream", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "error",
+            error: {
+              type: "unknown_error",
+              message: "Something went wrong",
+            },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "generic-error-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onError).toHaveBeenCalledWith("Something went wrong");
+    });
+
+    it("should handle transient error in exception catch block", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          throw new Error("overloaded_error: API temporarily unavailable");
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "transient-error-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        "Claude API is temporarily unavailable. Please try again in a moment."
+      );
+    });
+  });
+
+  describe("AskUserQuestion Flow", () => {
+    it("should emit user question and wait for response", async () => {
+      const onUserQuestionCallback = vi.fn();
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+        onUserQuestion: onUserQuestionCallback,
+      };
+
+      sdkSession.submitQuery(
+        "ask-question-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Get canUseTool function from query options
+      const callArgs = queryMock.mock.calls[0][0];
+      const canUseTool = callArgs.options.canUseTool;
+
+      expect(canUseTool).toBeDefined();
+
+      // Simulate AskUserQuestion invocation
+      const toolPromise = canUseTool("AskUserQuestion", {
+        questions: [{ id: "q1", type: "text", prompt: "What is your name?" }],
+      });
+
+      // Wait for question to be emitted
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Verify question was emitted
+      expect(onUserQuestionCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          questions: expect.any(Array),
+          tool_use_id: expect.stringContaining("perm_"),
+        })
+      );
+
+      // Send response
+      const pendingQuestion = sdkSession.getPendingQuestion("ask-question-test");
+      expect(pendingQuestion).toBeDefined();
+
+      sdkSession.sendQuestionResponse("ask-question-test", { q1: "Alice" });
+
+      // Wait for promise to resolve
+      const result = await toolPromise;
+
+      expect(result).toEqual({
+        behavior: "allow",
+        updatedInput: expect.objectContaining({
+          answers: { q1: "Alice" },
+        }),
+      });
+    });
+
+    it("should allow non-question tools through canUseTool", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "can-use-tool-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const callArgs = queryMock.mock.calls[0][0];
+      const canUseTool = callArgs.options.canUseTool;
+
+      // Test non-question tool
+      const result = await canUseTool("Bash", { command: "ls" });
+
+      expect(result).toEqual({ behavior: "allow" });
+    });
+  });
+
+  describe("Database Error Resilience", () => {
+    it("should continue on database error in preToolUse", async () => {
+      vi.mocked(database.recordToolEvent).mockImplementation(() => {
+        throw new Error("DB write failed");
+      });
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "db-error-resilience-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should still complete successfully
+      expect(callbacks.onComplete).toHaveBeenCalled();
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it("should continue on database error in postToolUse", async () => {
+      vi.mocked(database.updateToolEvent).mockImplementation(() => {
+        throw new Error("DB update failed");
+      });
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "db-update-error-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onComplete).toHaveBeenCalled();
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it("should continue on database error when recording messages", async () => {
+      vi.mocked(database.recordMessage).mockImplementation(() => {
+        throw new Error("Message record failed");
+      });
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "Hello" }],
+            },
+          } as any;
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "msg-db-error-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should still stream text
+      expect(callbacks.onText).toHaveBeenCalledWith("Hello", 1);
+      expect(callbacks.onComplete).toHaveBeenCalled();
+    });
+  });
+
+  describe("Session Reset on Config Change", () => {
+    it("should not reset session if workspace and model unchanged", async () => {
+      const mockInterrupt = vi.fn().mockResolvedValue(undefined);
+      const mockQuery: Partial<Query> = {
+        interrupt: mockInterrupt,
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          await new Promise((r) => setTimeout(r, 100));
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      // Start first query
+      sdkSession.submitQuery(
+        "no-reset-test",
+        "Query 1",
+        "/tmp/workspace",
+        callbacks,
+        "sonnet",
+      );
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Start second query with same config
+      sdkSession.submitQuery(
+        "no-reset-test",
+        "Query 2",
+        "/tmp/workspace",
+        callbacks,
+        "sonnet",
+      );
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Should have interrupted due to stale query cleanup, not config change
+      expect(mockInterrupt).toHaveBeenCalled();
+    });
+  });
+
+  describe("Interrupt on Disconnect", () => {
+    it("should interrupt and close query on disconnectSession", async () => {
+      const mockInterrupt = vi.fn().mockResolvedValue(undefined);
+      const mockClose = vi.fn();
+      const mockQuery: Partial<Query> = {
+        interrupt: mockInterrupt,
+        close: mockClose,
+        [Symbol.asyncIterator]: async function* () {
+          await new Promise((r) => setTimeout(r, 200));
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "disconnect-interrupt-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Disconnect
+      sdkSession.disconnectSession("disconnect-interrupt-test");
+
+      expect(mockInterrupt).toHaveBeenCalled();
+      expect(mockClose).toHaveBeenCalled();
+    });
+  });
+
+  describe("Streaming Buffer Management", () => {
+    it("should trim streaming content when exceeding MAX_STREAMING_BUFFER (result text)", async () => {
+      // MAX_STREAMING_BUFFER is 2MB
+      const largeText = "x".repeat(1024 * 1024 * 1.5); // 1.5MB
+      const moreText = "y".repeat(1024 * 1024); // 1MB more = 2.5MB total
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            result: largeText,
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "buffer-trim-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // First check that content is stored
+      let content1 = sdkSession.getStreamingContent("buffer-trim-test");
+      expect(content1.length).toBe(largeText.length);
+
+      // Submit another query with more large text
+      const mockQuery2: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test2",
+            result: moreText,
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      queryMock.mockReturnValue(mockQuery2);
+
+      sdkSession.submitQuery(
+        "buffer-trim-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Buffer should have been trimmed during streaming
+      const content2 = sdkSession.getStreamingContent("buffer-trim-test");
+      expect(content2.length).toBeLessThanOrEqual(2 * 1024 * 1024); // Should be <= 2MB
+    });
+
+    it("should trim streaming content when exceeding MAX_STREAMING_BUFFER (stream events)", async () => {
+      const largeChunk = "z".repeat(1024 * 1024 * 1.5); // 1.5MB
+      const moreChunk = "w".repeat(1024 * 1024); // 1MB more
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          // First large chunk
+          yield {
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
+              delta: { type: "text_delta", text: largeChunk },
+            },
+          } as any;
+          // Second large chunk (exceeds buffer)
+          yield {
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
+              delta: { type: "text_delta", text: moreChunk },
+            },
+          } as any;
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "buffer-stream-trim-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const content = sdkSession.getStreamingContent("buffer-stream-trim-test");
+      // Buffer should have been trimmed
+      expect(content.length).toBeLessThanOrEqual(2 * 1024 * 1024);
+    });
+  });
+
+  describe("Model Usage Tracking", () => {
+    it("should extract context window size from modelUsage", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0.001,
+            duration_ms: 100,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 100, output_tokens: 50 },
+            modelUsage: {
+              "claude-sonnet-4-5": {
+                inputTokens: 150,
+                outputTokens: 50,
+                cacheReadInputTokens: 0,
+                cacheCreationInputTokens: 0,
+                contextWindow: 200000,
+                maxOutputTokens: 8192,
+                costUSD: 0.001,
+              },
+            },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "model-usage-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context_window_size: 200000,
+          input_tokens: 150, // From modelUsage aggregate
+        })
+      );
+    });
+
+    it("should fallback to usage tokens when modelUsage absent", async () => {
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 100, output_tokens: 50 },
+            // No modelUsage field
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "fallback-usage-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(callbacks.onComplete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input_tokens: 100, // From usage field
+          output_tokens: 50,
+          context_window_size: 0, // No modelUsage
+        })
+      );
+    });
+  });
+
+  describe("Agent Failure Tracking", () => {
+    it("should record agent summary on failure in postToolUseFailure", async () => {
+      const toolEventCallback = vi.fn();
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn(),
+        [Symbol.asyncIterator]: async function* () {
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: toolEventCallback,
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "agent-failure-test",
+        "Test",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const callArgs = queryMock.mock.calls[0][0];
+      const hooks = callArgs.options.hooks;
+
+      // Simulate agent start
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { description: "Test agent" },
+            agent_id: undefined,
+          },
+          "toolu_fail_agent"
+        );
+      }
+
+      // Simulate SubagentStart
+      if (hooks?.SubagentStart?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStart[0].hooks[0](
+          { agent_id: "agent_xyz" },
+          undefined
+        );
+      }
+
+      // Simulate SubagentStop with transcript
+      if (hooks?.SubagentStop?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStop[0].hooks[0](
+          {
+            agent_id: "agent_xyz",
+            agent_transcript_path: "/tmp/transcript.txt",
+            last_assistant_message: "Agent failed due to error",
+          },
+          undefined
+        );
+      }
+
+      // Simulate agent failure
+      if (hooks?.PostToolUseFailure?.[0]?.hooks?.[0]) {
+        await hooks.PostToolUseFailure[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { description: "Test agent" },
+            agent_id: undefined,
+            error: "Agent execution failed",
+          },
+          "toolu_fail_agent"
+        );
+      }
+
+      // Verify agent_stop was emitted with summary
+      expect(toolEventCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "agent_stop",
+          success: false,
+          error: "Agent execution failed",
+          transcript_path: "/tmp/transcript.txt",
+          summary: "Agent failed due to error",
+        })
+      );
+
+      // Verify database was updated with summary
+      expect(database.updateToolEvent).toHaveBeenCalledWith(
+        "agent-failure-test",
+        "toolu_fail_agent",
+        false,
+        "Agent execution failed",
+        expect.any(Number),
+        "Agent failed due to error"
+      );
+    });
+  });
+
+  describe("Session Edge Cases", () => {
+    it("should handle query close error gracefully on stale cleanup", async () => {
+      const mockCloseThatThrows = vi.fn(() => {
+        throw new Error("Already closed");
+      });
+
+      const mockQuery: Partial<Query> = {
+        interrupt: vi.fn().mockResolvedValue(undefined),
+        close: mockCloseThatThrows,
+        [Symbol.asyncIterator]: async function* () {
+          await new Promise((r) => setTimeout(r, 100));
+          yield {
+            type: "result",
+            session_id: "test",
+            total_cost_usd: 0,
+            duration_ms: 1,
+            is_error: false,
+            num_turns: 1,
+            usage: { input_tokens: 1, output_tokens: 1 },
+          } as any;
+        },
+      };
+
+      const queryMock = vi.mocked(
+        await import("@anthropic-ai/claude-agent-sdk"),
+      ).query as Mock;
+      queryMock.mockReturnValue(mockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      // Start first query
+      sdkSession.submitQuery(
+        "close-error-test",
+        "Query 1",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 20));
+
+      // Start second query (triggers stale cleanup)
+      sdkSession.submitQuery(
+        "close-error-test",
+        "Query 2",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Should not throw, should handle close error
+      expect(mockCloseThatThrows).toHaveBeenCalled();
+    });
+
+    it("should return empty string for nonexistent session streaming content", () => {
+      const content = sdkSession.getStreamingContent("nonexistent-session");
+      expect(content).toBe("");
+    });
+
+    it("should return null for nonexistent session last completed response", () => {
+      const response = sdkSession.getLastCompletedResponse("nonexistent-session");
+      expect(response).toBeNull();
     });
   });
 });
