@@ -153,6 +153,7 @@ app.get("/api/version", (_req: Request, res: Response) => {
       timeout: 2000,
       cwd: config.PROJECT_ROOT,
       encoding: "utf-8",
+      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
   } catch {
     // ignore
@@ -181,6 +182,7 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
     execFileSync("git", ["fetch", "--tags", "--quiet"], {
       timeout: 10000,
       cwd: config.PROJECT_ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     if (config.CCPLUS_CHANNEL === "stable") {
@@ -188,6 +190,7 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
         timeout: 2000,
         cwd: config.PROJECT_ROOT,
         encoding: "utf-8",
+        stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
       if (tags) {
         latestVersion = tags.split("\n")[0];
@@ -198,6 +201,7 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
         timeout: 2000,
         cwd: config.PROJECT_ROOT,
         encoding: "utf-8",
+        stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
       const commitsBehind = parseInt(countStr || "0", 10);
       updateAvailable = commitsBehind > 0;
@@ -332,7 +336,7 @@ app.post("/api/projects/clone", (req: Request, res: Response) => {
   }
 
   try {
-    execFileSync("git", ["clone", repoUrl, targetPath], { timeout: 300_000 });
+    execFileSync("git", ["clone", repoUrl, targetPath], { timeout: 300_000, stdio: ['pipe', 'pipe', 'pipe'] });
     res.json({ name: repoName, path: targetPath });
   } catch (err) {
     log.error("Git clone failed", { repoUrl, destPath: targetPath, error: String(err) });
@@ -609,7 +613,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     result.branch = execFileSync("git", ["-C", projectDir, "rev-parse", "--abbrev-ref", "HEAD"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
   } catch {
     result.branch = null;
@@ -617,7 +621,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const status = execFileSync("git", ["-C", projectDir, "status", "--porcelain"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     result.dirty_count = status ? status.split("\n").filter(Boolean).length : 0;
   } catch {
@@ -626,7 +630,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const log = execFileSync("git", ["-C", projectDir, "log", "--format=%H|||%h|||%s|||%ar", "-n", "5"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     result.commits = log
       ? log.split("\n").map((line) => {
@@ -792,10 +796,10 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   // Git context
   try {
     const branch = execFileSync("git", ["-C", projectDir, "rev-parse", "--abbrev-ref", "HEAD"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     const status = execFileSync("git", ["-C", projectDir, "status", "--porcelain"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     result.git = { branch, dirty_count: status ? status.split("\n").filter(Boolean).length : 0 };
   } catch {
@@ -873,7 +877,7 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   // Commit count
   try {
     const count = execFileSync("git", ["-C", projectDir, "rev-list", "--count", "HEAD"], {
-      timeout: 5000, encoding: "utf-8",
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
     result.commit_count = parseInt(count, 10);
   } catch {
