@@ -401,7 +401,9 @@
   }
 }
 
-/* Accessibility: Reduced motion preferences */
+/* Accessibility: Reduced motion preferences
+   Using !important here is necessary to override animation declarations
+   for users with prefers-reduced-motion, ensuring accessibility compliance (WCAG 2.3.3) */
 @media (prefers-reduced-motion: reduce) {
   .message-bubble,
   .message-bubble.streaming {
@@ -506,8 +508,9 @@
   opacity: 0.5;
 }
 
-.copy-message-btn:hover {
-  opacity: 1 !important;
+/* Increase specificity to override parent hover rule without !important */
+.message-bubble.user .copy-message-btn:hover {
+  opacity: 1;
   border-color: var(--accent-dim);
   color: var(--text-primary);
 }

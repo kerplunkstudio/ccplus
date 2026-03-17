@@ -148,6 +148,9 @@ code {
 }
 
 /* === Reduced motion (WCAG 2.3.3) === */
+/* Using !important here is necessary for accessibility compliance.
+   This media query must override ALL animations and transitions globally
+   for users with vestibular motion disorders or motion sensitivity. */
 
 @media (prefers-reduced-motion: reduce) {
   *,

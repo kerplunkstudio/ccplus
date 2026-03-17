@@ -548,7 +548,9 @@
   opacity: 0.3;
 }
 
-/* Global class for when dragging */
+/* Global class for when dragging
+   Using !important here is necessary to override all cursor declarations
+   across the entire DOM tree during sidebar resize for consistent UX */
 
 body.sidebar-resizing {
   user-select: none;

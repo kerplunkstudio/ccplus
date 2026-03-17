@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { WebViewElement, WebViewLoadFailEvent, WindowWithElectron } from '../types';
 import './BrowserTab.css';
 
 interface BrowserTabProps {
@@ -12,10 +13,10 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url }) => {
   const [canGoForward, setCanGoForward] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const webviewRef = useRef<any>(null);
+  const webviewRef = useRef<WebViewElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const isElectron = !!(window as any).electronAPI;
+  const isElectron = !!(window as WindowWithElectron).electronAPI;
 
   useEffect(() => {
     setCurrentUrl(url);
@@ -40,9 +41,10 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url }) => {
       setInputUrl(webview.getURL());
     };
 
-    const handleLoadFail = (event: any) => {
+    const handleLoadFail = (event?: unknown) => {
       setIsLoading(false);
-      setError(`Failed to load: ${event.errorDescription || 'Unknown error'}`);
+      const failEvent = event as WebViewLoadFailEvent | undefined;
+      setError(`Failed to load: ${failEvent?.errorDescription || 'Unknown error'}`);
     };
 
     webview.addEventListener('did-start-loading', handleLoadStart);
@@ -100,7 +102,7 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url }) => {
   };
 
   const handleOpenExternal = () => {
-    const electronAPI = (window as any).electronAPI;
+    const electronAPI = (window as WindowWithElectron).electronAPI;
     if (electronAPI?.openExternal) {
       electronAPI.openExternal(currentUrl);
     } else {

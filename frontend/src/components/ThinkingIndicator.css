@@ -67,7 +67,9 @@
   }
 }
 
-/* Accessibility: Reduced motion support for thinking indicators */
+/* Accessibility: Reduced motion support for thinking indicators
+   Using !important here is necessary to override animation declarations
+   for users with prefers-reduced-motion, ensuring accessibility compliance (WCAG 2.3.3) */
 @media (prefers-reduced-motion: reduce) {
   .thinking-indicator,
   .thinking-indicator.fade-out {
