@@ -262,6 +262,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const prevSessionIdRef = useRef(sessionId);
   const seenToolUseIds = useRef<Set<string>>(new Set());
   const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const isRestoringSessionRef = useRef(true);
   const pendingWorkerRestartErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
   const workerRestartGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const awaitingDeltaAfterRestore = useRef(false);
@@ -426,6 +427,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       prevSessionIdRef.current = sessionId;
       currentSessionIdRef.current = sessionId;
       setIsRestoringSession(true);
+      isRestoringSessionRef.current = true;
       setMessages([]);
       dispatchTree({ type: 'CLEAR' });
       // Don't reset usage stats - they persist across sessions
@@ -894,7 +896,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         }, 100);
       }
 
-      if (!msgId && data.content && !completionFinalizedRef.current) {
+      if (!msgId && data.content && !completionFinalizedRef.current && !isRestoringSessionRef.current) {
         // Tab switch recovery: response_complete arrived but no streaming message exists
         // Create a finalized assistant message with the full content
         const recoveryId = `recovery_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -1264,6 +1266,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
       } catch (err) {
       } finally {
         setIsRestoringSession(false);
+        isRestoringSessionRef.current = false;
         // Fix 4: Delete cache entry after restore completes
         sessionCacheRef.current.delete(sessionId);
       }
