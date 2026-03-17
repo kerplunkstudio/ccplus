@@ -232,7 +232,9 @@ type SessionCache = {
 
 export function useTabSocket(token: string | null, sessionId: string) {
   const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const connectedRef = useRef(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
@@ -453,6 +455,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
       setPendingRestore(false);
       setSignals({ status: null });
       setContextTokens(null);
+
+      // Switch rooms on persistent socket (no destroy/recreate needed)
+      if (socketRef.current?.connected) {
+        if (previousSessionId) {
+          socketRef.current.emit('leave_session', { session_id: previousSessionId });
+        }
+        socketRef.current.emit('join_session', { session_id: sessionId });
+      }
     }
   }, [sessionId]);
 
@@ -460,7 +470,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     if (!token) return;
 
     const newSocket = io(SOCKET_URL, {
-      auth: { token, session_id: sessionId },
+      auth: { token },
       transports: ['polling', 'websocket'],
     });
 
@@ -471,33 +481,20 @@ export function useTabSocket(token: string | null, sessionId: string) {
         disconnectTimerRef.current = null;
       }
       setConnected(true);
+      connectedRef.current = true;
+      // Join the current session room
+      const currentSession = currentSessionIdRef.current;
+      if (currentSession) {
+        newSocket.emit('join_session', { session_id: currentSession });
+      }
     });
     newSocket.on('disconnect', () => {
-      // Debounce setting connected to false to prevent flicker during tab switches
+      // Debounce setting connected to false to prevent flicker during reconnects
       disconnectTimerRef.current = setTimeout(() => {
         setConnected(false);
+        connectedRef.current = false;
         disconnectTimerRef.current = null;
       }, 1500);
-      if (streamingIdRef.current) {
-        const msgId = streamingIdRef.current;
-        const finalContent = streamingContentRef.current;
-        if (finalContent) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, content: finalContent, streaming: false } : m
-            )
-          );
-        }
-        streamingContentRef.current = '';
-        streamingIdRef.current = null;
-        responseCompleteRef.current = false;
-        setStreaming(false);
-        if (clearToolTimerRef.current) {
-          clearTimeout(clearToolTimerRef.current);
-          clearToolTimerRef.current = null;
-        }
-        setCurrentTool(null);
-      }
     });
 
     newSocket.io.on('reconnect', () => {
@@ -508,8 +505,11 @@ export function useTabSocket(token: string | null, sessionId: string) {
       }
       const restoreAfterReconnect = async () => {
         try {
+          const activeSessionId = currentSessionIdRef.current;
+          if (!activeSessionId) return;
+
           let sessionIsActive = false;
-          const historyRes = await fetch(`${SOCKET_URL}/api/history/${sessionId}`);
+          const historyRes = await fetch(`${SOCKET_URL}/api/history/${activeSessionId}`);
           if (historyRes.ok) {
             const { messages: dbMessages, streaming: isStreaming } = await historyRes.json();
             sessionIsActive = isStreaming || streamActiveRef.current;
@@ -551,7 +551,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
             }
           }
 
-          const activityRes = await fetch(`${SOCKET_URL}/api/activity/${sessionId}`);
+          const activityRes = await fetch(`${SOCKET_URL}/api/activity/${activeSessionId}`);
           if (activityRes.ok) {
             const { events } = await activityRes.json();
             if (events && events.length > 0) {
@@ -921,6 +921,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
             },
           ];
         });
+        completionFinalizedRef.current = true;
       }
     });
 
@@ -1092,6 +1093,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     });
 
     setSocket(newSocket);
+    socketRef.current = newSocket;
 
     return () => {
       if (clearToolTimerRef.current) {
@@ -1102,9 +1104,10 @@ export function useTabSocket(token: string | null, sessionId: string) {
         clearTimeout(disconnectTimerRef.current);
         disconnectTimerRef.current = null;
       }
+      socketRef.current = null;
       newSocket.close();
     };
-  }, [token, sessionId]);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -1278,7 +1281,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
       // If background processing, cancel first
       if (backgroundProcessing) {
-        socket.emit('cancel');
+        socket.emit('cancel', { session_id: currentSessionIdRef.current });
         setBackgroundProcessing(false);
         dispatchTree({ type: 'MARK_ALL_STOPPED' });
       }
@@ -1311,14 +1314,14 @@ export function useTabSocket(token: string | null, sessionId: string) {
       toolLogRef.current = [];
       setToolLog([]);
       setSignals({ status: null });
-      socket.emit('message', { content, workspace, model, image_ids: imageIds });
+      socket.emit('message', { content, workspace, model, image_ids: imageIds, session_id: currentSessionIdRef.current });
     },
     [socket, connected, backgroundProcessing]
   );
 
   const cancelQuery = useCallback(() => {
     if (!socket || !connected) return;
-    socket.emit('cancel');
+    socket.emit('cancel', { session_id: currentSessionIdRef.current });
 
     dispatchTree({ type: 'MARK_ALL_STOPPED' });
 
@@ -1348,7 +1351,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const respondToQuestion = useCallback(
     (response: Record<string, string>) => {
       if (!socket || !connected) return;
-      socket.emit('question_response', { response });
+      socket.emit('question_response', { response, session_id: currentSessionIdRef.current });
       setPendingQuestion(null);
     },
     [socket, connected]

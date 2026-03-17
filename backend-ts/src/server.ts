@@ -68,8 +68,8 @@ if (orphanCount > 0) {
   console.log(`Marked ${orphanCount} orphaned tool events from previous run`);
 }
 
-// Maps socket.id -> { session_id, user_id }
-const connectedClients = new Map<string, { session_id: string; user_id: string }>();
+// Maps socket.id -> { session_id, user_id, sessions }
+const connectedClients = new Map<string, { session_id: string; user_id: string; sessions: Set<string> }>();
 
 // Track mutable workspace path (global default for new sessions)
 let workspacePath = config.WORKSPACE_PATH;
@@ -113,6 +113,7 @@ app.get("/health", (_req: Request, res: Response) => {
     uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
     active_sessions: sdkSession.getActiveSessions().length,
     connected_clients: connectedClients.size,
+    active_sessions_count: new Set([...connectedClients.values()].flatMap(c => [...c.sessions])).size,
     db: dbStats,
   });
 });
@@ -1019,44 +1020,37 @@ app.delete("/api/mcp/servers/:name", (req: Request, res: Response) => {
 // WebSocket Events
 // =========================================================================
 
-io.on("connection", (socket) => {
-  const token = socket.handshake.auth.token as string ?? "";
-  const userId = auth.verifyToken(token);
-
-  if (!userId) {
-    console.warn("WebSocket connection rejected: invalid token");
-    socket.disconnect(true);
-    return;
-  }
-
-  const sessionId = (socket.handshake.auth.session_id as string) ?? socket.id;
-
-  connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
+// Helper: Join a session room and sync state
+function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string): void {
   socket.join(sessionId);
+
+  const client = connectedClients.get(socket.id);
+  if (client) {
+    client.sessions.add(sessionId);
+    client.session_id = sessionId;
+  }
 
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
-    io.to(sessionId).emit("stream_active", { session_id: sessionId });
+    socket.emit("stream_active", { session_id: sessionId });
 
-    // Send accumulated streaming content so client can catch up on missed deltas
     const bufferedContent = sdkSession.getStreamingContent(sessionId);
     if (bufferedContent) {
-      io.to(sessionId).emit("stream_content_sync", { content: bufferedContent, session_id: sessionId });
+      socket.emit("stream_content_sync", { content: bufferedContent, session_id: sessionId });
     }
 
     const pq = sdkSession.getPendingQuestion(sessionId);
     if (pq) {
-      io.to(sessionId).emit("user_question", {
+      socket.emit("user_question", {
         questions: pq.questions ?? [],
         tool_use_id: pq.tool_use_id ?? "",
       });
     }
   } else {
-    // Session not active - check if there's a missed response_complete
     const missedResponse = sdkSession.getLastCompletedResponse(sessionId);
     if (missedResponse) {
-      io.to(sessionId).emit("response_complete", {
+      socket.emit("response_complete", {
         cost: missedResponse.cost,
         duration_ms: missedResponse.duration_ms,
         input_tokens: missedResponse.input_tokens,
@@ -1070,6 +1064,26 @@ io.on("connection", (socket) => {
   }
 
   socket.emit("connected", { session_id: sessionId });
+}
+
+io.on("connection", (socket) => {
+  const token = socket.handshake.auth.token as string ?? "";
+  const userId = auth.verifyToken(token);
+
+  if (!userId) {
+    console.warn("WebSocket connection rejected: invalid token");
+    socket.disconnect(true);
+    return;
+  }
+
+  const sessionId = (socket.handshake.auth.session_id as string) ?? "";
+
+  connectedClients.set(socket.id, { session_id: sessionId, user_id: userId, sessions: new Set() });
+
+  // If session_id provided in auth (backward compat or initial connect), auto-join
+  if (sessionId) {
+    joinSession(socket, sessionId, userId);
+  }
 
   // -- Message handler --
 
@@ -1080,7 +1094,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const sid = client.session_id;
+    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
     const uid = client.user_id;
     const content = ((data?.content as string) ?? "").trim();
     const workspace = (data?.workspace as string) ?? getWorkspaceForSession(sid);
@@ -1127,10 +1141,11 @@ io.on("connection", (socket) => {
 
   // -- Cancel --
 
-  socket.on("cancel", () => {
+  socket.on("cancel", (data?: { session_id?: string }) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
-    sdkSession.cancelQuery(client.session_id);
+    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
+    sdkSession.cancelQuery(sid);
     socket.emit("cancelled", { status: "ok" });
   });
 
@@ -1145,8 +1160,9 @@ io.on("connection", (socket) => {
   socket.on("question_response", (data: Record<string, unknown>) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
+    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
     const response = (data?.response as Record<string, unknown>) ?? {};
-    sdkSession.sendQuestionResponse(client.session_id, response);
+    sdkSession.sendQuestionResponse(sid, response);
   });
 
   // -- Duplicate session --
@@ -1167,13 +1183,45 @@ io.on("connection", (socket) => {
     }
   });
 
+  // -- Join session (room-based multiplexing) --
+
+  socket.on("join_session", (data: { session_id: string }, callback?: (response: { status: string }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ status: "error" });
+      return;
+    }
+
+    const newSessionId = data?.session_id;
+    if (!newSessionId || typeof newSessionId !== "string") {
+      callback?.({ status: "error" });
+      return;
+    }
+
+    joinSession(socket, newSessionId, client.user_id);
+    callback?.({ status: "ok" });
+  });
+
+  // -- Leave session --
+
+  socket.on("leave_session", (data: { session_id: string }) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) return;
+
+    const oldSessionId = data?.session_id;
+    if (!oldSessionId || typeof oldSessionId !== "string") return;
+
+    socket.leave(oldSessionId);
+    client.sessions.delete(oldSessionId);
+  });
+
   // -- Disconnect --
 
   socket.on("disconnect", () => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
     if (client) {
-      console.debug(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
+      console.debug(`Client disconnected: user=${client.user_id} sessions=[${[...client.sessions].join(",")}]`);
     }
   });
 });
