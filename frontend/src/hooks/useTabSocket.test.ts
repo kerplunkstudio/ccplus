@@ -227,3 +227,284 @@ describe('useTabSocket session cache', () => {
     );
   });
 });
+
+describe('useTabSocket persistent socket', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn();
+  });
+
+  it('should create socket only once regardless of session changes', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render with session-a
+    const { rerender } = renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Verify io() was called once
+    expect(io).toHaveBeenCalledTimes(1);
+
+    // Rerender with session-b
+    rerender({ token: 'test-token', sessionId: 'session-b' });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Rerender with session-c
+    rerender({ token: 'test-token', sessionId: 'session-c' });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Verify io() was still called only ONCE (socket persists across sessions)
+    expect(io).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not include session_id in auth handshake', () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render with token and sessionId
+    renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Verify io() was called with correct auth (no session_id)
+    expect(io).toHaveBeenCalledWith(
+      expect.any(String),
+      {
+        auth: { token: 'test-token' },
+        transports: ['polling', 'websocket'],
+      }
+    );
+
+    // Verify session_id is NOT in auth object
+    const authObject = (io as jest.Mock).mock.calls[0][1].auth;
+    expect(authObject).not.toHaveProperty('session_id');
+  });
+
+  it('should emit join_session on connect', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render
+    renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Find and trigger connect handler
+    const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
+
+    await act(async () => {
+      connectHandler?.();
+    });
+
+    // Verify join_session was emitted
+    expect(mockSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-a' });
+  });
+
+  it('should emit leave_session and join_session on session switch', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render with session-a
+    const { rerender } = renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Simulate connect
+    const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
+    await act(async () => {
+      connectHandler?.();
+    });
+
+    // Clear previous emit calls
+    mockSocket.emit.mockClear();
+
+    // Rerender with session-b
+    rerender({ token: 'test-token', sessionId: 'session-b' });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Verify leave_session was called for session-a
+    expect(mockSocket.emit).toHaveBeenCalledWith('leave_session', { session_id: 'session-a' });
+
+    // Verify join_session was called for session-b
+    expect(mockSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-b' });
+  });
+
+  it('should include session_id in message emit', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render
+    const { result } = renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Simulate connect
+    const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
+    await act(async () => {
+      connectHandler?.();
+    });
+
+    // Call sendMessage
+    await act(async () => {
+      result.current.sendMessage('Hello');
+    });
+
+    // Verify message emit includes session_id
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      'message',
+      expect.objectContaining({ session_id: 'session-a' })
+    );
+  });
+
+  it('should include session_id in cancel emit', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render
+    const { result } = renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Simulate connect
+    const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
+    await act(async () => {
+      connectHandler?.();
+    });
+
+    // Call cancelQuery
+    await act(async () => {
+      result.current.cancelQuery();
+    });
+
+    // Verify cancel emit includes session_id
+    expect(mockSocket.emit).toHaveBeenCalledWith('cancel', { session_id: 'session-a' });
+  });
+
+  it('should not close socket on session switch', async () => {
+    const mockSocket = {
+      on: jest.fn(),
+      emit: jest.fn(),
+      close: jest.fn(),
+      connected: true,
+      io: { on: jest.fn() },
+    };
+    (io as jest.Mock).mockReturnValue(mockSocket);
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ messages: [], streaming: false }),
+    });
+
+    // Render with session-a
+    const { rerender } = renderHook(
+      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      {
+        initialProps: { token: 'test-token', sessionId: 'session-a' },
+      }
+    );
+
+    // Rerender with session-b
+    rerender({ token: 'test-token', sessionId: 'session-b' });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Verify close() was NOT called
+    expect(mockSocket.close).not.toHaveBeenCalled();
+  });
+});
