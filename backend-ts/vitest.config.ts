@@ -4,9 +4,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    // Use test-specific database (set before any modules load)
+    // Use test-specific database and port (set before any modules load)
     env: {
       DATABASE_PATH: "test-ccplus.db",
+      PORT: "4999", // Use different port for tests to avoid conflict with running server
     },
     // Global setup runs once before all tests (not before each test file)
     globalSetup: ["./src/__tests__/setup.ts"],

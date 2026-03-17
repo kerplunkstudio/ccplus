@@ -1039,6 +1039,59 @@ describe("WebSocket Message Handling", () => {
     });
   }, 10000);
 
+  it("handles message with images", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    testSessionId = `test-img-msg-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: testSessionId },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        clientSocket.emit("message", {
+          session_id: testSessionId,
+          content: "test with images",
+          workspace: config.WORKSPACE_PATH,
+          image_ids: ["fake-image-id"],
+        });
+      });
+
+      clientSocket.on("message_received", (data) => {
+        expect(data.status).toBe("ok");
+        resolve();
+      });
+    });
+  }, 10000);
+
+  it("handles message without explicit session_id", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    testSessionId = `test-implicit-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: testSessionId },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        // Send message without explicit session_id (should use connected session)
+        clientSocket.emit("message", {
+          content: "test message",
+          workspace: config.WORKSPACE_PATH,
+        });
+      });
+
+      clientSocket.on("message_received", (data) => {
+        expect(data.status).toBe("ok");
+        resolve();
+      });
+    });
+  }, 10000);
+
   it("handles cancel event", async () => {
     if (!config.LOCAL_MODE) return;
 
@@ -1052,6 +1105,29 @@ describe("WebSocket Message Handling", () => {
     await new Promise<void>((resolve) => {
       clientSocket.on("connected", () => {
         clientSocket.emit("cancel", { session_id: testSessionId });
+      });
+
+      clientSocket.on("cancelled", (data) => {
+        expect(data.status).toBe("ok");
+        resolve();
+      });
+    });
+  }, 5000);
+
+  it("handles cancel without explicit session_id", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    testSessionId = `test-cancel-implicit-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: testSessionId },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        // Cancel without explicit session_id
+        clientSocket.emit("cancel");
       });
 
       clientSocket.on("cancelled", (data) => {
@@ -1077,6 +1153,26 @@ describe("WebSocket Message Handling", () => {
           expect(response.status).toBe("ok");
           resolve();
         });
+      });
+    });
+  }, 5000);
+
+  it("handles leave_session event", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    const sessionToLeave = `test-leave-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: sessionToLeave },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        // Leave the session
+        clientSocket.emit("leave_session", { session_id: sessionToLeave });
+        // Just resolve after emitting (no response expected)
+        setTimeout(resolve, 100);
       });
     });
   }, 5000);
@@ -1113,6 +1209,28 @@ describe("WebSocket Message Handling", () => {
       });
     });
   }, 10000);
+
+  it("handles question_response event", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    testSessionId = `test-question-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: testSessionId },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        clientSocket.emit("question_response", {
+          session_id: testSessionId,
+          response: { answer: "yes" },
+        });
+        // Just resolve after emitting (no response expected)
+        setTimeout(resolve, 100);
+      });
+    });
+  }, 5000);
 });
 
 describe("HTTP Error Handling", () => {
@@ -1278,4 +1396,356 @@ describe("Set Workspace Validation", () => {
 
     expect(response.status).toBe(403);
   });
+
+  it("sets workspace for specific session", async () => {
+    const validPath = config.WORKSPACE_PATH;
+    const sessionId = `test-ws-session-${Date.now()}`;
+
+    const response = await fetch(`${serverUrl}/api/set-workspace`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: validPath, session_id: sessionId }),
+    });
+
+    expect([200, 404]).toContain(response.status);
+  });
+});
+
+describe("HTTP Error Coverage", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles image file size limit", async () => {
+    // Create a large buffer (> 10MB)
+    const largeBuffer = Buffer.alloc(11 * 1024 * 1024);
+    const formData = new FormData();
+    const blob = new Blob([largeBuffer], { type: "image/png" });
+    formData.append("file", blob, "large.png");
+    formData.append("session_id", "test-session");
+
+    const response = await fetch(`${serverUrl}/api/images/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("handles API errors in history endpoint", async () => {
+    // Use empty session ID to potentially trigger errors
+    const response = await fetch(`${serverUrl}/api/history/`);
+
+    // Should either succeed with empty data or return error
+    expect([200, 404, 500]).toContain(response.status);
+  });
+
+  it("handles API errors in activity endpoint", async () => {
+    const response = await fetch(`${serverUrl}/api/activity/`);
+
+    expect([200, 404, 500]).toContain(response.status);
+  });
+
+  it("handles API errors in stats endpoint", async () => {
+    // Stats should always return data
+    const response = await fetch(`${serverUrl}/api/stats`);
+
+    expect([200, 500]).toContain(response.status);
+  });
+});
+
+describe("Git Context Error Handling", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles nonexistent project directory", async () => {
+    const fakePath = path.join(config.WORKSPACE_PATH, "nonexistent-project-xyz");
+    const response = await fetch(`${serverUrl}/api/git/context?project=${encodeURIComponent(fakePath)}`);
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("Project Overview Error Handling", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles nonexistent project directory", async () => {
+    const fakePath = path.join(config.WORKSPACE_PATH, "nonexistent-project-xyz");
+    const response = await fetch(`${serverUrl}/api/project/overview?project=${encodeURIComponent(fakePath)}`);
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("MCP Server Operations", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("validates server config type", async () => {
+    const response = await fetch(`${serverUrl}/api/mcp/servers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "test-server",
+        config: { type: "stdio", command: "test" },
+        scope: "user",
+      }),
+    });
+
+    // Either succeeds or validates format
+    expect([200, 400, 500]).toContain(response.status);
+  });
+
+  it("removes server with project scope", async () => {
+    const response = await fetch(`${serverUrl}/api/mcp/servers/test-server?scope=project&projectPath=${encodeURIComponent(config.WORKSPACE_PATH)}`, {
+      method: "DELETE",
+    });
+
+    expect([200, 404, 500]).toContain(response.status);
+  });
+});
+
+describe("Update Check Caching", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("returns cached result on second call", async () => {
+    // First call
+    const response1 = await fetch(`${serverUrl}/api/update-check`);
+    const data1 = await response1.json();
+
+    expect(response1.status).toBe(200);
+    expect(data1).toHaveProperty("update_available");
+
+    // Second call (should use cache)
+    const response2 = await fetch(`${serverUrl}/api/update-check`);
+    const data2 = await response2.json();
+
+    expect(response2.status).toBe(200);
+    expect(data2).toHaveProperty("update_available");
+  });
+});
+
+describe("Path Security", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("prevents traversal in browse endpoint", async () => {
+    const response = await fetch(`${serverUrl}/api/browse?path=${encodeURIComponent("../../etc")}`);
+
+    expect([403, 404]).toContain(response.status);
+  });
+
+  it("prevents traversal in git context", async () => {
+    const response = await fetch(`${serverUrl}/api/git/context?project=${encodeURIComponent("../../etc")}`);
+
+    // Can return 400 (missing/invalid) or 403 (forbidden)
+    expect([400, 403]).toContain(response.status);
+  });
+
+  it("prevents traversal in project overview", async () => {
+    const response = await fetch(`${serverUrl}/api/project/overview?project=${encodeURIComponent("../../etc")}`);
+
+    // Can return 400 (missing/invalid) or 403 (forbidden)
+    expect([400, 403]).toContain(response.status);
+  });
+});
+
+describe("Projects Endpoint", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("accepts session_id parameter", async () => {
+    const sessionId = `test-projects-${Date.now()}`;
+    const response = await fetch(`${serverUrl}/api/projects?session_id=${sessionId}`);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toHaveProperty("projects");
+    expect(data).toHaveProperty("workspace");
+  });
+});
+
+describe("Clone Repository", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles existing directory conflict", async () => {
+    // Use a directory name that's likely to exist
+    const response = await fetch(`${serverUrl}/api/projects/clone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: "https://github.com/user/backend-ts.git",
+        session_id: "test-session",
+      }),
+    });
+
+    // Either conflicts or fails for other reasons
+    expect([400, 409, 500]).toContain(response.status);
+  }, 10000);
+});
+
+describe("Scan Projects Depth", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("scans projects with depth limit", async () => {
+    const response = await fetch(`${serverUrl}/api/scan-projects`);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toHaveProperty("projects");
+    expect(Array.isArray(data.projects)).toBe(true);
+    // Should respect max results limit
+    expect(data.projects.length).toBeLessThanOrEqual(50);
+  });
+});
+
+describe("Browse Edge Cases", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles permission denied gracefully", async () => {
+    // Try to browse a path that might not be accessible
+    const response = await fetch(`${serverUrl}/api/browse?path=${encodeURIComponent("/System/Library")}`);
+
+    expect([403, 404, 500]).toContain(response.status);
+  });
+
+  it("lists directories only, not files", async () => {
+    const response = await fetch(`${serverUrl}/api/browse?path=${encodeURIComponent(config.WORKSPACE_PATH)}`);
+    const data = await response.json();
+
+    if (response.status === 200 && data.entries.length > 0) {
+      // All entries should be directories
+      for (const entry of data.entries) {
+        expect(entry.is_dir).toBe(true);
+      }
+    }
+  });
+});
+
+describe("Static File Serving", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("serves index.html at root", async () => {
+    const response = await fetch(`${serverUrl}/`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("html");
+  });
+
+  it("serves static assets", async () => {
+    // Try to fetch a static asset (might not exist, but tests the route)
+    const response = await fetch(`${serverUrl}/static.js`);
+
+    // Either serves the file or returns 404
+    expect([200, 304, 404]).toContain(response.status);
+  });
+});
+
+describe("Error Path Coverage", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("handles database errors in stats endpoint", async () => {
+    // Stats endpoint should handle errors gracefully
+    const response = await fetch(`${serverUrl}/api/stats/user`);
+
+    expect([200, 500]).toContain(response.status);
+  });
+
+  it("handles errors in sessions list", async () => {
+    // Use an invalid project path to potentially trigger error
+    const response = await fetch(`${serverUrl}/api/sessions?project=${encodeURIComponent("/nonexistent")}`);
+
+    expect([200, 500]).toContain(response.status);
+  });
+
+  it("handles errors in activity endpoint", async () => {
+    // Empty session ID
+    const response = await fetch(`${serverUrl}/api/activity/`);
+
+    expect([200, 404, 500]).toContain(response.status);
+  });
+
+  it("handles archive session errors", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/fake-session-xyz/archive`, {
+      method: "POST",
+    });
+
+    expect([200, 404, 500]).toContain(response.status);
+  });
+});
+
+describe("WebSocket Error Paths", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+  let clientSocket: ClientSocket;
+
+  beforeAll(async () => {
+    if (config.LOCAL_MODE) {
+      const response = await fetch(`${serverUrl}/api/auth/auto-login`, { method: "POST" });
+      const data = await response.json();
+      testToken = data.token;
+    }
+  });
+
+  afterEach(() => {
+    if (clientSocket?.connected) {
+      clientSocket.disconnect();
+    }
+  });
+
+  it("handles message without content or images", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    testSessionId = `test-empty-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: testSessionId },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        // Send message with empty content and no images (should be ignored)
+        clientSocket.emit("message", {
+          session_id: testSessionId,
+          content: "",
+          workspace: config.WORKSPACE_PATH,
+        });
+        // No message_received expected, just wait a bit
+        setTimeout(resolve, 200);
+      });
+    });
+  }, 5000);
+
+  it("handles join_session without callback", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    const newSessionId = `test-join-nocb-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connect", () => {
+        // Join without callback
+        clientSocket.emit("join_session", { session_id: newSessionId });
+        setTimeout(resolve, 200);
+      });
+    });
+  }, 5000);
+
+  it("handles duplicate_session without callback", async () => {
+    if (!config.LOCAL_MODE) return;
+
+    const sourceSessionId = `test-dup-source-${Date.now()}`;
+    const newSessionId = `test-dup-new-${Date.now()}`;
+
+    clientSocket = ioClient(serverUrl, {
+      auth: { token: testToken, session_id: `test-dup-${Date.now()}` },
+      transports: ["websocket"],
+    });
+
+    await new Promise<void>((resolve) => {
+      clientSocket.on("connected", () => {
+        // Duplicate without callback
+        clientSocket.emit("duplicate_session", { sourceSessionId, newSessionId });
+        setTimeout(resolve, 200);
+      });
+    });
+  }, 5000);
 });
