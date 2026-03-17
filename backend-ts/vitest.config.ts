@@ -4,6 +4,19 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // Use test-specific database (set before any modules load)
+    env: {
+      DATABASE_PATH: "test-ccplus.db",
+    },
+    // Global setup runs once before all tests (not before each test file)
+    globalSetup: ["./src/__tests__/setup.ts"],
+    // Run tests sequentially to avoid port conflicts (server.test.ts and socket-multiplexing.test.ts both start server)
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

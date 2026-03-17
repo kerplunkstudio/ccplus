@@ -30,6 +30,11 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 // Mock the database
 vi.mock("../database.js", () => mockDatabase);
 
+// Mock child_process to prevent actual Claude CLI execution
+vi.mock("child_process", () => ({
+  execFileSync: vi.fn(() => "[]"), // Return empty array of plugins
+}));
+
 import * as sdkSession from "../sdk-session.js";
 import * as database from "../database.js";
 

@@ -35,7 +35,7 @@ export const WORKSPACE_PATH = process.env.WORKSPACE_PATH ?? path.join(homedir(),
 export const SDK_MODEL = process.env.SDK_MODEL ?? "sonnet";
 export const HOST = process.env.HOST ?? "127.0.0.1";
 export const PORT = parseInt(process.env.PORT ?? "4000", 10);
-export const DATABASE_PATH = path.join(DATA_DIR, "ccplus.db");
+export const DATABASE_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "ccplus.db");
 export const LOCAL_MODE = (process.env.CCPLUS_AUTH ?? "local") === "local";
 
 const DEFAULT_SECRET = "ccplus-dev-secret-change-me";

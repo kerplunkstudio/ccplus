@@ -1,29 +1,22 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import { beforeEach, afterEach, afterAll, describe, it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
-// Create a temp directory for test databases
-const testDir = mkdtempSync(path.join(tmpdir(), "ccplus-test-"));
-const testDbPath = path.join(testDir, "test.db");
+// Import config to get DATABASE_PATH (set to test-ccplus.db via env var in vitest.config.ts)
+import * as config from "../config.js";
 
-// Mock the config module to use a temp database
-vi.mock("../config.js", async () => {
-  const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
-  return {
-    ...actual,
-    DATABASE_PATH: testDbPath,
-  };
-});
-
-// Import database module after mocking config
+// Import database module - it will use test-ccplus.db from config
 const db = await import("../database.js");
+
+// Create temp directory for legacy database tests
+const testDir = mkdtempSync(path.join(tmpdir(), "ccplus-test-"));
 
 describe("Database Tests", () => {
   beforeEach(() => {
     // Clean up the database by deleting all records
-    const database = new Database(testDbPath);
+    const database = new Database(config.DATABASE_PATH);
     try {
       database.exec("DELETE FROM conversations");
       database.exec("DELETE FROM tool_usage");
@@ -40,7 +33,7 @@ describe("Database Tests", () => {
   afterEach(() => {
     // Clean up after each test
     try {
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       database.close();
     } catch {
       // Database might already be closed
@@ -780,7 +773,7 @@ describe("Database Tests", () => {
 
     it("should return null for invalid JSON", () => {
       // Manually insert invalid JSON to test error handling
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       database.prepare("INSERT INTO workspace_state (user_id, state) VALUES (?, ?)").run("user_bad", "invalid json");
       database.close();
 
@@ -862,7 +855,7 @@ describe("Database Tests", () => {
       expect(result.images).toBe(1);
 
       // Verify images exist in duplicated session
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       const images = database.prepare("SELECT * FROM images WHERE session_id = ?").all("sess2") as Array<{ id: string }>;
       database.close();
 
@@ -933,7 +926,7 @@ describe("Database Tests", () => {
   describe("getInsights", () => {
     beforeEach(() => {
       // Manually insert backdated records for testing time-based queries
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
 
       // Insert conversations from 40 days ago (outside default 30-day window)
       database.prepare(`
@@ -1065,7 +1058,7 @@ describe("Database Tests", () => {
 
     it("should calculate change percentage from previous period", () => {
       // Insert data in previous period (31-60 days ago)
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       database.prepare(`
         INSERT INTO conversations (session_id, user_id, role, content, timestamp)
         VALUES (?, ?, ?, ?, date('now', '-40 days'))
@@ -1093,7 +1086,7 @@ describe("Database Tests", () => {
 
     it("should handle empty database gracefully", () => {
       // Clear all data
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       database.exec("DELETE FROM conversations");
       database.exec("DELETE FROM tool_usage");
       database.close();
@@ -1154,9 +1147,14 @@ describe("Database Tests", () => {
   });
 
   describe("Migration System", () => {
+    afterAll(() => {
+      // Clean up any mocks that might have been applied
+      vi.doUnmock("../config.js");
+    });
+
     it("should create schema_version table on fresh database", () => {
       // Force a fresh database by closing and reopening
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
 
       const tableExists = database.prepare(`
         SELECT COUNT(*) as c FROM sqlite_master
@@ -1169,7 +1167,7 @@ describe("Database Tests", () => {
     });
 
     it("should mark new database as version 3", () => {
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
 
       const version = database.prepare(
         "SELECT MAX(version) as v FROM schema_version"
@@ -1181,7 +1179,7 @@ describe("Database Tests", () => {
     });
 
     it("should have applied_at timestamp", () => {
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
 
       const row = database.prepare(
         "SELECT applied_at FROM schema_version WHERE version = 1"
@@ -1194,7 +1192,7 @@ describe("Database Tests", () => {
     });
 
     it("should not re-run migrations on subsequent connections", () => {
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
 
       const countBefore = database.prepare(
         "SELECT COUNT(*) as c FROM schema_version"
@@ -1205,7 +1203,7 @@ describe("Database Tests", () => {
       // Trigger getDb() to run migration check
       db.recordMessage("test", "user", "user", "test message");
 
-      const database2 = new Database(testDbPath);
+      const database2 = new Database(config.DATABASE_PATH);
 
       const countAfter = database2.prepare(
         "SELECT COUNT(*) as c FROM schema_version"
@@ -1240,7 +1238,7 @@ describe("Database Tests", () => {
       legacyDb.close();
 
       // Mock the config to point to the legacy database temporarily
-      const originalDbPath = testDbPath;
+      const originalDbPath = config.DATABASE_PATH;
       vi.doMock("../config.js", async () => {
         const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
         return {
