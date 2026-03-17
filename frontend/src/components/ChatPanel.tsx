@@ -866,7 +866,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             </div>
           )}
-          {streaming && (
+          {streaming && !isRestoringSession && (
             <div className="thinking-indicator">
               <div className="thinking-content">
                 <span className="dot" />
