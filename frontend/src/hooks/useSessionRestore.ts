@@ -324,6 +324,7 @@ export function useSessionRestore({
           }
         }
       } catch (err) {
+        console.error('[useSessionRestore] Failed to restore session:', err);
       } finally {
         if (isMounted) {
           setIsRestoringSession(false);
@@ -460,6 +461,7 @@ export function useSessionRestore({
             }
           }
         } catch (err) {
+          console.error('[useSessionRestore] Failed to restore after reconnect:', err);
         }
       };
 
