@@ -78,6 +78,8 @@ interface ChatPanelProps {
   promptSuggestions?: string[];
   rateLimitState?: { active: boolean; retryAfterMs: number } | null;
   activityTree?: ActivityNode[];
+  pendingInput?: string | null;
+  onClearPendingInput?: () => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -107,6 +109,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   promptSuggestions = [],
   rateLimitState,
   activityTree = [],
+  pendingInput = null,
+  onClearPendingInput,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -137,6 +141,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
 
+  // Handle pending input from "Send to new session"
+  useEffect(() => {
+    if (pendingInput && onClearPendingInput) {
+      setInput(pendingInput);
+      onClearPendingInput();
+      // Focus textarea after setting input
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
+    }
+  }, [pendingInput, onClearPendingInput]);
+
   // Persist input drafts per session
   useEffect(() => {
     if (!sessionId) return;
@@ -160,13 +176,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         inputDraftsRef.current = updatedDrafts;
       }
 
-      // Restore input for new session
-      const savedDraft = inputDraftsRef.current[sessionId] || '';
-      setInput(savedDraft);
+      // Restore input for new session (unless there's pending input)
+      if (!pendingInput) {
+        const savedDraft = inputDraftsRef.current[sessionId] || '';
+        setInput(savedDraft);
+      }
     }
 
     previousSessionIdRef.current = sessionId;
-  }, [sessionId, input]);
+  }, [sessionId, input, pendingInput]);
 
   const isNearBottom = useCallback(() => {
     const container = messagesContainerRef.current;

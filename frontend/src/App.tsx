@@ -85,6 +85,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [version, setVersion] = useState<string | null>(null);
 
+  const [pendingInput, setPendingInput] = useState<string | null>(null);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
@@ -408,12 +410,9 @@ function AppContent({ token, loading }: AppContentProps) {
     // Create a new tab
     workspace.addTab(activeProject.path);
 
-    // Wait a moment for the tab to be created and switched to
-    setTimeout(() => {
-      // Send the selected text as the first message
-      sendMessage(text, activeProject.path);
-    }, 100);
-  }, [activeProject, workspace, sendMessage]);
+    // Set the text as pending input for the new session
+    setPendingInput(text);
+  }, [activeProject, workspace]);
 
   const handleOpenBrowserTab = useCallback((url: string, label: string) => {
     if (!activeProject) return;
@@ -430,6 +429,10 @@ function AppContent({ token, loading }: AppContentProps) {
     // Tell backend to copy conversation/tool data
     duplicateSession(sessionId, newSessionId);
   }, [workspace, activeProject, duplicateSession]);
+
+  const handleClearPendingInput = useCallback(() => {
+    setPendingInput(null);
+  }, []);
 
   if (loading) {
     return null; // AppLoadingScreen handles this
@@ -557,6 +560,8 @@ function AppContent({ token, loading }: AppContentProps) {
                     promptSuggestions={promptSuggestions}
                     rateLimitState={rateLimitState}
                     activityTree={activityTree}
+                    pendingInput={pendingInput}
+                    onClearPendingInput={handleClearPendingInput}
                   />
                 ) : null
               ) : (

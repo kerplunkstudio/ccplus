@@ -605,11 +605,18 @@ export function submitQuery(
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
 
-  // Guard against concurrent submits
+  // Force-close stale query if one is lingering
   if (session.activeQuery !== null) {
-    console.warn(`[sdk-session] Rejecting concurrent query for ${sessionId} (already active)`);
-    callbacks.onError('A query is already running for this session. Please wait or cancel the current query.');
-    return;
+    console.warn(`[sdk-session] Forcing cleanup of stale query for ${sessionId}`);
+    try {
+      session.activeQuery.interrupt().catch(() => {});
+      session.activeQuery.close();
+    } catch {
+      // already closed or invalid
+    }
+    session.activeQuery = null;
+    session.streamingContent = '';
+    session.cancelRequested = false;
   }
 
   // Clear last completed response when starting a new query

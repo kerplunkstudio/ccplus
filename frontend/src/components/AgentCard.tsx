@@ -12,12 +12,20 @@ interface AgentCardProps {
 }
 
 /**
- * Truncates text to ~120 chars (roughly 1-2 lines), breaking at word boundary
+ * Extracts the first sentence from text, falling back to first 120 chars at word boundary.
  */
-const truncateSummary = (text: string, maxLength: number = 120): string => {
-  if (text.length <= maxLength) return text;
-  // Try to break at a word boundary
-  const truncated = text.substring(0, maxLength);
+const truncateSummary = (text: string, maxLength: number = 200): string => {
+  // Strip leading markdown headers/whitespace
+  const cleaned = text.replace(/^[\s#*\-]+/, '').trim();
+  if (!cleaned) return text.substring(0, maxLength);
+
+  // Find first sentence-ending punctuation
+  const match = cleaned.match(/^(.+?[.!?])(?:\s|$)/);
+  if (match && match[1].length <= maxLength) return match[1];
+
+  // Fallback: cut at word boundary
+  if (cleaned.length <= maxLength) return cleaned;
+  const truncated = cleaned.substring(0, maxLength);
   const lastSpace = truncated.lastIndexOf(' ');
   return (lastSpace > maxLength * 0.7 ? truncated.substring(0, lastSpace) : truncated) + '...';
 };
