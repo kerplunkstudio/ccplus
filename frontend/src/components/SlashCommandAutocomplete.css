@@ -139,7 +139,9 @@
   line-height: 1;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments
+   Using !important here is necessary to override inline styles set by JavaScript
+   positioning calculations (SlashCommandAutocomplete.tsx line 65) for mobile viewport */
 @media (max-width: 768px) {
   .slash-autocomplete {
     left: var(--space-lg) !important;

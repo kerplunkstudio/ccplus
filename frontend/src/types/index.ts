@@ -141,4 +141,78 @@ export interface RateLimitState {
   rateLimitedAt: string;
 }
 
+export interface PendingQuestion {
+  questions: Array<{
+    question: string;
+    header: string;
+    options: Array<{ label: string; description: string }>;
+    multiSelect: boolean;
+  }>;
+  toolUseId: string;
+}
+
+export interface ElectronAPI {
+  onMenuAction?: (handler: (event: unknown, action: string) => void) => void;
+  removeMenuActionListener?: (handler: (event: unknown, action: string) => void) => void;
+  openExternal?: (url: string) => void;
+}
+
+export interface WindowWithElectron extends Window {
+  electronAPI?: ElectronAPI;
+}
+
+export interface FileWithPath extends File {
+  path?: string;
+}
+
+export interface MarkdownCodeProps {
+  node?: unknown;
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+  [key: string]: unknown;
+}
+
+export interface DBMessage {
+  id: number;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+}
+
+export interface DBToolEvent {
+  tool_name: string;
+  tool_use_id: string;
+  parent_agent_id: string | null;
+  agent_type?: string;
+  timestamp: string;
+  success: boolean | null;
+  error?: string | null;
+  duration_ms?: number;
+  parameters?: Record<string, unknown>;
+  description?: string;
+}
+
+export interface SkillData {
+  name: string;
+  plugin: string;
+  description?: string;
+}
+
+export interface WebViewElement extends HTMLElement {
+  loadURL: (url: string) => void;
+  canGoBack: () => boolean;
+  canGoForward: () => boolean;
+  goBack: () => void;
+  goForward: () => void;
+  reload: () => void;
+  getURL: () => string;
+  addEventListener: (event: string, handler: (event?: unknown) => void) => void;
+  removeEventListener: (event: string, handler: (event?: unknown) => void) => void;
+}
+
+export interface WebViewLoadFailEvent {
+  errorDescription?: string;
+}
+
 export * from './workspace';
