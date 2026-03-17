@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Message, ToolEvent, UsageStats, SignalState, ActivityNode } from '../types';
+import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem } from '../types';
 import { ChatPanelHeader } from './ChatPanelHeader';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
@@ -43,6 +43,8 @@ interface ChatPanelProps {
   activityTree?: ActivityNode[];
   pendingInput?: string | null;
   onClearPendingInput?: () => void;
+  todos?: TodoItem[];
+  onClearTodos?: () => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -74,6 +76,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   activityTree = [],
   pendingInput = null,
   onClearPendingInput,
+  todos = [],
+  onClearTodos,
 }) => {
   const [pluginModalOpen, setPluginModalOpen] = useState(false);
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
@@ -120,6 +124,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           toolLog={toolLog}
           activityTree={activityTree}
           signals={signals}
+          todos={todos}
+          onClearTodos={onClearTodos}
         />
 
         <ChatInput

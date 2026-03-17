@@ -11,7 +11,7 @@ interface PathEntry {
 describe('PathAutocomplete', () => {
   const mockOnSelect = jest.fn();
   const mockOnClose = jest.fn();
-  const mockInputRef = { current: null } as React.RefObject<HTMLTextAreaElement>;
+  const mockInputRef = { current: null } as unknown as React.RefObject<HTMLTextAreaElement>;
 
   const mockEntries: PathEntry[] = [
     { name: 'src', path: '/project/src', isDir: true },

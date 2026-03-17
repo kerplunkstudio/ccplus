@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { Message, ToolEvent } from '../types';
+import { Message, ToolEvent, TodoItem } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { NewSessionDashboard } from './NewSessionDashboard';
 import { TextSelectionPopup } from './TextSelectionPopup';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { QuestionPrompt } from './QuestionPrompt';
+import { TodoProgress } from './TodoProgress';
 import { UsageStats, ActivityNode, SignalState } from '../types';
 import './MessageList.css';
 
@@ -32,6 +33,8 @@ interface MessageListProps {
   toolLog: ToolEvent[];
   activityTree?: ActivityNode[];
   signals?: SignalState;
+  todos?: TodoItem[];
+  onClearTodos?: () => void;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -50,6 +53,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   toolLog,
   activityTree = [],
   signals,
+  todos = [],
+  onClearTodos,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -161,6 +166,9 @@ export const MessageList: React.FC<MessageListProps> = ({
           pendingQuestion={pendingQuestion}
           onRespondToQuestion={onRespondToQuestion}
         />
+      )}
+      {todos && todos.length > 0 && onClearTodos && (
+        <TodoProgress todos={todos} onDismiss={onClearTodos} />
       )}
       {streaming && !isRestoringSession && (
         <ThinkingIndicator activityTree={activityTree} signals={signals} />

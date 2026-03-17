@@ -17,8 +17,14 @@ export interface Message {
   isCompactBoundary?: boolean;
 }
 
+export interface TodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  activeForm: string;
+}
+
 export interface ToolEvent {
-  type: 'tool_start' | 'tool_complete' | 'agent_start' | 'agent_stop';
+  type: 'tool_start' | 'tool_complete' | 'agent_start' | 'agent_stop' | 'todo_update';
   tool_name: string;
   tool_use_id: string;
   parent_agent_id: string | null;

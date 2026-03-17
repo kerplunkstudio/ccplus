@@ -269,10 +269,14 @@ export function useStreamingMessages({
       model?: string;
       sdk_session_id?: string | null;
       session_id?: string;
+      context_window_size?: number;
     }) => {
       if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
 
       const msgId = streamingIdRef.current;
+      const alreadyFinalized = completionFinalizedRef.current;
+      const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
+
       if (msgId) {
         const finalContent = streamingContentRef.current || data.content || '';
         setMessages((prev) =>
@@ -282,13 +286,18 @@ export function useStreamingMessages({
         );
 
         completionFinalizedRef.current = true;
-        responseCompleteRef.current = true;
-        streamingContentRef.current = '';
 
-        setTimeout(() => {
-          responseCompleteRef.current = false;
-          streamingIdRef.current = null;
-        }, 100);
+        if (isFinalCompletion) {
+          // Only clear refs on final completion
+          responseCompleteRef.current = true;
+          streamingContentRef.current = '';
+          setTimeout(() => {
+            responseCompleteRef.current = false;
+            streamingIdRef.current = null;
+          }, 100);
+        }
+        // For intermediate completions: keep streamingIdRef and streamingContentRef intact
+        // so subsequent text_deltas update the same message instead of creating duplicates
       }
 
       if (data.input_tokens !== undefined) {
@@ -300,8 +309,6 @@ export function useStreamingMessages({
         const windowSize = data.context_window_size || MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW;
         setUsageStats(prev => ({ ...prev, contextWindowSize: windowSize, model: data.model || prev.model }));
       }
-
-      const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
 
       if (isFinalCompletion) {
         fetchUserStats().then(stats => {
@@ -320,6 +327,9 @@ export function useStreamingMessages({
         toolLogRef.current = [];
         completionFinalizedRef.current = false;
         messageIndexRef.current = 0;
+        streamingIdRef.current = null;
+        responseCompleteRef.current = false;
+        streamingContentRef.current = '';
       } else {
         setStreaming(false);
 
@@ -335,7 +345,7 @@ export function useStreamingMessages({
         }, 100);
       }
 
-      if (!msgId && data.content && !completionFinalizedRef.current && !isRestoringSessionRef.current) {
+      if (!msgId && data.content && !alreadyFinalized && !isRestoringSessionRef.current) {
         const recoveryId = `recovery_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
         setMessages((prev) => {
           const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;

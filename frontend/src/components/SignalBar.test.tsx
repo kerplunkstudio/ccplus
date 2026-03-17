@@ -5,16 +5,18 @@ import { SignalState } from '../types';
 
 describe('SignalBar', () => {
   it('renders nothing when no status', () => {
-    const signals: SignalState = {};
+    const signals: SignalState = {
+      status: null,
+    };
 
     const { container } = render(<SignalBar signals={signals} />);
 
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders nothing when status is undefined', () => {
+  it('renders nothing when status is null', () => {
     const signals: SignalState = {
-      status: undefined,
+      status: null,
     };
 
     const { container } = render(<SignalBar signals={signals} />);
@@ -98,7 +100,7 @@ describe('SignalBar', () => {
     it('renders unknown phase as-is', () => {
       const signals: SignalState = {
         status: {
-          phase: 'custom_phase',
+          phase: 'custom_phase' as 'planning',
         },
       };
 
@@ -193,7 +195,7 @@ describe('SignalBar', () => {
     it('does not render icon for unknown phase', () => {
       const signals: SignalState = {
         status: {
-          phase: 'custom_phase',
+          phase: 'custom_phase' as 'planning',
         },
       };
 
@@ -287,7 +289,7 @@ describe('SignalBar', () => {
     it('handles empty string phase', () => {
       const signals: SignalState = {
         status: {
-          phase: '',
+          phase: '' as 'planning',
         },
       };
 
@@ -375,7 +377,9 @@ describe('SignalBar', () => {
 
       expect(screen.getByText('Implementing')).toBeInTheDocument();
 
-      const updatedSignals: SignalState = {};
+      const updatedSignals: SignalState = {
+        status: null,
+      };
 
       rerender(<SignalBar signals={updatedSignals} />);
 

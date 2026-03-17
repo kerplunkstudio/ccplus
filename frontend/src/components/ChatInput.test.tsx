@@ -412,7 +412,7 @@ describe('ChatInput', () => {
     // After send, the messages array would be updated
     const updatedMessages = [
       ...messages,
-      { id: '2', content: 'New message', role: 'user', timestamp: Date.now() },
+      { id: '2', content: 'New message', role: 'user' as const, timestamp: Date.now() },
     ];
 
     rerender(
