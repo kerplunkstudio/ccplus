@@ -385,7 +385,7 @@ function AppContent({ token, loading }: AppContentProps) {
   }, []);
 
   const handleNavigate = useCallback((page: string) => {
-    setActivePage(page);
+    setActivePage(prev => prev === page ? null : page);
     setShowDashboard(false);
   }, []);
 
