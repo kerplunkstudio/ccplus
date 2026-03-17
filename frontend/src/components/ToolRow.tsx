@@ -65,15 +65,6 @@ export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSele
           <StatusIcon status={node.status} />
         </div>
       </div>
-
-      {node.error && (
-        <div className="tool-row-error">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2L2 22h20L12 2zm-1 13h2v2h-2v-2zm0-6h2v4h-2V9z" />
-          </svg>
-          <span>{node.error}</span>
-        </div>
-      )}
     </div>
   );
 });

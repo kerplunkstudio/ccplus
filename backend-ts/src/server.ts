@@ -1379,6 +1379,14 @@ function gracefulShutdown(signal: string): void {
   process.exit(0);
 }
 
+process.on("uncaughtException", (err) => {
+  console.error("[server] Uncaught exception (not crashing):", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] Unhandled rejection (not crashing):", reason);
+});
+
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("exit", removePidFile);
