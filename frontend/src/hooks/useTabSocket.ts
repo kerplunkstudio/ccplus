@@ -247,6 +247,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   const streamingContentRef = useRef('');
   const streamingIdRef = useRef<string | null>(null);
   const responseCompleteRef = useRef(false);
+  const completionFinalizedRef = useRef(false);
   const syncInProgressRef = useRef(false);
   const sequenceRef = useRef(0);
   const currentSessionIdRef = useRef<string>(sessionId);
@@ -808,6 +809,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
           )
         );
 
+        // Mark that we've finalized a message for this query cycle
+        completionFinalizedRef.current = true;
+
         // Set flag to catch late text_deltas and keep streamingId alive briefly
         responseCompleteRef.current = true;
 
@@ -867,6 +871,9 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
         // Delete cache entry for this session (data is now in DB)
         sessionCacheRef.current.delete(sessionId);
+
+        // Reset completion flag for next query cycle
+        completionFinalizedRef.current = false;
       } else {
         // Intermediate completion: main response is done, but check for background agents
         setStreaming(false);
@@ -887,7 +894,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         }, 100);
       }
 
-      if (!msgId && data.content) {
+      if (!msgId && data.content && !completionFinalizedRef.current) {
         // Tab switch recovery: response_complete arrived but no streaming message exists
         // Create a finalized assistant message with the full content
         const recoveryId = `recovery_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -1289,6 +1296,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
         streamingContentRef.current = '';
         streamingIdRef.current = null;
         responseCompleteRef.current = false;
+        completionFinalizedRef.current = false;
         setThinking('');
       }
 
@@ -1325,6 +1333,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     streamingContentRef.current = '';
     streamingIdRef.current = null;
     responseCompleteRef.current = false;
+    completionFinalizedRef.current = false;
     setStreaming(false);
     setBackgroundProcessing(false);
     if (clearToolTimerRef.current) {
