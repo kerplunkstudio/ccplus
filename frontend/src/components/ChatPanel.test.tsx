@@ -99,7 +99,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaultProps} />);
     const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
     fireEvent.change(textarea, { target: { value: 'Test message' } });
-    const sendBtn = screen.getByLabelText('Send');
+    const sendBtn = screen.getByLabelText('Send message');
     fireEvent.click(sendBtn);
     expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, undefined, undefined);
   });
@@ -122,19 +122,19 @@ describe('ChatPanel', () => {
 
   it('does not send empty messages', () => {
     render(<ChatPanel {...defaultProps} />);
-    const sendBtn = screen.getByLabelText('Send');
+    const sendBtn = screen.getByLabelText('Send message');
     fireEvent.click(sendBtn);
     expect(defaultProps.onSendMessage).not.toHaveBeenCalled();
   });
 
   it('shows cancel button while streaming', () => {
     render(<ChatPanel {...defaultProps} streaming={true} />);
-    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cancel streaming')).toBeInTheDocument();
   });
 
   it('calls onCancel when cancel button clicked', () => {
     render(<ChatPanel {...defaultProps} streaming={true} />);
-    const cancelBtn = screen.getByLabelText('Cancel');
+    const cancelBtn = screen.getByLabelText('Cancel streaming');
     fireEvent.click(cancelBtn);
     expect(defaultProps.onCancel).toHaveBeenCalled();
   });
@@ -155,8 +155,8 @@ describe('ChatPanel', () => {
 
   it('shows send button when background processing is active', () => {
     render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
-    expect(screen.getByLabelText('Send')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Cancel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Send message')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Cancel streaming')).not.toBeInTheDocument();
   });
 
   it('shows background processing indicator when backgroundProcessing is true', () => {
@@ -174,7 +174,7 @@ describe('ChatPanel', () => {
     render(<ChatPanel {...defaultProps} streaming={false} backgroundProcessing={true} />);
     const textarea = screen.getByPlaceholderText(/Send a message/);
     fireEvent.change(textarea, { target: { value: 'New message' } });
-    const sendBtn = screen.getByLabelText('Send');
+    const sendBtn = screen.getByLabelText('Send message');
     fireEvent.click(sendBtn);
     expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, undefined, undefined);
   });
@@ -186,8 +186,8 @@ describe('ChatPanel', () => {
 
   it('shows cancel button when actively streaming, even if backgroundProcessing was true', () => {
     render(<ChatPanel {...defaultProps} streaming={true} backgroundProcessing={false} />);
-    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Send')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Cancel streaming')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Send message')).not.toBeInTheDocument();
   });
 
   it('adds drag-over class when files are dragged over input container', () => {

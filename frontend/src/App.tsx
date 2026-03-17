@@ -474,7 +474,10 @@ function AppContent({ token, loading }: AppContentProps) {
           <div
             className="mobile-overlay"
             onClick={() => setMobileDrawer(null)}
-            aria-hidden="true"
+            role="button"
+            aria-label="Close drawer"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setMobileDrawer(null)}
           />
         )}
 

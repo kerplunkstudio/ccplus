@@ -174,6 +174,9 @@ describe('ActivityTree', () => {
       parent_agent_id: null,
     };
     render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
+    // Error is shown in the detail panel when node is clicked
+    const deployNode = screen.getByText('Deploy');
+    fireEvent.click(deployNode);
     expect(screen.getByText('Permission denied')).toBeInTheDocument();
   });
 

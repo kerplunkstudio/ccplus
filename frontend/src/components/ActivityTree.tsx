@@ -225,8 +225,9 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                 role="tab"
                 aria-selected={activeTab === 'agents'}
                 aria-controls="activity-panel-agents"
+                id="tab-agents"
               >
-                Agents{agentNodes.length > 0 && <span className="activity-tab-count">{agentNodes.length}</span>}
+                Agents{agentNodes.length > 0 && <span className="activity-tab-count" aria-label={`${agentNodes.length} agents`}>{agentNodes.length}</span>}
               </button>
               <button
                 className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
@@ -234,13 +235,14 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                 role="tab"
                 aria-selected={activeTab === 'tools'}
                 aria-controls="activity-panel-tools"
+                id="tab-tools"
               >
-                Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count">{toolNodes.length}</span>}
+                Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count" aria-label={`${toolNodes.length} tools`}>{toolNodes.length}</span>}
               </button>
             </div>
           </div>
 
-          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-label={activeTab === 'agents' ? 'Agent activity' : 'Tool logs'}>
+          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
             {visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-pulse" />

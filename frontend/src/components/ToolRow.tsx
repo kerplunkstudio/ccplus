@@ -13,13 +13,13 @@ interface ToolRowProps {
 const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
   switch (status) {
     case 'running':
-      return <span className="tool-status-icon tool-status-running" aria-label="Running" />;
+      return <span className="tool-status-icon tool-status-running" aria-hidden="true" />;
     case 'completed':
-      return <span className="tool-status-icon tool-status-completed" aria-label="Completed" />;
+      return <span className="tool-status-icon tool-status-completed" aria-hidden="true" />;
     case 'failed':
-      return <span className="tool-status-icon tool-status-failed" aria-label="Failed" />;
+      return <span className="tool-status-icon tool-status-failed" aria-hidden="true" />;
     case 'stopped':
-      return <span className="tool-status-icon tool-status-stopped" aria-label="Stopped" />;
+      return <span className="tool-status-icon tool-status-stopped" aria-hidden="true" />;
     default:
       return null;
   }
@@ -62,7 +62,9 @@ export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSele
           {node.duration_ms !== undefined && (
             <span className="tool-row-duration">{formatDuration(node.duration_ms)}</span>
           )}
-          <StatusIcon status={node.status} />
+          <span className="tool-row-status-wrapper" role="status" aria-label={`Status: ${node.status}`}>
+            <StatusIcon status={node.status} />
+          </span>
         </div>
       </div>
     </div>
