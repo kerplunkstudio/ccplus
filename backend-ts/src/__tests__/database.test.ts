@@ -711,6 +711,448 @@ describe("Database Tests", () => {
     });
   });
 
+  describe("updateMessage", () => {
+    it("should update message content only", () => {
+      const msg = db.recordMessage("sess1", "user1", "assistant", "initial content");
+      db.updateMessage(msg.id as number, "updated content");
+
+      const history = db.getConversationHistory("sess1");
+      expect(history[0].content).toBe("updated content");
+      expect(history[0].sdk_session_id).toBeNull();
+    });
+
+    it("should update message content and sdk_session_id", () => {
+      const msg = db.recordMessage("sess1", "user1", "assistant", "initial content");
+      db.updateMessage(msg.id as number, "updated content", "sdk-456");
+
+      const history = db.getConversationHistory("sess1");
+      expect(history[0].content).toBe("updated content");
+      expect(history[0].sdk_session_id).toBe("sdk-456");
+    });
+  });
+
+  describe("getMessageImages", () => {
+    it("should return empty array for empty image IDs", () => {
+      const images = db.getMessageImages([]);
+      expect(images).toEqual([]);
+    });
+
+    it("should return image metadata for stored images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+      db.storeImage("img2", "test2.jpg", "image/jpeg", 200, imageData, "sess1");
+
+      const images = db.getMessageImages(["img1", "img2"]);
+
+      expect(images).toHaveLength(2);
+      expect(images[0].id).toBe("img1");
+      expect(images[0].filename).toBe("test.png");
+      expect(images[0].url).toBe("/api/images/img1");
+      expect(images[1].id).toBe("img2");
+      expect(images[1].filename).toBe("test2.jpg");
+      expect(images[1].url).toBe("/api/images/img2");
+    });
+
+    it("should filter out non-existent images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const images = db.getMessageImages(["img1", "nonexistent"]);
+
+      expect(images).toHaveLength(1);
+      expect(images[0].id).toBe("img1");
+    });
+  });
+
+  describe("getWorkspaceState", () => {
+    it("should return null for non-existent user", () => {
+      const state = db.getWorkspaceState("nonexistent");
+      expect(state).toBeNull();
+    });
+
+    it("should return parsed workspace state", () => {
+      const workspaceState = { tabs: ["file1.ts", "file2.ts"], activeFile: "file1.ts" };
+      db.saveWorkspaceState("user1", workspaceState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(workspaceState);
+    });
+
+    it("should return null for invalid JSON", () => {
+      // Manually insert invalid JSON to test error handling
+      const database = new Database(testDbPath);
+      database.prepare("INSERT INTO workspace_state (user_id, state) VALUES (?, ?)").run("user_bad", "invalid json");
+      database.close();
+
+      const state = db.getWorkspaceState("user_bad");
+      expect(state).toBeNull();
+    });
+  });
+
+  describe("saveWorkspaceState", () => {
+    it("should insert new workspace state", () => {
+      const workspaceState = { tabs: ["file1.ts"] };
+      db.saveWorkspaceState("user1", workspaceState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(workspaceState);
+    });
+
+    it("should update existing workspace state", () => {
+      db.saveWorkspaceState("user1", { tabs: ["old.ts"] });
+      db.saveWorkspaceState("user1", { tabs: ["new.ts"] });
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual({ tabs: ["new.ts"] });
+    });
+
+    it("should handle complex nested state", () => {
+      const complexState = {
+        tabs: ["file1.ts", "file2.ts"],
+        activeFile: "file1.ts",
+        panels: { left: true, right: false },
+        history: [{ file: "file1.ts", line: 10 }],
+      };
+      db.saveWorkspaceState("user1", complexState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(complexState);
+    });
+  });
+
+  describe("duplicateSession", () => {
+    it("should duplicate conversations", () => {
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.recordMessage("sess1", "user1", "assistant", "response1");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.conversations).toBe(2);
+
+      const originalHistory = db.getConversationHistory("sess1");
+      const duplicatedHistory = db.getConversationHistory("sess2");
+
+      expect(duplicatedHistory).toHaveLength(2);
+      expect(duplicatedHistory[0].content).toBe(originalHistory[0].content);
+      expect(duplicatedHistory[1].content).toBe(originalHistory[1].content);
+    });
+
+    it("should duplicate tool events", () => {
+      db.recordToolEvent("sess1", "Read", "t1");
+      db.recordToolEvent("sess1", "Write", "t2");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.toolEvents).toBe(2);
+
+      const originalEvents = db.getToolEvents("sess1");
+      const duplicatedEvents = db.getToolEvents("sess2");
+
+      expect(duplicatedEvents).toHaveLength(2);
+      expect(duplicatedEvents[0].tool_name).toBe(originalEvents[0].tool_name);
+      expect(duplicatedEvents[1].tool_name).toBe(originalEvents[1].tool_name);
+    });
+
+    it("should duplicate images with new IDs", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.images).toBe(1);
+
+      // Verify images exist in duplicated session
+      const database = new Database(testDbPath);
+      const images = database.prepare("SELECT * FROM images WHERE session_id = ?").all("sess2") as Array<{ id: string }>;
+      database.close();
+
+      expect(images).toHaveLength(1);
+      expect(images[0].id).not.toBe("img1"); // Should have a new ID
+    });
+
+    it("should not archive duplicated session", () => {
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.duplicateSession("sess1", "sess2", "user1");
+
+      const sessions = db.getSessionsList();
+      expect(sessions.some(s => s.session_id === "sess2")).toBe(true);
+    });
+
+    it("should return zero counts for empty session", () => {
+      const result = db.duplicateSession("nonexistent", "sess2", "user1");
+
+      expect(result.conversations).toBe(0);
+      expect(result.toolEvents).toBe(0);
+      expect(result.images).toBe(0);
+    });
+  });
+
+  describe("cleanupOrphanedImages", () => {
+    it("should not delete images from active sessions", () => {
+      const imageData = Buffer.from("fake image data");
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(0);
+
+      const image = db.getImage("img1");
+      expect(image).not.toBeNull();
+    });
+
+    it("should delete images from orphaned sessions", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "orphaned-session");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(1);
+
+      const image = db.getImage("img1");
+      expect(image).toBeNull();
+    });
+
+    it("should clean up multiple orphaned images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+      db.storeImage("img2", "orphan1.png", "image/png", 100, imageData, "orphaned1");
+      db.storeImage("img3", "orphan2.png", "image/png", 100, imageData, "orphaned2");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(2);
+
+      expect(db.getImage("img1")).not.toBeNull();
+      expect(db.getImage("img2")).toBeNull();
+      expect(db.getImage("img3")).toBeNull();
+    });
+  });
+
+  describe("getInsights", () => {
+    beforeEach(() => {
+      // Manually insert backdated records for testing time-based queries
+      const database = new Database(testDbPath);
+
+      // Insert conversations from 40 days ago (outside default 30-day window)
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-40 days'), ?)
+      `).run("old_session", "user1", "user", "old message", "/path/to/project1");
+
+      // Insert conversations from 10 days ago (within window)
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "user1", "user", "recent message", "/path/to/project1");
+
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "user1", "assistant", "assistant response", "/path/to/project1");
+
+      // Insert tool events from 10 days ago
+      database.prepare(`
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
+      `).run("recent_session", "Read", "t1", 1, 1000, 500);
+
+      database.prepare(`
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
+      `).run("recent_session", "Write", "t2", 1, 2000, 1000);
+
+      database.close();
+    });
+
+    it("should return insights for default 30-day period", () => {
+      const insights = db.getInsights();
+
+      expect(insights.period).toBeDefined();
+      expect(insights.period.days).toBe(30);
+      expect(insights.summary).toBeDefined();
+      expect(insights.daily).toBeDefined();
+      expect(insights.by_project).toBeDefined();
+      expect(insights.by_tool).toBeDefined();
+    });
+
+    it("should calculate summary statistics", () => {
+      const insights = db.getInsights();
+
+      expect(insights.summary.total_queries).toBeGreaterThan(0);
+      expect(insights.summary.total_cost).toBeGreaterThan(0);
+      expect(insights.summary.total_input_tokens).toBeGreaterThan(0);
+      expect(insights.summary.total_output_tokens).toBeGreaterThan(0);
+      expect(insights.summary.total_tool_calls).toBeGreaterThan(0);
+      expect(insights.summary.total_sessions).toBeGreaterThan(0);
+    });
+
+    it("should calculate cost based on token usage", () => {
+      const insights = db.getInsights();
+
+      // Cost = (input_tokens / 1_000_000 * 3.0) + (output_tokens / 1_000_000 * 15.0)
+      const expectedCost = (3000 / 1_000_000 * 3.0) + (1500 / 1_000_000 * 15.0);
+      expect(insights.summary.total_cost).toBeCloseTo(expectedCost, 2);
+    });
+
+    it("should provide daily breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.daily)).toBe(true);
+      const dailyWithData = (insights.daily as Array<Record<string, unknown>>).filter(
+        (d: Record<string, unknown>) => (d.queries as number) > 0
+      );
+      expect(dailyWithData.length).toBeGreaterThan(0);
+
+      // Check structure of daily entries
+      const firstDay = (insights.daily as Array<Record<string, unknown>>)[0];
+      expect(firstDay.date).toBeDefined();
+      expect(firstDay.queries).toBeDefined();
+      expect(firstDay.tool_calls).toBeDefined();
+      expect(firstDay.cost).toBeDefined();
+      expect(firstDay.input_tokens).toBeDefined();
+      expect(firstDay.output_tokens).toBeDefined();
+      expect(firstDay.sessions).toBeDefined();
+    });
+
+    it("should provide project breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.by_project)).toBe(true);
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+      expect(projects.length).toBeGreaterThan(0);
+
+      const project = projects[0];
+      expect(project.project).toBeDefined();
+      expect(project.path).toBeDefined();
+      expect(project.queries).toBeGreaterThan(0);
+      expect(project.cost).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should provide tool breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.by_tool)).toBe(true);
+      const tools = insights.by_tool as Array<Record<string, unknown>>;
+      expect(tools.length).toBeGreaterThan(0);
+
+      const tool = tools[0];
+      expect(tool.tool).toBeDefined();
+      expect(tool.count).toBeGreaterThan(0);
+      expect(tool.success_rate).toBeGreaterThanOrEqual(0);
+      expect(tool.success_rate).toBeLessThanOrEqual(1);
+    });
+
+    it("should filter by custom date range", () => {
+      const insights7Days = db.getInsights(7);
+      const insights30Days = db.getInsights(30);
+
+      expect(insights7Days.period.days).toBe(7);
+      expect(insights30Days.period.days).toBe(30);
+
+      // 7-day window should have same or fewer queries than 30-day window
+      expect(insights7Days.summary.total_queries).toBeLessThanOrEqual(insights30Days.summary.total_queries);
+    });
+
+    it("should filter by project path", () => {
+      const allInsights = db.getInsights();
+      const projectInsights = db.getInsights(30, "/path/to/project1");
+
+      expect(projectInsights.summary.total_queries).toBeGreaterThan(0);
+      expect(projectInsights.summary.total_queries).toBeLessThanOrEqual(allInsights.summary.total_queries);
+    });
+
+    it("should calculate change percentage from previous period", () => {
+      // Insert data in previous period (31-60 days ago)
+      const database = new Database(testDbPath);
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp)
+        VALUES (?, ?, ?, ?, date('now', '-40 days'))
+      `).run("prev_session", "user1", "user", "previous period message");
+      database.close();
+
+      const insights = db.getInsights();
+
+      expect(insights.summary.change_pct).toBeDefined();
+      expect(typeof insights.summary.change_pct).toBe("number");
+    });
+
+    it("should exclude archived sessions from insights", () => {
+      db.recordMessage("archived_session", "user1", "user", "archived message");
+      db.archiveSession("archived_session");
+
+      const insights = db.getInsights();
+
+      // Verify archived session is not counted
+      const allSessions = db.getSessionsList(100, undefined, true);
+      const activeInsightsSessions = insights.summary.total_sessions as number;
+
+      expect(activeInsightsSessions).toBeLessThan(allSessions.length);
+    });
+
+    it("should handle empty database gracefully", () => {
+      // Clear all data
+      const database = new Database(testDbPath);
+      database.exec("DELETE FROM conversations");
+      database.exec("DELETE FROM tool_usage");
+      database.close();
+
+      const insights = db.getInsights();
+
+      expect(insights.summary.total_queries).toBe(0);
+      expect(insights.summary.total_cost).toBe(0);
+      expect(insights.summary.total_tool_calls).toBe(0);
+      expect(insights.daily).toEqual([]);
+      expect(insights.by_project).toEqual([]);
+      expect(insights.by_tool).toEqual([]);
+    });
+
+    it("should sort daily entries by date ascending", () => {
+      const insights = db.getInsights();
+      const daily = insights.daily as Array<Record<string, unknown>>;
+
+      if (daily.length > 1) {
+        for (let i = 1; i < daily.length; i++) {
+          const prevDate = new Date(daily[i - 1].date as string);
+          const currDate = new Date(daily[i].date as string);
+          expect(currDate >= prevDate).toBe(true);
+        }
+      }
+    });
+
+    it("should sort projects by query count descending", () => {
+      const insights = db.getInsights();
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+
+      if (projects.length > 1) {
+        for (let i = 1; i < projects.length; i++) {
+          expect(projects[i - 1].queries as number).toBeGreaterThanOrEqual(projects[i].queries as number);
+        }
+      }
+    });
+
+    it("should sort tools by count descending", () => {
+      const insights = db.getInsights();
+      const tools = insights.by_tool as Array<Record<string, unknown>>;
+
+      if (tools.length > 1) {
+        for (let i = 1; i < tools.length; i++) {
+          expect(tools[i - 1].count as number).toBeGreaterThanOrEqual(tools[i].count as number);
+        }
+      }
+    });
+
+    it("should extract project name from path", () => {
+      const insights = db.getInsights();
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+
+      const project = projects.find((p: Record<string, unknown>) => p.path === "/path/to/project1");
+      expect(project).toBeDefined();
+      expect(project!.project).toBe("project1");
+    });
+  });
+
   describe("Migration System", () => {
     it("should create schema_version table on fresh database", () => {
       // Force a fresh database by closing and reopening
