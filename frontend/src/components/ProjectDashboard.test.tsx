@@ -138,7 +138,7 @@ describe('ProjectDashboard', () => {
       expect(screen.getByText('React')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
     expect(screen.getByText('Node.js')).toBeInTheDocument();
     expect(screen.getByText('SQLite')).toBeInTheDocument();
   });

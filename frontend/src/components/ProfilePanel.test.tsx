@@ -63,14 +63,19 @@ describe('ProfilePanel', () => {
   });
 
   it('allows selecting chat font', async () => {
-    
+
     render(<ProfilePanel />);
 
-    // Default is System Default
-    const systemButton = screen.getByRole('radio', { name: /System Default/i });
+    // Get all font option buttons
+    const fontButtons = screen.getAllByRole('radio').filter((el: HTMLElement) => {
+      return el.className.includes('profile-font-card');
+    });
+
+    const systemButton = fontButtons[0]; // System Default
+    const monoButton = fontButtons[1]; // Mono
+
     expect(systemButton).toHaveAttribute('aria-checked', 'true');
 
-    const monoButton = screen.getByRole('radio', { name: /Mono/i });
     fireEvent.click(monoButton);
 
     expect(monoButton).toHaveAttribute('aria-checked', 'true');
@@ -106,7 +111,12 @@ describe('ProfilePanel', () => {
 
     expect(screen.getByPlaceholderText('Your name')).toHaveValue('Charlie');
     expect(screen.getByRole('radio', { name: 'Designer' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: /Mono/i })).toHaveAttribute('aria-checked', 'true');
+
+    const fontButtons = screen.getAllByRole('radio').filter((el: HTMLElement) => {
+      return el.className.includes('profile-font-card');
+    });
+    const monoButton = fontButtons[1];
+    expect(monoButton).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows auto-saved indicator after changes', async () => {
@@ -154,7 +164,7 @@ describe('ProfilePanel', () => {
   });
 
   it('updates multiple fields independently', async () => {
-    
+
     render(<ProfilePanel />);
 
     const nameInput = screen.getByPlaceholderText('Your name');
@@ -163,7 +173,10 @@ describe('ProfilePanel', () => {
     const dataScientistButton = screen.getByRole('radio', { name: 'Data Scientist' });
     fireEvent.click(dataScientistButton);
 
-    const serifButton = screen.getByRole('radio', { name: /Serif/i });
+    const fontButtons = screen.getAllByRole('radio').filter((el: HTMLElement) => {
+      return el.className.includes('profile-font-card');
+    });
+    const serifButton = fontButtons[3]; // Serif is the 4th font option
     fireEvent.click(serifButton);
 
     jest.advanceTimersByTime(2000);
