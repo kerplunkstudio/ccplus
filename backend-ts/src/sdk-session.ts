@@ -228,7 +228,7 @@ function buildSystemPrompt(projectPath?: string): string {
 // ---- Types ----
 
 interface SessionCallbacks {
-  onText: (text: string) => void;
+  onText: (text: string, messageIndex: number) => void;
   onToolEvent: (event: Record<string, unknown>) => void;
   onComplete: (result: Record<string, unknown>) => void;
   onError: (message: string) => void;
@@ -747,6 +747,7 @@ async function streamQuery(
   let assistantMsgId: number | null = null;
   let streamEventsActive = false;
   let lastCompletionData: Record<string, unknown> = {};
+  let messageIndex = 0;
 
   const { sessionId } = session;
   const callbacks = session.callbacks;
@@ -921,6 +922,7 @@ async function streamQuery(
       }
 
       if (message.type === "assistant") {
+        messageIndex++;
         const msg = message as any;
         let hasText = false;
         const currentMessageText: string[] = [];
@@ -933,7 +935,7 @@ async function streamQuery(
               if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
                 session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
               }
-              callbacks.onText(block.text);
+              callbacks.onText(block.text, messageIndex);
             }
             currentMessageText.push(block.text);
             hasText = true;
@@ -971,6 +973,7 @@ async function streamQuery(
             input_tokens: null,
             output_tokens: null,
             model: session.model,
+            message_index: messageIndex,
           });
         }
       } else if (message.type === "result") {
@@ -998,7 +1001,7 @@ async function streamQuery(
           if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
             session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
           }
-          callbacks.onText(sdkResultText);
+          callbacks.onText(sdkResultText, messageIndex);
         }
 
         lastCompletionData = {
@@ -1011,6 +1014,7 @@ async function streamQuery(
           input_tokens: result.usage?.input_tokens,
           output_tokens: result.usage?.output_tokens,
           model: session.model,
+          message_index: messageIndex,
         };
       }
       // StreamEvent handling for token-level streaming
@@ -1026,7 +1030,7 @@ async function streamQuery(
             if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
               session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
             }
-            callbacks.onText(delta.text);
+            callbacks.onText(delta.text, messageIndex);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
           }

@@ -1230,8 +1230,8 @@ io.on("connection", (socket) => {
 
 function buildSocketCallbacks(sessionId: string, userId: string) {
   return {
-    onText: (text: string) => {
-      io.to(sessionId).emit("text_delta", { text, session_id: sessionId });
+    onText: (text: string, messageIndex: number) => {
+      io.to(sessionId).emit("text_delta", { text, message_index: messageIndex, session_id: sessionId });
     },
     onToolEvent: (event: Record<string, unknown>) => {
       io.to(sessionId).emit("tool_event", { ...event, session_id: sessionId });
@@ -1283,6 +1283,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         model: result.model,
         sdk_session_id: result.sdk_session_id,
         content: result.text,
+        message_index: result.message_index,
         session_id: sessionId,
       });
     },
