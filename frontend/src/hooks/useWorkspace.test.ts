@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWorkspace } from './useWorkspace';
 
 // Mock fetch
@@ -660,6 +660,165 @@ describe('useWorkspace', () => {
       // The test verifies that the stripTransientFields function is called
       expect(tab.isStreaming).toBe(true); // localStorage has real-time state
     });
+
+    it('should restore from localStorage on mount', () => {
+      const initialState = {
+        projects: [
+          {
+            path: '/cached/project',
+            name: 'Cached Project',
+            tabs: [{ sessionId: 'cached-tab', label: 'Cached Tab', isStreaming: false, hasRunningAgent: false, createdAt: Date.now(), type: 'chat' as const, projectPath: '/cached/project' }],
+            activeTabId: 'cached-tab',
+            tabMruOrder: ['cached-tab'],
+          },
+        ],
+        activeProjectPath: '/cached/project',
+        savedAt: Date.now(),
+      };
+
+      localStorage.setItem('ccplus_workspace', JSON.stringify(initialState));
+
+      const { result } = renderHook(() => useWorkspace());
+
+      expect(result.current.state.projects).toHaveLength(1);
+      expect(result.current.state.projects[0].path).toBe('/cached/project');
+      expect(result.current.state.projects[0].tabs[0].sessionId).toBe('cached-tab');
+    });
+
+    it('should handle corrupt localStorage gracefully', () => {
+      localStorage.setItem('ccplus_workspace', 'invalid json {');
+
+      const { result } = renderHook(() => useWorkspace());
+
+      // Should fall back to empty state
+      expect(result.current.state.projects).toHaveLength(0);
+      expect(result.current.state.activeProjectPath).toBeNull();
+    });
+
+    it('should restore from API when API has newer data', async () => {
+      const localState = {
+        projects: [{ path: '/local', name: 'Local', tabs: [], activeTabId: '', tabMruOrder: [] }],
+        activeProjectPath: '/local',
+        savedAt: 1000,
+      };
+      localStorage.setItem('ccplus_workspace', JSON.stringify(localState));
+
+      const apiState = {
+        projects: [{ path: '/api', name: 'API', tabs: [], activeTabId: '', tabMruOrder: [] }],
+        activeProjectPath: '/api',
+        savedAt: 2000,
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => apiState,
+      });
+
+      const { result } = renderHook(() => useWorkspace());
+
+      await waitFor(() => {
+        expect(result.current.state.projects[0]?.path).toBe('/api');
+      });
+    });
+
+    it('should keep localStorage when it has newer data', async () => {
+      const localState = {
+        projects: [{ path: '/local', name: 'Local', tabs: [], activeTabId: '', tabMruOrder: [] }],
+        activeProjectPath: '/local',
+        savedAt: 2000,
+      };
+      localStorage.setItem('ccplus_workspace', JSON.stringify(localState));
+
+      const apiState = {
+        projects: [{ path: '/api', name: 'API', tabs: [], activeTabId: '', tabMruOrder: [] }],
+        activeProjectPath: '/api',
+        savedAt: 1000,
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => apiState,
+      });
+
+      const { result } = renderHook(() => useWorkspace());
+
+      // Should keep local state because it's newer
+      expect(result.current.state.projects[0]?.path).toBe('/local');
+    });
+
+    it('should bootstrap API when API is empty but localStorage has data', async () => {
+      const localState = {
+        projects: [{ path: '/local', name: 'Local', tabs: [], activeTabId: '', tabMruOrder: [] }],
+        activeProjectPath: '/local',
+      };
+      localStorage.setItem('ccplus_workspace', JSON.stringify(localState));
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ projects: [], activeProjectPath: null }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        });
+
+      renderHook(() => useWorkspace());
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/api/workspace'),
+          expect.objectContaining({
+            method: 'PUT',
+            body: expect.stringContaining('/local'),
+          })
+        );
+      });
+    });
+
+    it('should use sendBeacon on beforeunload', async () => {
+      const mockSendBeacon = jest.fn();
+      Object.defineProperty(navigator, 'sendBeacon', {
+        writable: true,
+        value: mockSendBeacon,
+      });
+
+      const { result } = renderHook(() => useWorkspace());
+
+      // Wait for initialization
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      // Trigger beforeunload
+      window.dispatchEvent(new Event('beforeunload'));
+
+      expect(mockSendBeacon).toHaveBeenCalledWith(
+        expect.stringContaining('/api/workspace'),
+        expect.any(Blob)
+      );
+    });
+
+    it('should not send beacon if not initialized', () => {
+      const mockSendBeacon = jest.fn();
+      Object.defineProperty(navigator, 'sendBeacon', {
+        writable: true,
+        value: mockSendBeacon,
+      });
+
+      // Render hook but don't let it initialize
+      renderHook(() => useWorkspace());
+
+      // Trigger beforeunload immediately
+      window.dispatchEvent(new Event('beforeunload'));
+
+      // Should not send beacon if not initialized
+      expect(mockSendBeacon).not.toHaveBeenCalled();
+    });
   });
 
   describe('Active project and tab helpers', () => {
@@ -700,6 +859,295 @@ describe('useWorkspace', () => {
       });
 
       expect(result.current.activeTab?.sessionId).toBe(tab1);
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    it('should handle closing non-existent tab gracefully', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      // Try to close non-existent tab
+      act(() => {
+        result.current.closeTab(projectPath, 'non-existent-tab');
+      });
+
+      // Should not affect existing tabs
+      expect(result.current.state.projects[0]!.tabs).toHaveLength(1);
+    });
+
+    it('should handle closing tabs from non-existent project', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      // Try to close tab from non-existent project
+      act(() => {
+        result.current.closeTab('/non-existent', 'tab-id');
+      });
+
+      // Should not crash
+      expect(result.current.state.projects).toHaveLength(1);
+    });
+
+    it('should handle closeOtherTabs with non-existent project', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      // Try to close other tabs from non-existent project
+      act(() => {
+        result.current.closeOtherTabs('/non-existent', 'tab-id');
+      });
+
+      // Should not crash
+      expect(result.current.state.projects).toHaveLength(1);
+    });
+
+    it('should handle closeOtherTabs with non-existent target tab', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      act(() => {
+        result.current.addTab(projectPath, 'tab2');
+        result.current.addTab(projectPath, 'tab3');
+      });
+
+      const initialCount = result.current.state.projects[0]!.tabs.length;
+
+      // Try to close other tabs with non-existent target
+      act(() => {
+        result.current.closeOtherTabs(projectPath, 'non-existent-tab');
+      });
+
+      // Should not change tabs if target doesn't exist
+      expect(result.current.state.projects[0]!.tabs.length).toBe(initialCount);
+    });
+
+    it('should handle updateTabLabel with non-existent tab', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      // Try to update label of non-existent tab
+      act(() => {
+        result.current.updateTabLabel(projectPath, 'non-existent-tab', 'New Label');
+      });
+
+      // Should not crash
+      expect(result.current.state.projects[0]!.tabs).toHaveLength(1);
+    });
+
+    it('should handle selectTab with non-existent tab', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+      const originalActiveTabId = result.current.state.projects[0]!.activeTabId;
+
+      // Try to select non-existent tab
+      act(() => {
+        result.current.selectTab(projectPath, 'non-existent-tab');
+      });
+
+      // Should still update activeTabId even if tab doesn't exist
+      expect(result.current.state.projects[0]!.activeTabId).toBe('non-existent-tab');
+    });
+
+    it('should handle duplicateTab with non-existent source tab', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      let newSessionId: string = '';
+      act(() => {
+        newSessionId = result.current.duplicateTab(projectPath, 'non-existent-tab');
+      });
+
+      // Should create new tab even if source doesn't exist
+      expect(result.current.state.projects[0]!.tabs.length).toBeGreaterThan(1);
+      expect(newSessionId).toBeTruthy();
+    });
+
+    it('should handle reopenTab when stack is empty', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const initialCount = result.current.state.projects[0]!.tabs.length;
+
+      // Try to reopen when there are no closed tabs
+      act(() => {
+        result.current.reopenTab();
+      });
+
+      // Should not add any tabs
+      expect(result.current.state.projects[0]!.tabs.length).toBe(initialCount);
+    });
+
+    it('should track closed tabs in stack', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      // Add multiple tabs
+      act(() => {
+        result.current.addTab(projectPath, 'tab2');
+        result.current.addTab(projectPath, 'tab3');
+      });
+
+      expect(result.current.hasClosedTabs).toBe(false);
+
+      // Close tabs
+      act(() => {
+        result.current.closeTab(projectPath, 'tab2');
+        result.current.closeTab(projectPath, 'tab3');
+      });
+
+      expect(result.current.hasClosedTabs).toBe(true);
+
+      // Reopen both tabs
+      act(() => {
+        result.current.reopenTab();
+      });
+
+      expect(result.current.hasClosedTabs).toBe(true);
+
+      act(() => {
+        result.current.reopenTab();
+      });
+
+      expect(result.current.hasClosedTabs).toBe(false);
+    });
+
+    it('should handle API fetch errors during initialization', async () => {
+      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useWorkspace());
+
+      // Should still work with localStorage fallback
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      expect(result.current.state.projects).toHaveLength(1);
+    });
+
+    it('should handle API PUT errors during save', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ projects: [], activeProjectPath: null }),
+        })
+        .mockRejectedValueOnce(new Error('Save failed'));
+
+      const { result } = renderHook(() => useWorkspace());
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+
+      // Add project (triggers save)
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      // Wait for debounced save
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      // Should still work despite save error
+      expect(result.current.state.projects).toHaveLength(1);
+    });
+
+    it('should clear saveTimerRef on unmount', () => {
+      const { result, unmount } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      // Unmount before debounced save fires
+      unmount();
+
+      // Should not throw errors
+    });
+  });
+
+  describe('MRU order edge cases', () => {
+    it('should handle empty tabMruOrder gracefully', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      // Manually corrupt MRU order to empty array
+      const project = result.current.state.projects[0]!;
+      project.tabMruOrder = [];
+
+      act(() => {
+        result.current.addTab(projectPath, 'tab2');
+      });
+
+      // Should still work
+      expect(result.current.state.projects[0]!.tabs.length).toBeGreaterThan(1);
+    });
+
+    it('should ensure MRU order contains all tabs', () => {
+      const { result } = renderHook(() => useWorkspace());
+
+      act(() => {
+        result.current.addProject('/test/project', 'Test Project');
+      });
+
+      const projectPath = '/test/project';
+
+      act(() => {
+        result.current.addTab(projectPath, 'tab2');
+        result.current.addTab(projectPath, 'tab3');
+      });
+
+      const project = result.current.state.projects[0]!;
+      const allTabIds = project.tabs.map((t) => t.sessionId);
+      const mruIds = project.tabMruOrder || [];
+
+      // All tab IDs should be in MRU order
+      allTabIds.forEach((id) => {
+        expect(mruIds).toContain(id);
+      });
     });
   });
 });
