@@ -724,7 +724,7 @@ describe("SDK Session", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(callbacks.onText).toHaveBeenCalledWith("Hello world");
+      expect(callbacks.onText).toHaveBeenCalledWith("Hello world", expect.any(Number));
     });
 
     it("should call onThinkingDelta for thinking blocks", async () => {
@@ -828,8 +828,8 @@ describe("SDK Session", () => {
 
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(callbacks.onText).toHaveBeenCalledWith("Streamed ");
-      expect(callbacks.onText).toHaveBeenCalledWith("text");
+      expect(callbacks.onText).toHaveBeenCalledWith("Streamed ", expect.any(Number));
+      expect(callbacks.onText).toHaveBeenCalledWith("text", expect.any(Number));
     });
   });
 
