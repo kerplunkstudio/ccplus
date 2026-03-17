@@ -211,6 +211,7 @@ function AppContent({ token, loading }: AppContentProps) {
   }, []);
 
   const lastLabeledSessionRef = useRef<string | null>(null);
+  const prevActiveSessionRef = useRef<string | null>(null);
   const mruCycleIndexRef = useRef<number>(0);
   const isCyclingRef = useRef<boolean>(false);
   const mruSnapshotRef = useRef<string[]>([]);
@@ -222,6 +223,8 @@ function AppContent({ token, loading }: AppContentProps) {
     if (lastLabeledSessionRef.current === activeTab.sessionId) return;
     // Skip during session restore — messages may belong to a different session
     if (isRestoringSession) return;
+    // Skip if tab just switched — messages haven't synced yet
+    if (activeTab.sessionId !== prevActiveSessionRef.current) return;
 
     const firstUserMessage = messages.find(m => m.role === 'user');
     if (!firstUserMessage || !firstUserMessage.content) return;
@@ -237,6 +240,10 @@ function AppContent({ token, loading }: AppContentProps) {
       workspace.updateTabLabel(activeProject.path, activeTab.sessionId, truncated);
     }
   }, [messages, activeProject, activeTab, workspace, isRestoringSession]);
+
+  useEffect(() => {
+    prevActiveSessionRef.current = activeTab?.sessionId || null;
+  });
 
   useEffect(() => {
     if (!activeProject || !activeTab) return;
