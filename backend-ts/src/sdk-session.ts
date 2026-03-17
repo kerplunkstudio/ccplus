@@ -8,6 +8,7 @@ import * as config from "./config.js";
 import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
+import { log } from "./logger.js";
 
 // ---- Skills discovery (cached) ----
 
@@ -277,7 +278,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
       // Interrupt existing query if running
       if (existing.activeQuery) {
         existing.activeQuery.interrupt().catch((err) => {
-          console.error(`[sdk-session] Failed to interrupt query during session reset for ${sessionId}:`, err);
+          log.error("Failed to interrupt query during session reset", { sessionId, error: String(err) });
         });
       }
       sessions.delete(sessionId);
@@ -404,7 +405,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         agentDescription,
       );
     } catch (e) {
-      console.error("Database write failed (preToolUse):", e);
+      log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
     }
 
     return { continue: true };
@@ -454,7 +455,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       try {
         database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs, stopData?.lastMessage ?? null);
       } catch (e) {
-        console.error("Database write failed (postToolUse agent):", e);
+        log.error("Database write failed (postToolUse agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
       const event: Record<string, unknown> = {
@@ -482,7 +483,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       try {
         database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
       } catch (e) {
-        console.error("Database write failed (postToolUse tool):", e);
+        log.error("Database write failed (postToolUse tool)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     }
 
@@ -533,7 +534,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       try {
         database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs, stopData?.lastMessage ?? null);
       } catch (e) {
-        console.error("Database write failed (postToolUseFailure agent):", e);
+        log.error("Database write failed (postToolUseFailure agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
       session.callbacks.onToolEvent({
@@ -552,7 +553,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       try {
         database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs);
       } catch (e) {
-        console.error("Database write failed (postToolUseFailure tool):", e);
+        log.error("Database write failed (postToolUseFailure tool)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     }
 
@@ -607,7 +608,7 @@ export function submitQuery(
 
   // Force-close stale query if one is lingering
   if (session.activeQuery !== null) {
-    console.warn(`[sdk-session] Forcing cleanup of stale query for ${sessionId}`);
+    log.warn("Forcing cleanup of stale query", { sessionId });
     try {
       session.activeQuery.interrupt().catch(() => {});
       session.activeQuery.close();
@@ -627,7 +628,7 @@ export function submitQuery(
 
   // Run query in background (don't await)
   streamQuery(session, prompt, workspace, model, imageIds).catch((err) => {
-    console.error(`Stream query error for ${sessionId}:`, err);
+    log.error("Stream query error", { sessionId, error: String(err) });
     callbacks.onError(String(err));
   });
 }
@@ -645,7 +646,7 @@ export function cancelQuery(sessionId: string): void {
     session.cancelRequested = true;
     if (session.activeQuery) {
       session.activeQuery.interrupt().catch((err) => {
-        console.error(`[sdk-session] Failed to interrupt query during cancellation for ${sessionId}:`, err);
+        log.error("Failed to interrupt query during cancellation", { sessionId, error: String(err) });
       });
     }
     // Clear question timeout and unblock any pending question
@@ -675,7 +676,7 @@ export function disconnectSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session?.activeQuery) {
     session.activeQuery.interrupt().catch((err) => {
-      console.error(`[sdk-session] Failed to interrupt query during disconnect for ${sessionId}:`, err);
+      log.error("Failed to interrupt query during disconnect", { sessionId, error: String(err) });
     });
     session.activeQuery.close();
   }
@@ -759,7 +760,7 @@ async function streamQuery(
   try {
     // Look up previous SDK session ID for resume
     const resumeId = database.getLastSdkSessionId(sessionId);
-    console.log(`[sdk-session] Query for ${sessionId}: resume=${resumeId ?? 'none'}, cwd=${workspace}`);
+    log.info("Query started", { sessionId, resume: resumeId ?? 'none', workspace });
 
     // Build environment with whitelist approach (only pass known-safe env vars)
     // Legacy blacklist: k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY"
@@ -856,7 +857,7 @@ async function streamQuery(
             });
           }
         } catch (e) {
-          console.error(`Failed to load image ${imgId}:`, e);
+          log.error("Failed to load image", { sessionId, imageId: imgId, error: String(e) });
         }
       }
 
@@ -959,7 +960,7 @@ async function streamQuery(
               database.updateMessage(assistantMsgId, resultText.join(""));
             }
           } catch (e) {
-            console.error("Failed to record/update assistant message:", e);
+            log.error("Failed to record/update assistant message", { sessionId, error: String(e) });
           }
 
           // Signal intermediate completion
@@ -981,14 +982,14 @@ async function streamQuery(
         const result = message as any;
 
         session.sdkSessionId = result.session_id;
-        console.log(`[sdk-session] Result for ${sessionId}: sdk_session=${result.session_id}, resumed=${resumeId === result.session_id ? 'yes' : 'new_session'}`);
+        log.info("Query completed", { sessionId, sdkSessionId: result.session_id, resumed: resumeId === result.session_id });
 
         // Persist SDK session ID so next query can resume
         if (assistantMsgId !== null && result.session_id) {
           try {
             database.updateMessage(assistantMsgId, resultText.join(""), result.session_id);
           } catch (e) {
-            console.error("Failed to update SDK session ID:", e);
+            log.error("Failed to update SDK session ID", { sessionId, error: String(e) });
           }
         }
 
@@ -1071,7 +1072,7 @@ async function streamQuery(
       callbacks.onComplete(lastCompletionData);
     }
   } catch (err) {
-    console.error(`[sdk-session] SDK query CATCH for ${sessionId}:`, err);
+    log.error("SDK query error", { sessionId, error: String(err) });
     callbacks.onError(String(err));
     sessions.delete(sessionId);
   } finally {

@@ -17,6 +17,7 @@ import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
+import { log } from "./logger.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -65,7 +66,7 @@ const START_TIME = Date.now();
 // Mark orphaned tool events from previous run
 const orphanCount = database.markOrphanedToolEvents();
 if (orphanCount > 0) {
-  console.log(`Marked ${orphanCount} orphaned tool events from previous run`);
+  log.info(`Marked ${orphanCount} orphaned tool events from previous run`, { orphanCount });
 }
 
 // Maps socket.id -> { session_id, user_id, sessions }
@@ -240,7 +241,7 @@ app.get("/api/history/:sessionId", (req: Request, res: Response) => {
       model: context?.model ?? null,
     });
   } catch (err) {
-    console.error("Failed to fetch history:", err);
+    log.error("Failed to fetch history", { sessionId: req.params.sessionId, error: String(err) });
     res.status(500).json({ error: "Failed to load history" });
   }
 });
@@ -250,7 +251,7 @@ app.get("/api/activity/:sessionId", (req: Request, res: Response) => {
     const events = database.getToolEvents(req.params.sessionId);
     res.json({ events });
   } catch (err) {
-    console.error("Failed to fetch activity:", err);
+    log.error("Failed to fetch activity", { sessionId: req.params.sessionId, error: String(err) });
     res.status(500).json({ error: "Failed to load activity" });
   }
 });
@@ -259,7 +260,7 @@ app.get("/api/stats", (_req: Request, res: Response) => {
   try {
     res.json(database.getStats());
   } catch (err) {
-    console.error("Failed to fetch stats:", err);
+    log.error("Failed to fetch stats", { error: String(err) });
     res.status(500).json({ error: "Failed to load stats" });
   }
 });
@@ -268,19 +269,20 @@ app.get("/api/stats/user", (_req: Request, res: Response) => {
   try {
     res.json(database.getUserStats("local"));
   } catch (err) {
-    console.error("Failed to fetch user stats:", err);
+    log.error("Failed to fetch user stats", { userId: "local", error: String(err) });
     res.status(500).json({ error: "Failed to load user stats" });
   }
 });
 
 app.get("/api/insights", (req: Request, res: Response) => {
+  let days = 30;
   try {
-    let days = parseInt(req.query.days as string ?? "30", 10);
+    days = parseInt(req.query.days as string ?? "30", 10);
     if (isNaN(days) || days < 1 || days > 365) days = 30;
     const project = (req.query.project as string) || undefined;
     res.json(database.getInsights(days, project));
   } catch (err) {
-    console.error("Failed to fetch insights:", err);
+    log.error("Failed to fetch insights", { days, error: String(err) });
     res.status(500).json({ error: "Failed to load insights" });
   }
 });
@@ -301,7 +303,7 @@ app.get("/api/projects", (req: Request, res: Response) => {
     }
     res.json({ projects, workspace: workspaceForSession });
   } catch (err) {
-    console.error("Failed to list projects:", err);
+    log.error("Failed to list projects", { error: String(err) });
     res.status(500).json({ error: "Failed to list projects" });
   }
 });
@@ -333,7 +335,7 @@ app.post("/api/projects/clone", (req: Request, res: Response) => {
     execFileSync("git", ["clone", repoUrl, targetPath], { timeout: 300_000 });
     res.json({ name: repoName, path: targetPath });
   } catch (err) {
-    console.error("Git clone failed:", err);
+    log.error("Git clone failed", { repoUrl, destPath: targetPath, error: String(err) });
     res.status(500).json({ error: "Failed to clone repository" });
   }
 });
@@ -570,11 +572,11 @@ app.post("/api/set-workspace", (req: Request, res: Response) => {
   // If session_id provided, store per-session; otherwise update global default
   if (sessionId?.trim()) {
     sessionWorkspaces.set(sessionId.trim(), resolved);
-    console.log(`Set workspace for session ${sessionId}: ${resolved}`);
+    log.info("Set workspace for session", { sessionId, workspace: resolved });
   } else {
     workspacePath = resolved;
     process.env.WORKSPACE_PATH = resolved;
-    console.log(`Set global workspace: ${resolved}`);
+    log.info("Set global workspace", { workspace: resolved });
   }
 
   res.json({ workspace: resolved });
@@ -650,7 +652,7 @@ app.get("/api/sessions", (req: Request, res: Response) => {
     const project = (req.query.project as string) || undefined;
     res.json({ sessions: database.getSessionsList(50, project) });
   } catch (err) {
-    console.error("Failed to list sessions:", err);
+    log.error("Failed to list sessions", { error: String(err) });
     res.status(500).json({ error: "Failed to list sessions" });
   }
 });
@@ -664,7 +666,7 @@ app.post("/api/sessions/:sessionId/archive", (req: Request, res: Response) => {
       res.status(500).json({ error: "Failed to archive session" });
     }
   } catch (err) {
-    console.error("Failed to archive session:", err);
+    log.error("Failed to archive session", { sessionId: req.params.sessionId, error: String(err) });
     res.status(500).json({ error: "Failed to archive session" });
   }
 });
@@ -738,7 +740,7 @@ app.post("/api/images/upload", upload.single("file"), (req: Request, res: Respon
     );
     res.json(meta);
   } catch (err) {
-    console.error("Failed to store image:", err);
+    log.error("Failed to store image", { sessionId, filename: req.file?.originalname, error: String(err) });
     res.status(500).json({ error: "Failed to store image" });
   }
 });
@@ -754,7 +756,7 @@ app.get("/api/images/:imageId", (req: Request, res: Response) => {
     res.set("Content-Disposition", `inline; filename="${image.filename}"`);
     res.send(image.data as Buffer);
   } catch (err) {
-    console.error("Failed to retrieve image:", err);
+    log.error("Failed to retrieve image", { imageId: req.params.imageId, error: String(err) });
     res.status(500).json({ error: "Failed to retrieve image" });
   }
 });
@@ -1071,7 +1073,7 @@ io.on("connection", (socket) => {
   const userId = auth.verifyToken(token);
 
   if (!userId) {
-    console.warn("WebSocket connection rejected: invalid token");
+    log.warn("WebSocket connection rejected: invalid token", { socketId: socket.id });
     socket.disconnect(true);
     return;
   }
@@ -1119,11 +1121,11 @@ io.on("connection", (socket) => {
         try {
           database.incrementUserStats(uid, 1);
         } catch (e) {
-          console.error("Failed to increment session count:", e);
+          log.error("Failed to increment session count", { userId, error: String(e) });
         }
       }
     } catch (err) {
-      console.error("Failed to record user message:", err);
+      log.error("Failed to record user message", { sessionId, error: String(err) });
     }
 
     socket.emit("message_received", { status: "ok" });
@@ -1178,7 +1180,7 @@ io.on("connection", (socket) => {
       const result = database.duplicateSession(data.sourceSessionId, data.newSessionId, client.user_id);
       callback?.({ success: true, conversations: result.conversations, toolEvents: result.toolEvents, images: result.images });
     } catch (err) {
-      console.error("Failed to duplicate session:", err);
+      log.error("Failed to duplicate session", { sourceSessionId: data.sourceSessionId, newSessionId: data.newSessionId, error: String(err) });
       callback?.({ success: false, error: String(err) });
     }
   });
@@ -1221,7 +1223,7 @@ io.on("connection", (socket) => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
     if (client) {
-      console.debug(`Client disconnected: user=${client.user_id} sessions=[${[...client.sessions].join(",")}]`);
+      log.debug("Client disconnected", { userId: client.user_id, sessions: [...client.sessions] });
     }
   });
 });
@@ -1244,7 +1246,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           try {
             database.incrementUserStats(userId, 0, 0, 0, 0, 0, 0, lines);
           } catch (e) {
-            console.error("Failed to increment LOC:", e);
+            log.error("Failed to increment LOC", { sessionId, error: String(e) });
           }
         }
       }
@@ -1261,7 +1263,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           (result.output_tokens as number) ?? 0,
         );
       } catch (e) {
-        console.error("Failed to increment user stats:", e);
+        log.error("Failed to increment user stats", { sessionId, userId, error: String(e) });
       }
 
       // Persist session context for tab restoration
@@ -1272,7 +1274,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           (result.model as string) ?? null
         );
       } catch (e) {
-        console.error("Failed to update session context:", e);
+        log.error("Failed to update session context", { sessionId, error: String(e) });
       }
 
       io.to(sessionId).emit("response_complete", {
@@ -1323,7 +1325,7 @@ function writePidFile(): void {
   try {
     writeFileSync(config.SERVER_PID_PATH, String(process.pid));
   } catch (e) {
-    console.error("Failed to write PID file:", e);
+    log.error("Failed to write PID file", { pidPath: config.SERVER_PID_PATH, error: String(e) });
   }
 }
 
@@ -1338,20 +1340,23 @@ function removePidFile(): void {
 }
 
 // Start server
-console.log(`Starting ccplus server on ${config.HOST}:${config.PORT}`);
-console.log(`Local mode: ${config.LOCAL_MODE}`);
-console.log(`Workspace: ${workspacePath}`);
-console.log(`Database: ${config.DATABASE_PATH}`);
-console.log(`Static dir: ${config.STATIC_DIR}`);
+log.info("Starting ccplus server", {
+  host: config.HOST,
+  port: config.PORT,
+  localMode: config.LOCAL_MODE,
+  workspace: workspacePath,
+  database: config.DATABASE_PATH,
+  staticDir: config.STATIC_DIR,
+});
 
 writePidFile();
 
 function gracefulShutdown(signal: string): void {
-  console.log(`Received ${signal}, shutting down gracefully...`);
+  log.info("Received shutdown signal", { signal });
 
   // Force exit after timeout if graceful shutdown hangs
   const forceExitTimeout = setTimeout(() => {
-    console.error("Shutdown timed out, forcing exit");
+    log.error("Shutdown timed out, forcing exit");
     process.exit(1);
   }, 5000);
   forceExitTimeout.unref(); // Don't keep process alive just for this timer
