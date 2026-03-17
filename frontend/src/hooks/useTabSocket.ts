@@ -166,6 +166,8 @@ export function useTabSocket(token: string | null, sessionId: string) {
     promptSuggestions: toolEvents.promptSuggestions,
     rateLimitState: toolEvents.rateLimitState,
     contextTokens: streamingHook.contextTokens,
+    todos: toolEvents.todos,
+    setTodos: toolEvents.setTodos,
   };
 }
 

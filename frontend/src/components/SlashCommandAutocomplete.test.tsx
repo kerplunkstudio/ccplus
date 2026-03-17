@@ -6,7 +6,7 @@ import { SkillSuggestion } from '../utils/slashCommands';
 describe('SlashCommandAutocomplete', () => {
   const mockOnSelect = jest.fn();
   const mockOnClose = jest.fn();
-  const mockInputRef = { current: null } as React.RefObject<HTMLTextAreaElement>;
+  const mockInputRef = { current: null } as unknown as React.RefObject<HTMLTextAreaElement>;
 
   const mockSuggestions: SkillSuggestion[] = [
     { name: 'commit', plugin: 'git-tools', description: 'Commit changes with a message' },

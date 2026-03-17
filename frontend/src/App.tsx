@@ -64,6 +64,8 @@ function AppContent({ token, loading }: AppContentProps) {
     promptSuggestions,
     rateLimitState,
     contextTokens,
+    todos,
+    setTodos,
   } = useTabSocket(token, activeTab?.sessionId || '');
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
@@ -437,6 +439,10 @@ function AppContent({ token, loading }: AppContentProps) {
     setPendingInput(null);
   }, []);
 
+  const handleClearTodos = useCallback(() => {
+    setTodos([]);
+  }, [setTodos]);
+
   if (loading) {
     return null; // AppLoadingScreen handles this
   }
@@ -568,6 +574,8 @@ function AppContent({ token, loading }: AppContentProps) {
                     activityTree={activityTree}
                     pendingInput={pendingInput}
                     onClearPendingInput={handleClearPendingInput}
+                    todos={todos}
+                    onClearTodos={handleClearTodos}
                   />
                 ) : null
               ) : (

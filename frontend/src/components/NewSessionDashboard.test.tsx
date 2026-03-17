@@ -10,7 +10,11 @@ const mockUsageStats: UsageStats = {
   totalSessions: 45,
   totalCost: 123.45,
   totalDuration: 7200000, // 2 hours
-  totalTools: 850,
+  totalInputTokens: 50000,
+  totalOutputTokens: 30000,
+  queryCount: 150,
+  contextWindowSize: 200000,
+  model: 'sonnet',
   linesOfCode: 15000,
 };
 
@@ -332,7 +336,11 @@ describe('NewSessionDashboard', () => {
       totalSessions: 1,
       totalCost: 0,
       totalDuration: 125000, // 2m 5s
-      totalTools: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      queryCount: 0,
+      contextWindowSize: 200000,
+      model: 'sonnet',
       linesOfCode: 0,
     };
 
@@ -353,7 +361,11 @@ describe('NewSessionDashboard', () => {
       totalSessions: 1,
       totalCost: 0,
       totalDuration: 500, // 500ms
-      totalTools: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      queryCount: 0,
+      contextWindowSize: 200000,
+      model: 'sonnet',
       linesOfCode: 0,
     };
 

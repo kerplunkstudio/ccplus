@@ -328,7 +328,9 @@ describe('Toast', () => {
 
       render(<Toast toast={toast} onRemove={mockOnRemove} />);
 
-      expect(screen.getByText(/Line 1.*Line 2.*Line 3/s)).toBeInTheDocument();
+      expect(screen.getByText((content, element) => {
+        return element !== null && element.textContent === 'Line 1\nLine 2\nLine 3';
+      })).toBeInTheDocument();
     });
 
     it('only calls onRemove once even if close is clicked multiple times', () => {

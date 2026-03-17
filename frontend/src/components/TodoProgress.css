@@ -1,0 +1,109 @@
+.todo-progress {
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm) var(--space-md);
+  border-left: 2px solid var(--accent);
+  background: var(--bg-tertiary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  animation: todoSlideIn 0.3s var(--ease-out) both;
+  transition: opacity 0.5s var(--ease-default), transform 0.5s var(--ease-default);
+}
+
+.todo-progress--dismissing {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.todo-progress--complete {
+  border-left-color: var(--success);
+}
+
+.todo-progress__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.todo-progress__counter {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.todo-progress__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.todo-progress__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: 2px 0;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.todo-progress__icon {
+  flex-shrink: 0;
+  width: 1em;
+  text-align: center;
+  font-size: var(--text-xs);
+}
+
+.todo-progress__item--completed .todo-progress__icon {
+  color: var(--success);
+}
+
+.todo-progress__item--in_progress .todo-progress__icon {
+  color: var(--accent);
+  animation: todoPulse 2s ease-in-out infinite;
+}
+
+.todo-progress__item--pending .todo-progress__icon {
+  color: var(--text-tertiary);
+}
+
+.todo-progress__item--completed .todo-progress__text {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-tertiary);
+}
+
+.todo-progress__item--in_progress .todo-progress__text {
+  color: var(--text-primary);
+}
+
+.todo-progress__item--pending .todo-progress__text {
+  color: var(--text-tertiary);
+}
+
+@keyframes todoSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes todoPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-progress {
+    animation: none;
+  }
+  .todo-progress--dismissing {
+    transition: none;
+  }
+  .todo-progress__item--in_progress .todo-progress__icon {
+    animation: none;
+  }
+}

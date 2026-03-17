@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { ToolEvent, SignalState, Message } from '../types';
+import { ToolEvent, SignalState, Message, TodoItem } from '../types';
 import { TreeAction } from './useActivityTree';
 
 interface UseToolEventsProps {
@@ -42,6 +42,7 @@ export function useToolEvents({
   const [signals, setSignals] = useState<SignalState>({ status: null });
   const [promptSuggestions, setPromptSuggestions] = useState<string[]>([]);
   const [rateLimitState, setRateLimitState] = useState<{ active: boolean; retryAfterMs: number } | null>(null);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
 
   const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,6 +105,12 @@ export function useToolEvents({
       }
 
       switch (event.type) {
+        case 'todo_update': {
+          if (event.parameters?.todos && Array.isArray(event.parameters.todos)) {
+            setTodos(event.parameters.todos as TodoItem[]);
+          }
+          break;
+        }
         case 'agent_start': {
           if (streamingIdRef.current && streamingContentRef.current.trim()) {
             const msgId = streamingIdRef.current;
@@ -243,5 +250,7 @@ export function useToolEvents({
     setPromptSuggestions,
     rateLimitState,
     setRateLimitState,
+    todos,
+    setTodos,
   };
 }

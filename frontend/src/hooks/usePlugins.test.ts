@@ -270,13 +270,13 @@ describe('usePlugins', () => {
 
       const { result } = renderHook(() => usePlugins());
 
-      let installResult;
+      let installResult: any;
       await act(async () => {
         installResult = await result.current.installPlugin('bad-plugin');
       });
 
-      expect(installResult.success).toBe(false);
-      expect(installResult.error).toBe('Installation failed');
+      expect(installResult!.success).toBe(false);
+      expect(installResult!.error).toBe('Installation failed');
     });
 
     it('should handle network error during installation', async () => {
@@ -284,13 +284,13 @@ describe('usePlugins', () => {
 
       const { result } = renderHook(() => usePlugins());
 
-      let installResult;
+      let installResult: any;
       await act(async () => {
         installResult = await result.current.installPlugin('network-fail');
       });
 
-      expect(installResult.success).toBe(false);
-      expect(installResult.error).toBe('Network error');
+      expect(installResult!.success).toBe(false);
+      expect(installResult!.error).toBe('Network error');
     });
   });
 
@@ -361,13 +361,13 @@ describe('usePlugins', () => {
 
       const { result } = renderHook(() => usePlugins());
 
-      let uninstallResult;
+      let uninstallResult: any;
       await act(async () => {
         uninstallResult = await result.current.uninstallPlugin('bad-plugin');
       });
 
-      expect(uninstallResult.success).toBe(false);
-      expect(uninstallResult.error).toBe('Uninstallation failed');
+      expect(uninstallResult!.success).toBe(false);
+      expect(uninstallResult!.error).toBe('Uninstallation failed');
     });
 
     it('should reload both lists after successful uninstallation', async () => {
