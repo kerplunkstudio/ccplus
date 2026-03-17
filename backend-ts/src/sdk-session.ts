@@ -386,6 +386,22 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         session_id: sessionId,
       };
       session.callbacks.onToolEvent(event);
+
+      // Emit dedicated todo_update for TodoWrite tools
+      if (toolName === 'TodoWrite') {
+        const todos = toolParams.todos as Array<{ content: string; status: string; activeForm: string }> | undefined;
+        if (todos) {
+          session.callbacks.onToolEvent({
+            type: 'todo_update',
+            tool_name: 'TodoWrite',
+            tool_use_id: actualToolUseId,
+            parent_agent_id: parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : null,
+            parameters: { todos },
+            timestamp: new Date().toISOString(),
+            session_id: sessionId,
+          });
+        }
+      }
     }
 
     // Record to database (success=null means "running")
@@ -760,7 +776,7 @@ async function streamQuery(
   try {
     // Look up previous SDK session ID for resume
     const resumeId = database.getLastSdkSessionId(sessionId);
-    log.info("Query started", { sessionId, resume: resumeId ?? 'none', workspace });
+    log.debug("Query started", { sessionId, resume: resumeId ?? 'none', workspace });
 
     // Build environment with whitelist approach (only pass known-safe env vars)
     // Legacy blacklist: k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY"
@@ -982,7 +998,7 @@ async function streamQuery(
         const result = message as any;
 
         session.sdkSessionId = result.session_id;
-        log.info("Query completed", { sessionId, sdkSessionId: result.session_id, resumed: resumeId === result.session_id });
+        log.debug("Query completed", { sessionId, sdkSessionId: result.session_id, resumed: resumeId === result.session_id });
 
         // Persist SDK session ID so next query can resume
         if (assistantMsgId !== null && result.session_id) {
