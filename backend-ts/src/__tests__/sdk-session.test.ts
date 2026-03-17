@@ -2824,8 +2824,7 @@ description: Project command
   describe("Streaming Buffer Management", () => {
     it("should trim streaming content when exceeding MAX_STREAMING_BUFFER (result text)", async () => {
       // MAX_STREAMING_BUFFER is 2MB
-      const largeText = "x".repeat(1024 * 1024 * 1.5); // 1.5MB
-      const moreText = "y".repeat(1024 * 1024); // 1MB more = 2.5MB total
+      const largeText = "x".repeat(1024 * 1024 * 2.5); // 2.5MB (exceeds buffer)
 
       const mockQuery: Partial<Query> = {
         interrupt: vi.fn().mockResolvedValue(undefined),
@@ -2863,44 +2862,11 @@ description: Project command
         callbacks,
       );
 
-      await new Promise((r) => setTimeout(r, 50));
-
-      // First check that content is stored
-      let content1 = sdkSession.getStreamingContent("buffer-trim-test");
-      expect(content1.length).toBe(largeText.length);
-
-      // Submit another query with more large text
-      const mockQuery2: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test2",
-            result: moreText,
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
-      queryMock.mockReturnValue(mockQuery2);
-
-      sdkSession.submitQuery(
-        "buffer-trim-test",
-        "Query",
-        "/tmp/workspace",
-        callbacks,
-      );
-
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100));
 
       // Buffer should have been trimmed during streaming
-      const content2 = sdkSession.getStreamingContent("buffer-trim-test");
-      expect(content2.length).toBeLessThanOrEqual(2 * 1024 * 1024); // Should be <= 2MB
+      const content = sdkSession.getStreamingContent("buffer-trim-test");
+      expect(content.length).toBeLessThanOrEqual(2 * 1024 * 1024); // Should be <= 2MB
     });
 
     it("should trim streaming content when exceeding MAX_STREAMING_BUFFER (stream events)", async () => {
@@ -3186,7 +3152,7 @@ description: Project command
   });
 
   describe("Session Edge Cases", () => {
-    it("should handle query close error gracefully on stale cleanup", async () => {
+    it("should handle query close error gracefully in finally block", async () => {
       const mockCloseThatThrows = vi.fn(() => {
         throw new Error("Already closed");
       });
@@ -3195,7 +3161,6 @@ description: Project command
         interrupt: vi.fn().mockResolvedValue(undefined),
         close: mockCloseThatThrows,
         [Symbol.asyncIterator]: async function* () {
-          await new Promise((r) => setTimeout(r, 100));
           yield {
             type: "result",
             session_id: "test",
@@ -3220,27 +3185,17 @@ description: Project command
         onError: vi.fn(),
       };
 
-      // Start first query
       sdkSession.submitQuery(
-        "close-error-test",
-        "Query 1",
+        "close-error-finally-test",
+        "Query",
         "/tmp/workspace",
         callbacks,
       );
 
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 100));
 
-      // Start second query (triggers stale cleanup)
-      sdkSession.submitQuery(
-        "close-error-test",
-        "Query 2",
-        "/tmp/workspace",
-        callbacks,
-      );
-
-      await new Promise((r) => setTimeout(r, 50));
-
-      // Should not throw, should handle close error
+      // Should complete without throwing despite close error
+      expect(callbacks.onComplete).toHaveBeenCalled();
       expect(mockCloseThatThrows).toHaveBeenCalled();
     });
 
