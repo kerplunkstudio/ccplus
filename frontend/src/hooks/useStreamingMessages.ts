@@ -296,7 +296,8 @@ export function useStreamingMessages({
       }
 
       if (data.model) {
-        const windowSize = MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW;
+        // Prefer context_window_size from backend (from SDK modelUsage)
+        const windowSize = data.context_window_size || MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW;
         setUsageStats(prev => ({ ...prev, contextWindowSize: windowSize, model: data.model || prev.model }));
       }
 

@@ -1,4 +1,4 @@
-import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool, type ModelUsage } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream } from "fs";
 import { execFileSync } from "child_process";
 import { homedir } from "os";
@@ -1005,6 +1005,11 @@ async function streamQuery(
           callbacks.onText(sdkResultText, messageIndex);
         }
 
+        // Extract cumulative context usage from modelUsage
+        const modelUsageValues: ModelUsage[] = Object.values(result.modelUsage || {});
+        const totalInputTokens = modelUsageValues.reduce((sum, mu) => sum + (mu.inputTokens || 0), 0);
+        const contextWindowSize = modelUsageValues[0]?.contextWindow ?? 0;
+
         lastCompletionData = {
           text: resultText.join(""),
           sdk_session_id: result.session_id,
@@ -1012,8 +1017,9 @@ async function streamQuery(
           duration_ms: result.duration_ms,
           is_error: result.is_error ?? (result.subtype !== "success"),
           num_turns: result.num_turns,
-          input_tokens: result.usage?.input_tokens,
+          input_tokens: totalInputTokens || result.usage?.input_tokens,
           output_tokens: result.usage?.output_tokens,
+          context_window_size: contextWindowSize,
           model: session.model,
           message_index: messageIndex,
         };
