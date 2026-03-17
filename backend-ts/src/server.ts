@@ -71,12 +71,6 @@ if (orphanCount > 0) {
 // Maps socket.id -> { session_id, user_id }
 const connectedClients = new Map<string, { session_id: string; user_id: string }>();
 
-// Maps session_id -> pending cancellation timeout
-const pendingCancellations = new Map<string, NodeJS.Timeout>();
-
-// Disconnect grace period in milliseconds
-const DISCONNECT_GRACE_PERIOD_MS = 5000;
-
 // Track mutable workspace path (global default for new sessions)
 let workspacePath = config.WORKSPACE_PATH;
 
@@ -1040,14 +1034,6 @@ io.on("connection", (socket) => {
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
   socket.join(sessionId);
 
-  // Clear any pending cancellation timer for this session
-  const pendingTimer = pendingCancellations.get(sessionId);
-  if (pendingTimer) {
-    clearTimeout(pendingTimer);
-    pendingCancellations.delete(sessionId);
-    console.log(`Client reconnected to session ${sessionId}, cancelled pending query cancellation`);
-  }
-
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
@@ -1188,37 +1174,6 @@ io.on("connection", (socket) => {
     connectedClients.delete(socket.id);
     if (client) {
       console.debug(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
-
-      // Check if there are any remaining clients in this session's room
-      const room = io.sockets.adapter.rooms.get(client.session_id);
-      const remainingClients = room ? room.size : 0;
-
-      // If no clients remain for this session and there's an active query, schedule cancellation with grace period
-      if (remainingClients === 0 && sdkSession.isActive(client.session_id)) {
-        // Clear any existing pending cancellation
-        const existingTimer = pendingCancellations.get(client.session_id);
-        if (existingTimer) {
-          clearTimeout(existingTimer);
-        }
-
-        // Schedule cancellation after grace period
-        console.log(`No clients remaining for session ${client.session_id}, scheduling query cancellation in ${DISCONNECT_GRACE_PERIOD_MS}ms`);
-        const timer = setTimeout(() => {
-          // Double-check no clients reconnected during grace period
-          const roomAfterDelay = io.sockets.adapter.rooms.get(client.session_id);
-          const clientsAfterDelay = roomAfterDelay ? roomAfterDelay.size : 0;
-
-          if (clientsAfterDelay === 0 && sdkSession.isActive(client.session_id)) {
-            console.log(`Grace period elapsed for session ${client.session_id}, cancelling active query`);
-            sdkSession.cancelQuery(client.session_id);
-          }
-
-          // Clean up timer from map
-          pendingCancellations.delete(client.session_id);
-        }, DISCONNECT_GRACE_PERIOD_MS);
-
-        pendingCancellations.set(client.session_id, timer);
-      }
     }
   });
 });
@@ -1352,28 +1307,24 @@ function gracefulShutdown(signal: string): void {
   }, 5000);
   forceExitTimeout.unref(); // Don't keep process alive just for this timer
 
-  // 1. Clear all pending cancellation timers
-  pendingCancellations.forEach((timer) => clearTimeout(timer));
-  pendingCancellations.clear();
-
-  // 2. Stop accepting new connections
+  // 1. Stop accepting new connections
   httpServer.close(() => {
     console.log("HTTP server closed");
   });
 
-  // 3. Close all active Socket.IO connections
+  // 2. Close all active Socket.IO connections
   io.close(() => {
     console.log("Socket.IO server closed");
   });
 
-  // 4. Close database connection
+  // 3. Close database connection
   database.close();
   console.log("Database closed");
 
-  // 5. Remove PID file
+  // 4. Remove PID file
   removePidFile();
 
-  // 6. Exit
+  // 5. Exit
   console.log("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
