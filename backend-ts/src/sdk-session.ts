@@ -1065,6 +1065,23 @@ async function streamQuery(
       else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
         callbacks.onCompactBoundary?.();
       }
+      // API errors (overloaded, server errors, etc.)
+      else if ((message as any).type === 'error') {
+        const msg = message as any;
+        const errorType = msg.error?.type ?? '';
+        const errorMessage = msg.error?.message ?? String(msg);
+
+        if (errorType === 'overloaded_error') {
+          log.warn("API overloaded", { sessionId, errorType });
+          callbacks.onError('Claude is currently overloaded. Please try again in a moment.');
+        } else if (errorType === 'api_error') {
+          log.warn("API internal error", { sessionId, errorType });
+          callbacks.onError('Claude API encountered an internal error. Please try again.');
+        } else {
+          log.error("API error during streaming", { sessionId, errorType, errorMessage });
+          callbacks.onError(errorMessage);
+        }
+      }
     }
 
     // Emit final completion
@@ -1072,8 +1089,18 @@ async function streamQuery(
       callbacks.onComplete(lastCompletionData);
     }
   } catch (err) {
-    log.error("SDK query error", { sessionId, error: String(err) });
-    callbacks.onError(String(err));
+    const errorStr = String(err);
+    let userMessage = errorStr;
+
+    // Try to extract a cleaner message from API error JSON
+    if (errorStr.includes('overloaded_error') || errorStr.includes('api_error')) {
+      userMessage = 'Claude API is temporarily unavailable. Please try again in a moment.';
+      log.warn("Transient API error (exception)", { sessionId, error: errorStr });
+    } else {
+      log.error("SDK query error", { sessionId, error: errorStr });
+    }
+
+    callbacks.onError(userMessage);
     sessions.delete(sessionId);
   } finally {
     // Close query to release resources
