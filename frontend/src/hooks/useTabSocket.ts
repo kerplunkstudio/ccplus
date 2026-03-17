@@ -932,6 +932,18 @@ export function useTabSocket(token: string | null, sessionId: string) {
 
       switch (event.type) {
         case 'agent_start': {
+          // Finalize the current streaming message before agent work begins
+          if (streamingIdRef.current && streamingContentRef.current.trim()) {
+            const msgId = streamingIdRef.current;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, streaming: false } : m
+              )
+            );
+            streamingIdRef.current = null;
+            streamingContentRef.current = '';
+          }
+
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           setCurrentToolDebounced(event);
@@ -943,6 +955,18 @@ export function useTabSocket(token: string | null, sessionId: string) {
           break;
         }
         case 'tool_start': {
+          // Finalize the current streaming message before tool work begins
+          if (streamingIdRef.current && streamingContentRef.current.trim()) {
+            const msgId = streamingIdRef.current;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, streaming: false } : m
+              )
+            );
+            streamingIdRef.current = null;
+            streamingContentRef.current = '';
+          }
+
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           setCurrentToolDebounced(event);
