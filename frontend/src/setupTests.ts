@@ -12,3 +12,12 @@ global.console.error = (...args: any[]) => {
   }
   originalError.call(console, ...args);
 };
+
+// Mock clipboard API globally
+Object.defineProperty(navigator, 'clipboard', {
+  value: {
+    writeText: jest.fn(() => Promise.resolve()),
+  },
+  writable: true,
+  configurable: true,
+});
