@@ -217,6 +217,8 @@ function AppContent({ token, loading }: AppContentProps) {
     if (!activeProject || !activeTab || messages.length === 0) return;
     if (activeTab.label !== 'New session') return;
     if (lastLabeledSessionRef.current === activeTab.sessionId) return;
+    // Skip during session restore — messages may belong to a different session
+    if (isRestoringSession) return;
 
     const firstUserMessage = messages.find(m => m.role === 'user');
     if (!firstUserMessage || !firstUserMessage.content) return;
@@ -231,7 +233,7 @@ function AppContent({ token, loading }: AppContentProps) {
       lastLabeledSessionRef.current = activeTab.sessionId;
       workspace.updateTabLabel(activeProject.path, activeTab.sessionId, truncated);
     }
-  }, [messages, activeProject, activeTab, workspace]);
+  }, [messages, activeProject, activeTab, workspace, isRestoringSession]);
 
   useEffect(() => {
     if (!activeProject || !activeTab) return;
