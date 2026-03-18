@@ -289,6 +289,9 @@ install_macos() {
                 fi
                 hdiutil detach "$mount_point" -quiet
                 success "Installed to /Applications/cc+.app"
+                # Rebuild native modules for local Node.js version
+                step "Rebuilding native modules..."
+                (cd /Applications/cc+.app/Contents/Resources/app.asar.unpacked/backend-ts && npm rebuild better-sqlite3 2>/dev/null) || warn "Could not rebuild native modules"
             else
                 hdiutil detach "$mount_point" -quiet
                 die "No .app found in DMG"
@@ -310,6 +313,9 @@ install_macos() {
                     die "Failed to copy to /Applications (permission denied). Try: sudo $(basename "$0")"
                 fi
                 success "Installed to /Applications/cc+.app"
+                # Rebuild native modules for local Node.js version
+                step "Rebuilding native modules..."
+                (cd /Applications/cc+.app/Contents/Resources/app.asar.unpacked/backend-ts && npm rebuild better-sqlite3 2>/dev/null) || warn "Could not rebuild native modules"
             else
                 die "No .app found in ZIP"
             fi
