@@ -221,18 +221,6 @@ export function useStreamingMessages({
       }
       messageIndexRef.current = incomingIndex;
 
-      if (responseCompleteRef.current && streamingIdRef.current) {
-        const msgId = streamingIdRef.current;
-        streamingContentRef.current += data.text;
-        const currentContent = streamingContentRef.current;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === msgId ? { ...m, content: currentContent, streaming: true } : m
-          )
-        );
-        return;
-      }
-
       if (!streamingIdRef.current) {
         setMessages((prev) => {
           const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
@@ -344,6 +332,10 @@ export function useStreamingMessages({
         responseCompleteRef.current = false;
         streamingContentRef.current = '';
       } else {
+        // Intermediate completion: finalize current message so next assistant turn creates a new bubble
+        streamingIdRef.current = null;
+        streamingContentRef.current = '';
+
         setStreaming(false);
 
         setTimeout(() => {

@@ -98,7 +98,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
         // Create new tab if it doesn't exist
         const newTab: TabState = {
           sessionId: action.sessionId,
-          label: 'New session',
+          label: action.label || 'New session',
           isStreaming: false,
           hasRunningAgent: false,
           createdAt: Date.now(),
@@ -404,9 +404,9 @@ export function useWorkspace() {
     dispatch({ type: 'SELECT_PROJECT', path });
   }, []);
 
-  const addTab = useCallback((projectPath: string, sessionId?: string) => {
+  const addTab = useCallback((projectPath: string, sessionId?: string, label?: string) => {
     const newSessionId = sessionId || generateSessionId();
-    dispatch({ type: 'ADD_TAB', projectPath, sessionId: newSessionId });
+    dispatch({ type: 'ADD_TAB', projectPath, sessionId: newSessionId, label });
   }, []);
 
   const closeTab = useCallback((projectPath: string, sessionId: string) => {
