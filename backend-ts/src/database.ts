@@ -96,8 +96,35 @@ function getDb(): Database.Database {
     db = new Database(config.DATABASE_PATH);
     db.pragma("journal_mode = WAL");
     db.exec(SCHEMA_SQL);
+    runProvenanceMigration(db);
   }
   return db;
+}
+
+/**
+ * Add provenance columns to conversations and tool_usage tables.
+ * Wrapped in try/catch since columns may already exist.
+ */
+function runProvenanceMigration(database: Database.Database): void {
+  const migrations = [
+    "ALTER TABLE conversations ADD COLUMN source_connection_id TEXT",
+    "ALTER TABLE conversations ADD COLUMN source_ip TEXT",
+    "ALTER TABLE conversations ADD COLUMN user_agent TEXT",
+    "ALTER TABLE tool_usage ADD COLUMN source_connection_id TEXT",
+  ];
+
+  for (const sql of migrations) {
+    try {
+      database.exec(sql);
+    } catch (err) {
+      // Column already exists or other error - ignore
+      // SQLite doesn't have IF NOT EXISTS for ALTER TABLE ADD COLUMN
+      const message = (err as Error).message ?? "";
+      if (!message.includes("duplicate column name")) {
+        console.warn(`Provenance migration warning: ${message}`);
+      }
+    }
+  }
 }
 
 // --- Message operations ---
@@ -110,14 +137,26 @@ export function recordMessage(
   sdkSessionId?: string,
   projectPath?: string,
   imageIds?: string[],
+  sourceConnectionId?: string,
+  sourceIp?: string,
+  userAgent?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const imagesJson = imageIds ? JSON.stringify(imageIds) : null;
   const stmt = d.prepare(`
-    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images,
+                               source_connection_id, source_ip, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(sessionId, userId, role, content, sdkSessionId ?? null, projectPath ?? null, imagesJson);
+  const info = stmt.run(
+    sessionId, userId, role, content,
+    sdkSessionId ?? null,
+    projectPath ?? null,
+    imagesJson,
+    sourceConnectionId ?? null,
+    sourceIp ?? null,
+    userAgent ?? null
+  );
   const row = d.prepare("SELECT * FROM conversations WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
 }
@@ -131,6 +170,16 @@ export function updateMessage(messageId: number, content: string, sdkSessionId?:
     d.prepare("UPDATE conversations SET content = ? WHERE id = ?")
       .run(content, messageId);
   }
+}
+
+export function getMessageProvenance(messageId: number): Record<string, unknown> | null {
+  const d = getDb();
+  const row = d.prepare(`
+    SELECT id, session_id, source_connection_id, source_ip, user_agent, timestamp
+    FROM conversations
+    WHERE id = ?
+  `).get(messageId) as Record<string, unknown> | undefined;
+  return row ?? null;
 }
 
 export function getConversationHistory(sessionId: string, limit: number = 50): Record<string, unknown>[] {
@@ -172,6 +221,7 @@ export function recordToolEvent(
   parameters?: string | Record<string, unknown> | null,
   inputTokens?: number | null,
   outputTokens?: number | null,
+  sourceConnectionId?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -180,8 +230,8 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, source_connection_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, toolName, toolUseId,
@@ -189,6 +239,7 @@ export function recordToolEvent(
     success === null || success === undefined ? null : (success ? 1 : 0),
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
+    sourceConnectionId ?? null,
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
