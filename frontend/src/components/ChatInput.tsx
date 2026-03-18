@@ -734,7 +734,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     for (let i = 0; i < files.length; i++) {
       const file = files[i] as FileWithPath;
 
-      if (file.type.startsWith('image/')) {
+      if (file.type?.startsWith('image/')) {
         imageFiles.push(file);
       } else {
         const filePath = file.path;
