@@ -12,7 +12,7 @@ describe('ModelSelector', () => {
   it('renders with the selected model label', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -23,19 +23,19 @@ describe('ModelSelector', () => {
   it('shows the full model ID as title on trigger', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
 
     const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
-    expect(trigger).toHaveAttribute('title', 'claude-sonnet-4-20250514');
+    expect(trigger).toHaveAttribute('title', 'claude-sonnet-4-6');
   });
 
   it('opens dropdown when trigger is clicked', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -52,7 +52,7 @@ describe('ModelSelector', () => {
     render(
       <div>
         <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
+          selectedModel="claude-sonnet-4-6"
           onSelectModel={mockOnSelectModel}
         />
         <button>Outside</button>
@@ -75,7 +75,7 @@ describe('ModelSelector', () => {
   it('calls onSelectModel when a model is selected', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -88,13 +88,13 @@ describe('ModelSelector', () => {
 
     fireEvent.click(opusOption!);
 
-    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
+    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-6');
   });
 
   it('closes dropdown after selecting a model', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -111,9 +111,9 @@ describe('ModelSelector', () => {
   it('shows overridden class when isOverridden is true', () => {
     render(
       <ModelSelector
-        selectedModel="claude-opus-4-20250514"
+        selectedModel="claude-opus-4-6"
         onSelectModel={mockOnSelectModel}
-        sessionModel="claude-sonnet-4-20250514"
+        sessionModel="claude-sonnet-4-6"
         isOverridden={true}
       />
     );
@@ -125,21 +125,21 @@ describe('ModelSelector', () => {
   it('shows session override info in title when overridden', () => {
     render(
       <ModelSelector
-        selectedModel="claude-opus-4-20250514"
+        selectedModel="claude-opus-4-6"
         onSelectModel={mockOnSelectModel}
-        sessionModel="claude-sonnet-4-20250514"
+        sessionModel="claude-sonnet-4-6"
         isOverridden={true}
       />
     );
 
     const trigger = screen.getByRole('button', { name: /Model: Opus \(session override\)/i });
-    expect(trigger).toHaveAttribute('title', 'Session: claude-opus-4-20250514\nDefault: claude-sonnet-4-20250514');
+    expect(trigger).toHaveAttribute('title', 'Session: claude-opus-4-6\nDefault: claude-sonnet-4-6');
   });
 
   it('does not show overridden class when isOverridden is false', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
         isOverridden={false}
       />
@@ -170,7 +170,7 @@ describe('ModelSelector', () => {
   it('supports keyboard navigation (ArrowDown to open)', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -186,7 +186,7 @@ describe('ModelSelector', () => {
   it('supports keyboard navigation (Escape to close)', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -204,7 +204,7 @@ describe('ModelSelector', () => {
   it('supports keyboard navigation (Enter to select focused item)', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -218,13 +218,13 @@ describe('ModelSelector', () => {
     // Enter to select
     fireEvent.keyDown(trigger.parentElement!, { key: 'Enter' });
 
-    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
+    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-6');
   });
 
   it('cycles through options with ArrowDown', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -245,7 +245,7 @@ describe('ModelSelector', () => {
   it('displays full model IDs in dropdown items', () => {
     render(
       <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
+        selectedModel="claude-sonnet-4-6"
         onSelectModel={mockOnSelectModel}
       />
     );
@@ -253,8 +253,8 @@ describe('ModelSelector', () => {
     const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
     fireEvent.click(trigger);
 
-    expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument();
-    expect(screen.getByText('claude-opus-4-20250514')).toBeInTheDocument();
+    expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument();
+    expect(screen.getByText('claude-opus-4-6')).toBeInTheDocument();
     expect(screen.getByText('claude-haiku-4-5-20251001')).toBeInTheDocument();
   });
 });

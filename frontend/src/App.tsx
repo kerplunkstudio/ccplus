@@ -100,7 +100,7 @@ function AppContent({ token, loading }: AppContentProps) {
   } = socketData;
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
+    return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-6';
   });
 
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {

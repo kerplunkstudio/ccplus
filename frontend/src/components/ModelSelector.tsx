@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './ModelSelector.css';
 
 const MODELS = [
-  { id: 'claude-sonnet-4-20250514', label: 'Sonnet' },
-  { id: 'claude-opus-4-20250514', label: 'Opus' },
+  { id: 'claude-sonnet-4-6', label: 'Sonnet' },
+  { id: 'claude-opus-4-6', label: 'Opus' },
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku' },
 ];
 

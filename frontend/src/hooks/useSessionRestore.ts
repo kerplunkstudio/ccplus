@@ -7,17 +7,14 @@ import { fetchUserStats } from './useStreamingMessages';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-  'opus': 500_000,
-  'sonnet': 500_000,
-  'haiku': 200_000,
-  'claude-sonnet-4-5-20250514': 500_000,
-  'claude-opus-4-5-20250514': 500_000,
-  'claude-sonnet-4-6': 1_000_000,
-  'claude-opus-4-6': 1_000_000,
-  'claude-sonnet-4-20250514': 500_000,
+  'claude-sonnet-4-6': 200_000,
+  'claude-opus-4-6': 200_000,
   'claude-haiku-4-5-20251001': 200_000,
+  'sonnet': 200_000,
+  'opus': 200_000,
+  'haiku': 200_000,
 };
-const DEFAULT_CONTEXT_WINDOW = 500_000;
+const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 type SessionCache = {
   messages: Message[];

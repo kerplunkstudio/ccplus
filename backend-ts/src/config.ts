@@ -32,7 +32,7 @@ export const CCPLUS_CHANNEL = process.env.CCPLUS_CHANNEL ?? "stable";
 
 // Environment
 export const WORKSPACE_PATH = process.env.WORKSPACE_PATH ?? path.join(homedir(), "Workspace");
-export const SDK_MODEL = process.env.SDK_MODEL ?? "sonnet";
+export const SDK_MODEL = process.env.SDK_MODEL ?? "claude-sonnet-4-6";
 export const HOST = process.env.HOST ?? "127.0.0.1";
 export const PORT = parseInt(process.env.PORT ?? "4000", 10);
 export const DATABASE_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "ccplus.db");
@@ -59,7 +59,7 @@ if (SECRET_KEY === DEFAULT_SECRET) {
 
 // Hot-reloadable config values (can be updated dynamically)
 let runtimeConfig = {
-  SDK_MODEL: process.env.SDK_MODEL ?? "sonnet",
+  SDK_MODEL: process.env.SDK_MODEL ?? "claude-sonnet-4-6",
   MAX_CONVERSATION_HISTORY: 50,
   MAX_ACTIVITY_EVENTS: 200,
   BYPASS_PERMISSIONS: process.env.CCPLUS_BYPASS_PERMISSIONS
@@ -106,7 +106,7 @@ export const BYPASS_PERMISSIONS = process.env.CCPLUS_BYPASS_PERMISSIONS
 export function reloadConfig(key: string, value: string | undefined): void {
   switch (key) {
     case "SDK_MODEL":
-      runtimeConfig.SDK_MODEL = value ?? "sonnet";
+      runtimeConfig.SDK_MODEL = value ?? "claude-sonnet-4-6";
       break;
     case "MAX_CONVERSATION_HISTORY":
       runtimeConfig.MAX_CONVERSATION_HISTORY = value ? parseInt(value, 10) : MAX_CONVERSATION_HISTORY_DEFAULT;
