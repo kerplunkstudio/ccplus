@@ -28,6 +28,12 @@ jobs:
         working-directory: backend-ts
         run: npm run build
 
+      - name: Setup test environment
+        run: |
+          mkdir -p static/chat
+          echo '<!DOCTYPE html><html><body>test</body></html>' > static/chat/index.html
+          mkdir -p ~/Workspace
+
       - name: Run tests
         working-directory: backend-ts
         run: npm test
