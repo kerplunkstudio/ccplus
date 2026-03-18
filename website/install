@@ -78,8 +78,8 @@ warn() {
 # ============================================================================
 
 cleanup() {
-    if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR:-}" ]; then
-        rm -rf "$TMPDIR"
+    if [ -n "${INSTALLER_TMPDIR:-}" ] && [ -d "${INSTALLER_TMPDIR:-}" ]; then
+        rm -rf "$INSTALLER_TMPDIR"
     fi
 }
 
@@ -235,8 +235,8 @@ install_binary() {
     success "Found version $version"
 
     # Create temp directory
-    TMPDIR="$(mktemp -d)"
-    local download_file="$TMPDIR/ccplus-download"
+    INSTALLER_TMPDIR="$(mktemp -d)"
+    local download_file="$INSTALLER_TMPDIR/ccplus-download"
 
     step "Downloading ($platform)"
     info "URL: $download_url"
@@ -274,7 +274,7 @@ install_macos() {
     case "$download_url" in
         *.dmg)
             step "Installing from DMG"
-            local mount_point="$TMPDIR/mount"
+            local mount_point="$INSTALLER_TMPDIR/mount"
             mkdir -p "$mount_point"
 
             if ! hdiutil attach "$download_file" -mountpoint "$mount_point" -quiet; then
@@ -298,7 +298,7 @@ install_macos() {
             step "Installing from ZIP"
             need_cmd unzip
 
-            local extract_dir="$TMPDIR/extracted"
+            local extract_dir="$INSTALLER_TMPDIR/extracted"
             mkdir -p "$extract_dir"
 
             if ! unzip -q "$download_file" -d "$extract_dir"; then
