@@ -1395,6 +1395,10 @@ process.on("uncaughtException", (err) => {
 });
 
 process.on("unhandledRejection", (reason) => {
+  const reasonStr = String(reason);
+  if (reasonStr.includes("ProcessTransport is not ready for writing")) {
+    return;
+  }
   console.error("[server] Unhandled rejection (not crashing):", reason);
 });
 
