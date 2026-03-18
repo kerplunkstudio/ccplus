@@ -16,7 +16,6 @@ import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { AppLoadingScreen } from './components/AppLoadingScreen';
 import { CommandPalette } from './components/CommandPalette';
-import { SearchPanel } from './components/SearchPanel';
 import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
@@ -584,13 +583,11 @@ function AppContent({ token, loading }: AppContentProps) {
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
-  const shouldShowSearch = activePage === 'search';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
     : shouldShowProfile ? 'profile'
     : shouldShowMcp ? 'mcp'
-    : shouldShowSearch ? 'search'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
@@ -684,7 +681,7 @@ function AppContent({ token, loading }: AppContentProps) {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowSearch || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -697,16 +694,6 @@ function AppContent({ token, loading }: AppContentProps) {
                 <ProfilePanel />
               ) : shouldShowMcp ? (
                 <MCPPanel projectPath={activeProject?.path} />
-              ) : shouldShowSearch ? (
-                <SearchPanel
-                  onNavigateToSession={(sessionId) => {
-                    if (activeProject) {
-                      workspace.addTab(activeProject.path, sessionId);
-                      setActivePage(null);
-                    }
-                  }}
-                  onClose={() => setActivePage(null)}
-                />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard

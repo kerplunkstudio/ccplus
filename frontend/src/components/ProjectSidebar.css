@@ -615,10 +615,11 @@ body.sidebar-resizing * {
   padding: var(--space-sm) var(--space-md);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border);
+  letter-spacing: -0.01em;
 }
 
 .search-result-item {
@@ -635,8 +636,8 @@ body.sidebar-resizing * {
 
 .search-result-content {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-primary);
+  font-size: 11px;
+  color: var(--text-secondary);
   line-height: 1.5;
   word-wrap: break-word;
   overflow-wrap: break-word;

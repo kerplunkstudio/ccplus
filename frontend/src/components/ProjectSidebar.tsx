@@ -405,7 +405,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
     if (project) {
       handleSelectSession(project.path, sessionId);
+    } else if (activeProjectPath) {
+      // Open the session as a new tab in the active project
+      onSelectTab(activeProjectPath, sessionId);
     }
+
+    // Clear search after navigating
+    setSearchQuery('');
   };
 
   const highlightMatch = (text: string, query: string): React.ReactNode => {
@@ -791,14 +797,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
         )}
 
         <div className="sidebar-footer-nav">
-          <button
-            className={`footer-nav-item ${activePage === 'search' ? 'active' : ''}`}
-            onClick={() => onNavigate('search')}
-            aria-label="Search"
-          >
-            <span className="footer-nav-icon">⌕</span>
-            <span className="footer-nav-label">Search</span>
-          </button>
           <button
             className={`footer-nav-item ${activePage === 'mcp' ? 'active' : ''}`}
             onClick={() => onNavigate('mcp')}
