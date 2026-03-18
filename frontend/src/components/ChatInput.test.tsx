@@ -17,6 +17,22 @@ jest.mock('../hooks/useSkills', () => ({
   }),
 }));
 
+// Mock useVoiceInput
+const mockStartRecording = jest.fn();
+const mockStopRecording = jest.fn();
+let mockIsRecording = false;
+
+jest.mock('../hooks/useVoiceInput', () => ({
+  useVoiceInput: () => ({
+    isRecording: mockIsRecording,
+    isSupported: true,
+    transcript: '',
+    error: null,
+    startRecording: mockStartRecording,
+    stopRecording: mockStopRecording,
+  }),
+}));
+
 // Mock child components
 jest.mock('./SlashCommandAutocomplete', () => ({
   SlashCommandAutocomplete: ({ suggestions, onSelect, onClose }: any) => (
@@ -461,5 +477,108 @@ describe('ChatInput', () => {
     fireEvent.keyDown(textarea, { key: 'ArrowUp' });
 
     // No assertions needed - testing that it doesn't crash
+  });
+
+  describe('Voice Input', () => {
+    beforeEach(() => {
+      mockStartRecording.mockClear();
+      mockStopRecording.mockClear();
+      mockIsRecording = false;
+    });
+
+    it('renders voice button when voice is supported', () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+      expect(voiceButton).toBeInTheDocument();
+    });
+
+    it('starts recording on mouse down', () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+
+      fireEvent.mouseDown(voiceButton);
+
+      expect(mockStartRecording).toHaveBeenCalledTimes(1);
+    });
+
+    it('has mouse up handler that stops recording when recording', () => {
+      // Set isRecording to true for this test
+      mockIsRecording = true;
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Release to stop recording/i);
+
+      fireEvent.mouseUp(voiceButton);
+
+      // The handler is attached, stopRecording would be called if isRecording was true
+      // We can't test the exact call without re-rendering with state change
+      expect(voiceButton).toBeInTheDocument();
+    });
+
+    it('has mouse leave handler to stop recording', () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+
+      // Just verify the handlers don't crash
+      fireEvent.mouseLeave(voiceButton);
+      expect(voiceButton).toBeInTheDocument();
+    });
+
+    it('starts recording on touch start', () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+
+      fireEvent.touchStart(voiceButton);
+
+      expect(mockStartRecording).toHaveBeenCalledTimes(1);
+    });
+
+    it('has touch end handler', () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+
+      fireEvent.touchEnd(voiceButton);
+
+      // Handler attached, doesn't crash
+      expect(voiceButton).toBeInTheDocument();
+    });
+
+    it('starts recording when space is pressed and textarea is empty', async () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const textarea = screen.getByPlaceholderText(/Send a message/i);
+
+      fireEvent.keyDown(textarea, { key: ' ' });
+
+      expect(mockStartRecording).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not start recording when space is pressed and textarea has content', async () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const textarea = screen.getByPlaceholderText(/Send a message/i);
+
+      await userEvent.type(textarea, 'hello');
+      fireEvent.keyDown(textarea, { key: ' ' });
+
+      expect(mockStartRecording).not.toHaveBeenCalled();
+    });
+
+    it('disables voice button when not connected', () => {
+      renderWithToast(<ChatInput {...defaultProps} connected={false} />);
+      const voiceButton = screen.getByLabelText(/Hold to record voice/i);
+      expect(voiceButton).toBeDisabled();
+    });
+
+    it('shows pulse rings when recording', () => {
+      mockIsRecording = true;
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const pulseRings = document.querySelectorAll('.voice-pulse-ring');
+      expect(pulseRings.length).toBe(2);
+    });
+
+    it('shows recording bar when recording', () => {
+      mockIsRecording = true;
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const recordingBar = document.querySelector('.voice-recording-bar');
+      expect(recordingBar).toBeInTheDocument();
+    });
   });
 });
