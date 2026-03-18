@@ -17,8 +17,6 @@ import * as sdkSession from "./sdk-session.js";
 import { ProvenanceTracker } from "./provenance.js";
 import { configWatcher, type ConfigChange } from "./config-watcher.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
-import { RateLimiter } from "./rate-limiter.js";
-import { CircuitBreaker } from "./circuit-breaker.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 
 // Remove CLAUDECODE env var
@@ -81,12 +79,6 @@ const provenanceTracker = new ProvenanceTracker();
 
 // Connection health monitor
 const connectionHealthMonitor = new ConnectionHealthMonitor();
-
-// Rate limiter
-const rateLimiter = new RateLimiter();
-
-// Circuit breaker
-const circuitBreaker = new CircuitBreaker();
 
 let workspacePath = config.WORKSPACE_PATH;
 
@@ -1018,11 +1010,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (gracefulShutdown.isShuttingDown()) {
-      socket.emit("error", { message: "Server is shutting down" });
-      return;
-    }
-
     connectionHealthMonitor.onEvent(client.session_id);
 
 
@@ -1038,9 +1025,6 @@ io.on("connection", (socket) => {
 
     if (!content && !imageIdsData.length) return;
 
-
-    // Generate correlation context for this user message
-    const correlation = createCorrelationContext(sid);
     // Record user message with provenance
     try {
       const provenance = provenanceTracker.getProvenance(socket.id);
@@ -1053,7 +1037,7 @@ io.on("connection", (socket) => {
         provenance?.connectionId ?? undefined,
         provenance?.sourceIp ?? undefined,
         provenance?.userAgent ?? undefined,
-        correlation.correlationId,
+        undefined,
       );
 
       // Record transcript event
@@ -1069,7 +1053,6 @@ io.on("connection", (socket) => {
         metadata: {
           project_path: projectPathData || null,
         },
-        correlation_id: correlation.correlationId,
       });
 
       const existing = database.getConversationHistory(sid, 1);
@@ -1092,7 +1075,7 @@ io.on("connection", (socket) => {
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined, correlation.correlationId),
+      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -1275,7 +1258,6 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
             model: result.model ?? null,
             sdk_session_id: result.sdk_session_id ?? null,
           },
-          correlation_id: correlationId,
         });
       } catch (e) {
         console.error("Failed to record assistant message transcript event:", e);
@@ -1293,9 +1275,6 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
       });
     },
     onError: (message: string) => {
-      // Circuit breaker: record failure on error
-      circuitBreaker.recordFailure(sessionId);
-
       io.to(sessionId).emit("error", { message });
 
       // Record error transcript event
@@ -1307,7 +1286,6 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
             message,
           },
           metadata: null,
-          correlation_id: correlationId,
         });
       } catch (e) {
         console.error("Failed to record error transcript event:", e);
@@ -1370,22 +1348,24 @@ console.log(`Config watcher started`);
 
 writePidFile();
 
-// Graceful shutdown handlers
-const gracefulShutdown = new GracefulShutdown({
-  httpServer,
-  io,
-  getActiveSessions: sdkSession.getActiveSessions,
-  cleanupFns: [
-    () => connectionHealthMonitor.stop(),
-    () => configWatcher.stop(),
-    () => removePidFile(),
-    () => database.closeDatabase(),
-  ],
-  hardTimeoutMs: 10000,
+// Shutdown handlers
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, cleaning up...");
+  connectionHealthMonitor.stop();
+  configWatcher.stop();
+  removePidFile();
+  database.closeDatabase();
+  process.exit(0);
 });
 
-process.on("SIGTERM", () => gracefulShutdown.shutdown());
-process.on("SIGINT", () => gracefulShutdown.shutdown());
+process.on("SIGINT", () => {
+  console.log("SIGINT received, cleaning up...");
+  connectionHealthMonitor.stop();
+  configWatcher.stop();
+  removePidFile();
+  database.closeDatabase();
+  process.exit(0);
+});
 
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
