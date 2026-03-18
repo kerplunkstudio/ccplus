@@ -31,7 +31,6 @@ type SessionCache = {
 };
 
 interface UseSessionRestoreProps {
-  token: string | null;
   sessionId: string;
   socket: Socket | null;
   currentSessionIdRef: MutableRefObject<string>;
@@ -73,7 +72,6 @@ interface UseSessionRestoreProps {
 }
 
 export function useSessionRestore({
-  token,
   sessionId,
   socket,
   currentSessionIdRef,
@@ -181,7 +179,7 @@ export function useSessionRestore({
 
   // Session restore effect
   useEffect(() => {
-    if (!token) return;
+    if (!sessionId) return;
 
     let isMounted = true;
     const restoreSession = async () => {
@@ -341,7 +339,7 @@ export function useSessionRestore({
     return () => {
       isMounted = false;
     };
-  }, [token, sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, isRestoringSessionRef, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setContextTokens, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
+  }, [sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, isRestoringSessionRef, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setContextTokens, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
 
   // Reconnect restore logic
   useEffect(() => {

@@ -24,32 +24,27 @@ describe('useSocketConnection', () => {
   });
 
   describe('Socket creation', () => {
-    it('should create socket with auth token', () => {
+    it('should create socket without auth', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(io).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          auth: { token: 'test-token' },
           transports: ['polling', 'websocket'],
         })
       );
-    });
 
-    it('should not create socket if token is null', () => {
-      const currentSessionIdRef = { current: 'session-123' };
-
-      renderHook(() => useSocketConnection({ token: null, currentSessionIdRef }));
-
-      expect(io).not.toHaveBeenCalled();
+      // Verify auth is NOT in the options
+      const callArgs = (io as jest.Mock).mock.calls[0][1];
+      expect(callArgs).not.toHaveProperty('auth');
     });
 
     it('should use SOCKET_URL from environment or default', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(io).toHaveBeenCalledWith(
         expect.stringMatching(/http:\/\/localhost:4000/),
@@ -60,7 +55,7 @@ describe('useSocketConnection', () => {
     it('should return socket in state', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { result } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { result } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(result.current.socket).toBe(mockSocket);
       expect(result.current.socketRef.current).toBe(mockSocket);
@@ -71,7 +66,7 @@ describe('useSocketConnection', () => {
     it('should set connected to true on connect', async () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { result } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { result } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(result.current.connected).toBe(false);
 
@@ -91,7 +86,7 @@ describe('useSocketConnection', () => {
     it('should emit join_session on connect', async () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       // Find and trigger connect handler
       const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -108,7 +103,7 @@ describe('useSocketConnection', () => {
     it('should set connected to false on disconnect after debounce', async () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { result } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { result } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       // Trigger connect first
       const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -140,7 +135,7 @@ describe('useSocketConnection', () => {
     it('should clear disconnect timer on reconnect', async () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { result } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { result } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       // Trigger connect
       const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
@@ -176,7 +171,7 @@ describe('useSocketConnection', () => {
     it('should close socket on unmount', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { unmount } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { unmount } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(mockSocket.close).not.toHaveBeenCalled();
 
@@ -188,7 +183,7 @@ describe('useSocketConnection', () => {
     it('should clear disconnect timer on unmount', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { unmount } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { unmount } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       // Trigger disconnect to start timer
       const disconnectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'disconnect')?.[1];
@@ -205,7 +200,7 @@ describe('useSocketConnection', () => {
     it('should clear socketRef on unmount', () => {
       const currentSessionIdRef = { current: 'session-123' };
 
-      const { result, unmount } = renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      const { result, unmount } = renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       expect(result.current.socketRef.current).toBe(mockSocket);
 
@@ -215,63 +210,11 @@ describe('useSocketConnection', () => {
     });
   });
 
-  describe('Token change handling', () => {
-    it('should create new socket when token changes', () => {
-      const currentSessionIdRef = { current: 'session-123' };
-
-      const { rerender } = renderHook(
-        ({ token }) => useSocketConnection({ token, currentSessionIdRef }),
-        { initialProps: { token: 'token-1' } }
-      );
-
-      expect(io).toHaveBeenCalledTimes(1);
-      expect(io).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ auth: { token: 'token-1' } })
-      );
-
-      // Clear mock to count new calls
-      (io as jest.Mock).mockClear();
-
-      rerender({ token: 'token-2' });
-
-      expect(io).toHaveBeenCalledTimes(1);
-      expect(io).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ auth: { token: 'token-2' } })
-      );
-    });
-
-    it('should close old socket when token changes', () => {
-      const currentSessionIdRef = { current: 'session-123' };
-
-      const { rerender } = renderHook(
-        ({ token }) => useSocketConnection({ token, currentSessionIdRef }),
-        { initialProps: { token: 'token-1' } }
-      );
-
-      const firstSocket = mockSocket;
-
-      // Create new mock for second token
-      const secondSocket = {
-        on: jest.fn(),
-        emit: jest.fn(),
-        close: jest.fn(),
-        io: { on: jest.fn() },
-      };
-      (io as jest.Mock).mockReturnValue(secondSocket);
-
-      rerender({ token: 'token-2' });
-
-      expect(firstSocket.close).toHaveBeenCalled();
-    });
-  });
-
   describe('Session ID handling', () => {
     it('should emit join_session with current session on connect', async () => {
       const currentSessionIdRef = { current: 'session-abc' };
 
-      renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
 
@@ -287,7 +230,7 @@ describe('useSocketConnection', () => {
     it('should not emit join_session if currentSessionId is empty', async () => {
       const currentSessionIdRef = { current: '' };
 
-      renderHook(() => useSocketConnection({ token: 'test-token', currentSessionIdRef }));
+      renderHook(() => useSocketConnection({ currentSessionIdRef }));
 
       const connectHandler = mockSocket.on.mock.calls.find(call => call[0] === 'connect')?.[1];
 

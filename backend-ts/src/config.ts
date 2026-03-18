@@ -36,35 +36,13 @@ export const SDK_MODEL = process.env.SDK_MODEL ?? "claude-sonnet-4-6";
 export const HOST = process.env.HOST ?? "127.0.0.1";
 export const PORT = parseInt(process.env.PORT ?? "4000", 10);
 export const DATABASE_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "ccplus.db");
-export const LOCAL_MODE = (process.env.CCPLUS_AUTH ?? "local") === "local";
-
-const DEFAULT_SECRET = "ccplus-dev-secret-change-me";
-export const SECRET_KEY = process.env.SECRET_KEY ?? DEFAULT_SECRET;
-
-// Abort startup if insecure default key is used outside local/dev mode
-if (SECRET_KEY === DEFAULT_SECRET) {
-  if (!LOCAL_MODE) {
-    console.error(
-      "FATAL: SECRET_KEY is set to the insecure default value. " +
-      "Set a strong SECRET_KEY environment variable before running in production."
-    );
-    process.exit(1);
-  } else {
-    console.warn(
-      "WARNING: SECRET_KEY is using the insecure default value. " +
-      "Set SECRET_KEY in your .env file before exposing this service to a network."
-    );
-  }
-}
 
 // Hot-reloadable config values (can be updated dynamically)
 let runtimeConfig = {
   SDK_MODEL: process.env.SDK_MODEL ?? "claude-sonnet-4-6",
   MAX_CONVERSATION_HISTORY: 50,
   MAX_ACTIVITY_EVENTS: 200,
-  BYPASS_PERMISSIONS: process.env.CCPLUS_BYPASS_PERMISSIONS
-    ? process.env.CCPLUS_BYPASS_PERMISSIONS === 'true'
-    : LOCAL_MODE,
+  BYPASS_PERMISSIONS: true,
 };
 
 export const MAX_CONVERSATION_HISTORY_DEFAULT = 50;
@@ -94,10 +72,8 @@ export const MAX_ACTIVITY_EVENTS = MAX_ACTIVITY_EVENTS_DEFAULT;
 // Server PID path (for process management)
 export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
 
-// Permission bypass (default: true in local mode, false otherwise)
-export const BYPASS_PERMISSIONS = process.env.CCPLUS_BYPASS_PERMISSIONS
-  ? process.env.CCPLUS_BYPASS_PERMISSIONS === 'true'
-  : LOCAL_MODE;
+// Permission bypass (always enabled)
+export const BYPASS_PERMISSIONS = true;
 
 /**
  * Reload hot-reloadable config values from environment

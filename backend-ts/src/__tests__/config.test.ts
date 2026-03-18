@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   DATABASE_PATH,
   DATA_DIR,
-  LOCAL_MODE,
   LOG_DIR,
   MAX_ACTIVITY_EVENTS,
   MAX_CONVERSATION_HISTORY,
@@ -36,12 +35,6 @@ describe("Config", () => {
 
     it("should have DATABASE_PATH containing ccplus.db", () => {
       expect(DATABASE_PATH).toContain("ccplus.db");
-    });
-  });
-
-  describe("local mode", () => {
-    it("should default to LOCAL_MODE true", () => {
-      expect(LOCAL_MODE).toBe(true);
     });
   });
 });

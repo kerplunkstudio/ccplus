@@ -71,7 +71,6 @@ describe('useSessionRestore', () => {
   });
 
   const createHookProps = (overrides?: Partial<any>) => ({
-    token: 'test-token',
     sessionId: 'session-1',
     socket: mockSocket,
     contextTokens: null,
@@ -96,8 +95,8 @@ describe('useSessionRestore', () => {
       });
     });
 
-    it('should not restore if token is null', async () => {
-      const { result } = renderHook(() => useSessionRestore(createHookProps({ token: null })));
+    it('should not restore if sessionId is empty', async () => {
+      const { result } = renderHook(() => useSessionRestore(createHookProps({ sessionId: '' })));
 
       expect(result.current.isRestoringSession).toBe(true);
 

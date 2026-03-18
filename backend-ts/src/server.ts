@@ -12,7 +12,6 @@ import process from "process";
 import { homedir } from "os";
 
 import * as config from "./config.js";
-import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { findClaudeBinary } from "./utils.js";
@@ -70,8 +69,8 @@ if (orphanCount > 0) {
   log.info(`Marked ${orphanCount} orphaned tool events from previous run`, { orphanCount });
 }
 
-// Maps socket.id -> { session_id, user_id, sessions }
-const connectedClients = new Map<string, { session_id: string; user_id: string; sessions: Set<string> }>();
+// Maps socket.id -> { session_id, sessions }
+const connectedClients = new Map<string, { session_id: string; sessions: Set<string> }>();
 
 // Track mutable workspace path (global default for new sessions)
 let workspacePath = config.WORKSPACE_PATH;
@@ -118,31 +117,6 @@ app.get("/health", (_req: Request, res: Response) => {
     active_sessions_count: new Set([...connectedClients.values()].flatMap(c => [...c.sessions])).size,
     db: dbStats,
   });
-});
-
-// -- Auth --
-
-app.post("/api/auth/auto-login", (_req: Request, res: Response) => {
-  if (!config.LOCAL_MODE) {
-    res.status(403).json({ error: "Auto-login disabled in production mode" });
-    return;
-  }
-  const token = auth.autoLogin();
-  if (!token) {
-    res.status(500).json({ error: "Failed to generate token" });
-    return;
-  }
-  res.json({ token, user: { id: "local", username: "local" } });
-});
-
-app.post("/api/auth/verify", (req: Request, res: Response) => {
-  const { token } = req.body ?? {};
-  const userId = auth.verifyToken(token ?? "");
-  if (!userId) {
-    res.status(401).json({ valid: false });
-    return;
-  }
-  res.json({ valid: true, user: { id: userId, username: userId } });
 });
 
 // -- Version --
@@ -224,12 +198,7 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
 
 // -- Status --
 
-app.get("/api/status/first-run", (req: Request, res: Response) => {
-  const token = (req.headers.authorization ?? "").replace("Bearer ", "");
-  if (!auth.verifyToken(token)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+app.get("/api/status/first-run", (_req: Request, res: Response) => {
   res.json({ first_run: database.isFirstRun() });
 });
 
@@ -1055,7 +1024,7 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
 
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
-    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
+    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId));
     socket.emit("stream_active", { session_id: sessionId });
 
     const bufferedContent = sdkSession.getStreamingContent(sessionId);
@@ -1091,22 +1060,13 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
 }
 
 io.on("connection", (socket) => {
-  const token = socket.handshake.auth.token as string ?? "";
-  const userId = auth.verifyToken(token);
-
-  if (!userId) {
-    log.warn("WebSocket connection rejected: invalid token", { socketId: socket.id });
-    socket.disconnect(true);
-    return;
-  }
-
   const sessionId = (socket.handshake.auth.session_id as string) ?? "";
 
-  connectedClients.set(socket.id, { session_id: sessionId, user_id: userId, sessions: new Set() });
+  connectedClients.set(socket.id, { session_id: sessionId, sessions: new Set() });
 
   // If session_id provided in auth (backward compat or initial connect), auto-join
   if (sessionId) {
-    joinSession(socket, sessionId, userId);
+    joinSession(socket, sessionId, "local");
   }
 
   // -- Message handler --
@@ -1114,12 +1074,12 @@ io.on("connection", (socket) => {
   socket.on("message", (data: Record<string, unknown>) => {
     const client = connectedClients.get(socket.id);
     if (!client) {
-      socket.emit("error", { message: "Not authenticated" });
+      socket.emit("error", { message: "Not connected" });
       return;
     }
 
     const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
-    const uid = client.user_id;
+    const uid = "local";
     const content = ((data?.content as string) ?? "").trim();
     const workspace = (data?.workspace as string) ?? getWorkspaceForSession(sid);
     const model = (data?.model as string) || undefined;
@@ -1143,7 +1103,7 @@ io.on("connection", (socket) => {
         try {
           database.incrementUserStats(uid, 1);
         } catch (e) {
-          log.error("Failed to increment session count", { userId, error: String(e) });
+          log.error("Failed to increment session count", { error: String(e) });
         }
       }
     } catch (err) {
@@ -1157,7 +1117,7 @@ io.on("connection", (socket) => {
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid, uid),
+      buildSocketCallbacks(sid),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -1194,12 +1154,12 @@ io.on("connection", (socket) => {
   socket.on("duplicate_session", (data: { sourceSessionId: string; newSessionId: string }, callback?: (response: { success: boolean; error?: string; conversations?: number; toolEvents?: number; images?: number }) => void) => {
     const client = connectedClients.get(socket.id);
     if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
+      callback?.({ success: false, error: "Not connected" });
       return;
     }
 
     try {
-      const result = database.duplicateSession(data.sourceSessionId, data.newSessionId, client.user_id);
+      const result = database.duplicateSession(data.sourceSessionId, data.newSessionId, "local");
       callback?.({ success: true, conversations: result.conversations, toolEvents: result.toolEvents, images: result.images });
     } catch (err) {
       log.error("Failed to duplicate session", { sourceSessionId: data.sourceSessionId, newSessionId: data.newSessionId, error: String(err) });
@@ -1222,7 +1182,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    joinSession(socket, newSessionId, client.user_id);
+    joinSession(socket, newSessionId, "local");
     callback?.({ status: "ok" });
   });
 
@@ -1358,14 +1318,14 @@ io.on("connection", (socket) => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
     if (client) {
-      log.debug("Client disconnected", { userId: client.user_id, sessions: [...client.sessions] });
+      log.debug("Client disconnected", { sessions: [...client.sessions] });
     }
   });
 });
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
-function buildSocketCallbacks(sessionId: string, userId: string) {
+function buildSocketCallbacks(sessionId: string) {
   return {
     onText: (text: string, messageIndex: number) => {
       io.to(sessionId).emit("text_delta", { text, message_index: messageIndex, session_id: sessionId });
@@ -1379,7 +1339,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         if (content) {
           const lines = content.split("\n").length;
           try {
-            database.incrementUserStats(userId, 0, 0, 0, 0, 0, 0, lines);
+            database.incrementUserStats("local", 0, 0, 0, 0, 0, 0, lines);
           } catch (e) {
             log.error("Failed to increment LOC", { sessionId, error: String(e) });
           }
@@ -1389,7 +1349,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
     onComplete: (result: Record<string, unknown>) => {
       try {
         database.incrementUserStats(
-          userId,
+          "local",
           0,
           1,
           (result.duration_ms as number) ?? 0,
@@ -1398,7 +1358,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           (result.output_tokens as number) ?? 0,
         );
       } catch (e) {
-        log.error("Failed to increment user stats", { sessionId, userId, error: String(e) });
+        log.error("Failed to increment user stats", { sessionId, error: String(e) });
       }
 
       // Persist session context for tab restoration
@@ -1505,7 +1465,6 @@ function removePidFile(): void {
 log.info("Starting ccplus server", {
   host: config.HOST,
   port: config.PORT,
-  localMode: config.LOCAL_MODE,
   workspace: workspacePath,
   database: config.DATABASE_PATH,
   staticDir: config.STATIC_DIR,
@@ -1582,18 +1541,9 @@ setInterval(() => {
       for (const task of readyTasks) {
         log.info(`Firing scheduled task ${task.id} for session ${sessionId}`, { taskId: task.id, prompt: task.prompt });
 
-        // Get user_id from connected clients
-        let userId = "local";
-        for (const client of connectedClients.values()) {
-          if (client.sessions.has(sessionId)) {
-            userId = client.user_id;
-            break;
-          }
-        }
-
         // Record user message
         try {
-          database.recordMessage(sessionId, userId, "user", task.prompt, undefined, undefined, undefined);
+          database.recordMessage(sessionId, "local", "user", task.prompt, undefined, undefined, undefined);
         } catch (err) {
           log.error("Failed to record scheduled task message", { sessionId, taskId: task.id, error: String(err) });
         }
@@ -1607,7 +1557,7 @@ setInterval(() => {
           sessionId,
           task.prompt,
           workspace,
-          buildSocketCallbacks(sessionId, userId),
+          buildSocketCallbacks(sessionId),
           undefined,
           undefined,
         );

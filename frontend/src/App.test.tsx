@@ -3,15 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 // Mock the hooks
-jest.mock('./hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: { id: '1', username: 'test' },
-    token: 'test-token',
-    loading: false,
-    logout: jest.fn(),
-  }),
-}));
-
 jest.mock('./hooks/useWorkspace', () => ({
   useWorkspace: () => ({
     state: {
@@ -55,10 +46,12 @@ jest.mock('./hooks/useWorkspace', () => ({
 
 jest.mock('./hooks/useTabSocket', () => ({
   useTabSocket: () => ({
+    socket: null,
     connected: true,
     messages: [],
     streaming: false,
     backgroundProcessing: false,
+    thinking: '',
     currentTool: null,
     activityTree: [],
     sendMessage: jest.fn(),
@@ -69,10 +62,17 @@ jest.mock('./hooks/useTabSocket', () => ({
     duplicateSession: jest.fn(),
     isRestoringSession: false,
     pendingRestore: false,
-    signals: { status: null, plan: null },
+    signals: { status: null },
     promptSuggestions: [],
     rateLimitState: null,
     contextTokens: null,
+    todos: [],
+    setTodos: jest.fn(),
+    scheduledTasks: [],
+    createScheduledTask: jest.fn(),
+    deleteScheduledTask: jest.fn(),
+    pauseScheduledTask: jest.fn(),
+    resumeScheduledTask: jest.fn(),
     usageStats: {
       totalCost: 0,
       totalInputTokens: 0,
@@ -189,67 +189,10 @@ describe('App', () => {
   });
 });
 
-describe('App - Auth Flow', () => {
-  it('renders with token', () => {
-    render(<App />);
-    expect(screen.getByTestId('project-sidebar')).toBeInTheDocument();
-  });
-
-  it('renders loading state when loading is true', () => {
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: null,
-      token: null,
-      loading: true,
-      logout: jest.fn(),
-    });
-    render(<App />);
-    // AppContent should not render during loading
-    expect(screen.queryByTestId('chat-panel')).not.toBeInTheDocument();
-  });
-
-  it('renders without token', () => {
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: null,
-      token: null,
-      loading: false,
-      logout: jest.fn(),
-    });
-    jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
-      state: {
-        projects: [],
-        activeProjectPath: null,
-      },
-      activeProject: null,
-      activeTab: null,
-      addProject: jest.fn(),
-      removeProject: jest.fn(),
-      selectProject: jest.fn(),
-      selectTab: jest.fn(),
-      selectTabQuiet: jest.fn(),
-      addTab: jest.fn(),
-      addBrowserTab: jest.fn(),
-      closeTab: jest.fn(),
-      closeOtherTabs: jest.fn(),
-      duplicateTab: jest.fn(),
-      reopenTab: jest.fn(),
-      hasClosedTabs: false,
-      updateTabLabel: jest.fn(),
-      setTabStreaming: jest.fn(),
-    });
-    render(<App />);
-    expect(screen.getByText('Open a project from the sidebar to get started')).toBeInTheDocument();
-  });
-});
 
 describe('App - Workspace State', () => {
   beforeEach(() => {
     // Reset mocks to default state
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [
@@ -315,12 +258,6 @@ describe('App - Workspace State', () => {
 
 describe('App - Conditional Rendering', () => {
   it('shows welcome screen when no projects and first run', async () => {
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [],
@@ -356,12 +293,6 @@ describe('App - Conditional Rendering', () => {
   });
 
   it('shows no-project state when no active project', () => {
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [],
@@ -389,12 +320,6 @@ describe('App - Conditional Rendering', () => {
   });
 
   it('shows dashboard when project has no tabs', () => {
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [
@@ -437,12 +362,6 @@ describe('App - Conditional Rendering', () => {
 describe('App - Socket Connection', () => {
   beforeEach(() => {
     // Reset mocks to default state
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [
@@ -562,12 +481,6 @@ describe('App - Socket Connection', () => {
 describe('App - Model Selection', () => {
   beforeEach(() => {
     // Reset mocks to default state
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [
@@ -666,12 +579,6 @@ describe('App - Model Selection', () => {
 describe('App - Error Boundary', () => {
   beforeEach(() => {
     // Reset mocks to default state
-    jest.spyOn(require('./hooks/useAuth'), 'useAuth').mockReturnValue({
-      user: { id: '1', username: 'test' },
-      token: 'test-token',
-      loading: false,
-      logout: jest.fn(),
-    });
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [

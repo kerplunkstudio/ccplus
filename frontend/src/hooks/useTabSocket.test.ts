@@ -50,9 +50,9 @@ describe('useTabSocket session cache', () => {
 
     // Render hook with session A
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -76,7 +76,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch to session B (this should cache session A's state)
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     // Wait for session B restore to complete
@@ -89,7 +89,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch back to session A (should restore from cache, not DB)
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-a' });
+      rerender({ sessionId: 'session-a' });
     });
 
     // Wait for restore to complete
@@ -131,9 +131,9 @@ describe('useTabSocket session cache', () => {
     });
 
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -153,7 +153,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch to session B to cache session A
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -167,7 +167,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch back to session A
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-a' });
+      rerender({ sessionId: 'session-a' });
     });
 
     await waitFor(() => {
@@ -185,7 +185,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch to session B and back to session A again
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -193,7 +193,7 @@ describe('useTabSocket session cache', () => {
     });
 
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-a' });
+      rerender({ sessionId: 'session-a' });
     });
 
     await waitFor(() => {
@@ -217,9 +217,9 @@ describe('useTabSocket session cache', () => {
     (io as jest.Mock).mockReturnValue(mockSocket);
 
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -242,7 +242,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch to session B
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -254,7 +254,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch back to session A
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-a' });
+      rerender({ sessionId: 'session-a' });
     });
 
     await waitFor(() => {
@@ -275,9 +275,9 @@ describe('useTabSocket session cache', () => {
     (io as jest.Mock).mockReturnValue(mockSocket);
 
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -291,7 +291,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch to session B (should not cache session A since it's empty)
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -300,7 +300,7 @@ describe('useTabSocket session cache', () => {
 
     // Switch back to session A
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-a' });
+      rerender({ sessionId: 'session-a' });
     });
 
     await waitFor(() => {
@@ -347,9 +347,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render with session-a
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -363,7 +363,7 @@ describe('useTabSocket persistent socket', () => {
 
     // Rerender with session-b
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -372,7 +372,7 @@ describe('useTabSocket persistent socket', () => {
 
     // Rerender with session-c
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-c' });
+      rerender({ sessionId: 'session-c' });
     });
 
     await waitFor(() => {
@@ -383,7 +383,7 @@ describe('useTabSocket persistent socket', () => {
     expect(io).toHaveBeenCalledTimes(1);
   });
 
-  it('should not include session_id in auth handshake', async () => {
+  it('should not include auth in socket options', async () => {
     const mockSocket = {
       on: jest.fn(),
       emit: jest.fn(),
@@ -393,11 +393,11 @@ describe('useTabSocket persistent socket', () => {
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    // Render with token and sessionId
+    // Render with sessionId
     const { result } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -406,18 +406,17 @@ describe('useTabSocket persistent socket', () => {
       expect(result.current.isRestoringSession).toBe(false);
     });
 
-    // Verify io() was called with correct auth (no session_id)
+    // Verify io() was called without auth
     expect(io).toHaveBeenCalledWith(
       expect.any(String),
       {
-        auth: { token: 'test-token' },
         transports: ['polling', 'websocket'],
       }
     );
 
-    // Verify session_id is NOT in auth object
-    const authObject = (io as jest.Mock).mock.calls[0][1].auth;
-    expect(authObject).not.toHaveProperty('session_id');
+    // Verify auth is NOT in options
+    const options = (io as jest.Mock).mock.calls[0][1];
+    expect(options).not.toHaveProperty('auth');
   });
 
   it('should emit join_session on connect', async () => {
@@ -432,9 +431,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render
     const { result } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -466,9 +465,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render with session-a
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -488,7 +487,7 @@ describe('useTabSocket persistent socket', () => {
 
     // Rerender with session-b
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {
@@ -514,9 +513,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render
     const { result } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -555,9 +554,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render
     const { result } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -593,9 +592,9 @@ describe('useTabSocket persistent socket', () => {
 
     // Render with session-a
     const { result, rerender } = renderHook(
-      ({ token, sessionId }) => useTabSocket(token, sessionId),
+      ({ sessionId }) => useTabSocket(sessionId),
       {
-        initialProps: { token: 'test-token', sessionId: 'session-a' },
+        initialProps: { sessionId: 'session-a' },
       }
     );
 
@@ -606,7 +605,7 @@ describe('useTabSocket persistent socket', () => {
 
     // Rerender with session-b
     await act(async () => {
-      rerender({ token: 'test-token', sessionId: 'session-b' });
+      rerender({ sessionId: 'session-b' });
     });
 
     await waitFor(() => {

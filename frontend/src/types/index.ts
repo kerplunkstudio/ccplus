@@ -74,11 +74,6 @@ export function isAgentNode(node: ActivityNode): node is AgentNode {
   return 'children' in node;
 }
 
-export interface User {
-  id: string;
-  username: string;
-}
-
 export interface UsageStats {
   totalCost: number;
   totalInputTokens: number;
