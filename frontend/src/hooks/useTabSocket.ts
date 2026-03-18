@@ -21,7 +21,12 @@ type SessionCache = {
   contextTokens: number | null;
 };
 
-export function useTabSocket(token: string | null, sessionId: string) {
+interface UseTabSocketProps {
+  onDevServerDetected?: (url: string) => void;
+}
+
+export function useTabSocket(token: string | null, sessionId: string, props?: UseTabSocketProps) {
+  const onDevServerDetected = props?.onDevServerDetected;
   // Session tracking refs
   const currentSessionIdRef = useRef<string>(sessionId);
   const prevSessionIdRef = useRef(sessionId);
@@ -76,6 +81,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
     sequenceRef,
     seenToolUseIds,
     toolLogRef, // Pass the shared ref
+    onDevServerDetected,
   });
 
   // Session restore hook

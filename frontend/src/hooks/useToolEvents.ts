@@ -14,6 +14,7 @@ interface UseToolEventsProps {
   sequenceRef: MutableRefObject<number>;
   seenToolUseIds: MutableRefObject<Set<string>>;
   toolLogRef: MutableRefObject<ToolEvent[]>; // Accept from outside
+  onDevServerDetected?: (url: string) => void;
 }
 
 export function useToolEvents({
@@ -27,6 +28,7 @@ export function useToolEvents({
   sequenceRef,
   seenToolUseIds,
   toolLogRef, // Use external ref
+  onDevServerDetected,
 }: UseToolEventsProps) {
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
   const [toolLog, setToolLog] = useState<ToolEvent[]>([]);
@@ -222,6 +224,13 @@ export function useToolEvents({
       setPromptSuggestions(data.suggestions);
     });
 
+    socket.on('dev_server_detected', (data: { url: string; session_id: string }) => {
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
+      if (onDevServerDetected) {
+        onDevServerDetected(data.url);
+      }
+    });
+
     return () => {
       socket.off('tool_event');
       socket.off('user_question');
@@ -229,12 +238,13 @@ export function useToolEvents({
       socket.off('tool_progress');
       socket.off('rate_limit');
       socket.off('prompt_suggestions');
+      socket.off('dev_server_detected');
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;
       }
     };
-  }, [socket, dispatchTree, currentSessionIdRef, streamingIdRef, streamingContentRef, setMessages, setStreaming, sequenceRef, seenToolUseIds, setCurrentToolDebounced, checkAndFinalizeToolState]);
+  }, [socket, dispatchTree, currentSessionIdRef, streamingIdRef, streamingContentRef, setMessages, setStreaming, sequenceRef, seenToolUseIds, setCurrentToolDebounced, checkAndFinalizeToolState, onDevServerDetected]);
 
   return {
     currentTool,
