@@ -58,6 +58,7 @@ const defaultProps = {
   onRemoveProject: jest.fn(),
   onNewTabForProject: jest.fn(),
   onCloseTab: jest.fn(),
+  onRenameTab: jest.fn(),
   sidebarWidth: 260,
   onSidebarWidthChange: jest.fn(),
   onNavigate: jest.fn(),
@@ -376,7 +377,10 @@ describe('ProjectSidebar Search Integration', () => {
     });
 
     expect(screen.getByText('First session')).toBeInTheDocument();
-    expect(screen.getByText(/This is a test message with search term/i)).toBeInTheDocument();
+    // Text is split by highlightMatch function into mark/span elements
+    expect(screen.getByText((content, element) => {
+      return element?.textContent === 'This is a test message with search term';
+    })).toBeInTheDocument();
   });
 
   it('highlights search term in results', async () => {
@@ -453,10 +457,14 @@ describe('ProjectSidebar Search Integration', () => {
     fireEvent.change(searchInput, { target: { value: 'search' } });
 
     await waitFor(() => {
-      expect(screen.getByText(/Implementing search/i)).toBeInTheDocument();
+      const contentElement = screen.getByText((content, element) => {
+        return element?.textContent === 'Implementing search';
+      });
+      expect(contentElement).toBeInTheDocument();
     });
 
-    const resultItem = screen.getByText(/Implementing search/i).closest('.search-result-item');
+    // Find the result item by its class since text is split across elements
+    const resultItem = document.querySelector('.search-result-item');
     expect(resultItem).toBeInTheDocument();
 
     fireEvent.click(resultItem!);
@@ -541,8 +549,13 @@ describe('ProjectSidebar Search Integration', () => {
       expect(screen.getByText(/2 results across 1 sessions/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/First test message/i)).toBeInTheDocument();
-    expect(screen.getByText(/Second test message/i)).toBeInTheDocument();
+    // Text is split by highlightMatch function into mark/span elements
+    expect(screen.getByText((content, element) => {
+      return element?.textContent === 'First test message';
+    })).toBeInTheDocument();
+    expect(screen.getByText((content, element) => {
+      return element?.textContent === 'Second test message';
+    })).toBeInTheDocument();
   });
 
   it('handles search API errors gracefully', async () => {

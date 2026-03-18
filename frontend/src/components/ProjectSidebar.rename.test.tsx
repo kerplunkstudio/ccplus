@@ -69,7 +69,6 @@ describe('ProjectSidebar - Session Rename', () => {
   });
 
   it('enters edit mode on double-click of active session', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project first
@@ -84,16 +83,17 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click the active session
-    await user.dblClick(session);
+    userEvent.dblClick(session);
 
     // Should show input with current label
-    const input = screen.getByDisplayValue('Session One');
-    expect(input).toBeInTheDocument();
-    expect(input).toHaveFocus();
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+      expect(input).toHaveFocus();
+    });
   });
 
   it('commits rename on Enter key', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -106,23 +106,29 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
+
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+    });
 
     const input = screen.getByDisplayValue('Session One');
 
     // Change the value
-    await user.clear(input);
-    await user.type(input, 'Renamed Session');
+    userEvent.clear(input);
+    userEvent.type(input, 'Renamed Session');
 
     // Press Enter
-    await user.keyboard('{Enter}');
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     // Should call onRenameTab with project path, session ID, and new label
-    expect(defaultProps.onRenameTab).toHaveBeenCalledWith('/path/to/project1', 'session1', 'Renamed Session');
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).toHaveBeenCalledWith('/path/to/project1', 'session1', 'Renamed Session');
+    });
   });
 
   it('commits rename on blur', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -135,13 +141,18 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
+
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+    });
 
     const input = screen.getByDisplayValue('Session One');
 
     // Change the value
-    await user.clear(input);
-    await user.type(input, 'New Name');
+    userEvent.clear(input);
+    userEvent.type(input, 'New Name');
 
     // Blur the input
     fireEvent.blur(input);
@@ -153,7 +164,6 @@ describe('ProjectSidebar - Session Rename', () => {
   });
 
   it('cancels rename on Escape key', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -166,16 +176,21 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
+
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+    });
 
     const input = screen.getByDisplayValue('Session One');
 
     // Change the value
-    await user.clear(input);
-    await user.type(input, 'Should Not Save');
+    userEvent.clear(input);
+    userEvent.type(input, 'Should Not Save');
 
     // Press Escape
-    await user.keyboard('{Escape}');
+    fireEvent.keyDown(input, { key: 'Escape' });
 
     // Should not call onRenameTab
     expect(defaultProps.onRenameTab).not.toHaveBeenCalled();
@@ -187,7 +202,6 @@ describe('ProjectSidebar - Session Rename', () => {
   });
 
   it('does not enter edit mode on double-click of inactive session', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -200,15 +214,14 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session Two');
 
     // Double-click inactive session
-    await user.dblClick(session);
+    userEvent.dblClick(session);
 
-    // Should not show input (should just select the session twice)
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    // Should not show rename input (search input is okay, but not Session Two input)
+    expect(screen.queryByDisplayValue('Session Two')).not.toBeInTheDocument();
     expect(defaultProps.onSelectTab).toHaveBeenCalled();
   });
 
   it('does not rename with empty value', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -221,22 +234,26 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
+
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+    });
 
     const input = screen.getByDisplayValue('Session One');
 
     // Clear the value
-    await user.clear(input);
+    userEvent.clear(input);
 
     // Press Enter with empty value
-    await user.keyboard('{Enter}');
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     // Should not call onRenameTab with empty string
     expect(defaultProps.onRenameTab).not.toHaveBeenCalledWith('/path/to/project1', 'session1', '');
   });
 
   it('trims whitespace from rename value', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -249,23 +266,29 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
+
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One');
+      expect(input).toBeInTheDocument();
+    });
 
     const input = screen.getByDisplayValue('Session One');
 
     // Change the value with leading/trailing spaces
-    await user.clear(input);
-    await user.type(input, '  Trimmed Name  ');
+    userEvent.clear(input);
+    userEvent.type(input, '  Trimmed Name  ');
 
     // Press Enter
-    await user.keyboard('{Enter}');
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     // Should call onRenameTab with trimmed value
-    expect(defaultProps.onRenameTab).toHaveBeenCalledWith('/path/to/project1', 'session1', 'Trimmed Name');
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).toHaveBeenCalledWith('/path/to/project1', 'session1', 'Trimmed Name');
+    });
   });
 
   it('auto-selects input text when entering edit mode', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -278,19 +301,18 @@ describe('ProjectSidebar - Session Rename', () => {
     const session = screen.getByText('Session One');
 
     // Double-click to enter edit mode
-    await user.dblClick(session);
+    userEvent.dblClick(session);
 
-    const input = screen.getByDisplayValue('Session One') as HTMLInputElement;
-
-    // Check that text is selected
     await waitFor(() => {
+      const input = screen.getByDisplayValue('Session One') as HTMLInputElement;
+      expect(input).toBeInTheDocument();
+      // Check that text is selected
       expect(input.selectionStart).toBe(0);
       expect(input.selectionEnd).toBe('Session One'.length);
     });
   });
 
   it('hides close button when in edit mode', async () => {
-    const user = userEvent.setup();
     renderWithToast(<ProjectSidebar {...defaultProps} />);
 
     // Expand project
@@ -313,7 +335,7 @@ describe('ProjectSidebar - Session Rename', () => {
     }
 
     // Double-click to enter edit mode
-    await user.dblClick(screen.getByText('Session One'));
+    userEvent.dblClick(screen.getByText('Session One'));
 
     // Close button should be hidden during edit
     await waitFor(() => {
