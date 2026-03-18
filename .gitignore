@@ -46,4 +46,7 @@ credentials.json
 htmlcov/
 .coverage
 coverage.xml
-.claude/
+
+# Claude Code personal files (but keep .claude/rules/)
+.claude/*
+!.claude/rules/
