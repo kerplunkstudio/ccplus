@@ -109,7 +109,7 @@ describe('ChatPanel', () => {
     fireEvent.change(textarea, { target: { value: 'Test message' } });
     const sendBtn = screen.getByLabelText('Send message');
     fireEvent.click(sendBtn);
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, undefined, undefined);
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Test message', undefined, undefined, undefined, undefined);
   });
 
   it('calls onSendMessage on Enter key', () => {
@@ -117,7 +117,7 @@ describe('ChatPanel', () => {
     const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
     fireEvent.change(textarea, { target: { value: 'Enter test' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test', undefined, undefined, undefined);
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('Enter test', undefined, undefined, undefined, undefined);
   });
 
   it('does not send on Shift+Enter', () => {
@@ -184,7 +184,7 @@ describe('ChatPanel', () => {
     fireEvent.change(textarea, { target: { value: 'New message' } });
     const sendBtn = screen.getByLabelText('Send message');
     fireEvent.click(sendBtn);
-    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, undefined, undefined);
+    expect(defaultProps.onSendMessage).toHaveBeenCalledWith('New message', undefined, undefined, undefined, undefined);
   });
 
   it('hides background processing indicator when streaming is active', () => {

@@ -19,7 +19,6 @@ Requires a [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) sub
 - **Multi-Tab Sessions** — Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Each tab is its own Claude Code session with independent context.
 - **Agent Observability** — Watch agents work in real time. Activity trees show every tool call, every agent spawn, every decision.
 - **Built-in Browser** — Browser tabs alongside chat. Dev server auto-detection opens tabs automatically. VerifyApp screenshots for visual testing.
-- **Voice Input** — Push-to-talk with global Space shortcut. Web Speech API.
 - **Cmd+K Command Palette** — Fuzzy search across sessions, projects, and actions
 - **Conversation Search** — Full-text search across all message history
 - **Scheduled Tasks** — `/loop 5m check the deploy` — recurring prompts on intervals
@@ -123,7 +122,7 @@ ccplus/
 │   ├── src/
 │   │   ├── App.tsx
 │   │   ├── components/        # ChatPanel, ActivityTree, MessageBubble, CommandPalette, BrowserTab, DevServerToast
-│   │   ├── hooks/             # useSocket, useAuth, useVoiceInput, useScheduler, useWorkspace
+│   │   ├── hooks/             # useSocket, useAuth, useScheduler, useWorkspace
 │   │   └── types/             # TypeScript interfaces
 │   └── build/                 # Generated (gitignored)
 ├── static/chat/               # Deployed build (gitignored)

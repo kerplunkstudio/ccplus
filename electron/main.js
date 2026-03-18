@@ -178,16 +178,6 @@ function createWindow() {
     show: false, // Don't show until ready
   });
 
-  // Grant microphone permissions for voice input (Web Speech API)
-  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = ['media', 'audioCapture'];
-    if (allowedPermissions.includes(permission)) {
-      callback(true);
-    } else {
-      callback(false);
-    }
-  });
-
   // Save window state on close
   mainWindow.on('close', () => {
     const bounds = mainWindow.getBounds();
