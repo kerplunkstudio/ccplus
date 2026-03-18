@@ -9,6 +9,7 @@ Electron wrapper for the cc+ web interface, providing a native desktop app exper
 - **Window state persistence**: Remembers window size and position
 - **Native menus**: macOS, Linux, and Windows menu integration
 - **Dock integration**: Native app appearance in dock/taskbar
+- **Branded shell**: Custom CC+ icon and app name patched into Electron at launch
 - **Auto-update ready**: Built with electron-builder for easy distribution
 
 ## Architecture
@@ -24,9 +25,10 @@ The desktop app consists of:
 When you launch the desktop app:
 
 1. Electron starts the main process
-2. Main process starts the Node.js server
-3. Main process creates a browser window pointing to `http://localhost:4000`
-4. The React UI loads and connects via WebSocket
+2. Launcher patches Electron binary with CC+ icon and app name
+3. Main process starts the Node.js server
+4. Main process creates a browser window pointing to `http://localhost:4000`
+5. The React UI loads and connects via WebSocket
 
 When you close the app:
 
