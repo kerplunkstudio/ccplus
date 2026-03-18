@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Socket } from 'socket.io-client';
 import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem } from '../types';
 import { ChatPanelHeader } from './ChatPanelHeader';
 import { MessageList } from './MessageList';
