@@ -6,8 +6,8 @@ import { useSkills } from '../hooks/useSkills';
 import { useToast } from '../contexts/ToastContext';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import {
-  parseSlashCommand,
   shouldShowAutocomplete,
+  findSlashCommandAtCursor,
   filterSkills,
   getAllSuggestions,
 } from '../utils/slashCommands';
@@ -82,6 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [pathSuggestions, setPathSuggestions] = useState<Array<{ name: string; path: string; isDir: boolean }>>([]);
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
+  const currentSlashCommandRef = useRef<{ start: number; command: string } | null>(null);
 
   // Voice input
   const { isRecording, isSupported: isVoiceSupported, transcript, error: voiceError, startRecording, stopRecording } = useVoiceInput();
@@ -316,11 +317,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Get filtered autocomplete suggestions
   const getAutocompleteSuggestions = () => {
-    const command = parseSlashCommand(input);
-    if (!command) return [];
+    const cursorPosition = textareaRef.current?.selectionStart || 0;
+    const slashCmd = findSlashCommandAtCursor(input, cursorPosition);
+
+    if (!slashCmd) return [];
+
+    // Store the current slash command context for handleAutocompleteSelect
+    currentSlashCommandRef.current = slashCmd;
 
     const allSuggestions = getAllSuggestions(skills);
-    return filterSkills(allSuggestions, command.command);
+    return filterSkills(allSuggestions, slashCmd.command);
   };
 
   const autocompleteSuggestions = getAutocompleteSuggestions();
@@ -378,7 +384,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     // Check for slash command autocomplete first (takes priority)
     const shouldShow = shouldShowAutocomplete(newValue, cursorPosition);
-    if (shouldShow && newValue.startsWith('/')) {
+    if (shouldShow) {
       setShowAutocomplete(true);
       setAutocompleteIndex(0);
       setShowPathAutocomplete(false);
@@ -412,9 +418,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Handle autocomplete selection
   const handleAutocompleteSelect = (suggestion: { name: string }) => {
-    setInput(`/${suggestion.name} `);
+    const slashCmd = currentSlashCommandRef.current;
+    if (!slashCmd) {
+      // Fallback to old behavior
+      setInput(`/${suggestion.name} `);
+      setShowAutocomplete(false);
+      textareaRef.current?.focus();
+      return;
+    }
+
+    // Get cursor position to preserve text after cursor
+    const cursorPosition = textareaRef.current?.selectionStart || 0;
+
+    // Replace from slash start to cursor with the selected command
+    const before = input.slice(0, slashCmd.start);
+    const after = input.slice(cursorPosition);
+    const newInput = before + `/${suggestion.name} ` + after;
+
+    setInput(newInput);
     setShowAutocomplete(false);
-    textareaRef.current?.focus();
+
+    // Set cursor position after the inserted command
+    const newCursorPos = slashCmd.start + suggestion.name.length + 2; // +2 for '/' and ' '
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        textareaRef.current.focus();
+      }
+    }, 0);
+
+    // Clear the ref
+    currentSlashCommandRef.current = null;
   };
 
   // Handle path autocomplete selection

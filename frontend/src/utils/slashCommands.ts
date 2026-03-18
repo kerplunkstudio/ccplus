@@ -14,6 +14,11 @@ export interface SkillSuggestion {
   description?: string;
 }
 
+export interface SlashCommandAtCursor {
+  start: number;
+  command: string;
+}
+
 /**
  * Parse a potential slash command from input text
  */
@@ -37,30 +42,52 @@ export function parseSlashCommand(input: string): SlashCommand | null {
 }
 
 /**
+ * Find a slash command at the current cursor position
+ * Returns the start position and partial command text, or null if no valid slash command is at cursor
+ */
+export function findSlashCommandAtCursor(input: string, cursorPosition: number): SlashCommandAtCursor | null {
+  // Cursor at position 0 - no command possible
+  if (cursorPosition === 0) {
+    return null;
+  }
+
+  // Scan backwards from cursor to find the start of a potential slash command
+  let start = cursorPosition;
+
+  // Move backwards to find the beginning of the current token
+  while (start > 0 && !/\s/.test(input[start - 1])) {
+    start--;
+  }
+
+  // Check if the token starts with /
+  if (start >= input.length || input[start] !== '/') {
+    return null;
+  }
+
+  // Extract the text from / to cursor (excluding the /)
+  const commandText = input.slice(start + 1, cursorPosition);
+
+  // Don't allow whitespace in the command name
+  if (commandText.includes(' ')) {
+    return null;
+  }
+
+  // Don't allow newlines between / and cursor
+  if (commandText.includes('\n')) {
+    return null;
+  }
+
+  return {
+    start,
+    command: commandText,
+  };
+}
+
+/**
  * Check if the cursor is in a position to show autocomplete
  */
 export function shouldShowAutocomplete(input: string, cursorPosition: number): boolean {
-  // Only show if cursor is at the end or within the command name
-  const beforeCursor = input.slice(0, cursorPosition);
-  const afterCursor = input.slice(cursorPosition);
-
-  // Must start with /
-  if (!beforeCursor.startsWith('/')) {
-    return false;
-  }
-
-  // Don't show if there are multiple lines before cursor
-  if (beforeCursor.includes('\n')) {
-    return false;
-  }
-
-  // Don't show if cursor is after whitespace (user is typing arguments)
-  const commandPart = beforeCursor.slice(1);
-  if (commandPart.includes(' ')) {
-    return false;
-  }
-
-  return true;
+  return findSlashCommandAtCursor(input, cursorPosition) !== null;
 }
 
 /**
