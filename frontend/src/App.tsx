@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { useAuth } from './hooks/useAuth';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTabSocket } from './hooks/useTabSocket';
@@ -14,6 +15,7 @@ import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
 import { AppLoadingScreen } from './components/AppLoadingScreen';
+import { CommandPalette } from './components/CommandPalette';
 import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
@@ -22,6 +24,8 @@ import { DevServerToast } from './components/DevServerToast';
 import { WindowWithElectron } from './types';
 import { ensureMruOrder } from './utils/tabs';
 import './App.css';
+
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 // Console easter egg
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
@@ -47,6 +51,9 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [devServerToast, setDevServerToast] = useState<{ url: string } | null>(null);
 
+  // Store the screenshot capture function from BrowserTab
+  const screenshotCaptureFnRef = useRef<(() => Promise<{ image: string | null; url: string; error?: string }>) | null>(null);
+
   const handleDevServerDetected = useCallback((url: string) => {
     if (!activeProject) return;
 
@@ -61,6 +68,7 @@ function AppContent({ token, loading }: AppContentProps) {
     setDevServerToast({ url });
   }, [activeProject, workspace]);
 
+  const socketData = useTabSocket(token, activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
   const {
     connected,
     messages,
@@ -83,7 +91,12 @@ function AppContent({ token, loading }: AppContentProps) {
     contextTokens,
     todos,
     setTodos,
-  } = useTabSocket(token, activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
+    scheduledTasks,
+    createScheduledTask,
+    deleteScheduledTask,
+    pauseScheduledTask,
+    resumeScheduledTask,
+  } = socketData;
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
@@ -100,6 +113,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [activePage, setActivePage] = useState<string | null>(null);
 
+  const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+
   const [isFirstRun, setIsFirstRun] = useState<boolean>(false);
   const [checkingFirstRun, setCheckingFirstRun] = useState<boolean>(true);
 
@@ -107,10 +122,75 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const [pendingInput, setPendingInput] = useState<string | null>(null);
 
+  // Socket for screenshot capture (separate from useTabSocket to avoid circular deps)
+  const screenshotSocketRef = useRef<Socket | null>(null);
+
   const handleSelectModel = (model: string) => {
     setSelectedModel(model);
     localStorage.setItem('ccplus_selected_model', model);
   };
+
+  // Setup socket connection for screenshot capture
+  useEffect(() => {
+    if (!token || !activeTab?.sessionId) return;
+
+    // Create socket if not exists
+    if (!screenshotSocketRef.current) {
+      const newSocket = io(SOCKET_URL, {
+        auth: { token },
+        transports: ['polling', 'websocket'],
+      });
+      screenshotSocketRef.current = newSocket;
+    }
+
+    const socket = screenshotSocketRef.current;
+
+    // Handler for screenshot capture requests
+    const handleCaptureScreenshot = async (data: { session_id: string }) => {
+      // Only respond if this is for our active session
+      if (data.session_id !== activeTab.sessionId) return;
+
+      // Only respond if we have a browser tab active
+      if (activeTab.type !== 'browser' || !screenshotCaptureFnRef.current) {
+        socket.emit('screenshot_result', {
+          session_id: data.session_id,
+          error: 'No browser tab is currently active',
+        });
+        return;
+      }
+
+      try {
+        const result = await screenshotCaptureFnRef.current();
+        socket.emit('screenshot_result', {
+          session_id: data.session_id,
+          image: result.image,
+          url: result.url,
+          error: result.error,
+        });
+      } catch (error) {
+        socket.emit('screenshot_result', {
+          session_id: data.session_id,
+          error: `Screenshot capture failed: ${String(error)}`,
+        });
+      }
+    };
+
+    socket.on('capture_screenshot', handleCaptureScreenshot);
+
+    return () => {
+      socket.off('capture_screenshot', handleCaptureScreenshot);
+    };
+  }, [token, activeTab]);
+
+  // Cleanup socket on unmount
+  useEffect(() => {
+    return () => {
+      if (screenshotSocketRef.current) {
+        screenshotSocketRef.current.close();
+        screenshotSocketRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const checkFirstRun = async () => {
@@ -267,9 +347,16 @@ function AppContent({ token, loading }: AppContentProps) {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
-  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Escape cancel, Ctrl+Tab MRU tab switching)
+  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Cmd+K command palette, Escape cancel, Ctrl+Tab MRU tab switching)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K / Ctrl+K: Open command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(true);
+        return;
+      }
+
       // Cmd+T / Ctrl+T: New tab (works even with zero tabs if project is selected)
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault();
@@ -288,8 +375,13 @@ function AppContent({ token, loading }: AppContentProps) {
         return;
       }
 
-      // Escape: Close active page (profile, insights) or cancel streaming query
+      // Escape: Close command palette, active page (profile, insights), or cancel streaming query
       if (e.key === 'Escape') {
+        if (showCommandPalette) {
+          e.preventDefault();
+          setShowCommandPalette(false);
+          return;
+        }
         if (activePage) {
           e.preventDefault();
           setActivePage(null);
@@ -403,7 +495,7 @@ function AppContent({ token, loading }: AppContentProps) {
         electronAPI.removeMenuActionListener(handleMenuAction);
       }
     };
-  }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery, activePage]);
+  }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery, activePage, showCommandPalette]);
 
   const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
     sendMessage(content, workspace || activeTab?.projectPath || activeProject?.path || undefined, model || selectedModel, imageIds);
@@ -459,6 +551,15 @@ function AppContent({ token, loading }: AppContentProps) {
     duplicateSession(sessionId, newSessionId);
   }, [workspace, activeProject, duplicateSession]);
 
+  const handleRenameTab = useCallback((sessionId: string, newLabel: string) => {
+    if (!activeProject) return;
+    workspace.updateTabLabel(activeProject.path, sessionId, newLabel);
+  }, [workspace, activeProject]);
+
+  const handleRenameTabInProject = useCallback((projectPath: string, sessionId: string, newLabel: string) => {
+    workspace.updateTabLabel(projectPath, sessionId, newLabel);
+  }, [workspace]);
+
   const handleClearPendingInput = useCallback(() => {
     setPendingInput(null);
   }, []);
@@ -466,6 +567,10 @@ function AppContent({ token, loading }: AppContentProps) {
   const handleClearTodos = useCallback(() => {
     setTodos([]);
   }, [setTodos]);
+
+  const handleToggleActivityPanel = useCallback(() => {
+    toggleDrawer('activity');
+  }, [toggleDrawer]);
 
   const hasProjects = workspace.state.projects.length > 0;
   const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
@@ -494,6 +599,18 @@ function AppContent({ token, loading }: AppContentProps) {
       <AppLoadingScreen ready={appReady} />
       <ToastContainer />
       <UpdateBanner />
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        projects={workspace.state.projects}
+        activeProjectPath={workspace.state.activeProjectPath}
+        onSelectTab={handleSelectTab}
+        onSelectProject={handleSelectProject}
+        onNewTab={handleNewTab}
+        onCloseTab={handleCloseTabInActiveProject}
+        onNavigate={handleNavigate}
+        onToggleActivityPanel={handleToggleActivityPanel}
+      />
       {devServerToast && (
         <DevServerToast
           url={devServerToast.url}
@@ -538,6 +655,7 @@ function AppContent({ token, loading }: AppContentProps) {
           onRemoveProject={handleRemoveProject}
           onNewTabForProject={handleNewTabForProject}
           onCloseTab={handleCloseTab}
+          onRenameTab={handleRenameTabInProject}
           sidebarWidth={sidebarWidth}
           onSidebarWidthChange={handleSidebarWidthChange}
           onNavigate={handleNavigate}
@@ -557,6 +675,7 @@ function AppContent({ token, loading }: AppContentProps) {
             onReopenTab={workspace.reopenTab}
             onCloseOtherTabs={(sessionId) => workspace.closeOtherTabs(activeProject.path, sessionId)}
             onDuplicateTab={handleDuplicateTab}
+            onRenameTab={handleRenameTab}
             hasClosedTabs={workspace.hasClosedTabs}
           />
         )}
@@ -583,7 +702,12 @@ function AppContent({ token, loading }: AppContentProps) {
                     onLoadSession={handleLoadSession}
                   />
                 ) : shouldShowBrowserTab && activeTab?.url ? (
-                  <BrowserTab url={activeTab.url} />
+                  <BrowserTab
+                    url={activeTab.url}
+                    onRegisterCapture={(fn) => {
+                      screenshotCaptureFnRef.current = fn;
+                    }}
+                  />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel
                     messages={messages}
@@ -616,6 +740,11 @@ function AppContent({ token, loading }: AppContentProps) {
                     onClearPendingInput={handleClearPendingInput}
                     todos={todos}
                     onClearTodos={handleClearTodos}
+                    scheduledTasks={scheduledTasks}
+                    onCreateScheduledTask={createScheduledTask}
+                    onDeleteScheduledTask={deleteScheduledTask}
+                    onPauseScheduledTask={pauseScheduledTask}
+                    onResumeScheduledTask={resumeScheduledTask}
                   />
                 ) : null
               ) : (
