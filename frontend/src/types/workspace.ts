@@ -26,7 +26,7 @@ export type WorkspaceAction =
   | { type: 'ADD_PROJECT'; path: string; name: string }
   | { type: 'REMOVE_PROJECT'; path: string }
   | { type: 'SELECT_PROJECT'; path: string }
-  | { type: 'ADD_TAB'; projectPath: string; sessionId: string }
+  | { type: 'ADD_TAB'; projectPath: string; sessionId: string; label?: string }
   | { type: 'ADD_BROWSER_TAB'; projectPath: string; sessionId: string; url: string; label: string }
   | { type: 'CLOSE_TAB'; projectPath: string; sessionId: string }
   | { type: 'CLOSE_OTHER_TABS'; projectPath: string; sessionId: string }

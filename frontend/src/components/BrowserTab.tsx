@@ -14,6 +14,7 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url, onRegisterCapture }
   const [canGoForward, setCanGoForward] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
   const webviewRef = useRef<WebViewElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -23,6 +24,24 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url, onRegisterCapture }
     setCurrentUrl(url);
     setInputUrl(url);
   }, [url]);
+
+  // Verify URL is reachable before loading webview
+  useEffect(() => {
+    setVerified(false);
+    setError(null);
+
+    const controller = new AbortController();
+
+    fetch(currentUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+      .then(() => {
+        setVerified(true);
+      })
+      .catch(() => {
+        setError(`Cannot reach ${currentUrl} — the server may not be running.`);
+      });
+
+    return () => controller.abort();
+  }, [currentUrl]);
 
   // Register screenshot capture function
   useEffect(() => {
@@ -103,9 +122,13 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url, onRegisterCapture }
       finalUrl = 'https://' + finalUrl;
     }
 
-    if (isElectron && webviewRef.current) {
+    // For Electron webviews: if already verified and webview exists, navigate directly.
+    // Otherwise, update currentUrl which triggers the verification effect.
+    if (isElectron && verified && webviewRef.current) {
       webviewRef.current.loadURL(finalUrl);
+      setCurrentUrl(finalUrl);
     } else {
+      setVerified(false);
       setCurrentUrl(finalUrl);
     }
     setInputUrl(finalUrl);
@@ -238,11 +261,17 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url, onRegisterCapture }
       )}
       <div className="browser-content">
         {isElectron ? (
-          <webview
-            ref={webviewRef}
-            src={currentUrl}
-            style={{ width: '100%', height: '100%' }}
-          />
+          verified ? (
+            <webview
+              ref={webviewRef}
+              src={currentUrl}
+              style={{ width: '100%', height: '100%' }}
+            />
+          ) : !error ? (
+            <div className="browser-loading-placeholder">
+              <span>Connecting...</span>
+            </div>
+          ) : null
         ) : (
           <iframe
             ref={iframeRef}

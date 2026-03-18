@@ -34,7 +34,7 @@ interface ProjectSidebarProps {
   onNewTabForProject: (projectPath: string) => void;
   onCloseTab: (projectPath: string, sessionId: string) => void;
   onRenameTab: (projectPath: string, sessionId: string, newLabel: string) => void;
-  onOpenSession: (projectPath: string, sessionId: string) => void;
+  onOpenSession: (projectPath: string, sessionId: string, label: string) => void;
   sidebarWidth: number;
   onSidebarWidthChange: (width: number) => void;
   onNavigate: (page: string) => void;
@@ -399,7 +399,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     commitSessionRename(projectPath);
   };
 
-  const handleSearchResultClick = (sessionId: string) => {
+  const handleSearchResultClick = (sessionId: string, sessionLabel: string) => {
     // If session is already open in a tab, just switch to it
     const project = projects.find(p =>
       p.tabs.some(tab => tab.sessionId === sessionId)
@@ -409,7 +409,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       handleSelectSession(project.path, sessionId);
     } else if (activeProjectPath) {
       // Create a new tab with this session loaded
-      onOpenSession(activeProjectPath, sessionId);
+      onOpenSession(activeProjectPath, sessionId, sessionLabel);
     }
 
     // Clear search after navigating
@@ -507,7 +507,18 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                 className="search-result-group"
                 style={{ animationDelay: `${resultIndex * 30}ms` }}
               >
-                <div className="search-result-session-header">
+                <div
+                  className="search-result-session-header"
+                  onClick={() => handleSearchResultClick(result.session_id, result.session_label)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSearchResultClick(result.session_id, result.session_label);
+                    }
+                  }}
+                >
                   {result.session_label.length > 60
                     ? result.session_label.slice(0, 60) + '...'
                     : result.session_label}
@@ -516,13 +527,13 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   <div
                     key={`${result.session_id}-${matchIndex}`}
                     className="search-result-item"
-                    onClick={() => handleSearchResultClick(result.session_id)}
+                    onClick={() => handleSearchResultClick(result.session_id, result.session_label)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        handleSearchResultClick(result.session_id);
+                        handleSearchResultClick(result.session_id, result.session_label);
                       }
                     }}
                   >

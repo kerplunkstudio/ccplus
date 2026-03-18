@@ -191,3 +191,13 @@
 .browser-error-btn:hover {
   background: #06b6d4;
 }
+
+.browser-loading-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #18181b;
+  color: #a1a1aa;
+  font-size: 14px;
+}

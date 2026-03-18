@@ -657,8 +657,8 @@ function AppContent({ token, loading }: AppContentProps) {
           onNewTabForProject={handleNewTabForProject}
           onCloseTab={handleCloseTab}
           onRenameTab={handleRenameTabInProject}
-          onOpenSession={(projectPath, sessionId) => {
-            workspace.addTab(projectPath, sessionId);
+          onOpenSession={(projectPath, sessionId, label) => {
+            workspace.addTab(projectPath, sessionId, label);
             setActivePage(null);
           }}
           sidebarWidth={sidebarWidth}
