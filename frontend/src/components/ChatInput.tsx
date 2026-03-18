@@ -409,16 +409,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleVoiceStop = useCallback(() => {
     if (!isVoiceSupported || !isRecording) return;
     stopRecording();
+    // Focus textarea after stopping to receive transcript
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
   }, [isVoiceSupported, isRecording, stopRecording]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Space bar shortcut for voice input (only when textarea is empty)
-    if (e.key === ' ' && input.trim() === '' && isVoiceSupported && !isRecording) {
+  // Global Space bar listener for voice input
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Only handle Space key
+      if (e.key !== ' ') return;
+
+      // Don't trigger if textarea has content (keep existing check)
+      if (input.trim() !== '') return;
+
+      // Don't trigger if user is typing in any input element
+      const activeElement = document.activeElement;
+      if (!activeElement) return;
+
+      const tagName = activeElement.tagName.toLowerCase();
+      const isEditable = activeElement.getAttribute('contenteditable') === 'true';
+
+      // Skip if focused on any editable element
+      if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || isEditable) {
+        return;
+      }
+
+      // Don't trigger if voice is not supported or already recording
+      if (!isVoiceSupported || isRecording || !connected) return;
+
+      // Prevent default to avoid scrolling
       e.preventDefault();
       handleVoiceStart();
-      return;
-    }
+    };
 
+    const handleGlobalKeyUp = (e: KeyboardEvent) => {
+      // Only handle Space key release during recording
+      if (e.key !== ' ') return;
+      if (!isRecording) return;
+
+      e.preventDefault();
+      handleVoiceStop();
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keyup', handleGlobalKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+      window.removeEventListener('keyup', handleGlobalKeyUp);
+    };
+  }, [isVoiceSupported, isRecording, input, connected, handleVoiceStart, handleVoiceStop]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle path autocomplete navigation
     if (showPathAutocomplete && pathSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -542,11 +586,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Stop voice recording when space bar is released
-    if (e.key === ' ' && isRecording) {
-      e.preventDefault();
-      handleVoiceStop();
-    }
+    // Voice recording is now handled globally via window event listeners
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
