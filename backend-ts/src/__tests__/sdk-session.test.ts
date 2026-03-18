@@ -2985,7 +2985,7 @@ description: Project command
 
       expect(callbacks.onComplete).toHaveBeenCalledWith(
         expect.objectContaining({
-          context_window_size: 200000,
+          context_window_size: 1000000,
           input_tokens: 100, // From usage.input_tokens (non-cached + cache_read + cache_creation)
         })
       );
@@ -3034,7 +3034,7 @@ description: Project command
         expect.objectContaining({
           input_tokens: 100, // From usage.input_tokens + cache tokens
           output_tokens: 50,
-          context_window_size: 200000, // Default when no modelUsage
+          context_window_size: 1000000, // Default when no modelUsage
         })
       );
     });

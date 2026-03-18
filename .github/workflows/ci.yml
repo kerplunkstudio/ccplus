@@ -47,7 +47,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: TypeScript compilation
         working-directory: frontend
