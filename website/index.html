@@ -1,0 +1,1697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cc+ — Claude Code with eyes</title>
+    <meta name="description" content="Claude Code with eyes. Free desktop app. Multi-tab sessions. Real-time observability.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@1,400&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@300;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --warm-black: oklch(15% 0.01 60);
+            --warm-gray: oklch(25% 0.01 60);
+            --warm-gray-light: oklch(35% 0.01 60);
+            --warm-white: oklch(95% 0.01 60);
+            --accent: oklch(72% 0.19 45);
+            --accent-dim: oklch(50% 0.12 45);
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--warm-black);
+            color: var(--warm-white);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    oklch(15% 0.01 60 / 0.03) 2px,
+                    oklch(15% 0.01 60 / 0.03) 4px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 2px,
+                    oklch(15% 0.01 60 / 0.03) 2px,
+                    oklch(15% 0.01 60 / 0.03) 4px
+                );
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(1rem, 5vw, 4rem);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Navigation */
+        nav {
+            padding: clamp(1.5rem, 3vw, 3rem) 0;
+            opacity: 0;
+            animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            color: var(--accent);
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: clamp(1.5rem, 3vw, 3rem);
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--warm-white);
+            text-decoration: none;
+            font-size: clamp(0.875rem, 1.5vw, 1rem);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent);
+        }
+
+        /* Hero */
+        .hero {
+            padding: clamp(3rem, 6vw, 6rem) 0;
+        }
+
+        .hero h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(4rem, 12vw, 11rem);
+            font-weight: 700;
+            line-height: 0.9;
+            letter-spacing: -0.04em;
+            margin-bottom: clamp(2rem, 4vw, 3rem);
+            max-width: 70%;
+            position: relative;
+        }
+
+        .hero h1 .line1,
+        .hero h1 .line2 {
+            display: block;
+            opacity: 0;
+        }
+
+        .hero h1 .line1 {
+            animation: slideInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+        }
+
+        .hero h1 .line2 {
+            animation: slideInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+        }
+
+        .hero .subtitle {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: var(--warm-gray-light);
+            max-width: 50ch;
+            margin-bottom: clamp(3rem, 5vw, 4rem);
+            font-weight: 400;
+            line-height: 1.6;
+            opacity: 0;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
+        }
+
+        .hero-cta-group {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            opacity: 0;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+        }
+
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem 2.5rem;
+            background: var(--accent);
+            color: var(--warm-black);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-decoration: none;
+            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+        }
+
+        .hero-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px oklch(72% 0.19 45 / 0.5);
+        }
+
+        .hero-note {
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+            color: var(--warm-gray-light);
+            font-weight: 300;
+        }
+
+        /* Divider stripe */
+        .stripe {
+            width: 100%;
+            height: 6px;
+            background: var(--accent);
+            margin: clamp(3rem, 5vw, 4rem) 0;
+            opacity: 0;
+            animation: expand 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
+            transform-origin: left;
+        }
+
+
+        /* Features */
+        .features {
+            padding: clamp(3rem, 6vw, 6rem) 0;
+        }
+
+        .feature {
+            margin-bottom: clamp(4rem, 6vw, 6rem);
+            position: relative;
+            padding-left: 4px;
+            border-left: 4px solid var(--accent);
+            opacity: 0;
+        }
+
+        .feature.visible {
+            animation: slideInFeature 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .feature-number {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(6rem, 12vw, 10rem);
+            font-weight: 300;
+            color: var(--accent);
+            opacity: 0.08;
+            line-height: 1;
+            letter-spacing: -0.05em;
+            position: absolute;
+            top: -2rem;
+            left: 2rem;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .feature:nth-child(even) .feature-number {
+            right: 2rem;
+            left: auto;
+            text-align: right;
+        }
+
+        .feature-content {
+            padding: 2rem 2rem 2rem 3rem;
+            max-width: 60ch;
+        }
+
+        .feature:nth-child(even) .feature-content {
+            margin-left: auto;
+            text-align: right;
+            padding: 2rem 3rem 2rem 2rem;
+        }
+
+        .feature-content h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+
+        .feature-content p {
+            font-size: clamp(1rem, 1.8vw, 1.125rem);
+            color: var(--warm-gray-light);
+            line-height: 1.7;
+            font-weight: 300;
+        }
+
+        /* How It Works */
+        .how-it-works {
+            padding: clamp(4rem, 6vw, 6rem) 0;
+            background: var(--warm-gray);
+            position: relative;
+            clip-path: polygon(0 3%, 100% 0, 100% 97%, 0 100%);
+            margin: clamp(3rem, 5vw, 4rem) 0;
+        }
+
+        .how-it-works::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: var(--accent);
+        }
+
+        .how-it-works h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 700;
+            margin-bottom: clamp(3rem, 6vw, 6rem);
+            letter-spacing: -0.03em;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: clamp(3rem, 5vw, 4rem);
+            margin-bottom: clamp(3rem, 6vw, 5rem);
+        }
+
+        .step h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 2.5vw, 2rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+        }
+
+        .step p {
+            font-size: clamp(1rem, 1.8vw, 1.125rem);
+            color: var(--warm-gray-light);
+            font-weight: 300;
+            line-height: 1.6;
+        }
+
+        .install-command {
+            background: var(--warm-black);
+            padding: 2rem;
+            border: 3px solid var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(0.875rem, 1.6vw, 1rem);
+            color: var(--accent);
+            overflow-x: auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .install-command code {
+            flex: 1;
+        }
+
+        .install-command::after {
+            content: '';
+            width: 2px;
+            height: 1.2em;
+            background: var(--accent);
+            animation: blink 1s step-end infinite;
+        }
+
+        .copy-btn {
+            background: var(--accent);
+            color: var(--warm-black);
+            border: none;
+            padding: 0.5rem 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .copy-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .copy-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* CTA */
+        .cta {
+            padding: clamp(4rem, 6vw, 6rem) 0 clamp(6rem, 8vw, 8rem) 0;
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 700;
+            margin-bottom: clamp(3rem, 6vw, 5rem);
+            letter-spacing: -0.03em;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem 2.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-decoration: none;
+            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--warm-black);
+            border: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--warm-white);
+            border: 3px solid var(--warm-white);
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 12px 32px oklch(72% 0.19 45 / 0.5);
+        }
+
+        .btn-secondary:hover {
+            background: var(--warm-white);
+            color: var(--warm-black);
+        }
+
+        .cta-note {
+            font-size: clamp(0.875rem, 1.4vw, 1rem);
+            color: var(--warm-gray-light);
+            font-weight: 300;
+        }
+
+        /* Footer */
+        footer {
+            padding: clamp(3rem, 5vw, 4rem) 0;
+            border-top: 2px solid var(--warm-gray);
+            text-align: center;
+            font-size: clamp(0.75rem, 1.5vw, 0.875rem);
+            color: var(--warm-gray-light);
+            font-weight: 300;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Animations */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUpScale {
+            from {
+                opacity: 0;
+                transform: translateY(60px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes slideInFeature {
+            from {
+                opacity: 0;
+                transform: translateX(-40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes expand {
+            from {
+                transform: scaleX(0);
+                opacity: 0;
+            }
+            to {
+                transform: scaleX(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        @keyframes blink {
+            0%, 50% {
+                opacity: 1;
+            }
+            51%, 100% {
+                opacity: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                max-width: 100%;
+            }
+
+            .feature:nth-child(even) .feature-content {
+                text-align: left;
+                margin-left: 0;
+                padding: 2rem 2rem 2rem 3rem;
+            }
+
+            .feature-number {
+                font-size: clamp(8rem, 25vw, 12rem);
+            }
+        }
+
+        /* APP REPLICA */
+        .app-replica-section {
+            margin-top: clamp(3rem, 6vw, 5rem);
+            opacity: 0;
+            animation: slideUpScale 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
+        }
+
+        .app-replica-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #141316;
+            border-radius: 12px;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+        }
+
+        .app-window-controls {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: #1E1D20;
+            border-bottom: 1px solid #332F2C;
+        }
+
+        .window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .window-dot-red {
+            background: #ff5f56;
+        }
+
+        .window-dot-yellow {
+            background: #ffbd2e;
+        }
+
+        .window-dot-green {
+            background: #27c93f;
+        }
+
+        .app-replica {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            height: 600px;
+            background: #141316;
+        }
+
+        /* Sidebar */
+        .app-sidebar {
+            background: #1E1D20;
+            border-right: 1px solid #332F2C;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #332F2C;
+        }
+
+        .sidebar-brand {
+            font-family: 'Crimson Pro', serif;
+            font-style: italic;
+            font-size: 18px;
+            font-weight: 600;
+            color: #E8E4DF;
+            margin: 0;
+        }
+
+        .sidebar-projects {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .sidebar-project {
+            margin-bottom: 2px;
+        }
+
+        .sidebar-project-header {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .sidebar-project-header:hover {
+            background: rgba(232, 228, 223, 0.05);
+        }
+
+        .sidebar-chevron {
+            font-size: 10px;
+            color: #8A8680;
+            margin-right: 6px;
+            transition: transform 0.15s;
+        }
+
+        .sidebar-project.expanded .sidebar-chevron {
+            transform: rotate(90deg);
+        }
+
+        .sidebar-project-name {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: #E8E4DF;
+            flex: 1;
+        }
+
+        .sidebar-activity-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #F07B3F;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .sidebar-sessions {
+            display: none;
+        }
+
+        .sidebar-project.expanded .sidebar-sessions {
+            display: block;
+        }
+
+        .sidebar-session {
+            display: flex;
+            align-items: center;
+            padding: 4px 12px 4px 32px;
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            transition: background 0.15s;
+        }
+
+        .sidebar-session:hover {
+            background: rgba(232, 228, 223, 0.05);
+        }
+
+        .sidebar-session.active {
+            background: rgba(232, 228, 223, 0.05);
+            border-left-color: #F07B3F;
+        }
+
+        .sidebar-session-label {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
+            color: #B8B4AF;
+            flex: 1;
+        }
+
+        .sidebar-session.active .sidebar-session-label {
+            color: #E8E4DF;
+            font-weight: 500;
+        }
+
+        .sidebar-session-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #F07B3F;
+            margin-left: 6px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Main panel */
+        .app-main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Tab bar */
+        .app-tab-bar {
+            display: flex;
+            align-items: stretch;
+            border-bottom: 1px solid #332F2C;
+            background: #1E1D20;
+            min-height: 32px;
+        }
+
+        .app-tab {
+            padding: 0 16px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 400;
+            color: #8A8680;
+            border-bottom: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: color 0.2s;
+            white-space: nowrap;
+        }
+
+        .app-tab:hover {
+            color: #B8B4AF;
+        }
+
+        .app-tab.active {
+            color: #E8E4DF;
+            border-bottom-color: #F07B3F;
+        }
+
+        .app-tab-new {
+            width: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            color: #8A8680;
+            font-size: 14px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .app-tab-new:hover {
+            color: #B8B4AF;
+        }
+
+        /* Chat + Activity layout */
+        .app-main {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            grid-template-columns: 1fr 280px;
+        }
+
+        .app-tab-bar {
+            grid-column: 1 / -1;
+        }
+
+        .app-chat {
+            padding: 16px;
+            overflow-y: auto;
+            background: #141316;
+        }
+
+        .app-activity {
+            background: #1E1D20;
+            border-left: 1px solid #332F2C;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Chat messages */
+        .chat-message {
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            font-style: italic;
+            color: #B8B4AF;
+            border-left: 2px solid #F07B3F;
+            padding-left: 12px;
+            font-size: 14px;
+        }
+
+        .chat-message.assistant {
+            color: #E8E4DF;
+            font-size: 14px;
+        }
+
+        .streaming-cursor {
+            display: inline-block;
+            width: 1.5px;
+            height: 1.2em;
+            background: #F07B3F;
+            margin-left: 2px;
+            border-radius: 0.5px;
+            vertical-align: text-bottom;
+            animation: cursorPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes cursorPulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* Tool log */
+        .tool-log {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-top: 8px;
+        }
+
+        .tool-log-entry {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 11px;
+            color: #B8B4AF;
+            padding: 1px 0;
+        }
+
+        .tool-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tool-dot.completed {
+            background: #A3D977;
+        }
+
+        .tool-dot.running {
+            background: #F07B3F;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .tool-name {
+            font-weight: 600;
+        }
+
+        .tool-file {
+            color: #8A8680;
+        }
+
+        .tool-duration {
+            color: #8A8680;
+            opacity: 0.7;
+            margin-left: auto;
+        }
+
+        .tool-spinner {
+            width: 8px;
+            height: 8px;
+            border: 1px solid #332F2C;
+            border-top-color: #F07B3F;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-left: auto;
+        }
+
+        /* Activity panel */
+        .activity-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 12px 0;
+            background: #141316;
+        }
+
+        .activity-title {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: #E8E4DF;
+        }
+
+        .activity-count {
+            background: #1E1D2A;
+            color: #F07B3F;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            border: 1px solid rgba(240, 123, 63, 0.12);
+        }
+
+        .activity-tabs {
+            display: flex;
+            border-bottom: 1px solid #332F2C;
+            background: #141316;
+        }
+
+        .activity-tab {
+            flex: 1;
+            padding: 8px 12px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #8A8680;
+            border-bottom: 2px solid transparent;
+            text-align: center;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .activity-tab:hover {
+            color: #B8B4AF;
+        }
+
+        .activity-tab.active {
+            color: #E8E4DF;
+            border-bottom-color: #F07B3F;
+        }
+
+        .activity-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        /* Agent card */
+        .agent-card {
+            background: #1E1D2A;
+            border: 1px solid #332F2C;
+            border-radius: 8px;
+            padding: 12px 14px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            border-radius: 8px 0 0 8px;
+            background: #F07B3F;
+            box-shadow: 0 0 8px rgba(240, 123, 63, 0.5);
+        }
+
+        .agent-card.running {
+            border-color: #F07B3F;
+            background: rgba(240, 123, 63, 0.03);
+        }
+
+        .agent-card.running::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(240, 123, 63, 0.08) 50%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            animation: agentShimmer 2.5s ease-in-out infinite;
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
+        @keyframes agentShimmer {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .agent-type {
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: #8A8680;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .agent-desc {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            color: #E8E4DF;
+            font-weight: 500;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .agent-children {
+            margin-top: 12px;
+            padding-left: 16px;
+            border-left: 2px solid rgba(240, 123, 63, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        /* Tool rows */
+        .tool-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            background: #1E1D20;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+
+        .tool-row:hover {
+            background: rgba(232, 228, 223, 0.05);
+            border-color: #332F2C;
+        }
+
+        .tool-row.running {
+            border-color: rgba(240, 123, 63, 0.12);
+        }
+
+        .tool-icon {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(232, 228, 223, 0.07);
+            border-radius: 3px;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .tool-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 11px;
+        }
+
+        .tool-label {
+            font-weight: 600;
+            color: #E8E4DF;
+        }
+
+        .tool-target {
+            color: #B8B4AF;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tool-status-icon {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tool-status-icon.completed {
+            background: #A3D977;
+        }
+
+        .tool-status-icon.running {
+            border: 2px solid #C85B1F;
+            border-top-color: #F07B3F;
+            animation: toolSpin 0.6s linear infinite;
+            width: 12px;
+            height: 12px;
+            box-shadow: 0 0 8px rgba(240, 123, 63, 0.3);
+        }
+
+        @keyframes toolSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tool-time {
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 11px;
+            color: #8A8680;
+            opacity: 0.7;
+            flex-shrink: 0;
+        }
+
+        /* Session panel visibility */
+        .app-chat-panel {
+            display: none;
+        }
+
+        .app-chat-panel.active {
+            display: block;
+        }
+
+        .app-activity-panel {
+            display: none;
+        }
+
+        .app-activity-panel.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 900px) {
+            .app-replica {
+                grid-template-columns: 200px 1fr;
+                height: 500px;
+            }
+
+            .app-sidebar {
+                font-size: 12px;
+            }
+
+            .app-activity {
+                display: none;
+            }
+
+            .app-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .app-replica-container {
+                transform: scale(0.85);
+                transform-origin: top center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <a href="#" class="logo">cc+</a>
+            <ul class="nav-links">
+                <li><a href="https://github.com/mjfuentes/ccplus">GitHub</a></li>
+                <li><a href="#download">Download</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="container">
+            <h1>
+                <span class="line1">See everything.</span>
+                <span class="line2">Miss nothing.</span>
+            </h1>
+            <p class="subtitle">
+                Claude Code with eyes. Free desktop app. Multi-tab sessions. Real-time observability.
+            </p>
+            <div class="hero-cta-group">
+                <a href="#download" class="hero-cta">Run it →</a>
+                <span class="hero-note">Built on Claude Code SDK. Uses your existing subscription.</span>
+            </div>
+
+            <!-- APP REPLICA -->
+            <div class="app-replica-section">
+                <div class="app-replica-container">
+                    <!-- macOS window controls -->
+                    <div class="app-window-controls">
+                        <span class="window-dot window-dot-red"></span>
+                        <span class="window-dot window-dot-yellow"></span>
+                        <span class="window-dot window-dot-green"></span>
+                    </div>
+
+                    <!-- App content -->
+                    <div class="app-replica">
+                        <!-- Sidebar -->
+                        <div class="app-sidebar">
+                            <div class="sidebar-header">
+                                <h2 class="sidebar-brand">cc+</h2>
+                            </div>
+                            <div class="sidebar-projects">
+                                <div class="sidebar-project expanded">
+                                    <div class="sidebar-project-header">
+                                        <span class="sidebar-chevron">▸</span>
+                                        <span class="sidebar-project-name">ccplus</span>
+                                        <span class="sidebar-activity-dot"></span>
+                                    </div>
+                                    <div class="sidebar-sessions">
+                                        <div class="sidebar-session active" onclick="switchSession(0)">
+                                            <span class="sidebar-session-label">Refactor auth module</span>
+                                            <span class="sidebar-session-dot"></span>
+                                        </div>
+                                        <div class="sidebar-session" onclick="switchSession(1)">
+                                            <span class="sidebar-session-label">Fix build errors</span>
+                                        </div>
+                                        <div class="sidebar-session" onclick="switchSession(2)">
+                                            <span class="sidebar-session-label">Add unit tests</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sidebar-project">
+                                    <div class="sidebar-project-header">
+                                        <span class="sidebar-chevron">▸</span>
+                                        <span class="sidebar-project-name">my-api</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main panel -->
+                        <div class="app-main">
+                            <!-- Tab bar -->
+                            <div class="app-tab-bar">
+                                <div class="app-tab active" onclick="switchSession(0)">Refactor auth module</div>
+                                <div class="app-tab" onclick="switchSession(1)">Fix build errors</div>
+                                <div class="app-tab" onclick="switchSession(2)">Add unit tests</div>
+                                <button class="app-tab-new">+</button>
+                            </div>
+
+                            <!-- Chat panels (3 sessions) -->
+                            <div class="app-chat">
+                                <!-- Session 1: Refactor auth module -->
+                                <div class="app-chat-panel active" id="chat-0">
+                                    <div class="chat-message user">
+                                        Refactor the auth middleware to use JWT tokens instead of session cookies
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        I'll refactor the auth middleware. Let me start by examining the current implementation.<span class="streaming-cursor"></span>
+                                    </div>
+                                    <div class="tool-log">
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Read</span>
+                                            <span class="tool-file">src/auth/middleware.ts</span>
+                                            <span class="tool-duration">320ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Read</span>
+                                            <span class="tool-file">src/auth/session.ts</span>
+                                            <span class="tool-duration">180ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot running"></span>
+                                            <span class="tool-name">Edit</span>
+                                            <span class="tool-file">src/auth/middleware.ts</span>
+                                            <span class="tool-spinner"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Session 2: Fix build errors -->
+                                <div class="app-chat-panel" id="chat-1">
+                                    <div class="chat-message user">
+                                        The TypeScript build is failing with 12 errors, fix them
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        I'll analyze the build errors and fix them one by one.<span class="streaming-cursor"></span>
+                                    </div>
+                                    <div class="tool-log">
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Bash</span>
+                                            <span class="tool-file">tsc --noEmit</span>
+                                            <span class="tool-duration">1.2s</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Read</span>
+                                            <span class="tool-file">src/types/index.ts</span>
+                                            <span class="tool-duration">90ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Edit</span>
+                                            <span class="tool-file">src/types/index.ts</span>
+                                            <span class="tool-duration">240ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot running"></span>
+                                            <span class="tool-name">Bash</span>
+                                            <span class="tool-file">tsc --noEmit</span>
+                                            <span class="tool-spinner"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Session 3: Add unit tests -->
+                                <div class="app-chat-panel" id="chat-2">
+                                    <div class="chat-message user">
+                                        Add unit tests for the database module, target 80% coverage
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        I'll write comprehensive tests for the database module.<span class="streaming-cursor"></span>
+                                    </div>
+                                    <div class="tool-log">
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Read</span>
+                                            <span class="tool-file">src/database.ts</span>
+                                            <span class="tool-duration">150ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Read</span>
+                                            <span class="tool-file">src/__tests__/database.test.ts</span>
+                                            <span class="tool-duration">120ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot completed"></span>
+                                            <span class="tool-name">Write</span>
+                                            <span class="tool-file">src/__tests__/database.test.ts</span>
+                                            <span class="tool-duration">380ms</span>
+                                        </div>
+                                        <div class="tool-log-entry">
+                                            <span class="tool-dot running"></span>
+                                            <span class="tool-name">Bash</span>
+                                            <span class="tool-file">npm test</span>
+                                            <span class="tool-spinner"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Activity tree panels (3 sessions) -->
+                            <div class="app-activity">
+                                <!-- Session 1: Refactor auth module -->
+                                <div class="app-activity-panel active" id="activity-0">
+                                    <div class="activity-header">
+                                        <span class="activity-title">Activity</span>
+                                        <span class="activity-count">12</span>
+                                    </div>
+                                    <div class="activity-tabs">
+                                        <div class="activity-tab active">TREE</div>
+                                        <div class="activity-tab">TOOLS</div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="agent-card running">
+                                            <div class="agent-type">code_agent</div>
+                                            <div class="agent-desc">Refactor auth middleware</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📄</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">middleware.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">320ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📄</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">session.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">180ms</span>
+                                                </div>
+                                                <div class="tool-row running">
+                                                    <div class="tool-icon">✏️</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Edit</span>
+                                                        <span class="tool-target">middleware.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon running"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Session 2: Fix build errors -->
+                                <div class="app-activity-panel" id="activity-1">
+                                    <div class="activity-header">
+                                        <span class="activity-title">Activity</span>
+                                        <span class="activity-count">18</span>
+                                    </div>
+                                    <div class="activity-tabs">
+                                        <div class="activity-tab active">TREE</div>
+                                        <div class="activity-tab">TOOLS</div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="agent-card running">
+                                            <div class="agent-type">build-error-resolver</div>
+                                            <div class="agent-desc">Fix TypeScript build errors</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">⚡</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Bash</span>
+                                                        <span class="tool-target">tsc --noEmit</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">1.2s</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📄</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">index.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">90ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">✏️</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Edit</span>
+                                                        <span class="tool-target">index.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">240ms</span>
+                                                </div>
+                                                <div class="tool-row running">
+                                                    <div class="tool-icon">⚡</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Bash</span>
+                                                        <span class="tool-target">tsc --noEmit</span>
+                                                    </div>
+                                                    <div class="tool-status-icon running"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Session 3: Add unit tests -->
+                                <div class="app-activity-panel" id="activity-2">
+                                    <div class="activity-header">
+                                        <span class="activity-title">Activity</span>
+                                        <span class="activity-count">24</span>
+                                    </div>
+                                    <div class="activity-tabs">
+                                        <div class="activity-tab active">TREE</div>
+                                        <div class="activity-tab">TOOLS</div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="agent-card running">
+                                            <div class="agent-type">tdd-guide</div>
+                                            <div class="agent-desc">Write database tests</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📄</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">database.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">150ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📄</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">database.test.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">120ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-icon">📝</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Write</span>
+                                                        <span class="tool-target">database.test.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">380ms</span>
+                                                </div>
+                                                <div class="tool-row running">
+                                                    <div class="tool-icon">⚡</div>
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Bash</span>
+                                                        <span class="tool-target">npm test</span>
+                                                    </div>
+                                                    <div class="tool-status-icon running"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="stripe"></div>
+
+    <section class="features">
+        <div class="container">
+            <div class="feature" data-feature>
+                <div class="feature-number">01</div>
+                <div class="feature-content">
+                    <h3>Parallel sessions</h3>
+                    <p>
+                        Multiple Claude Code sessions in parallel tabs. Frontend in one, backend in another, debugging in a third. Each has its own context and history.
+                    </p>
+                </div>
+            </div>
+
+            <div class="feature" data-feature>
+                <div class="feature-number">02</div>
+                <div class="feature-content">
+                    <h3>Live observability</h3>
+                    <p>
+                        Watch Claude work in real-time. Every agent spawn, tool call, sub-task visible as it happens. Full hierarchy. Nested agents, parallel tasks, tool chains.
+                    </p>
+                </div>
+            </div>
+
+            <div class="feature" data-feature>
+                <div class="feature-number">03</div>
+                <div class="feature-content">
+                    <h3>Tool analytics</h3>
+                    <p>
+                        Track tool usage, success rates, duration, token costs. SQLite backend stores every event. Query it. Analyze it. Optimize workflows.
+                    </p>
+                </div>
+            </div>
+
+            <div class="feature" data-feature>
+                <div class="feature-number">04</div>
+                <div class="feature-content">
+                    <h3>Signal over noise</h3>
+                    <p>
+                        No terminal scroll. No buried output. Clean view. Collapsible trees, markdown messages, streaming deltas. See what matters.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="how-it-works">
+        <div class="container">
+            <h2>How it works</h2>
+            <div class="steps">
+                <div class="step">
+                    <h3>1. Install</h3>
+                    <p>Clone. Run setup. Done.</p>
+                </div>
+                <div class="step">
+                    <h3>2. Run</h3>
+                    <p>Launch desktop app. Auto-login. Start session.</p>
+                </div>
+                <div class="step">
+                    <h3>3. See everything</h3>
+                    <p>Chat. Watch. Track. Export.</p>
+                </div>
+            </div>
+            <div class="install-command">
+                <code>curl -fsSL ccplus.run/install | sh</code>
+                <button class="copy-btn" onclick="copyInstallCommand()">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta" id="download">
+        <div class="container">
+            <h2>Ready?</h2>
+            <div class="cta-buttons">
+                <a href="https://github.com/mjfuentes/ccplus" class="btn btn-primary">
+                    Run it →
+                </a>
+                <a href="https://github.com/mjfuentes/ccplus#quick-start" class="btn btn-secondary">
+                    Quick Start
+                </a>
+            </div>
+            <p class="cta-note">Free. Open-source. No tracking.</p>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            Built by <a href="https://kerplunk.studio">kerplunk.studio</a> with cc+
+        </div>
+    </footer>
+
+    <script>
+        // Intersection Observer for feature animations
+        const observerOptions = {
+            threshold: 0.2,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('[data-feature]').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Copy install command
+        function copyInstallCommand() {
+            const command = 'curl -fsSL ccplus.run/install | sh';
+            navigator.clipboard.writeText(command).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        // Session switching
+        function switchSession(index) {
+            // Update tabs
+            const tabs = document.querySelectorAll('.app-tab');
+            tabs.forEach((tab, i) => {
+                if (i === index) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Update sidebar sessions
+            const sidebarSessions = document.querySelectorAll('.sidebar-session');
+            sidebarSessions.forEach((session, i) => {
+                if (i === index) {
+                    session.classList.add('active');
+                } else {
+                    session.classList.remove('active');
+                }
+            });
+
+            // Update chat panels
+            const chatPanels = document.querySelectorAll('.app-chat-panel');
+            chatPanels.forEach((panel, i) => {
+                if (i === index) {
+                    panel.classList.add('active');
+                } else {
+                    panel.classList.remove('active');
+                }
+            });
+
+            // Update activity panels
+            const activityPanels = document.querySelectorAll('.app-activity-panel');
+            activityPanels.forEach((panel, i) => {
+                if (i === index) {
+                    panel.classList.add('active');
+                } else {
+                    panel.classList.remove('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
