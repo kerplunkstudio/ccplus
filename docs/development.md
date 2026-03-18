@@ -40,10 +40,15 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
-| `SDK_MODEL` | `sonnet` | Default model for SDK queries |
+| `SDK_MODEL` | `claude-sonnet-4-6` | Default model for SDK queries |
 | `PORT` | `4000` | Server port |
-| `CCPLUS_AUTH` | `local` | Auth mode (`local` for auto-login) |
-| `SECRET_KEY` | `ccplus-dev-secret-change-me` | JWT signing key (change in production) |
+| `HOST` | `127.0.0.1` | Server host |
+| `DATABASE_PATH` | `data/ccplus.db` | SQLite database location |
+| `CCPLUS_CHANNEL` | `stable` | Release channel (stable/dev) |
+| `CCPLUS_BYPASS_PERMISSIONS` | `true` | Bypass permission prompts |
+| `MAX_CONVERSATION_HISTORY` | `50` | Max messages returned per session |
+| `MAX_ACTIVITY_EVENTS` | `200` | Max tool events returned per session |
+| `CORS_ORIGINS` | `http://localhost:4000,...` | Allowed CORS origins |
 
 ## Running Locally
 
@@ -108,10 +113,12 @@ cd backend-ts && npm run dev
 
 ```bash
 cd frontend
-npm start            # Dev server on port 3001 (proxies API to 3000)
+npm start            # Dev server on port 3000 (React default)
 npm run build        # Production build to frontend/build/
 npm test             # Run React component tests
 ```
+
+**Note**: The frontend dev server runs on port 3000 by default (React's default). The backend runs on port 4000. For development, ensure the backend is running at `localhost:4000` so the frontend can connect via Socket.IO.
 
 After modifying frontend source, deploy the build:
 ```bash
@@ -150,7 +157,33 @@ After modifying frontend source, deploy the build:
 | GET | `/` | Serve React SPA |
 | GET | `/<path>` | Serve static assets |
 | GET | `/health` | Health check (uptime, sessions, clients, DB stats) |
-| POST | `/api/auth/auto-login` | Generate JWT for local user (local mode only) |
-| POST | `/api/auth/verify` | Verify JWT, return user info |
-| GET | `/api/history/<session_id>` | Conversation history for a session |
+| GET | `/api/version` | Version info (version, channel, git SHA) |
+| GET | `/api/update-check` | Check for available updates (cached 1 hour) |
+| GET | `/api/status/first-run` | First-run status check |
+| GET | `/api/history/:sessionId` | Conversation history for a session |
+| GET | `/api/activity/:sessionId` | Tool events for a session |
 | GET | `/api/stats` | Aggregate tool usage and conversation statistics |
+| GET | `/api/stats/user` | User-level statistics |
+| GET | `/api/insights` | Analytics insights |
+| GET | `/api/search` | Search conversations and sessions |
+| GET | `/api/projects` | List projects in workspace |
+| POST | `/api/projects/clone` | Clone a repository |
+| GET | `/api/browse` | Browse filesystem |
+| GET | `/api/path-complete` | Path autocomplete |
+| GET | `/api/scan-projects` | Scan workspace for projects |
+| POST | `/api/set-workspace` | Update workspace path |
+| GET | `/api/git/context` | Git repository context |
+| GET | `/api/sessions` | List all sessions |
+| POST | `/api/sessions/:sessionId/archive` | Archive a session |
+| GET | `/api/workspace` | Get current workspace path |
+| PUT | `/api/workspace` | Update workspace path |
+| POST | `/api/workspace` | Create new workspace |
+| POST | `/api/images/upload` | Upload an image |
+| GET | `/api/images/:imageId` | Retrieve an image |
+| GET | `/api/project/overview` | Project structure and README |
+| GET | `/api/plugins` | List installed plugins |
+| GET | `/api/plugins/marketplace` | Plugin marketplace |
+| GET | `/api/skills` | List available skills |
+| GET | `/api/mcp/servers` | List MCP servers |
+| POST | `/api/mcp/servers` | Add MCP server |
+| DELETE | `/api/mcp/servers/:name` | Remove MCP server |
