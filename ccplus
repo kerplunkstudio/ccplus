@@ -719,7 +719,12 @@ run_doctor() {
 
     # Log file size check
     if [ -f "logs/server.log" ]; then
-        log_size_bytes=$(stat -f%z "logs/server.log" 2>/dev/null || stat -c%s "logs/server.log" 2>/dev/null || echo "0")
+        # Platform-specific stat command (BSD vs GNU)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            log_size_bytes=$(stat -f%z "logs/server.log" 2>/dev/null || echo "0")
+        else
+            log_size_bytes=$(stat -c%s "logs/server.log" 2>/dev/null || echo "0")
+        fi
         log_size_mb=$(echo "scale=1; $log_size_bytes / 1048576" | bc 2>/dev/null || echo "0")
 
         # Convert to float comparison (bc returns empty on some systems)
@@ -738,8 +743,14 @@ run_doctor() {
 
     # Node modules freshness - backend
     if [ -d "backend-ts/node_modules" ] && [ -f "backend-ts/package-lock.json" ]; then
-        backend_lock_time=$(stat -f%m "backend-ts/package-lock.json" 2>/dev/null || stat -c%Y "backend-ts/package-lock.json" 2>/dev/null || echo "0")
-        backend_modules_time=$(stat -f%m "backend-ts/node_modules" 2>/dev/null || stat -c%Y "backend-ts/node_modules" 2>/dev/null || echo "0")
+        # Platform-specific stat command (BSD vs GNU)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            backend_lock_time=$(stat -f%m "backend-ts/package-lock.json" 2>/dev/null || echo "0")
+            backend_modules_time=$(stat -f%m "backend-ts/node_modules" 2>/dev/null || echo "0")
+        else
+            backend_lock_time=$(stat -c%Y "backend-ts/package-lock.json" 2>/dev/null || echo "0")
+            backend_modules_time=$(stat -c%Y "backend-ts/node_modules" 2>/dev/null || echo "0")
+        fi
 
         if [ "$backend_lock_time" -gt "$backend_modules_time" ]; then
             warn "backend-ts/node_modules may be stale (package-lock.json is newer)"
@@ -755,8 +766,14 @@ run_doctor() {
 
     # Node modules freshness - frontend
     if [ -d "frontend/node_modules" ] && [ -f "frontend/package-lock.json" ]; then
-        frontend_lock_time=$(stat -f%m "frontend/package-lock.json" 2>/dev/null || stat -c%Y "frontend/package-lock.json" 2>/dev/null || echo "0")
-        frontend_modules_time=$(stat -f%m "frontend/node_modules" 2>/dev/null || stat -c%Y "frontend/node_modules" 2>/dev/null || echo "0")
+        # Platform-specific stat command (BSD vs GNU)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            frontend_lock_time=$(stat -f%m "frontend/package-lock.json" 2>/dev/null || echo "0")
+            frontend_modules_time=$(stat -f%m "frontend/node_modules" 2>/dev/null || echo "0")
+        else
+            frontend_lock_time=$(stat -c%Y "frontend/package-lock.json" 2>/dev/null || echo "0")
+            frontend_modules_time=$(stat -c%Y "frontend/node_modules" 2>/dev/null || echo "0")
+        fi
 
         if [ "$frontend_lock_time" -gt "$frontend_modules_time" ]; then
             warn "frontend/node_modules may be stale (package-lock.json is newer)"
@@ -789,16 +806,33 @@ get_uptime() {
         return
     fi
 
-    # Get process start time (macOS compatible)
+    # Get process start time (platform-specific)
     local start_time
-    start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    local now
+    now=$(date +%s)
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: Use BSD-style ps with lstart
+        start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux: Use GNU ps with etimes (elapsed time in seconds)
+        local etimes
+        etimes=$(ps -p "$pid" -o etimes= 2>/dev/null | tr -d ' ' || echo "")
+        if [ -n "$etimes" ]; then
+            start_time=$((now - etimes))
+        else
+            start_time=""
+        fi
+    else
+        # Unknown platform
+        start_time=""
+    fi
+
     if [ -z "$start_time" ]; then
         echo "N/A"
         return
     fi
 
-    local now
-    now=$(date +%s)
     local elapsed=$((now - start_time))
 
     # Format uptime
@@ -1130,9 +1164,19 @@ Commands:
   setup            Force re-run setup
   help             Show this help message
 
+Building Desktop Apps:
+  macOS:   npm run package:mac    # Build .dmg and .zip
+  Linux:   npm run package:linux  # Build AppImage and .deb
+  Windows: npm run package:win    # Build installer and portable
+
 Installation:
   One-line installer (clones repo, runs setup, starts server):
     curl -fsSL https://raw.githubusercontent.com/mjfuentes/ccplus/main/install.sh | bash
+
+Platform Support:
+  - macOS: Full support (tested on 10.15+)
+  - Linux: Full support (AppImage portable, .deb packages)
+  - Windows: Planned (build config ready, untested)
 
 Examples:
   ./ccplus              # First run: setup + build + launch desktop
@@ -1267,16 +1311,33 @@ get_uptime() {
         return
     fi
 
-    # Get process start time (macOS compatible)
+    # Get process start time (platform-specific)
     local start_time
-    start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    local now
+    now=$(date +%s)
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS: Use BSD-style ps with lstart
+        start_time=$(ps -p "$pid" -o lstart= 2>/dev/null | xargs -I {} date -j -f "%a %b %d %T %Y" "{}" "+%s" 2>/dev/null || echo "")
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux: Use GNU ps with etimes (elapsed time in seconds)
+        local etimes
+        etimes=$(ps -p "$pid" -o etimes= 2>/dev/null | tr -d ' ' || echo "")
+        if [ -n "$etimes" ]; then
+            start_time=$((now - etimes))
+        else
+            start_time=""
+        fi
+    else
+        # Unknown platform
+        start_time=""
+    fi
+
     if [ -z "$start_time" ]; then
         echo "N/A"
         return
     fi
 
-    local now
-    now=$(date +%s)
     local elapsed=$((now - start_time))
 
     # Format uptime

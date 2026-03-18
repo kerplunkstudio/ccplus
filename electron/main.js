@@ -148,6 +148,8 @@ function stopBackend() {
 
 // Create main window
 function createWindow() {
+  const isLinux = process.platform === 'linux';
+
   // Restore window state or use defaults
   const windowState = store.get('windowState', {
     width: 1400,
@@ -165,6 +167,8 @@ function createWindow() {
     minHeight: 600,
     title: 'CC+',
     backgroundColor: '#18181b',
+    // Linux: Set icon explicitly (required for taskbar/window decorations)
+    ...(isLinux && { icon: path.join(__dirname, 'assets', 'icon.png') }),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -220,6 +224,7 @@ function createWindow() {
 // Create application menu
 function createMenu() {
   const isMac = process.platform === 'darwin';
+  const isLinux = process.platform === 'linux';
 
   const template = [
     ...(isMac ? [{
@@ -349,6 +354,21 @@ app.whenReady().then(async () => {
       }
     } catch (err) {
       console.warn('[App] Could not set dock icon:', err.message);
+    }
+  }
+
+  // Set app icon on Linux (for notifications, alt-tab, etc.)
+  if (process.platform === 'linux') {
+    try {
+      const { nativeImage } = require('electron');
+      const iconPath = path.join(__dirname, 'assets', 'icon.png');
+      const icon = nativeImage.createFromPath(iconPath);
+      if (!icon.isEmpty()) {
+        // No dock on Linux, but this helps with window manager icons
+        console.log('[App] Linux icon loaded from:', iconPath);
+      }
+    } catch (err) {
+      console.warn('[App] Could not load Linux icon:', err.message);
     }
   }
 

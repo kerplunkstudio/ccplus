@@ -23,7 +23,9 @@
     "linux": {
       "category": "Development",
       "icon": "electron/assets/icon.png",
-      "target": ["AppImage", "deb"]
+      "target": ["AppImage", "deb"],
+      "maintainer": "mjfuentes",
+      "description": "Web UI and observability layer for Claude Code"
     },
     "win": {
       "icon": "electron/assets/icon.ico",
