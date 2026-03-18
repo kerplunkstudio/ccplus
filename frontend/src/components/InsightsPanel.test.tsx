@@ -401,7 +401,10 @@ describe('InsightsPanel', () => {
       expect(screen.getByText('1.5M')).toBeInTheDocument(); // total_queries
     });
 
-    expect(screen.getByText(/7\.5M tokens/)).toBeInTheDocument(); // total tokens
+    // Total is 5M + 2.5M = 7.5M, formatted as "7.5M tokens"
+    // The text may appear multiple times (hero stats and other places)
+    const tokenElements = screen.getAllByText(/7\.5M tokens/);
+    expect(tokenElements.length).toBeGreaterThan(0);
   });
 
   it('renders chart with correct y-axis labels', async () => {

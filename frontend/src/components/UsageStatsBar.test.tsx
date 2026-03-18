@@ -28,19 +28,24 @@ describe('UsageStatsBar', () => {
 
   describe('Activity view - Context indicator', () => {
     it('renders context usage with percentage when contextTokens is provided', () => {
-      render(
+      const { container } = render(
         <UsageStatsBar
           stats={mockStats}
           totalTools={10}
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={250000}
+          contextTokens={500000}
         />
       );
 
+      // Component shows 50% because 500000 / 1000000 = 50%
       expect(screen.getByText('50%')).toBeInTheDocument();
       expect(screen.getByText('CONTEXT')).toBeInTheDocument();
+
+      // Verify the bar width is set correctly
+      const fillBar = container.querySelector('.context-bar-fill') as HTMLElement;
+      expect(fillBar).toHaveStyle({ width: '50%' });
     });
 
     it('renders em-dash when contextTokens is null', () => {
@@ -82,10 +87,11 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={200000}
+          contextTokens={400000}
         />
       );
 
+      // 400000 / 1000000 = 40%
       const percentage = screen.getByText('40%');
       expect(percentage).not.toHaveClass('context-warn');
       expect(percentage).not.toHaveClass('context-danger');
@@ -103,10 +109,11 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={350000}
+          contextTokens={700000}
         />
       );
 
+      // 700000 / 1000000 = 70%
       const percentage = screen.getByText('70%');
       expect(percentage).toHaveClass('context-warn');
       expect(percentage).not.toHaveClass('context-danger');
@@ -124,10 +131,11 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={400000}
+          contextTokens={800000}
         />
       );
 
+      // 800000 / 1000000 = 80%
       const percentage = screen.getByText('80%');
       expect(percentage).toHaveClass('context-danger');
       expect(percentage).not.toHaveClass('context-warn');
@@ -145,10 +153,11 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={250000}
+          contextTokens={500000}
         />
       );
 
+      // 500000 / 1000000 = 50%
       const fillBar = container.querySelector('.context-bar-fill') as HTMLElement;
       expect(fillBar).toHaveStyle({ width: '50%' });
     });
@@ -161,7 +170,7 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={3}
           hasRunning={false}
-          contextTokens={250000}
+          contextTokens={500000}
         />
       );
 
@@ -199,8 +208,8 @@ describe('UsageStatsBar', () => {
         />
       );
 
-      // 123456 / 500000 = 0.246912 = 25% (rounded)
-      expect(screen.getByText('25%')).toBeInTheDocument();
+      // 123456 / 1000000 = 0.123456 = 12% (rounded)
+      expect(screen.getByText('12%')).toBeInTheDocument();
     });
 
     it('handles 100% context usage', () => {
@@ -211,10 +220,11 @@ describe('UsageStatsBar', () => {
           elapsed="5m 30s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={500000}
+          contextTokens={1000000}
         />
       );
 
+      // 1000000 / 1000000 = 100%
       expect(screen.getByText('100%')).toBeInTheDocument();
 
       const fillBar = container.querySelector('.context-bar-fill') as HTMLElement;
@@ -230,7 +240,7 @@ describe('UsageStatsBar', () => {
           elapsed="3m 45s"
           errorCount={0}
           hasRunning={false}
-          contextTokens={250000}
+          contextTokens={500000}
         />
       );
 

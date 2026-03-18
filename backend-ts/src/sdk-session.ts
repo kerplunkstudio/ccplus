@@ -1126,6 +1126,7 @@ async function streamQuery(
             model: session.model,
             message_index: messageIndex,
           });
+          session.streamingContent = '';
         }
       } else if (message.type === "result") {
         gotResult = true;

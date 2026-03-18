@@ -326,11 +326,12 @@ describe('Toast', () => {
         type: 'info',
       };
 
-      render(<Toast toast={toast} onRemove={mockOnRemove} />);
+      const { container } = render(<Toast toast={toast} onRemove={mockOnRemove} />);
 
-      expect(screen.getByText((content, element) => {
-        return element !== null && element.textContent === 'Line 1\nLine 2\nLine 3';
-      })).toBeInTheDocument();
+      // The message div contains the text (newlines are preserved in the DOM)
+      const messageDiv = container.querySelector('.toast-message');
+      expect(messageDiv).toBeInTheDocument();
+      expect(messageDiv?.textContent).toBe('Line 1\nLine 2\nLine 3');
     });
 
     it('only calls onRemove once even if close is clicked multiple times', () => {

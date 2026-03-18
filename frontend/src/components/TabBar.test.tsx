@@ -58,8 +58,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click the active tab
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events (component detects double-click via timing)
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     // Should show input with current label
     await waitFor(() => {
@@ -74,8 +75,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = await screen.findByDisplayValue('First Session');
 
@@ -97,8 +99,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = await screen.findByDisplayValue('First Session');
 
@@ -120,8 +123,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = await screen.findByDisplayValue('First Session');
 
@@ -146,8 +150,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('Second Session');
 
-    // Double-click inactive tab
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events (inactive tab)
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     // Should not show input (should just select the tab twice)
     await waitFor(() => {
@@ -161,8 +166,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = await screen.findByDisplayValue('First Session');
 
@@ -183,8 +189,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = await screen.findByDisplayValue('First Session');
 
@@ -206,8 +213,9 @@ describe('TabBar', () => {
 
     const tab = screen.getByText('First Session');
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(tab);
+    // Simulate double-click with two rapid click events
+    fireEvent.click(tab);
+    fireEvent.click(tab);
 
     const input = (await screen.findByDisplayValue('First Session')) as HTMLInputElement;
 
@@ -224,19 +232,18 @@ describe('TabBar', () => {
     const tabItem = screen.getByText('First Session').closest('.tab-item');
     expect(tabItem).toBeInTheDocument();
 
-    // Check close button exists initially (when hovering)
-    if (tabItem) {
-      fireEvent.mouseEnter(tabItem);
-      const closeButton = screen.getByLabelText('Close tab');
-      expect(closeButton).toBeInTheDocument();
-    }
+    // Check close button exists initially (there are 2 tabs, so 2 close buttons)
+    const initialCloseButtons = screen.getAllByLabelText('Close tab');
+    expect(initialCloseButtons.length).toBe(2);
 
-    // Double-click to enter edit mode
-    fireEvent.dblClick(screen.getByText('First Session'));
+    // Simulate double-click with two rapid click events to enter edit mode
+    fireEvent.click(screen.getByText('First Session'));
+    fireEvent.click(screen.getByText('First Session'));
 
-    // Close button should be hidden during edit
+    // During edit mode, there should be one less close button (only non-editing tabs have close buttons)
     await waitFor(() => {
-      expect(screen.queryByLabelText('Close tab')).not.toBeInTheDocument();
+      const closeButtons = screen.queryAllByLabelText('Close tab');
+      expect(closeButtons.length).toBe(1);
     });
   });
 });

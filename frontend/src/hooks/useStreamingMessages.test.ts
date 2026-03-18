@@ -601,9 +601,9 @@ describe('useStreamingMessages', () => {
         })
       );
 
-      // Wait for initial fetch to complete
+      // Wait for initial fetch to complete - default is 1M now
       await waitFor(() => {
-        expect(result.current.usageStats.contextWindowSize).toBe(500_000);
+        expect(result.current.usageStats.contextWindowSize).toBe(1_000_000);
       });
 
       const responseCompleteHandler = (mockSocket.on as jest.Mock).mock.calls.find(
@@ -619,11 +619,11 @@ describe('useStreamingMessages', () => {
         });
       });
 
-      // Wait for context window to update
+      // Wait for model to update (context window stays at 1M since model lookup returns 1M)
       await waitFor(() => {
-        expect(result.current.usageStats.contextWindowSize).toBe(1_000_000);
+        expect(result.current.usageStats.model).toBe('claude-sonnet-4-6');
       });
-      expect(result.current.usageStats.model).toBe('claude-sonnet-4-6');
+      expect(result.current.usageStats.contextWindowSize).toBe(1_000_000);
     });
 
     it('should fetch user stats on final completion', async () => {

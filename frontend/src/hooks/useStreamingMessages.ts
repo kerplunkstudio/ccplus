@@ -80,6 +80,7 @@ export function useStreamingMessages({
   const syncInProgressRef = useRef(false);
   const streamActiveRef = useRef(false);
   const awaitingDeltaAfterRestore = useRef(false);
+  const intermediateCompletionRef = useRef(false);
 
   // Refs to mirror state for session cache saves (avoid stale closures)
   const streamingRef = useRef(false);
@@ -221,7 +222,7 @@ export function useStreamingMessages({
       if (!streamingIdRef.current) {
         setMessages((prev) => {
           const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming && !intermediateCompletionRef.current) {
             streamingIdRef.current = lastMsg.id;
             streamingContentRef.current = lastMsg.content + data.text;
             const updatedContent = streamingContentRef.current;
@@ -233,6 +234,7 @@ export function useStreamingMessages({
             streamingContentRef.current = data.text;
             streamingIdRef.current = msgId;
             setThinking('');
+            intermediateCompletionRef.current = false;
             return [
               ...prev,
               {
@@ -336,8 +338,9 @@ export function useStreamingMessages({
         streamingIdRef.current = null;
         responseCompleteRef.current = false;
         streamingContentRef.current = '';
+        intermediateCompletionRef.current = false;
       } else {
-        // Intermediate completion: finalize current message so next assistant turn creates a new bubble
+        intermediateCompletionRef.current = true;
         streamingIdRef.current = null;
         streamingContentRef.current = '';
         completionFinalizedRef.current = false;
@@ -396,6 +399,7 @@ export function useStreamingMessages({
       streamingContentRef.current = '';
       streamingIdRef.current = null;
       responseCompleteRef.current = false;
+      intermediateCompletionRef.current = false;
     });
 
     socket.on('compact_boundary', () => {
