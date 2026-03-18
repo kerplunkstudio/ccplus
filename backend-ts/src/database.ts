@@ -113,6 +113,7 @@ function getDb(): Database.Database {
     db.pragma("journal_mode = WAL");
     db.exec(SCHEMA_SQL);
     runProvenanceMigration(db);
+    runCorrelationMigration(db);
   }
   return db;
 }
@@ -143,6 +144,31 @@ function runProvenanceMigration(database: Database.Database): void {
   }
 }
 
+/**
+ * Add correlation_id columns to conversations, tool_usage, and transcript_events tables.
+ * Wrapped in try/catch since columns may already exist.
+ */
+function runCorrelationMigration(database: Database.Database): void {
+  const migrations = [
+    "ALTER TABLE conversations ADD COLUMN correlation_id TEXT",
+    "ALTER TABLE tool_usage ADD COLUMN correlation_id TEXT",
+    "ALTER TABLE transcript_events ADD COLUMN correlation_id TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_tool_usage_correlation ON tool_usage(correlation_id)",
+    "CREATE INDEX IF NOT EXISTS idx_transcript_correlation ON transcript_events(correlation_id)",
+  ];
+
+  for (const sql of migrations) {
+    try {
+      database.exec(sql);
+    } catch (err) {
+      const message = (err as Error).message ?? "";
+      if (!message.includes("duplicate column name") && !message.includes("already exists")) {
+        console.warn(`Correlation migration warning: ${message}`);
+      }
+    }
+  }
+}
+
 // --- Message operations ---
 
 export function recordMessage(
@@ -156,13 +182,14 @@ export function recordMessage(
   sourceConnectionId?: string,
   sourceIp?: string,
   userAgent?: string,
+  correlationId?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const imagesJson = imageIds ? JSON.stringify(imageIds) : null;
   const stmt = d.prepare(`
     INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images,
-                               source_connection_id, source_ip, user_agent)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               source_connection_id, source_ip, user_agent, correlation_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, userId, role, content,
@@ -171,7 +198,8 @@ export function recordMessage(
     imagesJson,
     sourceConnectionId ?? null,
     sourceIp ?? null,
-    userAgent ?? null
+    userAgent ?? null,
+    correlationId ?? null
   );
   const row = d.prepare("SELECT * FROM conversations WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -238,6 +266,7 @@ export function recordToolEvent(
   inputTokens?: number | null,
   outputTokens?: number | null,
   sourceConnectionId?: string,
+  correlationId?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -246,8 +275,8 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens, source_connection_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, source_connection_id, correlation_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, toolName, toolUseId,
@@ -256,6 +285,7 @@ export function recordToolEvent(
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
     sourceConnectionId ?? null,
+    correlationId ?? null
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -715,8 +745,8 @@ export function recordTranscriptEvent(event: TranscriptEventInput): TranscriptEv
   const metadataJson = event.metadata ? JSON.stringify(event.metadata) : null;
 
   const stmt = d.prepare(`
-    INSERT INTO transcript_events (session_id, event_type, event_id, parent_event_id, data, metadata)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO transcript_events (session_id, event_type, event_id, parent_event_id, data, metadata, correlation_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   const info = stmt.run(
@@ -726,6 +756,7 @@ export function recordTranscriptEvent(event: TranscriptEventInput): TranscriptEv
     event.parent_event_id ?? null,
     dataJson,
     metadataJson,
+    event.correlation_id ?? null
   );
 
   const row = d.prepare("SELECT * FROM transcript_events WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
@@ -812,4 +843,11 @@ export function exportTranscript(sessionId: string): TranscriptEvent[] {
     data: JSON.parse(row.data as string),
     metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
   }));
+}
+
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
 }
