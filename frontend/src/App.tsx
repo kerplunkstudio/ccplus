@@ -450,10 +450,6 @@ function AppContent({ token, loading }: AppContentProps) {
     setTodos([]);
   }, [setTodos]);
 
-  if (loading) {
-    return null; // AppLoadingScreen handles this
-  }
-
   const hasProjects = workspace.state.projects.length > 0;
   const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
   const hasTabs = activeProject && activeProject.tabs.length > 0;
@@ -474,8 +470,11 @@ function AppContent({ token, loading }: AppContentProps) {
     : shouldShowChatPanel ? 'chat'
     : 'no-project';
 
+  const appReady = !loading && connected;
+
   return (
     <>
+      <AppLoadingScreen ready={appReady} />
       <ToastContainer />
       <UpdateBanner />
       <div
@@ -611,7 +610,6 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
-          <AppLoadingScreen ready={!loading} />
           <AppContent token={token} loading={loading} />
         </ToastProvider>
       </ThemeProvider>
