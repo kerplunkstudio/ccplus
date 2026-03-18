@@ -17,6 +17,10 @@ import * as sdkSession from "./sdk-session.js";
 import { ProvenanceTracker } from "./provenance.js";
 import { configWatcher, type ConfigChange } from "./config-watcher.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
+import { RateLimiter } from "./rate-limiter.js";
+import { CircuitBreaker } from "./circuit-breaker.js";
+import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
+import { GracefulShutdown } from "./graceful-shutdown.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -78,6 +82,9 @@ const provenanceTracker = new ProvenanceTracker();
 
 // Connection health monitor
 const connectionHealthMonitor = new ConnectionHealthMonitor();
+
+// Rate limiter
+const rateLimiter = new RateLimiter();
 
 // Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
@@ -898,6 +905,68 @@ app.get("/api/transcript/:sessionId/export", (req: Request, res: Response) => {
   }
 });
 
+// -- MCP server management --
+
+app.get("/api/mcp/servers", (req: Request, res: Response) => {
+  try {
+    const projectPath = req.query.project as string | undefined;
+    const servers = getAllMcpServers(projectPath);
+    res.json({ servers });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post("/api/mcp/servers", (req: Request, res: Response) => {
+  try {
+    const { name, config, scope, projectPath } = req.body;
+
+    if (!name || !config) {
+      res.status(400).json({ error: 'name and config are required' });
+      return;
+    }
+
+    if (!scope || !['user', 'project'].includes(scope)) {
+      res.status(400).json({ error: 'scope must be "user" or "project"' });
+      return;
+    }
+
+    if (scope === 'project' && !projectPath) {
+      res.status(400).json({ error: 'projectPath is required for project scope' });
+      return;
+    }
+
+    addMcpServer(name, config as McpServerConfig, scope, projectPath);
+    res.json({ success: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete("/api/mcp/servers/:name", (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const { scope, projectPath } = req.query as { scope?: string; projectPath?: string };
+
+    if (!scope || !['user', 'project'].includes(scope)) {
+      res.status(400).json({ error: 'scope query param must be "user" or "project"' });
+      return;
+    }
+
+    const removed = removeMcpServer(name, scope as 'user' | 'project', projectPath);
+    if (removed) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: `Server "${name}" not found in ${scope} scope` });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: message });
+  }
+});
+
 // =========================================================================
 // WebSocket Events
 // =========================================================================
@@ -947,7 +1016,20 @@ io.on("connection", (socket) => {
       socket.emit("error", { message: "Not authenticated" });
       return;
     }
+
+    if (gracefulShutdown.isShuttingDown()) {
+      socket.emit("error", { message: "Server is shutting down" });
+      return;
+    }
+
     connectionHealthMonitor.onEvent(client.session_id);
+
+    // Rate limiting check
+    const rateCheck = rateLimiter.check(client.session_id);
+    if (!rateCheck.allowed) {
+      socket.emit("rate_limited", { retry_after_ms: rateCheck.retryAfterMs });
+      return;
+    }
 
     // Track activity
     connectionHealthMonitor.onEvent(client.session_id);
@@ -1070,6 +1152,7 @@ io.on("connection", (socket) => {
     provenanceTracker.unregister(socket.id);
     if (client) {
       connectionHealthMonitor.onDisconnect(client.session_id);
+      rateLimiter.reset(client.session_id);
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
   });
@@ -1282,21 +1365,21 @@ console.log(`Config watcher started`);
 writePidFile();
 
 // Graceful shutdown handlers
-const shutdown = () => {
-  console.log("Shutting down...");
-  connectionHealthMonitor.stop();
-  configWatcher.stop();
-  removePidFile();
-  process.exit(0);
-};
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-process.on("exit", () => {
-  connectionHealthMonitor.stop();
-  configWatcher.stop();
-  removePidFile();
+const gracefulShutdown = new GracefulShutdown({
+  httpServer,
+  io,
+  getActiveSessions: sdkSession.getActiveSessions,
+  cleanupFns: [
+    () => connectionHealthMonitor.stop(),
+    () => configWatcher.stop(),
+    () => removePidFile(),
+    () => database.closeDatabase(),
+  ],
+  hardTimeoutMs: 10000,
 });
+
+process.on("SIGTERM", () => gracefulShutdown.shutdown());
+process.on("SIGINT", () => gracefulShutdown.shutdown());
 
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
