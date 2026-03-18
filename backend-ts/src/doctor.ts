@@ -327,6 +327,264 @@ export function checkNodeModulesFreshness(projectRoot: string): CheckResult[] {
 }
 
 /**
+ * Check connection health by querying the /api/health/connections endpoint
+ */
+export async function checkConnectionHealth(port: number): Promise<CheckResult[]> {
+  try {
+    const response = await fetch(`http://localhost:${port}/api/health/connections`);
+    if (!response.ok) {
+      return [{
+        status: "warning",
+        message: "Connection health endpoint not available",
+      }];
+    }
+
+    const data = await response.json() as {
+      total_connections?: number;
+      stale_count?: number;
+      rate_limited?: number;
+    };
+
+    const results: CheckResult[] = [];
+
+    if (data.total_connections !== undefined) {
+      results.push({
+        status: "ok",
+        message: `Total connections: ${data.total_connections}`,
+      });
+    }
+
+    if (data.stale_count !== undefined && data.stale_count > 0) {
+      results.push({
+        status: "warning",
+        message: `Stale connections detected: ${data.stale_count}`,
+      });
+    }
+
+    if (data.rate_limited !== undefined && data.rate_limited > 0) {
+      results.push({
+        status: "warning",
+        message: `Rate-limited connections: ${data.rate_limited}`,
+      });
+    }
+
+    return results.length > 0 ? results : [{
+      status: "ok",
+      message: "Connection health data available",
+    }];
+  } catch (error) {
+    return [{
+      status: "warning",
+      message: "Connection health not available",
+    }];
+  }
+}
+
+/**
+ * Check recent errors in tool_usage table
+ */
+export function checkRecentErrors(dbPath: string): CheckResult[] {
+  if (!existsSync(dbPath)) {
+    return [{
+      status: "warning",
+      message: "Database not found (no error data available)",
+    }];
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    const stmt = db.prepare(`
+      SELECT tool_name, error, COUNT(*) as count
+      FROM tool_usage
+      WHERE success = 0 AND error IS NOT NULL
+        AND timestamp >= datetime('now', '-1 day', 'localtime')
+      GROUP BY tool_name, error
+      ORDER BY count DESC
+      LIMIT 5
+    `);
+    const errors = stmt.all() as Array<{ tool_name: string; error: string; count: number }>;
+    db.close();
+
+    if (errors.length === 0) {
+      return [{
+        status: "ok",
+        message: "No errors in the last 24 hours",
+      }];
+    }
+
+    const results: CheckResult[] = [{
+      status: "warning",
+      message: `Found ${errors.length} error type(s) in last 24 hours`,
+    }];
+
+    // Add top error summary
+    const topError = errors[0];
+    results.push({
+      status: "warning",
+      message: `Most frequent: ${topError.tool_name} - ${topError.error.substring(0, 60)} (${topError.count}x)`,
+    });
+
+    return results;
+  } catch (error) {
+    return [{
+      status: "warning",
+      message: `Could not check recent errors: ${String(error)}`,
+    }];
+  }
+}
+
+/**
+ * Check transcript_events table statistics
+ */
+export function checkTranscriptStats(dbPath: string): CheckResult[] {
+  if (!existsSync(dbPath)) {
+    return [{
+      status: "warning",
+      message: "Database not found (no transcript data available)",
+    }];
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true });
+
+    // Check if transcript_events table exists
+    const tableCheck = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='transcript_events'"
+    ).get() as { name: string } | undefined;
+
+    if (!tableCheck) {
+      db.close();
+      return [{
+        status: "ok",
+        message: "Transcript events table not yet created",
+      }];
+    }
+
+    // Get total count
+    const totalStmt = db.prepare("SELECT COUNT(*) as count FROM transcript_events");
+    const totalResult = totalStmt.get() as { count: number };
+
+    // Get count in last 24h
+    const recentStmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM transcript_events
+      WHERE timestamp >= datetime('now', '-1 day', 'localtime')
+    `);
+    const recentResult = recentStmt.get() as { count: number };
+
+    // Get breakdown by event_type in last 24h
+    const breakdownStmt = db.prepare(`
+      SELECT event_type, COUNT(*) as count
+      FROM transcript_events
+      WHERE timestamp >= datetime('now', '-1 day', 'localtime')
+      GROUP BY event_type
+      ORDER BY count DESC
+      LIMIT 5
+    `);
+    const breakdown = breakdownStmt.all() as Array<{ event_type: string; count: number }>;
+
+    db.close();
+
+    const results: CheckResult[] = [{
+      status: "ok",
+      message: `Total transcript events: ${totalResult.count} (${recentResult.count} in last 24h)`,
+    }];
+
+    if (breakdown.length > 0) {
+      const topTypes = breakdown.map((b) => `${b.event_type}: ${b.count}`).join(", ");
+      results.push({
+        status: "ok",
+        message: `Event types (24h): ${topTypes}`,
+      });
+    }
+
+    return results;
+  } catch (error) {
+    return [{
+      status: "warning",
+      message: `Could not check transcript stats: ${String(error)}`,
+    }];
+  }
+}
+
+/**
+ * Check database file size
+ */
+export function checkDatabaseSize(dbPath: string): CheckResult {
+  if (!existsSync(dbPath)) {
+    return {
+      status: "warning",
+      message: "Database not found (will be created on first run)",
+    };
+  }
+
+  try {
+    const stats = statSync(dbPath);
+    const sizeMB = stats.size / (1024 * 1024);
+
+    if (sizeMB > 1024) {
+      return {
+        status: "error",
+        message: `Database is ${sizeMB.toFixed(1)}MB (> 1GB threshold)`,
+      };
+    } else if (sizeMB > 500) {
+      return {
+        status: "warning",
+        message: `Database is ${sizeMB.toFixed(1)}MB (> 500MB threshold)`,
+      };
+    } else {
+      return {
+        status: "ok",
+        message: `Database size: ${sizeMB.toFixed(1)}MB`,
+      };
+    }
+  } catch (error) {
+    return {
+      status: "warning",
+      message: `Could not check database size: ${String(error)}`,
+    };
+  }
+}
+
+/**
+ * Check if .env file exists and report its modification time
+ */
+export function checkConfigWatcher(envPath: string): CheckResult {
+  if (!existsSync(envPath)) {
+    return {
+      status: "warning",
+      message: ".env file not found (config may not be loaded)",
+    };
+  }
+
+  try {
+    const stats = statSync(envPath);
+    const mtime = new Date(stats.mtime);
+    const now = new Date();
+    const ageMs = now.getTime() - mtime.getTime();
+    const ageMinutes = Math.floor(ageMs / 60000);
+
+    if (ageMinutes < 60) {
+      return {
+        status: "ok",
+        message: `.env last modified ${ageMinutes} minute(s) ago`,
+      };
+    } else {
+      const ageHours = Math.floor(ageMinutes / 60);
+      return {
+        status: "ok",
+        message: `.env last modified ${ageHours} hour(s) ago`,
+      };
+    }
+  } catch (error) {
+    return {
+      status: "warning",
+      message: `Could not check .env file: ${String(error)}`,
+    };
+  }
+}
+
+/**
  * Format a CheckResult for display
  */
 export function formatCheckResult(result: CheckResult): string {
