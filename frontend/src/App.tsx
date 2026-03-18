@@ -70,6 +70,7 @@ function AppContent({ token, loading }: AppContentProps) {
 
   const socketData = useTabSocket(token, activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
   const {
+    socket,
     connected,
     messages,
     streaming,
@@ -710,6 +711,7 @@ function AppContent({ token, loading }: AppContentProps) {
                   />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel
+                    socket={socket}
                     messages={messages}
                     connected={connected}
                     streaming={streaming}
