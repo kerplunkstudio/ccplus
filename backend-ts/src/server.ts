@@ -116,6 +116,20 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+app.get("/api/health/connections", (_req: Request, res: Response) => {
+  const healthStatus = connectionHealthMonitor.getHealthStatus();
+  const config = connectionHealthMonitor.getConfig();
+  res.json({
+    ...healthStatus,
+    config: {
+      stale_threshold_ms: config.staleThresholdMs,
+      check_interval_ms: config.checkIntervalMs,
+      max_reconnects_per_hour: config.maxReconnectsPerHour,
+      grace_period_ms: config.gracePeriodMs,
+    },
+  });
+});
+
 // -- Auth --
 
 app.post("/api/auth/auto-login", (_req: Request, res: Response) => {
@@ -905,6 +919,9 @@ io.on("connection", (socket) => {
   connectionHealthMonitor.onConnect(sessionId);
   socket.join(sessionId);
 
+  // Track connection health
+  connectionHealthMonitor.onConnect(sessionId);
+
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     const provenance = provenanceTracker.getProvenance(socket.id);
@@ -930,6 +947,9 @@ io.on("connection", (socket) => {
       socket.emit("error", { message: "Not authenticated" });
       return;
     }
+    connectionHealthMonitor.onEvent(client.session_id);
+
+    // Track activity
     connectionHealthMonitor.onEvent(client.session_id);
 
     const sid = client.session_id;
@@ -1002,6 +1022,7 @@ io.on("connection", (socket) => {
   socket.on("cancel", () => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
+    connectionHealthMonitor.onEvent(client.session_id);
     sdkSession.cancelQuery(client.session_id);
 
     // Record cancellation transcript event
@@ -1036,6 +1057,7 @@ io.on("connection", (socket) => {
   socket.on("question_response", (data: Record<string, unknown>) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
+    connectionHealthMonitor.onEvent(client.session_id);
     const response = (data?.response as Record<string, unknown>) ?? {};
     sdkSession.sendQuestionResponse(client.session_id, response);
   });
