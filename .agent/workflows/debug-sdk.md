@@ -265,6 +265,6 @@ If issue persists after all checks:
 
 2. **Minimal reproduction**: Try to reproduce with a simple query like "Hello".
 
-3. **Check GitHub issues**: Search for similar problems at https://github.com/mjfuentes/ccplus/issues
+3. **Check GitHub issues**: Search for similar problems at https://github.com/kerplunkstudio/ccplus/issues
 
 4. **Report issue**: Open new issue with debug report and reproduction steps.

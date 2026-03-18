@@ -9,7 +9,7 @@
 
 **Quick start (recommended)**:
 ```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
+git clone git@github.com:kerplunkstudio/ccplus.git && cd ccplus
 ./ccplus             # Interactive setup + build + launch desktop app
 ```
 
@@ -22,7 +22,7 @@ The first run will:
 
 **Manual setup** (if you prefer):
 ```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
+git clone git@github.com:kerplunkstudio/ccplus.git && cd ccplus
 
 # TypeScript backend
 cd backend-ts && npm install && npm run build && cd ..
