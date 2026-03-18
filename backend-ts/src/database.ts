@@ -762,6 +762,10 @@ export function semanticSearchConversations(query: string, limit: number = 20): 
   timestamp: string
   rank: number
 }> {
+  if (!query || query.trim().length === 0) {
+    return [];
+  }
+
   const d = getDb();
   const stmt = d.prepare(`
     SELECT c.session_id, c.role, c.content, c.timestamp, conversations_fts.rank
@@ -772,7 +776,7 @@ export function semanticSearchConversations(query: string, limit: number = 20): 
     ORDER BY conversations_fts.rank
     LIMIT ?
   `);
-  return stmt.all(query, limit) as Array<{
+  return stmt.all(query.trim(), limit) as Array<{
     session_id: string
     role: string
     content: string
