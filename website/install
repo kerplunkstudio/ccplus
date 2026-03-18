@@ -198,7 +198,7 @@ check_prerequisites() {
     if [ -d "$INSTALL_DIR" ] || [ -d "/Applications/cc+.app" ]; then
         warn "Existing installation detected"
         printf "  Replace it? [y/N] "
-        read -r answer
+        read -r answer < /dev/tty
         case "$answer" in
             [yY]|[yY][eE][sS])
                 info "Will upgrade existing installation"
