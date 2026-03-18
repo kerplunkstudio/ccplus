@@ -630,7 +630,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     result.branch = execFileSync("git", ["-C", projectDir, "rev-parse", "--abbrev-ref", "HEAD"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, LC_ALL: "C" },
     }).trim();
   } catch {
     result.branch = null;
@@ -638,7 +638,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const status = execFileSync("git", ["-C", projectDir, "status", "--porcelain"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, LC_ALL: "C" },
     }).trim();
     result.dirty_count = status ? status.split("\n").filter(Boolean).length : 0;
   } catch {
@@ -647,7 +647,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const log = execFileSync("git", ["-C", projectDir, "log", "--format=%H|||%h|||%s|||%ar", "-n", "5"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, LC_ALL: "C" },
     }).trim();
     result.commits = log
       ? log.split("\n").map((line) => {
