@@ -228,4 +228,10 @@ export interface WebViewLoadFailEvent {
   errorDescription?: string;
 }
 
+export interface SessionMetadata {
+  model?: string;
+  thinking_level?: string;
+  verbose?: boolean;
+}
+
 export * from './workspace';

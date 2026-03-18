@@ -16,6 +16,7 @@ import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { ProvenanceTracker } from "./provenance.js";
 import { configWatcher, type ConfigChange } from "./config-watcher.js";
+import { ConnectionHealthMonitor } from "./connection-health.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -75,6 +76,9 @@ const connectedClients = new Map<string, { session_id: string; user_id: string }
 // Provenance tracker for all connections
 const provenanceTracker = new ProvenanceTracker();
 
+// Connection health monitor
+const connectionHealthMonitor = new ConnectionHealthMonitor();
+
 // Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
 
@@ -99,6 +103,7 @@ app.get("/health", (_req: Request, res: Response) => {
   } catch {
     // ignore
   }
+  const healthStatus = connectionHealthMonitor.getHealthStatus();
   res.json({
     status: "ok",
     version: config.VERSION,
@@ -106,6 +111,7 @@ app.get("/health", (_req: Request, res: Response) => {
     uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
     active_sessions: sdkSession.getActiveSessions().length,
     connected_clients: connectedClients.size,
+    stale_connections: healthStatus.stale,
     db: dbStats,
   });
 });
@@ -819,6 +825,18 @@ app.get("/api/connections/:sessionId", (req: Request, res: Response) => {
   }
 });
 
+// -- Connection health --
+
+app.get("/api/health/connections", (_req: Request, res: Response) => {
+  try {
+    const healthStatus = connectionHealthMonitor.getHealthStatus();
+    res.json(healthStatus);
+  } catch (err) {
+    console.error("Failed to fetch connection health:", err);
+    res.status(500).json({ error: "Failed to fetch connection health" });
+  }
+});
+
 // -- Plugins (stub) --
 
 app.get("/api/plugins", (_req: Request, res: Response) => {
@@ -884,6 +902,7 @@ io.on("connection", (socket) => {
 
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
   provenanceTracker.register(socket, sessionId);
+  connectionHealthMonitor.onConnect(sessionId);
   socket.join(sessionId);
 
   // Check if session has active query — re-register callbacks
@@ -911,6 +930,7 @@ io.on("connection", (socket) => {
       socket.emit("error", { message: "Not authenticated" });
       return;
     }
+    connectionHealthMonitor.onEvent(client.session_id);
 
     const sid = client.session_id;
     const uid = client.user_id;
@@ -1004,6 +1024,10 @@ io.on("connection", (socket) => {
   // -- Ping --
 
   socket.on("ping", () => {
+    const client = connectedClients.get(socket.id);
+    if (client) {
+      connectionHealthMonitor.onEvent(client.session_id);
+    }
     socket.emit("pong", { timestamp: Date.now() });
   });
 
@@ -1023,6 +1047,7 @@ io.on("connection", (socket) => {
     connectedClients.delete(socket.id);
     provenanceTracker.unregister(socket.id);
     if (client) {
+      connectionHealthMonitor.onDisconnect(client.session_id);
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
   });
@@ -1216,13 +1241,35 @@ console.log(`Workspace: ${workspacePath}`);
 console.log(`Database: ${config.DATABASE_PATH}`);
 console.log(`Static dir: ${config.STATIC_DIR}`);
 
+// Start connection health monitor
+connectionHealthMonitor.start();
+console.log(`Connection health monitor started`);
+
+// Start config watcher
+configWatcher.on('config-reloaded', (changes: ConfigChange[]) => {
+  console.log(`[config-watcher] Configuration reloaded. Changed keys: ${changes.map(c => c.key).join(', ')}`);
+});
+
+configWatcher.on('restart-required', (changes: ConfigChange[]) => {
+  console.warn(`[config-watcher] Server restart required due to changes: ${changes.map(c => c.key).join(', ')}`);
+});
+
+configWatcher.start();
+console.log(`Config watcher started`);
+
 writePidFile();
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM, shutting down...");
+  connectionHealthMonitor.stop();
+  configWatcher.stop();
   removePidFile();
   process.exit(0);
 });
-process.on("exit", removePidFile);
+process.on("exit", () => {
+  connectionHealthMonitor.stop();
+  configWatcher.stop();
+  removePidFile();
+});
 
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
