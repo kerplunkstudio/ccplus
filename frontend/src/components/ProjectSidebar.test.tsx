@@ -309,3 +309,275 @@ describe('ProjectSidebar', () => {
     expect(Math.max(...widths)).toBeLessThanOrEqual(400);
   });
 });
+
+describe('ProjectSidebar Search Integration', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('debounces search API call', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 't' } });
+    fireEvent.change(searchInput, { target: { value: 'te' } });
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    // Should not call immediately
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    // Wait for debounce (300ms)
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    }, { timeout: 500 });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/search?q=test')
+    );
+  });
+
+  it('displays search results from API', async () => {
+    const mockResults = [
+      {
+        session_id: 'session-1',
+        session_label: 'First session',
+        matches: [
+          {
+            content: 'This is a test message with search term',
+            role: 'user',
+            timestamp: '2024-01-01T12:00:00',
+          },
+        ],
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: mockResults }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 results across 1 sessions/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('First session')).toBeInTheDocument();
+    expect(screen.getByText(/This is a test message with search term/i)).toBeInTheDocument();
+  });
+
+  it('highlights search term in results', async () => {
+    const mockResults = [
+      {
+        session_id: 'session-1',
+        session_label: 'Test Session',
+        matches: [
+          {
+            content: 'This contains the search word',
+            role: 'user',
+            timestamp: '2024-01-01T12:00:00',
+          },
+        ],
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: mockResults }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'search' } });
+
+    await waitFor(() => {
+      const highlighted = document.querySelector('.search-highlight');
+      expect(highlighted).toBeInTheDocument();
+      expect(highlighted?.textContent).toBe('search');
+    });
+  });
+
+  it('shows empty state when no API results', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No results for 'nonexistent'/i)).toBeInTheDocument();
+    });
+  });
+
+  it('calls onSelectTab when search result clicked', async () => {
+    const mockResults = [
+      {
+        session_id: 'session-2',
+        session_label: 'Second session',
+        matches: [
+          {
+            content: 'Implementing search',
+            role: 'user',
+            timestamp: '2024-01-01T12:00:00',
+          },
+        ],
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: mockResults }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'search' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Implementing search/i)).toBeInTheDocument();
+    });
+
+    const resultItem = screen.getByText(/Implementing search/i).closest('.search-result-item');
+    expect(resultItem).toBeInTheDocument();
+
+    fireEvent.click(resultItem!);
+
+    expect(defaultProps.onSelectProject).toHaveBeenCalledWith('/test/project1');
+    expect(defaultProps.onSelectTab).toHaveBeenCalledWith('/test/project1', 'session-2');
+  });
+
+  it('returns to normal session list when search cleared', async () => {
+    const mockResults = [
+      {
+        session_id: 'session-1',
+        session_label: 'Test Session',
+        matches: [
+          {
+            content: 'Test content',
+            role: 'user',
+            timestamp: '2024-01-01T12:00:00',
+          },
+        ],
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: mockResults }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    // Perform search
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 results across 1 sessions/i)).toBeInTheDocument();
+    });
+
+    // Clear search
+    const clearButton = screen.getByLabelText('Clear search');
+    fireEvent.click(clearButton);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/1 results across 1 sessions/i)).not.toBeInTheDocument();
+    });
+
+    // Normal session list should be visible
+    expect(screen.getByText('Project 1')).toBeInTheDocument();
+  });
+
+  it('groups multiple matches from same session', async () => {
+    const mockResults = [
+      {
+        session_id: 'session-1',
+        session_label: 'Test Session',
+        matches: [
+          {
+            content: 'First test message',
+            role: 'user',
+            timestamp: '2024-01-01T12:00:00',
+          },
+          {
+            content: 'Second test message',
+            role: 'assistant',
+            timestamp: '2024-01-01T12:01:00',
+          },
+        ],
+      },
+    ];
+
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: mockResults }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/2 results across 1 sessions/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/First test message/i)).toBeInTheDocument();
+    expect(screen.getByText(/Second test message/i)).toBeInTheDocument();
+  });
+
+  it('handles search API errors gracefully', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+    renderWithToast(<ProjectSidebar {...defaultProps} />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    }, { timeout: 500 });
+
+    // Should show empty state
+    await waitFor(() => {
+      expect(screen.getByText(/No results for 'test'/i)).toBeInTheDocument();
+    });
+  });
+
+  it('includes project path in search when active project selected', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+
+    renderWithToast(<ProjectSidebar {...defaultProps} activeProjectPath="/test/project1" />);
+    const searchInput = screen.getByPlaceholderText('Search sessions...');
+
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('project=%2Ftest%2Fproject1')
+      );
+    }, { timeout: 500 });
+  });
+});

@@ -11,6 +11,18 @@ interface AvailableProject {
   path: string;
 }
 
+interface SearchMatch {
+  content: string;
+  role: string;
+  timestamp: string;
+}
+
+interface SearchResult {
+  session_id: string;
+  session_label: string;
+  matches: SearchMatch[];
+}
+
 interface ProjectSidebarProps {
   projects: ProjectEntry[];
   activeProjectPath: string | null;
@@ -53,6 +65,8 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([]);
   const [filterQuery, setFilterQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => {
     try {
@@ -69,6 +83,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<number>(0);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-expand active project on mount
   useEffect(() => {
@@ -187,6 +202,55 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     }
   };
 
+  const performSearch = useCallback(async (query: string) => {
+    if (!query || query.trim().length === 0) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const params = new URLSearchParams({ q: query });
+      if (activeProjectPath) {
+        params.append('project', activeProjectPath);
+      }
+      const response = await fetch(`${SOCKET_URL}/api/search?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.results || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [activeProjectPath]);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (searchQuery.trim().length > 0) {
+      searchTimeoutRef.current = setTimeout(() => {
+        performSearch(searchQuery);
+      }, 300);
+    } else {
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, performSearch]);
+
   const handleOpenPicker = () => {
     setShowPicker(true);
     fetchAvailableProjects();
@@ -271,6 +335,29 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     onSelectTab(projectPath, sessionId);
   };
 
+  const handleSearchResultClick = (sessionId: string) => {
+    // Find the project that contains this session
+    const project = projects.find(p =>
+      p.tabs.some(tab => tab.sessionId === sessionId)
+    );
+
+    if (project) {
+      handleSelectSession(project.path, sessionId);
+    }
+  };
+
+  const highlightMatch = (text: string, query: string): React.ReactNode => {
+    if (!query) return text;
+
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return parts.map((part, index) => {
+      if (part.toLowerCase() === query.toLowerCase()) {
+        return <mark key={index} className="search-highlight">{part}</mark>;
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   const isProjectActive = (projectPath: string): boolean => {
     return projectPath === activeProjectPath;
   };
@@ -339,7 +426,55 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       </div>
 
       <div className="project-list">
-        {projects.length === 0 ? (
+        {searchQuery && searchResults.length > 0 ? (
+          <div className="search-results">
+            <div className="search-results-header">
+              {searchResults.reduce((acc, r) => acc + r.matches.length, 0)} results across {searchResults.length} sessions
+            </div>
+            {searchResults.map((result, resultIndex) => (
+              <div
+                key={result.session_id}
+                className="search-result-group"
+                style={{ animationDelay: `${resultIndex * 30}ms` }}
+              >
+                <div className="search-result-session-header">
+                  {result.session_label.length > 60
+                    ? result.session_label.slice(0, 60) + '...'
+                    : result.session_label}
+                </div>
+                {result.matches.map((match, matchIndex) => (
+                  <div
+                    key={`${result.session_id}-${matchIndex}`}
+                    className="search-result-item"
+                    onClick={() => handleSearchResultClick(result.session_id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSearchResultClick(result.session_id);
+                      }
+                    }}
+                  >
+                    <div className="search-result-content">
+                      {highlightMatch(match.content, searchQuery)}
+                    </div>
+                    <div className="search-result-meta">
+                      <span className="search-result-role">{match.role}</span>
+                      <span className="search-result-timestamp">
+                        {new Date(match.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : searchQuery && !isSearching && searchResults.length === 0 ? (
+          <div className="search-empty-state">
+            No results for &apos;{searchQuery}&apos;
+          </div>
+        ) : projects.length === 0 ? (
           <div className="project-empty-state">
             <p className="project-empty-message">No projects open</p>
             <button
