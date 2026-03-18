@@ -6,12 +6,6 @@
 
 <img src="docs/demo.gif" alt="cc+ demo" width="800">
 
-```sh
-curl -fsSL https://ccplus.run/install | sh
-```
-
-Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) subscription.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
 
