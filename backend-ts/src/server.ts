@@ -296,14 +296,14 @@ app.get("/api/search", (req: Request, res: Response) => {
   try {
     const query = (req.query.q as string) || "";
     if (!query || query.trim().length === 0) {
-      return res.json({ results: [] });
+      return res.json({ success: true, data: [] });
     }
-    const project = (req.query.project as string) || undefined;
-    const results = database.searchConversations(query.trim(), project);
-    res.json({ results });
+    const limit = parseInt((req.query.limit as string) || "20", 10);
+    const results = database.semanticSearchConversations(query.trim(), limit);
+    res.json({ success: true, data: results });
   } catch (err) {
     log.error("Failed to search conversations", { query: req.query.q, error: String(err) });
-    res.status(500).json({ error: "Failed to search conversations" });
+    res.status(500).json({ success: false, error: "Failed to search conversations" });
   }
 });
 
