@@ -27,14 +27,13 @@
         }
 
         body {
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'DM Sans', sans-serif;
             background: var(--warm-black);
             color: var(--warm-white);
             line-height: 1.6;
             overflow-x: hidden;
             position: relative;
         }
-
 
         .container {
             max-width: 1400px;
@@ -46,7 +45,7 @@
 
         /* Navigation */
         nav {
-            padding: clamp(1.5rem, 3vw, 3rem) 0;
+            padding: clamp(1.5rem, 3vw, 2rem) 0;
             opacity: 0;
             animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
         }
@@ -86,18 +85,18 @@
             color: var(--accent);
         }
 
-        /* Hero */
+        /* Hero - Compact */
         .hero {
-            padding: clamp(1rem, 3vw, 2rem) 0;
+            padding: clamp(1rem, 2vw, 2rem) 0 clamp(1.5rem, 3vw, 2rem) 0;
         }
 
         .hero h1 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-size: clamp(2rem, 5vw, 3rem);
             font-weight: 700;
-            line-height: 0.9;
-            letter-spacing: -0.04em;
-            margin-bottom: clamp(1rem, 2vw, 1.5rem);
+            line-height: 1;
+            letter-spacing: -0.03em;
+            margin-bottom: clamp(0.75rem, 1.5vw, 1rem);
             max-width: 70%;
             position: relative;
         }
@@ -117,12 +116,12 @@
         }
 
         .hero .subtitle {
-            font-size: clamp(1rem, 2vw, 1.25rem);
+            font-size: clamp(0.875rem, 1.5vw, 1rem);
             color: var(--warm-gray-light);
-            max-width: 50ch;
-            margin-bottom: clamp(1.5rem, 3vw, 2rem);
+            max-width: 60ch;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
             font-weight: 400;
-            line-height: 1.6;
+            line-height: 1.5;
             opacity: 0;
             animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
         }
@@ -130,17 +129,18 @@
         .hero-cta-group {
             display: flex;
             align-items: center;
-            gap: 2rem;
+            gap: 1.5rem;
             flex-wrap: wrap;
             opacity: 0;
             animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
         }
 
         .hero-cta {
             display: inline-flex;
             align-items: center;
-            gap: 1rem;
-            padding: 0.875rem 1.75rem;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
             background: var(--accent);
             color: var(--warm-black);
             font-weight: 700;
@@ -154,148 +154,650 @@
 
         .hero-cta:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 32px oklch(72% 0.19 45 / 0.5);
+            box-shadow: 0 8px 24px oklch(72% 0.19 45 / 0.4);
         }
 
         .hero-note {
             font-size: clamp(0.75rem, 1.2vw, 0.875rem);
             color: var(--warm-gray-light);
-            font-weight: 300;
+            font-weight: 400;
         }
 
-        /* Divider stripe */
-        .stripe {
-            width: 100%;
-            height: 3px;
-            background: var(--accent);
-            margin: clamp(3rem, 5vw, 4rem) 0;
+        /* App Replica Container */
+        .app-window {
+            margin: 0 auto clamp(2rem, 4vw, 3rem) auto;
+            max-width: 1400px;
+            background: oklch(20% 0.01 60);
+            border: 1px solid oklch(30% 0.01 60);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 24px 64px oklch(0% 0 0 / 0.6);
             opacity: 0;
-            animation: expand 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
-            transform-origin: left;
+            animation: slideUpScale 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
         }
 
-
-        /* Features */
-        .features {
-            padding: clamp(3rem, 6vw, 6rem) 0;
+        .window-controls {
+            height: 40px;
+            background: oklch(18% 0.01 60);
+            border-bottom: 1px solid oklch(25% 0.01 60);
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            gap: 0.5rem;
         }
 
-        .feature {
-            margin-bottom: clamp(4rem, 6vw, 6rem);
-            position: relative;
-            padding-left: 4px;
-            border-left: 4px solid var(--accent);
-            opacity: 0;
+        .window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: oklch(40% 0.05 60);
         }
 
-        .feature.visible {
-            animation: slideInFeature 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
+        .window-dot-red { background: oklch(55% 0.15 25); }
+        .window-dot-yellow { background: oklch(75% 0.12 85); }
+        .window-dot-green { background: oklch(65% 0.12 145); }
 
-        .feature-number {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(6rem, 12vw, 10rem);
-            font-weight: 300;
-            color: var(--accent);
-            opacity: 0.08;
-            line-height: 1;
-            letter-spacing: -0.05em;
-            position: absolute;
-            top: -2rem;
-            left: 2rem;
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        .feature:nth-child(even) .feature-number {
-            right: 2rem;
-            left: auto;
-            text-align: right;
-        }
-
-        .feature-content {
-            padding: 2rem 2rem 2rem 3rem;
-            max-width: 60ch;
-        }
-
-        .feature:nth-child(even) .feature-content {
-            margin-left: auto;
-            text-align: right;
-            padding: 2rem 3rem 2rem 2rem;
-        }
-
-        .feature-content h3 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(1.5rem, 3vw, 2.5rem);
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-        }
-
-        .feature-content p {
-            font-size: clamp(1rem, 1.8vw, 1.125rem);
-            color: var(--warm-gray-light);
-            line-height: 1.7;
-            font-weight: 300;
-        }
-
-        /* How It Works */
-        .how-it-works {
-            padding: clamp(4rem, 6vw, 6rem) 0;
-            background: var(--warm-gray);
-            position: relative;
-            clip-path: polygon(0 3%, 100% 0, 100% 97%, 0 100%);
-            margin: clamp(3rem, 5vw, 4rem) 0;
-        }
-
-        .how-it-works::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: var(--accent);
-        }
-
-        .how-it-works h2 {
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2rem, 4vw, 3.5rem);
-            font-weight: 700;
-            margin-bottom: clamp(3rem, 6vw, 6rem);
-            letter-spacing: -0.03em;
-        }
-
-        .steps {
+        /* App Replica - PRESERVED EXACTLY */
+        .app-replica {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: clamp(3rem, 5vw, 4rem);
-            margin-bottom: clamp(3rem, 6vw, 5rem);
+            grid-template-columns: 280px 1fr;
+            height: 600px;
+            background: var(--warm-black);
         }
 
-        .step h3 {
+        /* Sidebar */
+        .app-sidebar {
+            background: oklch(18% 0.01 60);
+            border-right: 1px solid oklch(25% 0.01 60);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid oklch(25% 0.01 60);
+        }
+
+        .sidebar-brand {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(1.5rem, 2.5vw, 2rem);
+            font-size: 1.5rem;
             font-weight: 700;
-            margin-bottom: 1rem;
             color: var(--accent);
             letter-spacing: -0.02em;
         }
 
-        .step p {
-            font-size: clamp(1rem, 1.8vw, 1.125rem);
+        .sidebar-projects {
+            flex: 1;
+            padding: 1rem 0;
+        }
+
+        .sidebar-project {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-project-header {
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
             color: var(--warm-gray-light);
-            font-weight: 300;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .sidebar-project-header:hover {
+            background: oklch(22% 0.01 60);
+        }
+
+        .sidebar-chevron {
+            font-size: 0.75rem;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-project.expanded .sidebar-chevron {
+            transform: rotate(90deg);
+        }
+
+        .sidebar-project-name {
+            flex: 1;
+        }
+
+        .sidebar-activity-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .sidebar-sessions {
+            padding-left: 1rem;
+        }
+
+        .sidebar-session {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            color: var(--warm-gray-light);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-session:hover {
+            background: oklch(22% 0.01 60);
+            color: var(--warm-white);
+        }
+
+        .sidebar-session.active {
+            background: oklch(25% 0.02 60);
+            color: var(--warm-white);
+            font-weight: 600;
+        }
+
+        .sidebar-session-label {
+            flex: 1;
+        }
+
+        .sidebar-session-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .sidebar-session:not(.active) .sidebar-session-dot {
+            display: none;
+        }
+
+        /* Main Content */
+        .app-main {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            background: var(--warm-black);
+            overflow: hidden;
+        }
+
+        /* Tab Bar */
+        .app-tabs {
+            display: flex;
+            gap: 0;
+            background: oklch(18% 0.01 60);
+            border-bottom: 1px solid oklch(25% 0.01 60);
+            overflow-x: auto;
+        }
+
+        .app-tab {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--warm-gray-light);
+            background: oklch(18% 0.01 60);
+            border-right: 1px solid oklch(25% 0.01 60);
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .app-tab:hover {
+            background: oklch(22% 0.01 60);
+            color: var(--warm-white);
+        }
+
+        .app-tab.active {
+            background: var(--warm-black);
+            color: var(--warm-white);
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .app-tab-new {
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--warm-gray-light);
+            background: oklch(18% 0.01 60);
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .app-tab-new:hover {
+            background: oklch(22% 0.01 60);
+            color: var(--warm-white);
+        }
+
+        /* Content Area */
+        .app-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Chat Panel */
+        .app-chat {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid oklch(25% 0.01 60);
+        }
+
+        .app-chat-panel {
+            display: none;
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .app-chat-panel.active {
+            display: flex;
+        }
+
+        .chat-message {
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
             line-height: 1.6;
+            color: var(--warm-white);
+        }
+
+        .chat-message.user {
+            background: oklch(22% 0.02 220);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .chat-message.assistant {
+            background: oklch(20% 0.01 60);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .app-input-bar {
+            padding: 1rem;
+            border-top: 1px solid oklch(25% 0.01 60);
+        }
+
+        .app-input-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .app-input-wrapper {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: oklch(20% 0.01 60);
+            border: 1px solid oklch(30% 0.01 60);
+            border-radius: 6px;
+        }
+
+        .app-input-text {
+            color: var(--warm-gray-light);
+            font-size: 0.875rem;
+        }
+
+        .app-send-btn {
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .app-send-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .app-send-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Activity Panels */
+        .app-activity {
+            background: oklch(18% 0.01 60);
+            position: relative;
+        }
+
+        .app-activity-panel {
+            display: none;
+            padding: 1rem;
+            overflow-y: auto;
+            height: 100%;
+        }
+
+        .app-activity-panel.active {
+            display: block;
+        }
+
+        .activity-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .activity-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--warm-gray-light);
+        }
+
+        .activity-count {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--accent);
+            background: oklch(25% 0.02 60);
+            padding: 0.125rem 0.5rem;
+            border-radius: 3px;
+        }
+
+        .activity-content {
+            font-size: 0.75rem;
+        }
+
+        .agent-card {
+            background: oklch(22% 0.01 60);
+            border: 1px solid oklch(30% 0.01 60);
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            border-radius: 4px;
+        }
+
+        .agent-card.running {
+            border-left: 3px solid var(--accent);
+        }
+
+        .agent-type {
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 0.25rem;
+        }
+
+        .agent-desc {
+            color: var(--warm-gray-light);
+            font-size: 0.7rem;
+            line-height: 1.4;
+            margin-bottom: 0.75rem;
+        }
+
+        .agent-children {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .tool-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: oklch(20% 0.01 60);
+            border-radius: 3px;
+        }
+
+        .tool-row.completed {
+            opacity: 0.7;
+        }
+
+        .tool-row.running {
+            background: oklch(25% 0.02 60);
+        }
+
+        .tool-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .tool-label {
+            font-weight: 600;
+            color: var(--warm-white);
+            font-size: 0.7rem;
+        }
+
+        .tool-target {
+            color: var(--warm-gray-light);
+            font-size: 0.7rem;
+        }
+
+        .tool-status-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tool-status-icon.completed {
+            background: oklch(65% 0.12 145);
+        }
+
+        .tool-status-icon.running {
+            background: var(--accent);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .tool-time {
+            font-size: 0.625rem;
+            color: var(--accent-dim);
+            margin-left: auto;
+        }
+
+        /* Browser Preview */
+        .browser-preview {
+            background: var(--warm-white);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .browser-bar {
+            background: oklch(90% 0.01 60);
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid oklch(85% 0.01 60);
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .browser-dot-sm {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: oklch(70% 0.05 60);
+        }
+
+        .browser-url-bar {
+            flex: 1;
+            background: white;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid oklch(85% 0.01 60);
+        }
+
+        .browser-url {
+            font-size: 0.75rem;
+            color: oklch(40% 0.01 60);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .browser-content {
+            flex: 1;
+            overflow-y: auto;
+            background: white;
+        }
+
+        .preview-page {
+            padding: 2rem;
+            color: oklch(20% 0 0);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        .preview-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid oklch(85% 0.01 60);
+        }
+
+        .preview-logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: oklch(15% 0 0);
+        }
+
+        .preview-nav-links {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.875rem;
+            color: oklch(40% 0 0);
+        }
+
+        .preview-hero {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .preview-heading {
+            font-size: 2rem;
+            font-weight: 700;
+            color: oklch(15% 0 0);
+            margin-bottom: 1rem;
+        }
+
+        .preview-subtext {
+            font-size: 1rem;
+            color: oklch(40% 0 0);
+            margin-bottom: 1.5rem;
+        }
+
+        .preview-btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: oklch(55% 0.15 260);
+            color: white;
+            font-weight: 600;
+            border-radius: 6px;
+        }
+
+        .preview-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        .preview-card {
+            background: oklch(95% 0.01 60);
+            border: 1px solid oklch(85% 0.01 60);
+            border-radius: 8px;
+            height: 120px;
+        }
+
+        /* Features Grid - NEW COMPACT DESIGN */
+        .features {
+            padding: clamp(2rem, 4vw, 3rem) 0;
+        }
+
+        .features h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            margin-bottom: clamp(1.5rem, 3vw, 2rem);
+            letter-spacing: -0.02em;
+            text-align: center;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: clamp(2rem, 4vw, 3rem);
+        }
+
+        @media (max-width: 900px) {
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .feature-card {
+            background: oklch(20% 0.01 60);
+            border: 1px solid oklch(30% 0.01 60);
+            border-radius: 6px;
+            padding: 1.25rem;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-dim);
+        }
+
+        .feature-card h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.01em;
+            color: var(--warm-white);
+        }
+
+        .feature-card p {
+            font-size: 0.875rem;
+            color: var(--warm-gray-light);
+            line-height: 1.5;
+        }
+
+        /* Quick Start */
+        .quick-start {
+            background: oklch(18% 0.01 60);
+            padding: clamp(2rem, 4vw, 3rem) 0;
+            margin: clamp(2rem, 4vw, 3rem) 0;
+        }
+
+        .quick-start h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
+            letter-spacing: -0.02em;
+            text-align: center;
         }
 
         .install-command {
             background: var(--warm-black);
-            padding: 2rem;
+            padding: 1.5rem 2rem;
             border: 2px solid var(--accent);
+            border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: clamp(0.875rem, 1.6vw, 1rem);
+            font-size: clamp(0.875rem, 1.5vw, 1rem);
             color: var(--accent);
             overflow-x: auto;
             position: relative;
@@ -303,6 +805,8 @@
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
+            max-width: 800px;
+            margin: 0 auto;
         }
 
         .install-command code {
@@ -330,6 +834,7 @@
             cursor: pointer;
             transition: transform 0.2s;
             flex-shrink: 0;
+            border-radius: 4px;
         }
 
         .copy-btn:hover {
@@ -340,40 +845,40 @@
             transform: scale(0.95);
         }
 
-        /* CTA */
+        /* CTA - Compact */
         .cta {
-            padding: clamp(4rem, 6vw, 6rem) 0 clamp(6rem, 8vw, 8rem) 0;
+            padding: clamp(2rem, 4vw, 3rem) 0;
             text-align: center;
         }
 
         .cta h2 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-size: clamp(1.5rem, 3vw, 2rem);
             font-weight: 700;
-            margin-bottom: clamp(3rem, 6vw, 5rem);
-            letter-spacing: -0.03em;
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
+            letter-spacing: -0.02em;
         }
 
         .cta-buttons {
             display: flex;
-            gap: 2rem;
+            gap: 1.5rem;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 2rem;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 1rem;
-            padding: 1.25rem 2.5rem;
-            font-family: 'JetBrains Mono', monospace;
+            gap: 0.75rem;
+            padding: 0.875rem 1.75rem;
+            font-family: 'DM Sans', sans-serif;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             text-decoration: none;
-            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            font-size: clamp(0.875rem, 1.2vw, 1rem);
             transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 4px;
         }
 
         .btn-primary {
@@ -389,11 +894,11 @@
         }
 
         .btn:hover {
-            transform: translateY(-3px);
+            transform: translateY(-2px);
         }
 
         .btn-primary:hover {
-            box-shadow: 0 12px 32px oklch(72% 0.19 45 / 0.5);
+            box-shadow: 0 8px 24px oklch(72% 0.19 45 / 0.4);
         }
 
         .btn-secondary:hover {
@@ -401,20 +906,14 @@
             color: var(--warm-black);
         }
 
-        .cta-note {
-            font-size: clamp(0.875rem, 1.4vw, 1rem);
-            color: var(--warm-gray-light);
-            font-weight: 300;
-        }
-
         /* Footer */
         footer {
-            padding: clamp(3rem, 5vw, 4rem) 0;
-            border-top: 2px solid var(--warm-gray);
+            padding: clamp(2rem, 4vw, 3rem) 0;
+            border-top: 1px solid oklch(25% 0.01 60);
             text-align: center;
-            font-size: clamp(0.75rem, 1.5vw, 0.875rem);
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
             color: var(--warm-gray-light);
-            font-weight: 300;
+            font-weight: 400;
         }
 
         footer a {
@@ -442,7 +941,7 @@
         @keyframes slideInLeft {
             from {
                 opacity: 0;
-                transform: translateX(-40px);
+                transform: translateX(-30px);
             }
             to {
                 opacity: 1;
@@ -462,33 +961,11 @@
         @keyframes slideUpScale {
             from {
                 opacity: 0;
-                transform: translateY(60px) scale(0.95);
+                transform: translateY(40px) scale(0.97);
             }
             to {
                 opacity: 1;
                 transform: translateY(0) scale(1);
-            }
-        }
-
-        @keyframes slideInFeature {
-            from {
-                opacity: 0;
-                transform: translateX(-40px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes expand {
-            from {
-                transform: scaleX(0);
-                opacity: 0;
-            }
-            to {
-                transform: scaleX(1);
-                opacity: 1;
             }
         }
 
@@ -502,11 +979,19 @@
         }
 
         @keyframes blink {
-            0%, 50% {
-                opacity: 1;
-            }
-            51%, 100% {
+            50% {
                 opacity: 0;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .app-replica {
+                grid-template-columns: 240px 1fr;
+            }
+
+            .app-content {
+                grid-template-columns: 1fr 320px;
             }
         }
 
@@ -515,824 +1000,33 @@
                 max-width: 100%;
             }
 
-            .feature:nth-child(even) .feature-content {
-                text-align: left;
-                margin-left: 0;
-                padding: 2rem 2rem 2rem 3rem;
-            }
-
-            .feature-number {
-                font-size: clamp(8rem, 25vw, 12rem);
-            }
-        }
-
-        /* APP REPLICA */
-        .app-replica-section {
-            margin-top: clamp(2rem, 3vw, 3rem);
-            opacity: 0;
-            animation: slideUpScale 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
-        }
-
-        .app-replica-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: #141316;
-            border-radius: 12px;
-            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
-            overflow: hidden;
-        }
-
-        .app-window-controls {
-            display: flex;
-            gap: 8px;
-            padding: 12px;
-            background: #1E1D20;
-            border-bottom: 1px solid #332F2C;
-        }
-
-        .window-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-
-        .window-dot-red {
-            background: #ff5f56;
-        }
-
-        .window-dot-yellow {
-            background: #ffbd2e;
-        }
-
-        .window-dot-green {
-            background: #27c93f;
-        }
-
-        .app-replica {
-            display: grid;
-            grid-template-columns: 260px 1fr;
-            height: 600px;
-            background: #141316;
-        }
-
-        /* Sidebar */
-        .app-sidebar {
-            background: #1E1D20;
-            border-right: 1px solid #332F2C;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-header {
-            padding: 12px 16px;
-            border-bottom: 1px solid #332F2C;
-        }
-
-        .sidebar-brand {
-            font-family: 'Crimson Pro', serif;
-            font-style: italic;
-            font-size: 18px;
-            font-weight: 600;
-            color: #E8E4DF;
-            margin: 0;
-        }
-
-        .sidebar-projects {
-            flex: 1;
-            overflow-y: auto;
-            padding: 4px 0;
-        }
-
-        .sidebar-project {
-            margin-bottom: 2px;
-        }
-
-        .sidebar-project-header {
-            display: flex;
-            align-items: center;
-            padding: 6px 12px;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-
-        .sidebar-project-header:hover {
-            background: rgba(232, 228, 223, 0.05);
-        }
-
-        .sidebar-chevron {
-            font-size: 10px;
-            color: #8A8680;
-            margin-right: 6px;
-            transition: transform 0.15s;
-        }
-
-        .sidebar-project.expanded .sidebar-chevron {
-            transform: rotate(90deg);
-        }
-
-        .sidebar-project-name {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            font-weight: 700;
-            color: #E8E4DF;
-            flex: 1;
-        }
-
-        .sidebar-activity-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #F07B3F;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        .sidebar-sessions {
-            display: none;
-        }
-
-        .sidebar-project.expanded .sidebar-sessions {
-            display: block;
-        }
-
-        .sidebar-session {
-            display: flex;
-            align-items: center;
-            padding: 4px 12px 4px 32px;
-            cursor: pointer;
-            border-left: 2px solid transparent;
-            transition: background 0.15s;
-        }
-
-        .sidebar-session:hover {
-            background: rgba(232, 228, 223, 0.05);
-        }
-
-        .sidebar-session.active {
-            background: rgba(232, 228, 223, 0.05);
-            border-left-color: #F07B3F;
-        }
-
-        .sidebar-session-label {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 12px;
-            color: #B8B4AF;
-            flex: 1;
-        }
-
-        .sidebar-session.active .sidebar-session-label {
-            color: #E8E4DF;
-            font-weight: 500;
-        }
-
-        .sidebar-session-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #F07B3F;
-            margin-left: 6px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        /* Main panel */
-        .app-main {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* Tab bar */
-        .app-tab-bar {
-            display: flex;
-            align-items: stretch;
-            border-bottom: 1px solid #332F2C;
-            background: #1E1D20;
-            min-height: 32px;
-        }
-
-        .app-tab {
-            padding: 0 16px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            font-weight: 400;
-            color: #8A8680;
-            border-bottom: 1px solid transparent;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            transition: color 0.2s;
-            white-space: nowrap;
-        }
-
-        .app-tab:hover {
-            color: #B8B4AF;
-        }
-
-        .app-tab.active {
-            color: #E8E4DF;
-            border-bottom-color: #F07B3F;
-        }
-
-        .app-tab-new {
-            width: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: none;
-            border: none;
-            color: #8A8680;
-            font-size: 14px;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .app-tab-new:hover {
-            color: #B8B4AF;
-        }
-
-        /* Chat + Activity layout */
-        .app-main {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            grid-template-columns: 1fr 280px;
-        }
-
-        .app-tab-bar {
-            grid-column: 1 / -1;
-        }
-
-        .app-chat {
-            padding: 16px;
-            overflow-y: auto;
-            background: #141316;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .app-activity {
-            background: #1E1D20;
-            border-left: 1px solid #332F2C;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Chat messages */
-        .chat-message {
-            margin-bottom: 12px;
-            line-height: 1.5;
-        }
-
-        .chat-message.user {
-            font-style: italic;
-            color: #B8B4AF;
-            border-left: 2px solid #F07B3F;
-            padding-left: 12px;
-            font-size: 14px;
-        }
-
-        .chat-message.assistant {
-            color: #E8E4DF;
-            font-size: 14px;
-        }
-
-        .streaming-cursor {
-            display: inline-block;
-            width: 1.5px;
-            height: 1.2em;
-            background: #F07B3F;
-            margin-left: 2px;
-            border-radius: 0.5px;
-            vertical-align: text-bottom;
-            animation: cursorPulse 1.5s ease-in-out infinite;
-        }
-
-        @keyframes cursorPulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.3;
-            }
-        }
-
-        /* Tool log */
-        .tool-log {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            margin-top: 8px;
-        }
-
-        .tool-log-entry {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-family: 'SF Mono', 'Monaco', monospace;
-            font-size: 11px;
-            color: #B8B4AF;
-            padding: 1px 0;
-        }
-
-        .tool-dot {
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .tool-dot.completed {
-            background: #A3D977;
-        }
-
-        .tool-dot.running {
-            background: #F07B3F;
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-
-        .tool-name {
-            font-weight: 600;
-        }
-
-        .tool-file {
-            color: #8A8680;
-        }
-
-        .tool-duration {
-            color: #8A8680;
-            opacity: 0.7;
-            margin-left: auto;
-        }
-
-        .tool-spinner {
-            width: 8px;
-            height: 8px;
-            border: 1px solid #332F2C;
-            border-top-color: #F07B3F;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-            margin-left: auto;
-        }
-
-        /* Activity panel */
-        .activity-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 12px 0;
-            background: #141316;
-        }
-
-        .activity-title {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            color: #E8E4DF;
-        }
-
-        .activity-count {
-            background: #1E1D2A;
-            color: #F07B3F;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-family: 'SF Mono', 'Monaco', monospace;
-            border: 1px solid rgba(240, 123, 63, 0.12);
-        }
-
-        .activity-tabs {
-            display: flex;
-            border-bottom: 1px solid #332F2C;
-            background: #141316;
-        }
-
-        .activity-tab {
-            flex: 1;
-            padding: 8px 12px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #8A8680;
-            border-bottom: 2px solid transparent;
-            text-align: center;
-            cursor: pointer;
-            transition: color 0.2s, border-color 0.2s;
-        }
-
-        .activity-tab:hover {
-            color: #B8B4AF;
-        }
-
-        .activity-tab.active {
-            color: #E8E4DF;
-            border-bottom-color: #F07B3F;
-        }
-
-        .activity-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px;
-        }
-
-        /* Agent card */
-        .agent-card {
-            background: #1E1D2A;
-            border: 1px solid #332F2C;
-            border-radius: 8px;
-            padding: 12px 14px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .agent-card::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            border-radius: 8px 0 0 8px;
-            background: #F07B3F;
-            box-shadow: 0 0 8px rgba(240, 123, 63, 0.5);
-        }
-
-        .agent-card.running {
-            border-color: #F07B3F;
-            background: rgba(240, 123, 63, 0.03);
-        }
-
-        .agent-card.running::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(
-                90deg,
-                transparent 0%,
-                rgba(240, 123, 63, 0.08) 50%,
-                transparent 100%
-            );
-            background-size: 200% 100%;
-            animation: agentShimmer 2.5s ease-in-out infinite;
-            border-radius: inherit;
-            pointer-events: none;
-        }
-
-        .agent-card.completed {
-            border-color: #332F2C;
-            background: #1E1D2A;
-        }
-
-        .agent-card.completed::before {
-            background: #A3D977;
-            box-shadow: none;
-        }
-
-        @keyframes agentShimmer {
-            0% {
-                background-position: 200% 0;
-            }
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        .agent-type {
-            font-family: 'SF Mono', 'Monaco', monospace;
-            font-size: 10px;
-            font-weight: 500;
-            color: #8A8680;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-
-        .agent-desc {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 13px;
-            color: #E8E4DF;
-            font-weight: 500;
-            margin-top: 4px;
-            line-height: 1.4;
-        }
-
-        .agent-children {
-            margin-top: 12px;
-            padding-left: 16px;
-            border-left: 2px solid rgba(240, 123, 63, 0.2);
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        /* Tool rows */
-        .tool-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 8px;
-            background: #1E1D20;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            transition: all 0.15s;
-        }
-
-        .tool-row:hover {
-            background: rgba(232, 228, 223, 0.05);
-            border-color: #332F2C;
-        }
-
-        .tool-row.running {
-            border-color: rgba(240, 123, 63, 0.12);
-        }
-
-        .tool-info {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            align-items: baseline;
-            gap: 4px;
-            font-family: 'SF Mono', 'Monaco', monospace;
-            font-size: 11px;
-        }
-
-        .tool-label {
-            font-weight: 600;
-            color: #E8E4DF;
-        }
-
-        .tool-target {
-            color: #B8B4AF;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .tool-status-icon {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .tool-status-icon.completed {
-            background: #A3D977;
-        }
-
-        .tool-status-icon.running {
-            border: 2px solid #C85B1F;
-            border-top-color: #F07B3F;
-            animation: toolSpin 0.6s linear infinite;
-            width: 12px;
-            height: 12px;
-            box-shadow: 0 0 8px rgba(240, 123, 63, 0.3);
-        }
-
-        @keyframes toolSpin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .tool-time {
-            font-family: 'SF Mono', 'Monaco', monospace;
-            font-size: 11px;
-            color: #8A8680;
-            opacity: 0.7;
-            flex-shrink: 0;
-        }
-
-        /* Session panel visibility */
-        .app-chat-panel {
-            display: none;
-            flex: 1;
-            overflow-y: auto;
-        }
-
-        .app-chat-panel.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .app-input-bar {
-            padding: 12px;
-            border-top: 1px solid #332F2C;
-            background: #1E1D2A;
-            flex-shrink: 0;
-        }
-
-        .app-input-row {
-            display: flex;
-            align-items: flex-end;
-            gap: 6px;
-        }
-
-        .app-input-wrapper {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            background: #141316;
-            border: 1px solid #332F2C;
-            border-radius: 3px;
-            padding: 8px 12px;
-        }
-
-        .app-input-text {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 13px;
-            color: #8A8680;
-        }
-
-        .app-send-btn {
-            width: 36px;
-            height: 36px;
-            background: #E8E4DF;
-            border: none;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            cursor: default;
-        }
-
-        .app-send-btn svg {
-            width: 16px;
-            height: 16px;
-            fill: #141316;
-        }
-
-        .app-activity-panel {
-            display: none;
-        }
-
-        .app-activity-panel.active {
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Mobile responsive */
-        @media (max-width: 900px) {
-            .app-replica {
-                grid-template-columns: 200px 1fr;
-                height: 500px;
-            }
-
-            .app-sidebar {
-                font-size: 12px;
-            }
-
-            .app-activity {
+            .app-window {
                 display: none;
             }
 
-            .app-main {
-                grid-template-columns: 1fr;
+            .nav-links {
+                gap: 1rem;
             }
-        }
 
-        @media (max-width: 640px) {
-            .app-replica-container {
-                transform: scale(0.85);
-                transform-origin: top center;
+            .nav-links a {
+                font-size: 0.75rem;
             }
-        }
-
-        .browser-preview {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #1E1D20;
-        }
-
-        .browser-bar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: #1E1D20;
-            border-bottom: 1px solid #332F2C;
-        }
-
-        .browser-dots {
-            display: flex;
-            gap: 4px;
-        }
-
-        .browser-dot-sm {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #332F2C;
-        }
-
-        .browser-url-bar {
-            flex: 1;
-            background: #141316;
-            border: 1px solid #332F2C;
-            border-radius: 4px;
-            padding: 4px 10px;
-        }
-
-        .browser-url {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            color: #8A8680;
-        }
-
-        .browser-content {
-            flex: 1;
-            background: #fafaf8;
-            overflow: hidden;
-        }
-
-        .preview-page {
-            padding: 16px;
-            height: 100%;
-        }
-
-        .preview-nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e8e6e3;
-        }
-
-        .preview-logo {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            font-weight: 700;
-            color: #1c1b1a;
-        }
-
-        .preview-nav-links {
-            display: flex;
-            gap: 12px;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            color: #6b6660;
-        }
-
-        .preview-hero {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-
-        .preview-heading {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 24px;
-            font-weight: 700;
-            color: #1c1b1a;
-            margin-bottom: 6px;
-        }
-
-        .preview-subtext {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 12px;
-            color: #6b6660;
-            margin-bottom: 12px;
-        }
-
-        .preview-btn {
-            display: inline-block;
-            background: #F07B3F;
-            color: white;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 6px 16px;
-            border-radius: 4px;
-        }
-
-        .preview-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-        }
-
-        .preview-card {
-            height: 60px;
-            background: #f0efed;
-            border: 1px solid #e8e6e3;
-            border-radius: 4px;
         }
     </style>
 </head>
 <body>
+    <!-- Navigation -->
     <nav>
         <div class="container">
             <a href="#" class="logo">cc+</a>
             <ul class="nav-links">
                 <li><a href="https://github.com/mjfuentes/ccplus">GitHub</a></li>
-                <li><a href="#download">Download</a></li>
+                <li><a href="https://github.com/mjfuentes/ccplus#readme">Docs</a></li>
             </ul>
         </div>
     </nav>
 
+    <!-- Hero -->
     <section class="hero">
         <div class="container">
             <h1>
@@ -1340,78 +1034,87 @@
                 <span class="line2">Miss nothing.</span>
             </h1>
             <p class="subtitle">
-                Claude Code with eyes. The open-source desktop app that shows you everything the terminal hides.
+                Claude Code with eyes. Multi-tab sessions. Real-time observability. Built-in browser. Free, open source.
             </p>
             <div class="hero-cta-group">
-                <a href="#download" class="hero-cta">Run it →</a>
-                <span class="hero-note">Free. Open-source. Built on Claude Code SDK.</span>
+                <a href="https://github.com/mjfuentes/ccplus/releases" class="hero-cta">
+                    Download for Mac
+                </a>
+                <span class="hero-note">Requires Claude Code CLI subscription</span>
             </div>
+        </div>
+    </section>
 
-            <!-- APP REPLICA -->
-            <div class="app-replica-section">
-                <div class="app-replica-container">
-                    <!-- macOS window controls -->
-                    <div class="app-window-controls">
-                        <span class="window-dot window-dot-red"></span>
-                        <span class="window-dot window-dot-yellow"></span>
-                        <span class="window-dot window-dot-green"></span>
-                    </div>
+    <!-- App Replica Window -->
+    <section class="app-showcase">
+        <div class="container">
+            <div class="app-window">
+                <div class="window-controls">
+                    <span class="window-dot window-dot-red"></span>
+                    <span class="window-dot window-dot-yellow"></span>
+                    <span class="window-dot window-dot-green"></span>
+                </div>
 
-                    <!-- App content -->
-                    <div class="app-replica">
-                        <!-- Sidebar -->
-                        <div class="app-sidebar">
-                            <div class="sidebar-header">
-                                <h2 class="sidebar-brand">cc+</h2>
-                            </div>
-                            <div class="sidebar-projects">
-                                <div class="sidebar-project expanded">
-                                    <div class="sidebar-project-header">
-                                        <span class="sidebar-chevron">▸</span>
-                                        <span class="sidebar-project-name">ccplus</span>
-                                        <span class="sidebar-activity-dot"></span>
-                                    </div>
-                                    <div class="sidebar-sessions">
-                                        <div class="sidebar-session active" onclick="switchSession(0)">
-                                            <span class="sidebar-session-label">Refactor auth module</span>
-                                            <span class="sidebar-session-dot"></span>
-                                        </div>
-                                        <div class="sidebar-session" onclick="switchSession(1)">
-                                            <span class="sidebar-session-label">Add unit tests</span>
-                                        </div>
-                                        <div class="sidebar-session" onclick="switchSession(2)">
-                                            <span class="sidebar-session-label">Preview</span>
-                                        </div>
-                                    </div>
+                <!-- App content -->
+                <div class="app-replica">
+                    <!-- Sidebar -->
+                    <div class="app-sidebar">
+                        <div class="sidebar-header">
+                            <h2 class="sidebar-brand">cc+</h2>
+                        </div>
+                        <div class="sidebar-projects">
+                            <div class="sidebar-project expanded">
+                                <div class="sidebar-project-header">
+                                    <span class="sidebar-chevron">▸</span>
+                                    <span class="sidebar-project-name">ccplus</span>
+                                    <span class="sidebar-activity-dot"></span>
                                 </div>
-                                <div class="sidebar-project">
-                                    <div class="sidebar-project-header">
-                                        <span class="sidebar-chevron">▸</span>
-                                        <span class="sidebar-project-name">my-api</span>
+                                <div class="sidebar-sessions">
+                                    <div class="sidebar-session active" onclick="switchSession(0)">
+                                        <span class="sidebar-session-label">Refactor auth module</span>
+                                        <span class="sidebar-session-dot"></span>
+                                    </div>
+                                    <div class="sidebar-session" onclick="switchSession(1)">
+                                        <span class="sidebar-session-label">Add unit tests</span>
+                                    </div>
+                                    <div class="sidebar-session" onclick="switchSession(2)">
+                                        <span class="sidebar-session-label">Preview</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Main panel -->
-                        <div class="app-main">
-                            <!-- Tab bar -->
-                            <div class="app-tab-bar">
-                                <div class="app-tab active" onclick="switchSession(0)">Refactor auth module</div>
-                                <div class="app-tab" onclick="switchSession(1)">Add unit tests</div>
-                                <div class="app-tab" onclick="switchSession(2)">Preview</div>
-                                <button class="app-tab-new">+</button>
-                            </div>
+                    <!-- Main Content -->
+                    <div class="app-main">
+                        <!-- Tab Bar -->
+                        <div class="app-tabs">
+                            <div class="app-tab active" onclick="switchSession(0)">Refactor auth module</div>
+                            <div class="app-tab" onclick="switchSession(1)">Add unit tests</div>
+                            <div class="app-tab" onclick="switchSession(2)">Preview</div>
+                            <button class="app-tab-new">+</button>
+                        </div>
 
-                            <!-- Chat panels (3 sessions) -->
+                        <!-- Content: Chat + Activity -->
+                        <div class="app-content">
+                            <!-- Chat Panels -->
                             <div class="app-chat">
-                                <!-- Session 1: Refactor auth module -->
+                                <!-- Session 1: Refactor auth -->
                                 <div class="app-chat-panel active" id="chat-0">
                                     <div class="chat-message user">
                                         Refactor the auth middleware to use JWT tokens instead of session cookies
                                     </div>
                                     <div class="chat-message assistant">
-                                        I'll refactor the auth middleware. Let me start by examining the current implementation.<span class="streaming-cursor"></span>
+                                        I'll refactor the auth middleware to JWT. Let me examine the current session-based implementation first.
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        Found the session middleware in <code>src/middleware/auth.ts</code>. It's using express-session with a Redis store. I'll replace it with jsonwebtoken and create a new token verification flow.
+                                    </div>
+                                    <div class="chat-message user">
+                                        Make sure to handle token refresh too
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        Good call. I'll implement a refresh token rotation pattern — short-lived access tokens (15min) with longer refresh tokens (7 days) stored in httpOnly cookies.
                                     </div>
                                 </div>
 
@@ -1421,11 +1124,20 @@
                                         Add unit tests for the database module, target 80% coverage
                                     </div>
                                     <div class="chat-message assistant">
-                                        I'll write comprehensive tests for the database module.<span class="streaming-cursor"></span>
+                                        I'll write comprehensive tests for the database module. Let me read the current implementation and existing tests.
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        The database module has 12 public methods. Current coverage is at 34%. I'll focus on the untested CRUD operations and edge cases first.
+                                    </div>
+                                    <div class="chat-message user">
+                                        Focus on the query builder, that's the most complex part
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        Agreed — the query builder has the most branching logic. Writing table-driven tests for all filter combinations now.
                                     </div>
                                 </div>
 
-                                <!-- Session 3: Preview -->
+                                <!-- Session 3: Browser Preview -->
                                 <div class="app-chat-panel" id="chat-2">
                                     <div class="browser-preview">
                                         <div class="browser-bar">
@@ -1463,7 +1175,7 @@
                                     </div>
                                 </div>
 
-                                <!-- Input bar -->
+                                <!-- Input Bar -->
                                 <div class="app-input-bar">
                                     <div class="app-input-row">
                                         <div class="app-input-wrapper">
@@ -1479,17 +1191,13 @@
                                 </div>
                             </div>
 
-                            <!-- Activity tree panels (3 sessions) -->
+                            <!-- Activity Panels -->
                             <div class="app-activity">
-                                <!-- Session 1: Refactor auth module -->
+                                <!-- Session 1 Activity -->
                                 <div class="app-activity-panel active" id="activity-0">
                                     <div class="activity-header">
                                         <span class="activity-title">Activity</span>
-                                        <span class="activity-count">12</span>
-                                    </div>
-                                    <div class="activity-tabs">
-                                        <div class="activity-tab active">TREE</div>
-                                        <div class="activity-tab">TOOLS</div>
+                                        <span class="activity-count">18</span>
                                     </div>
                                     <div class="activity-content">
                                         <div class="agent-card running">
@@ -1499,7 +1207,7 @@
                                                 <div class="tool-row completed">
                                                     <div class="tool-info">
                                                         <span class="tool-label">Read</span>
-                                                        <span class="tool-target">middleware.ts</span>
+                                                        <span class="tool-target">middleware/auth.ts</span>
                                                     </div>
                                                     <div class="tool-status-icon completed"></div>
                                                     <span class="tool-time">320ms</span>
@@ -1507,15 +1215,58 @@
                                                 <div class="tool-row completed">
                                                     <div class="tool-info">
                                                         <span class="tool-label">Read</span>
-                                                        <span class="tool-target">session.ts</span>
+                                                        <span class="tool-target">config/session.ts</span>
                                                     </div>
                                                     <div class="tool-status-icon completed"></div>
                                                     <span class="tool-time">180ms</span>
                                                 </div>
-                                                <div class="tool-row running">
+                                                <div class="tool-row completed">
                                                     <div class="tool-info">
                                                         <span class="tool-label">Edit</span>
-                                                        <span class="tool-target">middleware.ts</span>
+                                                        <span class="tool-target">middleware/auth.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">450ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Write</span>
+                                                        <span class="tool-target">utils/jwt.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">280ms</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="agent-card running">
+                                            <div class="agent-type">security-reviewer</div>
+                                            <div class="agent-desc">Review JWT implementation</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">utils/jwt.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">90ms</span>
+                                                </div>
+                                                <div class="tool-row running">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Grep</span>
+                                                        <span class="tool-target">token.*secret</span>
+                                                    </div>
+                                                    <div class="tool-status-icon running"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="agent-card running">
+                                            <div class="agent-type">code-reviewer</div>
+                                            <div class="agent-desc">Review auth changes</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row running">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Bash</span>
+                                                        <span class="tool-target">npm run typecheck</span>
                                                     </div>
                                                     <div class="tool-status-icon running"></div>
                                                 </div>
@@ -1524,15 +1275,11 @@
                                     </div>
                                 </div>
 
-                                <!-- Session 2: Add unit tests -->
+                                <!-- Session 2 Activity -->
                                 <div class="app-activity-panel" id="activity-1">
                                     <div class="activity-header">
                                         <span class="activity-title">Activity</span>
-                                        <span class="activity-count">24</span>
-                                    </div>
-                                    <div class="activity-tabs">
-                                        <div class="activity-tab active">TREE</div>
-                                        <div class="activity-tab">TOOLS</div>
+                                        <span class="activity-count">31</span>
                                     </div>
                                     <div class="activity-content">
                                         <div class="agent-card running">
@@ -1549,24 +1296,38 @@
                                                 </div>
                                                 <div class="tool-row completed">
                                                     <div class="tool-info">
-                                                        <span class="tool-label">Read</span>
-                                                        <span class="tool-target">database.test.ts</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">120ms</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
                                                         <span class="tool-label">Write</span>
                                                         <span class="tool-target">database.test.ts</span>
                                                     </div>
                                                     <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">380ms</span>
+                                                    <span class="tool-time">680ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Bash</span>
+                                                        <span class="tool-target">npm test -- --coverage</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">4.2s</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="agent-card running">
+                                            <div class="agent-type">code_agent</div>
+                                            <div class="agent-desc">Test query builder edge cases</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">query-builder.ts</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">110ms</span>
                                                 </div>
                                                 <div class="tool-row running">
                                                     <div class="tool-info">
-                                                        <span class="tool-label">Bash</span>
-                                                        <span class="tool-target">npm test</span>
+                                                        <span class="tool-label">Write</span>
+                                                        <span class="tool-target">query-builder.test.ts</span>
                                                     </div>
                                                     <div class="tool-status-icon running"></div>
                                                 </div>
@@ -1575,7 +1336,7 @@
                                     </div>
                                 </div>
 
-                                <!-- Session 3: Preview (no activity panel) -->
+                                <!-- Session 3 Activity (empty for Preview) -->
                                 <div class="app-activity-panel" id="activity-2"></div>
                             </div>
                         </div>
@@ -1585,141 +1346,74 @@
         </div>
     </section>
 
-    <div class="stripe"></div>
-
+    <!-- Features Grid - NEW COMPACT DESIGN -->
     <section class="features">
         <div class="container">
-            <div class="feature" data-feature>
-                <div class="feature-number">01</div>
-                <div class="feature-content">
+            <h2>Everything you need to see the process, not just the output</h2>
+            <div class="features-grid">
+                <div class="feature-card">
                     <h3>Multi-Tab Sessions</h3>
-                    <p>
-                        Browser-style tabs with Cmd+T, Cmd+W, Ctrl+Tab MRU cycling. Not a sidebar list — actual tabs you can rename, duplicate, reorder. Each tab is its own Claude Code session with separate context.
-                    </p>
+                    <p>Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Rename, duplicate, reorder. Each tab is its own Claude Code session.</p>
                 </div>
-            </div>
-
-            <div class="feature" data-feature>
-                <div class="feature-number">02</div>
-                <div class="feature-content">
+                <div class="feature-card">
                     <h3>Agent Observability</h3>
-                    <p>
-                        Real-time hierarchical tree of every agent spawn and tool call. Claude Code Desktop? Black box. You see output, not the process. cc+ shows nested agents, parallel tasks, tool chains — all visible.
-                    </p>
+                    <p>Real-time tree of every agent spawn and tool call. See the process, not just output.</p>
                 </div>
-            </div>
-
-            <div class="feature" data-feature>
-                <div class="feature-number">03</div>
-                <div class="feature-content">
+                <div class="feature-card">
                     <h3>Built-in Browser</h3>
-                    <p>
-                        Browser tabs live alongside chat tabs in the same tab bar. Dev server auto-detection: starts a localhost server → cc+ opens a tab. No context switching between app and browser.
-                    </p>
+                    <p>Browser tabs alongside chat. Dev server auto-detection opens tabs automatically.</p>
                 </div>
-            </div>
-
-            <div class="feature" data-feature>
-                <div class="feature-number">04</div>
-                <div class="feature-content">
+                <div class="feature-card">
                     <h3>Analytics Dashboard</h3>
-                    <p>
-                        Cost trends over 7/30/90 days per project. Tool success rates, token usage, duration tracking. Know where your money goes. Claude Code Desktop has no analytics.
-                    </p>
+                    <p>Cost trends, tool success rates, token usage. Per-project breakdowns.</p>
                 </div>
-            </div>
-
-            <div class="feature" data-feature>
-                <div class="feature-number">05</div>
-                <div class="feature-content">
+                <div class="feature-card">
                     <h3>Voice & Command Palette</h3>
-                    <p>
-                        Push-to-talk voice input with Space bar. Cmd+K command palette: fuzzy search across sessions, projects, actions. Path autocomplete, slash command browser.
-                    </p>
+                    <p>Push-to-talk voice. Cmd+K fuzzy search across sessions and projects.</p>
                 </div>
-            </div>
-
-            <div class="feature" data-feature>
-                <div class="feature-number">06</div>
-                <div class="feature-content">
+                <div class="feature-card">
                     <h3>Open Source & Free</h3>
-                    <p>
-                        MIT license, no tracking, no telemetry. Built on Claude Code SDK — uses your existing CLI subscription. Plugin marketplace, MCP server management UI, theming. You own everything.
-                    </p>
+                    <p>MIT license. No tracking. Plugin marketplace. MCP server management. Theming.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="how-it-works">
+    <!-- Quick Start -->
+    <section class="quick-start">
         <div class="container">
-            <h2>How it works</h2>
-            <div class="steps">
-                <div class="step">
-                    <h3>1. Install</h3>
-                    <p>Clone. Run setup. Done.</p>
-                </div>
-                <div class="step">
-                    <h3>2. Run</h3>
-                    <p>Launch desktop app. Auto-login. Start session.</p>
-                </div>
-                <div class="step">
-                    <h3>3. See everything</h3>
-                    <p>Chat. Watch. Track. Export.</p>
-                </div>
-            </div>
+            <h2>Get started in seconds</h2>
             <div class="install-command">
-                <code>curl -fsSL ccplus.run/install | sh</code>
+                <code>git clone https://github.com/mjfuentes/ccplus.git && cd ccplus && ./ccplus</code>
                 <button class="copy-btn" onclick="copyInstallCommand()">Copy</button>
             </div>
         </div>
     </section>
 
-    <section class="cta" id="download">
+    <!-- CTA -->
+    <section class="cta">
         <div class="container">
-            <h2>Ready?</h2>
+            <h2>Ready to see everything?</h2>
             <div class="cta-buttons">
-                <a href="https://github.com/mjfuentes/ccplus" class="btn btn-primary">
-                    Run it →
-                </a>
-                <a href="https://github.com/mjfuentes/ccplus#quick-start" class="btn btn-secondary">
-                    Quick Start
-                </a>
+                <a href="https://github.com/mjfuentes/ccplus/releases" class="btn btn-primary">Download for Mac</a>
+                <a href="https://github.com/mjfuentes/ccplus" class="btn btn-secondary">View on GitHub</a>
             </div>
-            <p class="cta-note">Free. Open-source. No tracking.</p>
         </div>
     </section>
 
+    <!-- Footer -->
     <footer>
         <div class="container">
-            Built by <a href="https://kerplunk.studio">kerplunk.studio</a> with cc+
+            <p>Built by <a href="https://kerplunk.studio">kerplunk.studio</a> with cc+</p>
         </div>
     </footer>
 
     <script>
-        // Intersection Observer for feature animations
-        const observerOptions = {
-            threshold: 0.2,
-            rootMargin: '0px 0px -100px 0px'
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('visible');
-                }
-            });
-        }, observerOptions);
-
-        document.querySelectorAll('[data-feature]').forEach(el => {
-            observer.observe(el);
-        });
-
         // Copy install command
         function copyInstallCommand() {
-            const command = 'curl -fsSL ccplus.run/install | sh';
+            const command = 'git clone https://github.com/mjfuentes/ccplus.git && cd ccplus && ./ccplus';
             navigator.clipboard.writeText(command).then(() => {
-                const btn = document.querySelector('.copy-btn');
+                const btn = event.target;
                 const originalText = btn.textContent;
                 btn.textContent = 'Copied!';
                 setTimeout(() => {
@@ -1728,60 +1422,40 @@
             });
         }
 
-        // Session switching
+        // Switch session in app replica
         function switchSession(index) {
             // Update tabs
-            const tabs = document.querySelectorAll('.app-tab');
-            tabs.forEach((tab, i) => {
-                if (i === index) {
-                    tab.classList.add('active');
-                } else {
-                    tab.classList.remove('active');
-                }
+            document.querySelectorAll('.app-tab:not(.app-tab-new)').forEach((tab, i) => {
+                tab.classList.toggle('active', i === index);
             });
 
             // Update sidebar sessions
-            const sidebarSessions = document.querySelectorAll('.sidebar-session');
-            sidebarSessions.forEach((session, i) => {
-                if (i === index) {
-                    session.classList.add('active');
-                } else {
-                    session.classList.remove('active');
-                }
+            document.querySelectorAll('.sidebar-session').forEach((session, i) => {
+                session.classList.toggle('active', i === index);
             });
 
             // Update chat panels
-            const chatPanels = document.querySelectorAll('.app-chat-panel');
-            chatPanels.forEach((panel, i) => {
-                if (i === index) {
-                    panel.classList.add('active');
-                } else {
-                    panel.classList.remove('active');
-                }
+            document.querySelectorAll('.app-chat-panel').forEach((panel, i) => {
+                panel.classList.toggle('active', i === index);
             });
 
             // Update activity panels
-            const activityPanels = document.querySelectorAll('.app-activity-panel');
-            activityPanels.forEach((panel, i) => {
-                if (i === index) {
-                    panel.classList.add('active');
-                } else {
-                    panel.classList.remove('active');
-                }
+            document.querySelectorAll('.app-activity-panel').forEach((panel, i) => {
+                panel.classList.toggle('active', i === index);
             });
 
             // Hide activity column and input bar for Preview tab (index 2)
             const activityColumn = document.querySelector('.app-activity');
-            const appMain = document.querySelector('.app-main');
             const inputBar = document.querySelector('.app-input-bar');
+            const appContent = document.querySelector('.app-content');
             if (index === 2) {
                 activityColumn.style.display = 'none';
                 inputBar.style.display = 'none';
-                appMain.style.gridTemplateColumns = '1fr';
+                if (appContent) appContent.style.gridTemplateColumns = '1fr';
             } else {
-                activityColumn.style.display = 'flex';
+                activityColumn.style.display = 'block';
                 inputBar.style.display = 'block';
-                appMain.style.gridTemplateColumns = '1fr 280px';
+                if (appContent) appContent.style.gridTemplateColumns = '1fr 400px';
             }
         }
     </script>
