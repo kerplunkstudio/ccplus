@@ -9,7 +9,7 @@ describe('UsageStatsBar', () => {
     totalOutputTokens: 0,
     totalDuration: 0,
     queryCount: 0,
-    contextWindowSize: 500000,
+    contextWindowSize: 1000000,
     model: 'sonnet',
     linesOfCode: 0,
     totalSessions: 5,
