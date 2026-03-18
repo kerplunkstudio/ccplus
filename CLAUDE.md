@@ -646,6 +646,14 @@ Tests are mandatory for all implementations:
 
 **Fix**: `safeParams()` in `sdk-session.ts` truncates string values longer than 200 characters and strips internal keys like `tool_use_id`.
 
+### 7. Dynamic and static imports for the same module
+
+**Problem**: Bundle or runtime errors from mixing import styles for the same module.
+
+**Why**: Using both `await import("foo")` and `import foo from "foo"` for the same module causes unpredictable behavior with tree-shaking and module resolution in ESM.
+
+**Fix**: Pick one style per module. Use static `import` for modules always needed. Use dynamic `await import()` only for optional or lazy-loaded modules, and never mix with a static import of the same package.
+
 ## Multi-Agent Safety Rules
 
 When working as an AI agent (Claude Code or subagents), follow these rules to prevent conflicts in multi-agent scenarios:
