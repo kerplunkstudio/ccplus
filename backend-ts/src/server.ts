@@ -15,6 +15,7 @@ import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { ProvenanceTracker } from "./provenance.js";
+import { configWatcher, type ConfigChange } from "./config-watcher.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -834,6 +835,37 @@ app.get("/api/skills", (req: Request, res: Response) => {
   res.json({ skills });
 });
 
+// -- Transcript events --
+
+app.get("/api/transcript/:sessionId", (req: Request, res: Response) => {
+  try {
+    const types = req.query.types ? (req.query.types as string).split(",") : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
+
+    const events = database.getTranscript(req.params.sessionId, {
+      eventTypes: types,
+      limit,
+      offset,
+    });
+
+    res.json({ events });
+  } catch (err) {
+    console.error("Failed to fetch transcript:", err);
+    res.status(500).json({ error: "Failed to load transcript" });
+  }
+});
+
+app.get("/api/transcript/:sessionId/export", (req: Request, res: Response) => {
+  try {
+    const events = database.exportTranscript(req.params.sessionId);
+    res.json({ events, session_id: req.params.sessionId });
+  } catch (err) {
+    console.error("Failed to export transcript:", err);
+    res.status(500).json({ error: "Failed to export transcript" });
+  }
+});
+
 // =========================================================================
 // WebSocket Events
 // =========================================================================
@@ -893,7 +925,7 @@ io.on("connection", (socket) => {
     // Record user message with provenance
     try {
       const provenance = provenanceTracker.getProvenance(socket.id);
-      database.recordMessage(
+      const messageRecord = database.recordMessage(
         sid, uid, "user",
         content || "[Image]",
         undefined,
@@ -903,6 +935,21 @@ io.on("connection", (socket) => {
         provenance?.sourceIp ?? undefined,
         provenance?.userAgent ?? undefined,
       );
+
+      // Record transcript event
+      database.recordTranscriptEvent({
+        session_id: sid,
+        event_type: "user_message",
+        data: {
+          content: content || "[Image]",
+          role: "user",
+          message_id: messageRecord.id,
+          image_ids: imageIdsData.length ? imageIdsData : undefined,
+        },
+        metadata: {
+          project_path: projectPathData || null,
+        },
+      });
 
       const existing = database.getConversationHistory(sid, 1);
       if (existing.length <= 1) {
@@ -936,6 +983,21 @@ io.on("connection", (socket) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
     sdkSession.cancelQuery(client.session_id);
+
+    // Record cancellation transcript event
+    try {
+      database.recordTranscriptEvent({
+        session_id: client.session_id,
+        event_type: "cancel",
+        data: {
+          cancelled_by: client.user_id,
+        },
+        metadata: null,
+      });
+    } catch (e) {
+      console.error("Failed to record cancel transcript event:", e);
+    }
+
     socket.emit("cancelled", { status: "ok" });
   });
 
@@ -975,6 +1037,67 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
     },
     onToolEvent: (event: Record<string, unknown>) => {
       io.to(sessionId).emit("tool_event", event);
+
+      // Record transcript event for tool/agent lifecycle
+      try {
+        const eventType = event.type as string;
+        if (eventType === "tool_start") {
+          database.recordTranscriptEvent({
+            session_id: sessionId,
+            event_type: "tool_start",
+            event_id: event.tool_use_id as string,
+            parent_event_id: (event.parent_agent_id as string) ?? null,
+            data: {
+              tool_name: event.tool_name,
+              parameters: event.parameters ?? {},
+            },
+            metadata: null,
+          });
+        } else if (eventType === "tool_complete") {
+          database.recordTranscriptEvent({
+            session_id: sessionId,
+            event_type: "tool_complete",
+            event_id: event.tool_use_id as string,
+            parent_event_id: (event.parent_agent_id as string) ?? null,
+            data: {
+              tool_name: event.tool_name,
+              success: event.success ?? false,
+              error: event.error ?? null,
+              duration_ms: event.duration_ms ?? null,
+            },
+            metadata: null,
+          });
+        } else if (eventType === "agent_start") {
+          database.recordTranscriptEvent({
+            session_id: sessionId,
+            event_type: "agent_start",
+            event_id: event.tool_use_id as string,
+            parent_event_id: (event.parent_agent_id as string) ?? null,
+            data: {
+              agent_type: event.agent_type,
+              description: event.description ?? "",
+            },
+            metadata: null,
+          });
+        } else if (eventType === "agent_stop") {
+          database.recordTranscriptEvent({
+            session_id: sessionId,
+            event_type: "agent_stop",
+            event_id: event.tool_use_id as string,
+            parent_event_id: (event.parent_agent_id as string) ?? null,
+            data: {
+              agent_type: event.agent_type,
+              success: event.success ?? false,
+              error: event.error ?? null,
+              duration_ms: event.duration_ms ?? null,
+            },
+            metadata: null,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to record transcript event:", e);
+      }
+
       // Count lines of code
       if (event.type === "tool_complete" && (event.tool_name === "Write" || event.tool_name === "Edit")) {
         const params = event.parameters as Record<string, unknown> | undefined;
@@ -1005,6 +1128,28 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
         console.error("Failed to increment user stats:", e);
       }
 
+      // Record assistant message transcript event
+      try {
+        database.recordTranscriptEvent({
+          session_id: sessionId,
+          event_type: "assistant_message",
+          data: {
+            content: result.text ?? "",
+            role: "assistant",
+          },
+          metadata: {
+            cost: result.cost ?? null,
+            duration_ms: result.duration_ms ?? null,
+            input_tokens: result.input_tokens ?? null,
+            output_tokens: result.output_tokens ?? null,
+            model: result.model ?? null,
+            sdk_session_id: result.sdk_session_id ?? null,
+          },
+        });
+      } catch (e) {
+        console.error("Failed to record assistant message transcript event:", e);
+      }
+
       io.to(sessionId).emit("response_complete", {
         cost: result.cost,
         duration_ms: result.duration_ms,
@@ -1017,6 +1162,20 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
     },
     onError: (message: string) => {
       io.to(sessionId).emit("error", { message });
+
+      // Record error transcript event
+      try {
+        database.recordTranscriptEvent({
+          session_id: sessionId,
+          event_type: "error",
+          data: {
+            message,
+          },
+          metadata: null,
+        });
+      } catch (e) {
+        console.error("Failed to record error transcript event:", e);
+      }
     },
     onUserQuestion: (data: Record<string, unknown>) => {
       io.to(sessionId).emit("user_question", {
