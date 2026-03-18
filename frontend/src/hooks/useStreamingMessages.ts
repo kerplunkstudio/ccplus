@@ -136,6 +136,13 @@ export function useStreamingMessages({
       syncInProgressRef.current = true;
       streamingContentRef.current = data.content;
 
+      // During session restore, just buffer content — don't create messages
+      // The restore will set up the proper message structure
+      if (isRestoringSessionRef.current) {
+        syncInProgressRef.current = false;
+        return;
+      }
+
       if (!streamingIdRef.current) {
         const msgId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
         streamingIdRef.current = msgId;
@@ -183,6 +190,12 @@ export function useStreamingMessages({
     socket.on('text_delta', (data: { text: string; message_id?: string; message_index?: number; session_id?: string }) => {
       if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
       if (syncInProgressRef.current) return;
+
+      // During session restore, buffer content but don't create messages
+      if (isRestoringSessionRef.current && !streamingIdRef.current) {
+        streamingContentRef.current += data.text;
+        return;
+      }
 
       if (awaitingDeltaAfterRestore.current) {
         awaitingDeltaAfterRestore.current = false;

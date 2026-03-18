@@ -56,6 +56,7 @@ interface UseSessionRestoreProps {
   completionFinalizedRef: MutableRefObject<boolean>;
   messageIndexRef: MutableRefObject<number>;
   contextTokens: number | null;
+  isRestoringSessionRef: MutableRefObject<boolean>; // Shared ref from useTabSocket
   // Setters
   setMessages: Dispatch<React.SetStateAction<Message[]>>;
   setStreaming: (streaming: boolean) => void;
@@ -97,6 +98,7 @@ export function useSessionRestore({
   completionFinalizedRef,
   messageIndexRef,
   contextTokens,
+  isRestoringSessionRef, // Shared ref from useTabSocket
   setMessages,
   setStreaming,
   setBackgroundProcessing,
@@ -114,7 +116,6 @@ export function useSessionRestore({
   workerRestartGraceTimerRef,
 }: UseSessionRestoreProps) {
   const [isRestoringSession, setIsRestoringSession] = useState(true);
-  const isRestoringSessionRef = useRef(true);
 
   // Tab switch effect
   useEffect(() => {
@@ -179,7 +180,7 @@ export function useSessionRestore({
         socket.emit('join_session', { session_id: sessionId });
       }
     }
-  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, contextTokens, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket]);
+  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, contextTokens, isRestoringSessionRef, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket]);
 
   // Session restore effect
   useEffect(() => {
@@ -235,7 +236,10 @@ export function useSessionRestore({
                 const lastMsg = restored[restored.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
                   streamingIdRef.current = lastMsg.id;
-                  streamingContentRef.current = lastMsg.content || '';
+                  // Prefer buffered sync content (from stream_content_sync during restore) over DB content
+                  if (!streamingContentRef.current) {
+                    streamingContentRef.current = lastMsg.content || '';
+                  }
                   setStreaming(true);
                   awaitingDeltaAfterRestore.current = true;
                   setPendingRestore(true);
@@ -339,7 +343,7 @@ export function useSessionRestore({
     return () => {
       isMounted = false;
     };
-  }, [token, sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setContextTokens, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
+  }, [token, sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, isRestoringSessionRef, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setContextTokens, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
 
   // Reconnect restore logic
   useEffect(() => {
@@ -374,7 +378,10 @@ export function useSessionRestore({
                 const lastMsg = restored[restored.length - 1];
                 if (lastMsg && lastMsg.role === 'assistant') {
                   streamingIdRef.current = lastMsg.id;
-                  streamingContentRef.current = lastMsg.content || '';
+                  // Prefer buffered sync content (from stream_content_sync during restore) over DB content
+                  if (!streamingContentRef.current) {
+                    streamingContentRef.current = lastMsg.content || '';
+                  }
                   setStreaming(true);
                   awaitingDeltaAfterRestore.current = true;
                   setPendingRestore(true);
@@ -478,6 +485,5 @@ export function useSessionRestore({
 
   return {
     isRestoringSession,
-    isRestoringSessionRef,
   };
 }

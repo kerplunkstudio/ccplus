@@ -50,6 +50,7 @@ describe('useSessionRestore', () => {
       clearToolTimerRef: { current: null },
       pendingWorkerRestartErrorRef: { current: null },
       workerRestartGraceTimerRef: { current: null },
+      isRestoringSessionRef: { current: true },
     };
 
     // Create mock setters
@@ -89,7 +90,6 @@ describe('useSessionRestore', () => {
       const { result } = renderHook(() => useSessionRestore(createHookProps()));
 
       expect(result.current.isRestoringSession).toBe(true);
-      expect(result.current.isRestoringSessionRef.current).toBe(true);
 
       await waitFor(() => {
         expect(result.current.isRestoringSession).toBe(false);

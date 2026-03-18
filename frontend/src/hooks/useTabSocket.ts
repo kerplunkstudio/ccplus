@@ -58,6 +58,7 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
   // Shared refs that need to exist before hooks
   const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toolLogRef = useRef<ToolEvent[]>([]); // Create outside both hooks to break circular dependency
+  const isRestoringSessionRef = useRef(true); // Shared ref for session restore state
 
   // Streaming messages hook
   const streamingHook = useStreamingMessages({
@@ -65,7 +66,7 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
     toolLogRef,
     activityTreeRef,
     hasRunningAgents,
-    isRestoringSessionRef: useRef(true), // Placeholder, will be overwritten by session restore
+    isRestoringSessionRef,
     currentSessionIdRef,
     sessionId,
   });
@@ -86,7 +87,8 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
   });
 
   // Session restore hook
-  const { isRestoringSession, isRestoringSessionRef } = useSessionRestore({
+  const { isRestoringSession } = useSessionRestore({
+    isRestoringSessionRef, // Pass the shared ref
     token,
     sessionId,
     socket,
