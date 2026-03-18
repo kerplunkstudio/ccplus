@@ -262,21 +262,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  const uploadFiles = async (files: File[]) => {
     setUploading(true);
     const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
-    for (const file of Array.from(files)) {
-      // Validate file type
+    for (const file of files) {
       if (!file.type.startsWith('image/')) {
         showToast('Please choose a PNG, JPG, GIF, or WebP image', 'error');
         continue;
       }
 
-      // Validate file size (10MB max)
       if (file.size > 10 * 1024 * 1024) {
         showToast(`${file.name} is too large. Maximum file size is 10MB`, 'error');
         continue;
@@ -305,7 +300,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     setUploading(false);
-    // Reset file input
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    await uploadFiles(Array.from(files));
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -705,7 +707,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
@@ -713,26 +715,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
 
-    // Extract file paths from dropped files
+    const imageFiles: File[] = [];
     const paths: string[] = [];
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i] as FileWithPath;
-      // In Electron, files have a 'path' property with the absolute path
-      const filePath = file.path;
-      if (filePath) {
-        paths.push(filePath);
+
+      if (file.type.startsWith('image/')) {
+        imageFiles.push(file);
+      } else {
+        const filePath = file.path;
+        if (filePath) {
+          paths.push(filePath);
+        }
       }
     }
 
-    if (paths.length === 0) return;
+    if (imageFiles.length > 0) {
+      await uploadFiles(imageFiles);
+    }
 
-    // Append paths to the current input
-    const currentValue = input;
-    const separator = currentValue && !currentValue.endsWith('\n') && !currentValue.endsWith(' ') ? '\n' : '';
-    const newValue = currentValue + separator + paths.join('\n');
-    setInput(newValue);
+    if (paths.length > 0) {
+      const currentValue = input;
+      const separator = currentValue && !currentValue.endsWith('\n') && !currentValue.endsWith(' ') ? '\n' : '';
+      const newValue = currentValue + separator + paths.join('\n');
+      setInput(newValue);
+    }
 
-    // Focus the textarea after drop
     textareaRef.current?.focus();
   };
 
