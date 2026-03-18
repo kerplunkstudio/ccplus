@@ -18,6 +18,7 @@ import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
+import { DevServerToast } from './components/DevServerToast';
 import { WindowWithElectron } from './types';
 import { ensureMruOrder } from './utils/tabs';
 import './App.css';
@@ -44,6 +45,22 @@ function AppContent({ token, loading }: AppContentProps) {
   const { activeProject, activeTab } = workspace;
   const profile = useProfile();
 
+  const [devServerToast, setDevServerToast] = useState<{ url: string } | null>(null);
+
+  const handleDevServerDetected = useCallback((url: string) => {
+    if (!activeProject) return;
+
+    // Extract label from URL (e.g., "localhost:3000")
+    const label = url.replace(/^https?:\/\//, '');
+    const truncatedLabel = label.length > 30 ? label.substring(0, 30) + '...' : label;
+
+    // Open browser tab
+    workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
+
+    // Show toast
+    setDevServerToast({ url });
+  }, [activeProject, workspace]);
+
   const {
     connected,
     messages,
@@ -66,7 +83,7 @@ function AppContent({ token, loading }: AppContentProps) {
     contextTokens,
     todos,
     setTodos,
-  } = useTabSocket(token, activeTab?.sessionId || '');
+  } = useTabSocket(token, activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-20250514';
@@ -477,6 +494,23 @@ function AppContent({ token, loading }: AppContentProps) {
       <AppLoadingScreen ready={appReady} />
       <ToastContainer />
       <UpdateBanner />
+      {devServerToast && (
+        <DevServerToast
+          url={devServerToast.url}
+          onDismiss={() => setDevServerToast(null)}
+          onFocusTab={() => {
+            // Find the browser tab with this URL and focus it
+            if (activeProject) {
+              const browserTab = activeProject.tabs.find(
+                (tab) => tab.type === 'browser' && tab.url === devServerToast.url
+              );
+              if (browserTab) {
+                workspace.selectTab(activeProject.path, browserTab.sessionId);
+              }
+            }
+          }}
+        />
+      )}
       <div
         className="app-layout"
         style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
