@@ -1,12 +1,10 @@
 # cc+ - Claude Code Context
 
-> Repository conventions, architecture, and project-specific guidance for Claude Code agents.
+> Rules and conventions for Claude Code agents working on the cc+ codebase.
 
 ## Project Overview
 
-**cc+ (ccplus)** is a web UI and observability layer for Claude Code. It provides a browser-based chat interface backed by the Claude Code SDK, with a real-time activity tree showing every agent spawn and tool call as it happens.
-
-**Core design**: No routing layer, no orchestrator, no task queue. User messages go straight to the Claude Code SDK via WebSocket. The SDK does the work. cc+ shows you what it is doing.
+cc+ is a web UI and observability layer for Claude Code. User messages go straight to the Claude Code SDK via WebSocket. The SDK does the work. cc+ shows you what it is doing.
 
 **Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite
 
@@ -54,386 +52,44 @@
 | `ccplus` | Unified launcher and deployment tool |
 | `ccplus-desktop` | Desktop app launcher (delegates to ./ccplus desktop) |
 
-## Database Schema
+## Reference Documentation
 
-**Location**: `data/ccplus.db` (SQLite, WAL mode)
-
-```sql
-CREATE TABLE conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,       -- Browser session ID (session_<timestamp>_<random>)
-    user_id TEXT NOT NULL,          -- "local" in local mode
-    role TEXT NOT NULL,             -- "user" or "assistant"
-    content TEXT NOT NULL,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    sdk_session_id TEXT             -- SDK session UUID (set on assistant messages)
-);
-CREATE INDEX idx_conversations_session ON conversations(session_id, timestamp);
-
-CREATE TABLE tool_usage (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    session_id TEXT NOT NULL,
-    tool_name TEXT NOT NULL,        -- "Bash", "Read", "Edit", "Agent", etc.
-    duration_ms REAL,
-    success BOOLEAN,
-    error TEXT,
-    error_category TEXT,
-    parameters TEXT,                -- JSON blob (truncated to 200 chars per value)
-    tool_use_id TEXT,               -- Unique ID for this tool invocation
-    parent_agent_id TEXT,           -- tool_use_id of the parent Agent (null at root level)
-    agent_type TEXT,                -- For Agent/Task tools: the subagent type
-    input_tokens INTEGER,
-    output_tokens INTEGER
-);
-CREATE INDEX idx_tool_usage_session ON tool_usage(session_id, timestamp);
-CREATE INDEX idx_tool_usage_parent ON tool_usage(parent_agent_id);
-```
-
-**Common queries**:
-```bash
-# Recent conversations
-sqlite3 data/ccplus.db "SELECT session_id, role, substr(content, 1, 80), timestamp FROM conversations ORDER BY timestamp DESC LIMIT 20;"
-
-# Tool usage summary
-sqlite3 data/ccplus.db "SELECT tool_name, COUNT(*) as count, SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failures FROM tool_usage GROUP BY tool_name ORDER BY count DESC;"
-
-# Agent hierarchy for a session
-sqlite3 data/ccplus.db "SELECT tool_name, tool_use_id, parent_agent_id, agent_type, success, duration_ms FROM tool_usage WHERE session_id = 'SESSION_ID' ORDER BY timestamp;"
-
-# Errors
-sqlite3 data/ccplus.db "SELECT tool_name, error, timestamp FROM tool_usage WHERE error IS NOT NULL ORDER BY timestamp DESC LIMIT 20;"
-```
-
-## Architecture
-
-### Message Flow
-
-```
-Browser (React)
-    |
-    | socket.emit("message", { message: "..." })
-    v
-Socket.IO (server.ts)
-    |
-    | 1. Record user message to SQLite
-    | 2. Emit "message_received" ack
-    | 3. Call sdkSession.submitQuery()
-    v
-Session Manager (sdk-session.ts)
-    |
-    | Calls query() from @anthropic-ai/claude-agent-sdk
-    | Streaming runs in-process (async generator)
-    v
-Claude Agent SDK
-    |
-    | async for message in query(prompt, options):
-    |   - message.type == "assistant" -> text blocks + tool_use blocks
-    |   - message.type == "result"    -> session metadata, cost, tokens
-    v
-Callbacks (defined in server.ts buildSocketCallbacks)
-    |
-    | onText(chunk)       -> io.to(sessionId).emit("text_delta", ...)
-    | onToolEvent(event) -> io.to(sessionId).emit("tool_event", ...)
-    |                       + recordToolEvent() to SQLite
-    | onComplete(result)  -> recordMessage() to SQLite
-    |                       + io.to(sessionId).emit("response_complete", ...)
-    | onError(msg)        -> io.to(sessionId).emit("error", ...)
-    v
-Browser receives events, updates UI
-```
-
-### Async Model
-
-- **Node.js event loop**: Single-threaded async with non-blocking I/O
-- **SDK queries**: Run as async generators in the same event loop (in-process)
-- **better-sqlite3**: Synchronous database operations, singleton connection, WAL mode for concurrent reads
-- **No threading**: All operations execute sequentially in the event loop, async/await for I/O
-
-### Agent Stack (sdk-session.ts)
-
-The SDK's native `agent_id` field is used directly for parent-child correlation in the activity tree. No manual stack management is needed.
-
-**How it works**:
-1. The `buildHooks()` function in `sdk-session.ts` returns hook matcher arrays for `PreToolUse`, `PostToolUse`, and `PostToolUseFailure`.
-2. Each hook callback receives `agent_id` directly from the SDK hook input (e.g., `hookInput.agent_id`).
-3. This `agent_id` identifies the parent agent that spawned the current tool invocation.
-4. For root-level tools, `agent_id` is `undefined` and stored as `null` in the database.
-5. Nested agents automatically provide their own `tool_use_id` as the `agent_id` for their children.
-
-**Key difference from Python backend**: No manual stack push/pop. The SDK handles parent tracking natively via the `agent_id` field in hook callbacks.
-
-### Activity Tree (Frontend)
-
-The frontend builds a tree from flat `tool_event` WebSocket events using an immutable reducer (`useSocket.ts:treeReducer`).
-
-**Tree construction**:
-- `AGENT_START`: Creates an `AgentNode` with empty `children[]`. If `parent_agent_id` is set, inserts under parent via recursive `findAndInsert`. Otherwise appends to root.
-- `TOOL_START`: Creates a `ToolNode`. Same parent logic as agents.
-- `TOOL_COMPLETE` / `AGENT_STOP`: Finds the node by `tool_use_id` via recursive `findAndUpdate`, updates status/duration/error.
-- `CLEAR`: Resets tree (called on each new user message).
-
-**Node types**:
-- `AgentNode`: Has `children: ActivityNode[]`, `agent_type`, `description`. Collapsible in UI.
-- `ToolNode`: Leaf node with `tool_name`, `parameters`. Not collapsible.
-
-Both have `status: 'running' | 'completed' | 'failed'` and optional `duration_ms`, `error`.
-
-## WebSocket Protocol
-
-### Connection
-
-WebSocket connects to the Socket.IO server with query parameters:
-```typescript
-io(SOCKET_URL, {
-    auth: { token, session_id },
-    transports: ['polling', 'websocket'],
-});
-```
-
-Server validates JWT on `connect` event. Invalid token causes `disconnect()`.
-
-### Client to Server Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `message` | `{ message: string }` | Send user message to Claude Code SDK |
-| `cancel` | (none) | Cancel the active SDK query for this session |
-| `ping` | (none) | Keepalive ping |
-
-### Server to Client Events
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `connected` | `{ session_id }` | Connection confirmed, session joined |
-| `message_received` | `{ status: "ok" }` | User message acknowledged |
-| `text_delta` | `{ text: string }` | Streaming text chunk from Claude |
-| `tool_event` | `ToolEvent` | Tool/agent lifecycle event (see below) |
-| `response_complete` | `{ cost, duration_ms, input_tokens, output_tokens }` | SDK query finished |
-| `error` | `{ message: string }` | Error during SDK query |
-| `cancelled` | `{ status: "ok" }` | Cancellation confirmed |
-| `pong` | `{ timestamp: number }` | Keepalive response |
-
-### Tool Event Types
-
-All delivered via the `tool_event` WebSocket event. Differentiated by `type` field:
-
-**`tool_start`**: A tool invocation began.
-```json
-{
-    "type": "tool_start",
-    "tool_name": "Bash",
-    "tool_use_id": "toolu_abc123",
-    "parent_agent_id": "toolu_parent456",
-    "parameters": { "command": "pytest tests/" },
-    "timestamp": "2025-01-15T10:30:00",
-    "session_id": "session_xxx"
-}
-```
-
-**`tool_complete`**: A tool invocation finished.
-```json
-{
-    "type": "tool_complete",
-    "tool_name": "Bash",
-    "tool_use_id": "toolu_abc123",
-    "parent_agent_id": "toolu_parent456",
-    "success": true,
-    "error": null,
-    "duration_ms": 1234.5,
-    "timestamp": "2025-01-15T10:30:01",
-    "session_id": "session_xxx"
-}
-```
-
-**`agent_start`**: An Agent/Task sub-agent spawned.
-```json
-{
-    "type": "agent_start",
-    "tool_name": "Agent",
-    "tool_use_id": "toolu_agent789",
-    "parent_agent_id": null,
-    "agent_type": "code_agent",
-    "description": "Implement the auth module",
-    "timestamp": "2025-01-15T10:30:00",
-    "session_id": "session_xxx"
-}
-```
-
-**`agent_stop`**: An Agent/Task sub-agent completed.
-```json
-{
-    "type": "agent_stop",
-    "tool_name": "Agent",
-    "tool_use_id": "toolu_agent789",
-    "success": true,
-    "error": null,
-    "duration_ms": 45000,
-    "timestamp": "2025-01-15T10:30:45",
-    "session_id": "session_xxx"
-}
-```
+- **Architecture**: See `docs/architecture.md` for message flow, async model, WebSocket protocol, tool event types.
+- **Database**: See `docs/database.md` for schema and common queries.
+- **Development**: See `docs/development.md` for setup, environment variables, running locally, deploy workflow, HTTP API.
+- **Testing**: See `docs/testing.md` for test commands, coverage targets, and test policy.
 
 ## Run Modes
 
-cc+ can run in multiple modes:
+cc+ runs in three modes:
 
-1. **Desktop app** (default): Electron wrapper displays UI in a native window, stops web server
-2. **Desktop app (parallel)**: Electron wrapper runs alongside web server on port 4001, shared SDK worker
-3. **Web UI**: Node.js server serves the React app, access via browser at `localhost:4000`
+1. **Desktop app** (default): Electron window, stops web server
+2. **Desktop app (parallel)**: Electron + web server on port 4001 (RECOMMENDED FOR DEVELOPMENT)
+3. **Web UI**: Browser access at `localhost:4000`
 
-All modes use identical backend and frontend code. Desktop modes provide:
-- Standalone app window (no browser needed)
-- Native menus and window management
-- Dock/taskbar integration
-- Window state persistence
-
-**Parallel mode** is recommended for development as it allows both web and desktop interfaces to run simultaneously without conflicts.
-
-## Development Setup
-
-### Prerequisites
-
-- Node.js 18+ (for backend and frontend)
-- Claude Code CLI installed and authenticated (uses your subscription)
-
-### Initial Setup
-
-**Quick start (recommended)**:
-```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
-./ccplus             # Interactive setup + build + launch desktop app
-```
-
-The first run will:
-1. Install backend-ts dependencies
-2. Install frontend dependencies
-3. Interactively configure `.env` (workspace path, model choice)
-4. Build TypeScript backend
-5. Build frontend and launch desktop app
-
-**Manual setup** (if you prefer):
-```bash
-git clone git@github.com:mjfuentes/ccplus.git && cd ccplus
-
-# TypeScript backend
-cd backend-ts && npm install && npm run build && cd ..
-
-# Frontend
-cd frontend && npm install && cd ..
-
-# Environment
-cp .env.example .env
-# Edit .env with your values (WORKSPACE_PATH, SDK_MODEL, etc.)
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
-| `SDK_MODEL` | `sonnet` | Default model for SDK queries |
-| `PORT` | `4000` | Server port |
-| `CCPLUS_AUTH` | `local` | Auth mode (`local` for auto-login) |
-| `SECRET_KEY` | `ccplus-dev-secret-change-me` | JWT signing key (change in production) |
-
-### Running Locally
-
-**First run** (automatic setup):
-```bash
-./ccplus             # Interactive setup + build + launch desktop app
-```
-
-The first time you run `./ccplus`, it will:
-1. Check for prerequisites (Node 18+, Claude CLI)
-2. Install backend-ts dependencies
-3. Install frontend dependencies
-4. Interactively configure `.env` (workspace path, model, etc.)
-5. Build TypeScript backend
-6. Build frontend and launch desktop app
-
-**Subsequent runs** (launch desktop app):
-```bash
-./ccplus             # Build frontend + deploy + launch desktop app
-```
-
-**Health check**:
-```bash
-./ccplus doctor      # Run system diagnostics
-```
-
-**Desktop app variants**:
-```bash
-# Default: Exclusive mode (stops web server)
-./ccplus
-./ccplus desktop
-
-# Parallel mode (runs alongside web server) - RECOMMENDED FOR DEVELOPMENT
-./ccplus desktop-parallel
-
-# Or use the standalone launcher:
-./ccplus-desktop
-```
-
-**Web UI mode**:
-```bash
-./ccplus web         # Build frontend + deploy + start server
-```
-
-Access web UI at `http://localhost:4000`.
-
-**Component-specific commands**:
-```bash
-./ccplus server      # Restart Node.js server
-./ccplus backend     # Build TypeScript backend only
-./ccplus frontend    # Build + deploy frontend only (no restart)
-./ccplus stop        # Stop server
-./ccplus setup       # Force re-run setup
-```
-
-**Manual (development, foreground)**:
-```bash
-cd backend-ts && npm run dev
-```
-
-### Frontend Development
-
-```bash
-cd frontend
-npm start            # Dev server on port 3001 (proxies API to 3000)
-npm run build        # Production build to frontend/build/
-npm test             # Run React component tests
-```
-
-After modifying frontend source, deploy the build:
-```bash
-./ccplus             # Rebuilds, deploys, and launches desktop app
-./ccplus web         # Rebuilds, deploys, and starts web server
-```
-
-**The build step matters**: Express serves from `static/chat/`, not from `frontend/src/`. If you edit source files but do not deploy, the browser shows stale code.
+Use `./ccplus desktop-parallel` for development to allow both interfaces simultaneously.
 
 ## Repository Conventions
 
 ### Backend Style
 
-- **TypeScript**: Strict mode enabled
-- **Modules**: ESM (`.js` imports in `.ts` files due to Node.js ESM resolution)
-- **Database**: better-sqlite3 synchronous API, singleton connection
-- **Async**: All SDK operations use async/await, no blocking in event loop
-- **Line length**: 120 characters
-- **File naming**: `kebab-case.ts` (config.ts, sdk-session.ts, database.ts, etc.)
+- Use TypeScript strict mode
+- Use ESM modules (`.js` imports in `.ts` files)
+- Use better-sqlite3 synchronous API (singleton connection)
+- Use async/await for all SDK operations
+- Maximum line length: 120 characters
+- File naming: `kebab-case.ts`
 
 ### Frontend Style
 
-- **TypeScript**: Strict mode. All props and state typed.
-- **State management**: React hooks + useReducer for activity tree. No external state library.
-- **Immutability**: All state updates create new objects. The tree reducer uses `findAndInsert` / `findAndUpdate` which recursively copy nodes.
-- **Components**: Functional components only. No class components.
+- Use TypeScript strict mode, all props and state typed
+- Use React hooks + useReducer (no external state library)
+- Create new objects for all state updates (immutable patterns REQUIRED)
+- Use functional components only (no class components)
 
 ### Naming Conventions
 
-- **Backend TypeScript files**: `kebab-case.ts` for modules (server.ts, sdk-session.ts, database.ts)
+- **Backend TypeScript files**: `kebab-case.ts` (server.ts, sdk-session.ts, database.ts)
 - **Backend TypeScript interfaces**: `PascalCase`
 - **Backend TypeScript functions**: `camelCase()`
 - **Backend TypeScript constants**: `UPPER_SNAKE_CASE`
@@ -453,42 +109,25 @@ ccplus/
 │   │   ├── auth.ts            # JWT auth (jsonwebtoken)
 │   │   ├── config.ts          # Environment config
 │   │   └── __tests__/         # Vitest tests
-│   │       ├── config.test.ts
-│   │       ├── auth.test.ts
-│   │       ├── database.test.ts
-│   │       ├── sdk-session.test.ts
-│   │       └── server.test.ts
 │   ├── dist/                  # Compiled JS (gitignored)
 │   ├── package.json
 │   └── tsconfig.json
 ├── electron/
-│   ├── main.js                # Electron main process (app lifecycle, backend launcher)
-│   ├── preload.js             # IPC bridge (secure context isolation)
-│   ├── assets/                # App icons (icns, png, ico)
-│   └── README.md              # Desktop app docs
+│   ├── main.js                # Electron main process
+│   ├── preload.js             # IPC bridge
+│   └── assets/                # App icons
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx
-│   │   ├── App.css
 │   │   ├── components/
-│   │   │   ├── ChatPanel.tsx / .css / .test.tsx
-│   │   │   ├── ActivityTree.tsx / .css / .test.tsx
-│   │   │   └── MessageBubble.tsx / .css / .test.tsx
 │   │   ├── hooks/
-│   │   │   ├── useSocket.ts
-│   │   │   └── useAuth.ts
 │   │   └── types/
-│   │       └── index.ts
 │   ├── package.json
 │   └── build/                 # Generated (gitignored)
 ├── static/chat/               # Deployed build (gitignored)
 ├── data/                      # SQLite DB (gitignored)
 ├── logs/                      # Server logs (gitignored)
-├── ccplus                     # Unified launcher and deployment tool
-├── ccplus-desktop             # Desktop app launcher (delegates to ./ccplus)
-├── package.json               # Electron dependencies
-├── .env.example
-└── .gitignore
+└── docs/                      # Reference documentation
 ```
 
 ### Configuration Constants (config.ts)
@@ -500,197 +139,95 @@ ccplus/
 | `DATABASE_PATH` | `data/ccplus.db` | SQLite database location |
 | `STATIC_DIR` | `static/chat/` | Served frontend build |
 
-## Testing
-
-### Backend Tests
-
-**Location**: `backend-ts/src/__tests__/*.test.ts`
-
-**Run all**:
-```bash
-cd backend-ts && npm test
-```
-
-**Run specific module**:
-```bash
-cd backend-ts && npx vitest run src/__tests__/database.test.ts
-```
-
-**Coverage**:
-```bash
-cd backend-ts && npm run test:coverage
-```
-
-**Test files**:
-| File | Tests |
-|------|-------|
-| `config.test.ts` | Environment variable loading, defaults, directory creation (6 tests) |
-| `auth.test.ts` | JWT generation, verification, expiry, local mode (12 tests) |
-| `database.test.ts` | CRUD operations, conversation history, tool events, stats, images (58 tests) |
-| `sdk-session.test.ts` | Session lifecycle, cancellation, callback dispatch, hooks (29 tests) |
-| `server.test.ts` | HTTP routes, WebSocket events, auth flow, health check (44 tests) |
-
-**Framework**: Vitest with TypeScript support
-
-**Total tests**: 149 tests across 5 test files
-
-**Coverage targets**:
-- Critical paths (sdk-session, database): 80%+
-- Utility functions (auth, config): 100%
-- Server routes: Best effort
-
-### Frontend Tests
-
-**Location**: `frontend/src/components/*.test.tsx`
-
-**Run**:
-```bash
-cd frontend && npm test
-```
-
-**Framework**: Jest + React Testing Library
-
-**Test files**:
-- `ChatPanel.test.tsx`
-- `ActivityTree.test.tsx`
-- `MessageBubble.test.tsx`
-
-### Test Policy
-
-Tests are mandatory for all implementations:
-- New features: Unit tests for logic + integration tests for flows
-- Bug fixes: Regression test that fails without the fix
-- Refactoring: Existing tests pass before and after
-
-## Deploy Workflow
-
-**Script**: `./ccplus` at project root.
-
-| Command | What it does |
-|---------|-------------|
-| `./ccplus` or `./ccplus start` | Full deploy: build TypeScript backend, build frontend, deploy static, launch desktop app. On first run, runs interactive setup. Stops web server if running. |
-| `./ccplus web` | Full deploy: build TypeScript backend, build frontend, deploy static, start web server. Active SDK sessions are interrupted on server restart (they run in-process). |
-| `./ccplus doctor` | Run system diagnostics (Node version, environment, services, build status, database). |
-| `./ccplus server` | Restart Node.js server (kills active SDK sessions since they run in-process). |
-| `./ccplus backend` | Build TypeScript backend only (compiles to `dist/`). |
-| `./ccplus frontend` | Build + deploy frontend only. No server restart. |
-| `./ccplus desktop` | Launch Electron desktop app (stops web server, starts its own backend). Same as `./ccplus`. |
-| `./ccplus desktop-parallel` | Launch Electron desktop app alongside web server (port 4001). **Recommended for development.** |
-| `./ccplus stop` | Stop Node.js server. |
-| `./ccplus setup` | Force re-run interactive setup (reinstalls deps, configures .env). |
-| `./ccplus-desktop` | Standalone desktop app launcher (delegates to `./ccplus desktop`). |
-
-**Deploy behavior**: The Node.js server runs SDK queries in-process (no separate worker). Server restart interrupts any active SDK sessions. Clients automatically reconnect via Socket.IO and can start new queries.
-
-**After deploy**: Hard refresh browser (Cmd+Shift+R) to clear cached assets.
-
-## HTTP API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Serve React SPA |
-| GET | `/<path>` | Serve static assets |
-| GET | `/health` | Health check (uptime, sessions, clients, DB stats) |
-| POST | `/api/auth/auto-login` | Generate JWT for local user (local mode only) |
-| POST | `/api/auth/verify` | Verify JWT, return user info |
-| GET | `/api/history/<session_id>` | Conversation history for a session |
-| GET | `/api/stats` | Aggregate tool usage and conversation statistics |
-
 ## Common Pitfalls
 
 ### 1. Forgetting to deploy frontend changes
 
 **Problem**: You edit `frontend/src/*.tsx` but the browser shows old code.
 
-**Why**: Express serves from `static/chat/`, not from source. The build step compiles and copies.
+**Why**: Express serves from `static/chat/`, not from source.
 
-**Fix**: Run `./ccplus` after frontend changes. Hard refresh browser.
+**Fix**: Run `./ccplus frontend` after frontend changes. Hard refresh browser (Cmd+Shift+R).
 
 ### 2. better-sqlite3 is synchronous
 
 **Problem**: Database queries block the Node.js event loop.
 
-**Why**: better-sqlite3 uses synchronous operations, unlike async database libraries.
-
-**Fix**: In practice, this is not an issue because SQLite queries are fast (< 1ms for typical operations). For very large queries, consider breaking them into smaller chunks or using a worker thread (not currently implemented).
+**Fix**: Accept this. SQLite queries are fast (< 1ms). If you hit performance issues, investigate first before changing the database library.
 
 ### 3. Agent parent correlation
 
 **Problem**: Activity tree shows tools under the wrong parent.
 
-**Why**: The TypeScript backend relies on the SDK's native `agent_id` field for parent tracking. If the SDK provides incorrect `agent_id` values, the tree structure will be wrong.
-
-**Fix**: The SDK handles parent tracking natively. If you see incorrect parent relationships, check the `agent_id` values in the hook callbacks (logged in `buildHooks()` in `sdk-session.ts`).
+**Fix**: Use SDK's native `agent_id` for parent-child correlation. Do NOT implement manual stack management. The SDK handles this. If you see incorrect parent relationships, check `agent_id` values in hook callbacks (logged in `buildHooks()` in `sdk-session.ts`).
 
 ### 4. Cancellation is cooperative
 
 **Problem**: Cancelling a query does not kill it instantly.
 
-**Why**: The SDK's `query.interrupt()` method is checked between messages, not within them. A long-running tool call (e.g., a 60-second Bash command) will finish before cancellation is detected.
-
-**Fix**: This is by design. The SDK does not support mid-tool cancellation. The cancel takes effect after the current tool completes.
+**Fix**: Accept this. The SDK's `query.interrupt()` is checked between messages, not within them. A long-running tool call will finish before cancellation is detected. The SDK does not support mid-tool cancellation.
 
 ### 5. Socket.IO room vs sid
 
 **Problem**: Events not reaching the client, or reaching wrong clients.
 
-**Why**: `server.ts` uses `io.to(sessionId)` for streaming callbacks. The `sessionId` is the browser session, not the Socket.IO `socket.id`.
-
-**Fix**: Ensure `socket.join(sessionId)` happens on connect. Callbacks from `buildSocketCallbacks()` must use `io.to(sessionId).emit(...)` to target the correct room.
+**Fix**: Ensure `socket.join(sessionId)` happens on connect. Use `io.to(sessionId).emit(...)` in callbacks to target the correct room. The `sessionId` is the browser session, NOT the Socket.IO `socket.id`.
 
 ### 6. Large parameter serialization
 
 **Problem**: Memory bloat from tool parameters containing entire file contents.
 
-**Why**: Some tool inputs (e.g., `Write` tool with `content` field) can be very large.
-
-**Fix**: `safeParams()` in `sdk-session.ts` truncates string values longer than 200 characters and strips internal keys like `tool_use_id`.
+**Fix**: Use `safeParams()` in `sdk-session.ts` to truncate string values longer than 200 characters and strip internal keys like `tool_use_id`.
 
 ### 7. Dynamic and static imports for the same module
 
-**Problem**: Bundle or runtime errors from mixing import styles for the same module.
+**Problem**: Bundle or runtime errors from mixing import styles.
 
-**Why**: Using both `await import("foo")` and `import foo from "foo"` for the same module causes unpredictable behavior with tree-shaking and module resolution in ESM.
-
-**Fix**: Pick one style per module. Use static `import` for modules always needed. Use dynamic `await import()` only for optional or lazy-loaded modules, and never mix with a static import of the same package.
+**Fix**: Pick one style per module. Use static `import` for modules always needed. Use dynamic `await import()` only for optional or lazy-loaded modules. Never mix both for the same package.
 
 ## PR Merge Policy
 
 ### Bug Fixes
-All bug fix PRs must include:
+
+All bug fix PRs MUST include:
 1. **Symptom**: What the user sees (error message, wrong behavior, crash)
 2. **Root cause**: The specific code path and why it fails (file:line reference)
 3. **Fix**: Changes that address the root cause (not a workaround)
 4. **Regression test**: A test that fails without the fix and passes with it
 
 ### Features
-Feature PRs must include:
+
+Feature PRs MUST include:
 - Unit tests for new logic
 - Integration test if it adds an API endpoint
 - No hardcoded values or secrets
 
 ### All PRs
-- Backend tests pass: `cd backend-ts && npm test`
-- Frontend tests pass: `cd frontend && npm test`
+
+- Backend tests MUST pass: `cd backend-ts && npm test`
+- Frontend tests MUST pass: `cd frontend && npm test`
 - No console.log statements
-- Follows immutable patterns (no object mutation)
+- Follow immutable patterns (no object mutation)
 
 ## Multi-Agent Safety Rules
 
-When working as an AI agent (Claude Code or subagents), follow these rules to prevent conflicts in multi-agent scenarios:
+When working as an AI agent, follow these rules to prevent conflicts:
 
 ### Git Safety
-- **Never** create, apply, or drop git stash entries
-- **Never** switch branches unless explicitly requested by the user
-- **Never** modify worktrees without explicit request
+
+- NEVER create, apply, or drop git stash entries
+- NEVER switch branches unless explicitly requested
+- NEVER modify worktrees without explicit request
 - Commit only your own changes; keep unrelated WIP untouched
 
 ### Scope Discipline
+
 - Focus reports on your edits only; avoid redundant disclaimers about unrelated code
-- Do not modify files outside your assigned scope
-- If you discover an issue in unrelated code, report it but do not fix it unless asked
+- Do NOT modify files outside your assigned scope
+- If you discover an issue in unrelated code, report it but do NOT fix it unless asked
 
 ### Conflict Prevention
+
 - Before editing a shared file (server.ts, database.ts), check for recent changes
 - Use atomic, focused commits — one logical change per commit
 - Prefer additive changes (new files, new functions) over modifying hot paths
@@ -700,31 +237,34 @@ When working as an AI agent (Claude Code or subagents), follow these rules to pr
 
 ### Deploying Changes While the App Is Running
 
-The desktop app (and web server) serve the frontend from `static/chat/`, not from `frontend/src/`. You must deploy for changes to take effect.
+The desktop app and web server serve the frontend from `static/chat/`, NOT from `frontend/src/`. You MUST deploy for changes to take effect.
 
-**Frontend changes** (while the app is already running):
+**Frontend changes** (while app is running):
 ```bash
 ./ccplus frontend    # Builds + deploys to static/chat/ (no restart)
 ```
-Then hard refresh in the app (Cmd+Shift+R). The running backend is not affected.
+Then hard refresh in the app (Cmd+Shift+R).
 
-**Backend TypeScript changes** (while the app is already running):
+**Backend TypeScript changes** (while app is running):
 ```bash
 cd backend-ts && npm run build   # Compile TypeScript to dist/
 ```
-Then restart the server: `./ccplus server` (web mode) or relaunch the desktop app.
+Then restart: `./ccplus server` (web mode) or relaunch desktop app.
 
 **Full rebuild + launch** (from scratch or when both changed):
 ```bash
 ./ccplus             # Build backend + frontend + deploy + launch desktop app
-./ccplus web         # Same but starts web server instead of desktop app
+./ccplus web         # Same but starts web server instead
 ```
 
 **Config changes** (`.env`, `config.ts`): Requires backend restart.
 
 ### Auto-Deploy After Changes
 
-When working as a Claude Code agent, **automatically run `./ccplus frontend`** after frontend changes and **`cd backend-ts && npm run build`** after backend changes. Only run full `./ccplus` if the user is not currently running the app or explicitly asks for a full redeploy.
+When working as a Claude Code agent:
+- **Automatically run `./ccplus frontend`** after frontend changes
+- **Automatically run `cd backend-ts && npm run build`** after backend changes
+- Only run full `./ccplus` if the user is not currently running the app or explicitly asks for full redeploy
 
 **When to skip**: Only skip deploy if the user explicitly says "don't deploy" or the change is in `tests/`, `docs/`, or `.env`.
 
@@ -740,5 +280,5 @@ When working as a Claude Code agent, **automatically run `./ccplus frontend`** a
 
 ---
 
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-18
 **Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite
