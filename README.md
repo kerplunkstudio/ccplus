@@ -1,6 +1,6 @@
 # cc+
 
-Claude Code with eyes.
+The abstraction layer for Claude Code.
 
 ## Install
 
@@ -12,13 +12,13 @@ Requires a [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) sub
 
 ---
 
-**cc+** gives Claude Code a real-time activity tree, tabbed sessions, usage insights, and proper markdown rendering. No orchestrator, no routing layer — user messages go straight to the Claude Code SDK via WebSocket.
+**cc+** wraps Claude Code in a desktop app where you never write code. Describe what you want, watch agents build it. Multi-tab sessions, real-time activity trees, built-in browser — full visibility into what's happening without touching a single file.
 
 ## Features
 
-- **Live Activity Tree** — Real-time nested visualization of every tool call and agent spawn
-- **Tabbed Sessions** — Multiple concurrent conversations with independent context
-- **Built-in Browser** — Dev server auto-detection opens browser tabs automatically. VerifyApp screenshots for visual testing.
+- **Multi-Tab Sessions** — Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Each tab is its own Claude Code session with independent context.
+- **Agent Observability** — Watch agents work in real time. Activity trees show every tool call, every agent spawn, every decision.
+- **Built-in Browser** — Browser tabs alongside chat. Dev server auto-detection opens tabs automatically. VerifyApp screenshots for visual testing.
 - **Voice Input** — Push-to-talk with global Space shortcut. Web Speech API.
 - **Cmd+K Command Palette** — Fuzzy search across sessions, projects, and actions
 - **Conversation Search** — Full-text search across all message history
@@ -208,5 +208,5 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 ---
 
 <p align="center">
-  Built with <a href="https://www.anthropic.com/claude">Claude</a> by <a href="https://github.com/mjfuentes">@mjfuentes</a>
+  Built with <a href="https://www.anthropic.com/claude">Claude</a> by <a href="https://github.com/kerplunkstudio">@kerplunkstudio</a>
 </p>
