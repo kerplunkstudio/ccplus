@@ -176,7 +176,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   }, [showPicker]);
 
   const isGitHubUrl = (text: string): boolean => {
-    const githubPattern = /^(https?:\/\/github\.com\/|git@github\.com:)[\w\-]+\/[\w\-]+(?:\.git)?$/;
+    const githubPattern = /^(https?:\/\/github\.com\/|git@github\.com:)[\w-]+\/[\w-]+(?:\.git)?$/;
     return githubPattern.test(text.trim());
   };
 
@@ -426,10 +426,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
       }
       return <span key={index}>{part}</span>;
     });
-  };
-
-  const isProjectActive = (projectPath: string): boolean => {
-    return projectPath === activeProjectPath;
   };
 
   const isSessionActive = (projectPath: string, sessionId: string): boolean => {

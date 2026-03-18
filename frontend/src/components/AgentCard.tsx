@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { AgentNode } from '../types';
-import { ToolIcon } from './ToolIcon';
 import { formatDuration } from '../utils/formatDuration';
 import './AgentCard.css';
 
@@ -16,7 +15,7 @@ interface AgentCardProps {
  */
 const truncateSummary = (text: string, maxLength: number = 200): string => {
   // Strip leading markdown headers/whitespace
-  const cleaned = text.replace(/^[\s#*\-]+/, '').trim();
+  const cleaned = text.replace(/^[\s#*-]+/, '').trim();
   if (!cleaned) return text.substring(0, maxLength);
 
   // Find first sentence-ending punctuation

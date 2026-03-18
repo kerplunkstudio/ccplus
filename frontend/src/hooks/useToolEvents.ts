@@ -90,7 +90,7 @@ export function useToolEvents({
         }, 1500);
       }
     }
-  }, [streamingIdRef, setMessages]);
+  }, [streamingIdRef, toolLogRef, setMessages]);
 
   // Socket event listeners
   useEffect(() => {
@@ -244,6 +244,7 @@ export function useToolEvents({
         clearToolTimerRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, dispatchTree, currentSessionIdRef, streamingIdRef, streamingContentRef, setMessages, setStreaming, sequenceRef, seenToolUseIds, setCurrentToolDebounced, checkAndFinalizeToolState, onDevServerDetected]);
 
   return {

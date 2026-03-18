@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Message, FileWithPath, ImageAttachment } from '../types';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { PathAutocomplete } from './PathAutocomplete';

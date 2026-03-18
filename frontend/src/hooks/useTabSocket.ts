@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Message, ToolEvent, ActivityNode, UsageStats, SignalState } from '../types';
+import { Message, ToolEvent, ActivityNode, UsageStats } from '../types';
 import { useActivityTree } from './useActivityTree';
 import { useSocketConnection } from './useSocketConnection';
 import { useStreamingMessages } from './useStreamingMessages';
@@ -50,9 +50,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
   // Socket connection hook
   const {
     socket,
-    socketRef,
     connected,
-    connectedRef,
   } = useSocketConnection({ currentSessionIdRef });
 
   // Shared refs that need to exist before hooks
