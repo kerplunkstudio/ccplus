@@ -542,11 +542,11 @@ describe('ChatInput', () => {
       expect(voiceButton).toBeInTheDocument();
     });
 
-    it('starts recording when space is pressed and textarea is empty', async () => {
+    it('starts recording when space is pressed globally and textarea is empty', async () => {
       renderWithToast(<ChatInput {...defaultProps} />);
-      const textarea = screen.getByPlaceholderText(/Send a message/i);
 
-      fireEvent.keyDown(textarea, { key: ' ' });
+      // Simulate global space keydown (not on textarea)
+      fireEvent.keyDown(window, { key: ' ' });
 
       expect(mockStartRecording).toHaveBeenCalledTimes(1);
     });
@@ -556,9 +556,66 @@ describe('ChatInput', () => {
       const textarea = screen.getByPlaceholderText(/Send a message/i);
 
       await userEvent.type(textarea, 'hello');
-      fireEvent.keyDown(textarea, { key: ' ' });
+
+      // Space press should not trigger recording when there's content
+      fireEvent.keyDown(window, { key: ' ' });
 
       expect(mockStartRecording).not.toHaveBeenCalled();
+    });
+
+    it('does not start recording when space is pressed while focused on textarea', async () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+      const textarea = screen.getByPlaceholderText(/Send a message/i);
+
+      // Focus the textarea
+      textarea.focus();
+
+      // Space press should not trigger recording when textarea is focused (user is typing)
+      fireEvent.keyDown(window, { key: ' ' });
+
+      expect(mockStartRecording).not.toHaveBeenCalled();
+    });
+
+    it('does not start recording when space is pressed while focused on any input', async () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+
+      // Create a dummy input element in the document
+      const dummyInput = document.createElement('input');
+      document.body.appendChild(dummyInput);
+      dummyInput.focus();
+
+      fireEvent.keyDown(window, { key: ' ' });
+
+      expect(mockStartRecording).not.toHaveBeenCalled();
+
+      // Cleanup
+      document.body.removeChild(dummyInput);
+    });
+
+    it('does not start recording when space is pressed while focused on contentEditable', async () => {
+      renderWithToast(<ChatInput {...defaultProps} />);
+
+      // Create a dummy contentEditable element
+      const dummyDiv = document.createElement('div');
+      dummyDiv.setAttribute('contenteditable', 'true');
+      document.body.appendChild(dummyDiv);
+      dummyDiv.focus();
+
+      fireEvent.keyDown(window, { key: ' ' });
+
+      expect(mockStartRecording).not.toHaveBeenCalled();
+
+      // Cleanup
+      document.body.removeChild(dummyDiv);
+    });
+
+    it('stops recording when space is released globally', async () => {
+      mockIsRecording = true;
+      renderWithToast(<ChatInput {...defaultProps} />);
+
+      fireEvent.keyUp(window, { key: ' ' });
+
+      expect(mockStopRecording).toHaveBeenCalledTimes(1);
     });
 
     it('disables voice button when not connected', () => {
