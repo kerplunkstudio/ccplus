@@ -17,17 +17,30 @@ cc+ is a web UI and observability layer for Claude Code. User messages go straig
 | `backend-ts/src/server.ts` | Express + Socket.IO server, HTTP routes, WebSocket event handlers |
 | `backend-ts/src/sdk-session.ts` | SDK session manager, in-process streaming, hooks |
 | `backend-ts/src/database.ts` | SQLite operations via better-sqlite3 (synchronous, singleton) |
-| `backend-ts/src/auth.ts` | JWT auth (jsonwebtoken) |
 | `backend-ts/src/config.ts` | Environment config, paths, constants |
+| `backend-ts/src/doctor.ts` | System diagnostics (./ccplus doctor) |
+| `backend-ts/src/logger.ts` | Application logging |
+| `backend-ts/src/mcp-config.ts` | MCP server configuration |
+| `backend-ts/src/scheduler.ts` | Task scheduling |
+| `backend-ts/src/utils.ts` | Shared utility functions |
 
 ### Frontend
 
 | File | Purpose |
 |------|---------|
-| `frontend/src/App.tsx` | Root component -- wires auth, socket, chat panel, activity tree |
-| `frontend/src/hooks/useSocket.ts` | WebSocket connection, message state, activity tree reducer |
-| `frontend/src/hooks/useAuth.ts` | Auto-login flow, token persistence in localStorage |
+| `frontend/src/App.tsx` | Root component, workspace management, tab system, panel routing |
 | `frontend/src/types/index.ts` | TypeScript interfaces -- Message, ToolEvent, ActivityNode, AgentNode, ToolNode |
+| `frontend/src/hooks/useSocketConnection.ts` | WebSocket connection lifecycle |
+| `frontend/src/hooks/useActivityTree.ts` | Activity tree reducer and state management |
+| `frontend/src/hooks/useStreamingMessages.ts` | Streaming message handling and token counting |
+| `frontend/src/hooks/useSessionActions.ts` | Session actions (send, cancel, answer) |
+| `frontend/src/hooks/useSessionRestore.ts` | Session state restoration from database |
+| `frontend/src/hooks/useToolEvents.ts` | Tool event processing and tree updates |
+| `frontend/src/hooks/useTabSocket.ts` | Tab-specific socket orchestration (combines all hooks) |
+| `frontend/src/hooks/usePlugins.ts` | Plugin management (install, uninstall, list) |
+| `frontend/src/hooks/useSkills.ts` | Skills API and slash command integration |
+| `frontend/src/hooks/useWorkspace.ts` | Workspace/project/tab state management |
+| `frontend/src/hooks/useScheduler.ts` | Scheduled task management |
 | `frontend/src/components/ChatPanel.tsx` | Chat interface with streaming, auto-resize textarea, send/cancel |
 | `frontend/src/components/ActivityTree.tsx` | Real-time agent/tool tree with collapsible nodes, status icons |
 | `frontend/src/components/MessageBubble.tsx` | Markdown rendering for individual messages |
@@ -106,8 +119,12 @@ ccplus/
 │   │   ├── server.ts          # Express + Socket.IO (entry point)
 │   │   ├── sdk-session.ts     # SDK session lifecycle + hooks
 │   │   ├── database.ts        # SQLite operations (better-sqlite3)
-│   │   ├── auth.ts            # JWT auth (jsonwebtoken)
 │   │   ├── config.ts          # Environment config
+│   │   ├── doctor.ts          # System diagnostics
+│   │   ├── logger.ts          # Application logging
+│   │   ├── mcp-config.ts      # MCP server configuration
+│   │   ├── scheduler.ts       # Task scheduling
+│   │   ├── utils.ts           # Shared utilities
 │   │   └── __tests__/         # Vitest tests
 │   ├── dist/                  # Compiled JS (gitignored)
 │   ├── package.json
