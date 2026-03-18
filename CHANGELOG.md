@@ -74,6 +74,6 @@ cc+ provides a browser-based chat interface backed by the Claude Code SDK, with 
 ---
 
 ## Links
-- **Repository**: https://github.com/mjfuentes/ccplus
+- **Repository**: https://github.com/kerplunkstudio/ccplus
 - **Documentation**: See CLAUDE.md for architecture and development guide
-- **Issue Tracker**: https://github.com/mjfuentes/ccplus/issues
+- **Issue Tracker**: https://github.com/kerplunkstudio/ccplus/issues

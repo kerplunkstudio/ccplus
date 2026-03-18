@@ -339,13 +339,13 @@ function createMenu() {
         {
           label: 'GitHub Repository',
           click: async () => {
-            await shell.openExternal('https://github.com/mjfuentes/ccplus');
+            await shell.openExternal('https://github.com/kerplunkstudio/ccplus');
           },
         },
         {
           label: 'Report Issue',
           click: async () => {
-            await shell.openExternal('https://github.com/mjfuentes/ccplus/issues');
+            await shell.openExternal('https://github.com/kerplunkstudio/ccplus/issues');
           },
         },
       ],

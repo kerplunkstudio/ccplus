@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "cc+ Desktop - Observability for Claude Code",
   "main": "electron/main.js",
-  "author": "mjfuentes",
+  "author": "kerplunkstudio",
   "license": "MIT",
   "scripts": {
     "electron": "electron .",
@@ -24,7 +24,7 @@
       "category": "Development",
       "icon": "electron/assets/icon.png",
       "target": ["AppImage", "deb"],
-      "maintainer": "mjfuentes",
+      "maintainer": "kerplunkstudio",
       "description": "Web UI and observability layer for Claude Code"
     },
     "win": {

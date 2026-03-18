@@ -32,7 +32,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   console.log(
     '%c CC+ %c Observability for Claude Code %c\n\n' +
     'You found the console. Respect.\n' +
-    'github.com/Kerplunk-Studio/ccplus',
+    'github.com/kerplunkstudio/ccplus',
     'background: #22D3EE; color: #18181B; font-weight: bold; padding: 4px 8px; border-radius: 4px 0 0 4px;',
     'background: #27272A; color: #E4E4E7; padding: 4px 8px; border-radius: 0 4px 4px 0;',
     ''

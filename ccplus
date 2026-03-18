@@ -1184,7 +1184,7 @@ Building Desktop Apps:
 
 Installation:
   One-line installer (clones repo, runs setup, starts server):
-    curl -fsSL https://raw.githubusercontent.com/mjfuentes/ccplus/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/kerplunkstudio/ccplus/main/install.sh | bash
 
 Platform Support:
   - macOS: Full support (tested on 10.15+)

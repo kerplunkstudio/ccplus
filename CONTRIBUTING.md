@@ -14,7 +14,7 @@ Thank you for your interest in contributing to cc+! This guide will help you get
 
 ```bash
 # Clone the repository
-git clone https://github.com/Kerplunk-Studio/ccplus.git
+git clone https://github.com/kerplunkstudio/ccplus.git
 cd ccplus
 
 # Install dependencies and build (interactive setup on first run)
@@ -250,7 +250,7 @@ test: add coverage for SDK session cancellation
 
 ## Reporting Bugs
 
-Open a [GitHub Issue](https://github.com/Kerplunk-Studio/ccplus/issues) with:
+Open a [GitHub Issue](https://github.com/kerplunkstudio/ccplus/issues) with:
 - **Description**: What happened vs. what you expected
 - **Steps to reproduce**: Minimal example to trigger the bug
 - **Environment**: OS, Node.js version, cc+ version
@@ -258,7 +258,7 @@ Open a [GitHub Issue](https://github.com/Kerplunk-Studio/ccplus/issues) with:
 
 ## Requesting Features
 
-Open a [GitHub Issue](https://github.com/Kerplunk-Studio/ccplus/issues) with:
+Open a [GitHub Issue](https://github.com/kerplunkstudio/ccplus/issues) with:
 - **Use case**: What problem does this solve?
 - **Proposed solution**: How should it work?
 - **Alternatives**: Other approaches you considered
@@ -300,9 +300,9 @@ curl http://localhost:4000/health | jq
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/Kerplunk-Studio/ccplus/discussions) or reach out on the project repository.
+Open a [GitHub Discussion](https://github.com/kerplunkstudio/ccplus/discussions) or reach out on the project repository.
 
 ---
 
 **Author**: Matias Fuentes
-**GitHub**: https://github.com/Kerplunk-Studio/ccplus
+**GitHub**: https://github.com/kerplunkstudio/ccplus

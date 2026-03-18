@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # cc+ installer - One-line install for ccplus
-# Usage: curl -fsSL https://raw.githubusercontent.com/mjfuentes/ccplus/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/kerplunkstudio/ccplus/main/install.sh | bash
 
 set -euo pipefail
 
@@ -261,7 +261,7 @@ clone_repo() {
 
     info "Cloning from GitHub to $INSTALL_DIR..."
 
-    if ! git clone --quiet https://github.com/mjfuentes/ccplus.git "$INSTALL_DIR" 2>&1; then
+    if ! git clone --quiet https://github.com/kerplunkstudio/ccplus.git "$INSTALL_DIR" 2>&1; then
         error "Failed to clone repository"
         exit 1
     fi
