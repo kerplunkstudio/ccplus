@@ -4,6 +4,7 @@ import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { PathAutocomplete } from './PathAutocomplete';
 import { useSkills } from '../hooks/useSkills';
 import { useToast } from '../contexts/ToastContext';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 import {
   parseSlashCommand,
   shouldShowAutocomplete,
@@ -61,6 +62,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
 
+  // Voice input
+  const { isRecording, isSupported: isVoiceSupported, transcript, error: voiceError, startRecording, stopRecording } = useVoiceInput();
+  const isPressingRef = useRef(false);
+
   // Handle pending input from "Send to new session"
   useEffect(() => {
     if (pendingInput && onClearPendingInput) {
@@ -72,6 +77,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }, 0);
     }
   }, [pendingInput, onClearPendingInput]);
+
+  // Handle voice transcript updates
+  useEffect(() => {
+    if (transcript && !isRecording && isPressingRef.current) {
+      // Append transcript to current input when recording stops
+      const currentValue = input;
+      const separator = currentValue && !currentValue.endsWith('\n') && !currentValue.endsWith(' ') ? ' ' : '';
+      const newValue = currentValue + separator + transcript;
+      setInput(newValue);
+      isPressingRef.current = false;
+    }
+  }, [transcript, isRecording, input]);
+
+  // Show voice error as toast
+  useEffect(() => {
+    if (voiceError) {
+      showToast(voiceError, 'error');
+    }
+  }, [voiceError, showToast]);
 
   // Persist input drafts per session
   useEffect(() => {
@@ -375,7 +399,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  // Voice input handlers
+  const handleVoiceStart = useCallback(() => {
+    if (!isVoiceSupported || isRecording) return;
+    isPressingRef.current = true;
+    startRecording();
+  }, [isVoiceSupported, isRecording, startRecording]);
+
+  const handleVoiceStop = useCallback(() => {
+    if (!isVoiceSupported || !isRecording) return;
+    stopRecording();
+  }, [isVoiceSupported, isRecording, stopRecording]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Space bar shortcut for voice input (only when textarea is empty)
+    if (e.key === ' ' && input.trim() === '' && isVoiceSupported && !isRecording) {
+      e.preventDefault();
+      handleVoiceStart();
+      return;
+    }
+
     // Handle path autocomplete navigation
     if (showPathAutocomplete && pathSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -498,6 +541,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Stop voice recording when space bar is released
+    if (e.key === ' ' && isRecording) {
+      e.preventDefault();
+      handleVoiceStop();
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -616,6 +667,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
       <div className="input-row">
+        {isRecording && (
+          <div className="voice-recording-bar" aria-hidden="true" />
+        )}
         <div className="input-wrapper">
           <textarea
             ref={textareaRef}
@@ -623,12 +677,45 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
             placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
             disabled={!connected || (streaming && !backgroundProcessing)}
             rows={1}
           />
         </div>
         <div className="input-actions">
+          {isVoiceSupported && (
+            <button
+              className={`voice-btn ${isRecording ? 'recording' : ''}`}
+              onMouseDown={handleVoiceStart}
+              onMouseUp={handleVoiceStop}
+              onMouseLeave={handleVoiceStop}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                handleVoiceStart();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handleVoiceStop();
+              }}
+              disabled={!connected}
+              aria-label={isRecording ? 'Release to stop recording' : 'Hold to record voice'}
+              title={isRecording ? 'Release to stop recording' : 'Hold to record voice (or Space when empty)'}
+            >
+              {isRecording ? (
+                <>
+                  <div className="voice-pulse-ring" aria-hidden="true" />
+                  <div className="voice-pulse-ring" aria-hidden="true" />
+                </>
+              ) : null}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={isRecording ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+          )}
           <input
             type="file"
             ref={fileInputRef}
