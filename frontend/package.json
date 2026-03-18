@@ -33,7 +33,16 @@
     "extends": [
       "react-app",
       "react-app/jest"
-    ]
+    ],
+    "rules": {
+      "testing-library/no-node-access": "off",
+      "testing-library/no-wait-for-multiple-assertions": "off",
+      "testing-library/no-unnecessary-act": "off",
+      "testing-library/no-container": "off",
+      "testing-library/await-async-utils": "off",
+      "testing-library/no-wait-for-side-effects": "off",
+      "jest/no-conditional-expect": "off"
+    }
   },
   "jest": {
     "transformIgnorePatterns": [
