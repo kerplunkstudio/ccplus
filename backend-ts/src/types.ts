@@ -26,4 +26,5 @@ export interface TranscriptEventInput {
   parent_event_id?: string | null;
   data: Record<string, unknown>;
   metadata?: Record<string, unknown> | null;
+  correlation_id?: string;
 }
