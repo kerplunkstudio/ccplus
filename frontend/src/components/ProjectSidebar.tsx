@@ -34,6 +34,7 @@ interface ProjectSidebarProps {
   onNewTabForProject: (projectPath: string) => void;
   onCloseTab: (projectPath: string, sessionId: string) => void;
   onRenameTab: (projectPath: string, sessionId: string, newLabel: string) => void;
+  onOpenSession: (projectPath: string, sessionId: string) => void;
   sidebarWidth: number;
   onSidebarWidthChange: (width: number) => void;
   onNavigate: (page: string) => void;
@@ -56,6 +57,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onNewTabForProject,
   onCloseTab,
   onRenameTab,
+  onOpenSession,
   sidebarWidth,
   onSidebarWidthChange,
   onNavigate,
@@ -398,7 +400,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   };
 
   const handleSearchResultClick = (sessionId: string) => {
-    // Find the project that contains this session
+    // If session is already open in a tab, just switch to it
     const project = projects.find(p =>
       p.tabs.some(tab => tab.sessionId === sessionId)
     );
@@ -406,8 +408,8 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
     if (project) {
       handleSelectSession(project.path, sessionId);
     } else if (activeProjectPath) {
-      // Open the session as a new tab in the active project
-      onSelectTab(activeProjectPath, sessionId);
+      // Create a new tab with this session loaded
+      onOpenSession(activeProjectPath, sessionId);
     }
 
     // Clear search after navigating
