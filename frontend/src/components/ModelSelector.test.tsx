@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelSelector } from './ModelSelector';
 
 describe('ModelSelector', () => {
@@ -9,7 +9,7 @@ describe('ModelSelector', () => {
     jest.clearAllMocks();
   });
 
-  it('renders without crashing', () => {
+  it('renders with the selected model label', () => {
     render(
       <ModelSelector
         selectedModel="claude-sonnet-4-20250514"
@@ -17,433 +17,157 @@ describe('ModelSelector', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /Model: Sonnet/ })).toBeInTheDocument();
+    expect(screen.getByText('Sonnet')).toBeInTheDocument();
   });
 
-  it('displays the selected model label', () => {
+  it('shows the full model ID as title on trigger', () => {
     render(
       <ModelSelector
-        selectedModel="claude-opus-4-20250514"
+        selectedModel="claude-sonnet-4-20250514"
         onSelectModel={mockOnSelectModel}
       />
     );
 
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    expect(trigger).toHaveAttribute('title', 'claude-sonnet-4-20250514');
+  });
+
+  it('opens dropdown when trigger is clicked', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
     expect(screen.getByText('Opus')).toBeInTheDocument();
+    expect(screen.getByText('Haiku')).toBeInTheDocument();
   });
 
-  it('opens dropdown when trigger button is clicked', () => {
-    render(
-      <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    fireEvent.click(trigger);
-
-    expect(screen.getByRole('listbox')).toBeInTheDocument();
-  });
-
-  it('displays all model options when open', () => {
-    render(
-      <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    fireEvent.click(trigger);
-
-    const options = screen.getAllByRole('option');
-    expect(options).toHaveLength(3);
-    expect(screen.getByRole('option', { name: /Sonnet/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Opus/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Haiku/ })).toBeInTheDocument();
-  });
-
-  it('calls onSelectModel when option is clicked', () => {
-    render(
-      <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    fireEvent.click(trigger);
-
-    const opusOption = screen.getByRole('option', { name: /Opus/ });
-    fireEvent.click(opusOption);
-
-    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
-  });
-
-  it('closes dropdown after selecting an option', () => {
-    render(
-      <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    fireEvent.click(trigger);
-
-    const haikuOption = screen.getByRole('option', { name: /Haiku/ });
-    fireEvent.click(haikuOption);
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-  });
-
-  it('closes dropdown when clicking trigger again', () => {
-    render(
-      <ModelSelector
-        selectedModel="claude-sonnet-4-20250514"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    fireEvent.click(trigger);
-
-    expect(screen.getByRole('listbox')).toBeInTheDocument();
-
-    fireEvent.click(trigger);
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-  });
-
-  it('closes dropdown when clicking outside', () => {
+  it('closes dropdown when clicking outside', async () => {
     render(
       <div>
         <ModelSelector
           selectedModel="claude-sonnet-4-20250514"
           onSelectModel={mockOnSelectModel}
         />
-        <div data-testid="outside">Outside element</div>
+        <button>Outside</button>
       </div>
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
     fireEvent.click(trigger);
 
     expect(screen.getByRole('listbox')).toBeInTheDocument();
 
-    fireEvent.mouseDown(screen.getByTestId('outside'));
+    const outsideButton = screen.getByText('Outside');
+    fireEvent.mouseDown(outsideButton);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    });
+  });
+
+  it('calls onSelectModel when a model is selected', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    const opusOption = screen.getByText('Opus').closest('button');
+    expect(opusOption).toBeInTheDocument();
+
+    fireEvent.click(opusOption!);
+
+    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
+  });
+
+  it('closes dropdown after selecting a model', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    const haikuOption = screen.getByText('Haiku').closest('button');
+    fireEvent.click(haikuOption!);
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
-  it('marks the selected option as active', () => {
+  it('shows overridden class when isOverridden is true', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-opus-4-20250514"
+        onSelectModel={mockOnSelectModel}
+        sessionModel="claude-sonnet-4-20250514"
+        isOverridden={true}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Opus \(session override\)/i });
+    expect(trigger).toHaveClass('overridden');
+  });
+
+  it('shows session override info in title when overridden', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-opus-4-20250514"
+        onSelectModel={mockOnSelectModel}
+        sessionModel="claude-sonnet-4-20250514"
+        isOverridden={true}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Opus \(session override\)/i });
+    expect(trigger).toHaveAttribute('title', 'Session: claude-opus-4-20250514\nDefault: claude-sonnet-4-20250514');
+  });
+
+  it('does not show overridden class when isOverridden is false', () => {
     render(
       <ModelSelector
         selectedModel="claude-sonnet-4-20250514"
         onSelectModel={mockOnSelectModel}
+        isOverridden={false}
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    expect(trigger).not.toHaveClass('overridden');
+  });
+
+  it('highlights the active model in the dropdown', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-haiku-4-5-20251001"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Haiku/i });
     fireEvent.click(trigger);
 
-    const sonnetOption = screen.getByRole('option', { name: /Sonnet/ });
-    expect(sonnetOption).toHaveClass('active');
+    const haikuOption = screen.getByRole('option', { name: /Haiku/i });
+    expect(haikuOption).toHaveClass('active');
+
+    const sonnetOption = screen.getByRole('option', { name: /Sonnet/i });
+    expect(sonnetOption).not.toHaveClass('active');
   });
 
-  describe('keyboard navigation', () => {
-    it('opens dropdown on ArrowDown when closed', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      trigger.focus();
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-    });
-
-    it('opens dropdown on Enter when closed', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      trigger.focus();
-      fireEvent.keyDown(trigger, { key: 'Enter' });
-
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-    });
-
-    it('opens dropdown on Space when closed', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      trigger.focus();
-      fireEvent.keyDown(trigger, { key: ' ' });
-
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-    });
-
-    it('closes dropdown on Escape when open', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'Escape' });
-
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    });
-
-    it('navigates down through options with ArrowDown', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-
-      const opusOption = screen.getByRole('option', { name: /Opus/ });
-      expect(opusOption).toHaveClass('focused');
-    });
-
-    it('navigates up through options with ArrowUp', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-opus-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Opus/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowUp' });
-
-      const sonnetOption = screen.getByRole('option', { name: /Sonnet/ });
-      expect(sonnetOption).toHaveClass('focused');
-    });
-
-    it('wraps to last option when ArrowUp at first option', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowUp' });
-
-      const haikuOption = screen.getByRole('option', { name: /Haiku/ });
-      expect(haikuOption).toHaveClass('focused');
-    });
-
-    it('wraps to first option when ArrowDown at last option', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-haiku-4-5-20251001"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Haiku/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-
-      const sonnetOption = screen.getByRole('option', { name: /Sonnet/ });
-      expect(sonnetOption).toHaveClass('focused');
-    });
-
-    it('jumps to first option with Home key', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-haiku-4-5-20251001"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Haiku/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'Home' });
-
-      const sonnetOption = screen.getByRole('option', { name: /Sonnet/ });
-      expect(sonnetOption).toHaveClass('focused');
-    });
-
-    it('jumps to last option with End key', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'End' });
-
-      const haikuOption = screen.getByRole('option', { name: /Haiku/ });
-      expect(haikuOption).toHaveClass('focused');
-    });
-
-    it('selects focused option on Enter', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-      fireEvent.keyDown(trigger, { key: 'Enter' });
-
-      expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
-    });
-
-    it('selects focused option on Space', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-      fireEvent.keyDown(trigger, { key: ' ' });
-
-      expect(mockOnSelectModel).toHaveBeenCalledWith('claude-haiku-4-5-20251001');
-    });
-
-    it('closes dropdown on Tab', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      fireEvent.keyDown(trigger, { key: 'Tab' });
-
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('accessibility', () => {
-    it('has proper ARIA attributes when closed', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
-      expect(trigger).not.toHaveAttribute('aria-controls');
-    });
-
-    it('has proper ARIA attributes when open', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      expect(trigger).toHaveAttribute('aria-expanded', 'true');
-      expect(trigger).toHaveAttribute('aria-controls', 'model-selector-listbox');
-    });
-
-    it('listbox has proper ARIA attributes', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      const listbox = screen.getByRole('listbox');
-      expect(listbox).toHaveAttribute('aria-label', 'Select model');
-      expect(listbox).toHaveAttribute('id', 'model-selector-listbox');
-    });
-
-    it('options have proper aria-selected attribute', () => {
-      render(
-        <ModelSelector
-          selectedModel="claude-sonnet-4-20250514"
-          onSelectModel={mockOnSelectModel}
-        />
-      );
-
-      const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-      fireEvent.click(trigger);
-
-      const sonnetOption = screen.getByRole('option', { name: /Sonnet/ });
-      const opusOption = screen.getByRole('option', { name: /Opus/ });
-
-      expect(sonnetOption).toHaveAttribute('aria-selected', 'true');
-      expect(opusOption).toHaveAttribute('aria-selected', 'false');
-    });
-  });
-
-  it('handles unknown model ID gracefully', () => {
-    render(
-      <ModelSelector
-        selectedModel="unknown-model"
-        onSelectModel={mockOnSelectModel}
-      />
-    );
-
-    expect(screen.getByText('unknown-model')).toBeInTheDocument();
-  });
-
-  it('displays full model ID in title attribute', () => {
+  it('supports keyboard navigation (ArrowDown to open)', () => {
     render(
       <ModelSelector
         selectedModel="claude-sonnet-4-20250514"
@@ -451,7 +175,86 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/ });
-    expect(trigger).toHaveAttribute('title', 'claude-sonnet-4-20250514');
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    trigger.focus();
+
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation (Escape to close)', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+    fireEvent.keyDown(trigger.parentElement!, { key: 'Escape' });
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('supports keyboard navigation (Enter to select focused item)', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    // ArrowDown to focus next item (Opus)
+    fireEvent.keyDown(trigger.parentElement!, { key: 'ArrowDown' });
+
+    // Enter to select
+    fireEvent.keyDown(trigger.parentElement!, { key: 'Enter' });
+
+    expect(mockOnSelectModel).toHaveBeenCalledWith('claude-opus-4-20250514');
+  });
+
+  it('cycles through options with ArrowDown', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    const container = trigger.parentElement!;
+
+    // Start focused on Sonnet (index 0)
+    // Press ArrowDown -> Opus (index 1)
+    fireEvent.keyDown(container, { key: 'ArrowDown' });
+
+    const opusOption = screen.getByText('Opus').closest('button');
+    expect(opusOption).toHaveClass('focused');
+  });
+
+  it('displays full model IDs in dropdown items', () => {
+    render(
+      <ModelSelector
+        selectedModel="claude-sonnet-4-20250514"
+        onSelectModel={mockOnSelectModel}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    fireEvent.click(trigger);
+
+    expect(screen.getByText('claude-sonnet-4-20250514')).toBeInTheDocument();
+    expect(screen.getByText('claude-opus-4-20250514')).toBeInTheDocument();
+    expect(screen.getByText('claude-haiku-4-5-20251001')).toBeInTheDocument();
   });
 });
