@@ -43,7 +43,12 @@
     },
     "files": [
       "electron/**/*",
-      "!electron/assets/icon.sketch"
+      "!electron/assets/icon.sketch",
+      "backend-ts/dist/**/*",
+      "backend-ts/node_modules/**/*",
+      "backend-ts/package.json",
+      "static/chat/**/*",
+      "VERSION"
     ],
     "directories": {
       "buildResources": "electron/assets"
