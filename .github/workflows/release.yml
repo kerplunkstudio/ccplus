@@ -20,6 +20,15 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Cache electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron-builder
+            ~/Library/Caches/electron
+          key: electron-builder-macos-${{ hashFiles('package.json') }}
+          restore-keys: electron-builder-macos-
+
       - name: Install root dependencies
         run: npm ci
 
@@ -76,6 +85,15 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Cache electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron-builder
+            ~/.cache/electron
+          key: electron-builder-linux-${{ hashFiles('package.json') }}
+          restore-keys: electron-builder-linux-
+
       - name: Install root dependencies
         run: npm ci
 
@@ -124,6 +142,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Cache electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron-builder\Cache
+            ~\AppData\Local\electron\Cache
+          key: electron-builder-windows-${{ hashFiles('package.json') }}
+          restore-keys: electron-builder-windows-
 
       - name: Install root dependencies
         run: npm ci
