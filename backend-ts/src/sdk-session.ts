@@ -240,6 +240,8 @@ interface SessionCallbacks {
   onRateLimit?: (data: { retryAfterMs: number; rateLimitedAt: string }) => void;
   onPromptSuggestion?: (suggestions: string[]) => void;
   onCompactBoundary?: () => void;
+  onDevServerDetected?: (url: string) => void;
+  onCaptureScreenshot?: () => Promise<{ image?: string; url?: string; error?: string }>;
 }
 
 interface ActiveSession {
@@ -343,6 +345,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
   const agentIdToToolUseId = new Map<string, string>();
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
+  const detectedDevServerUrls = new Set<string>();
 
   const preToolUse: HookCallback = async (hookInput, toolUseId) => {
     const input = hookInput as Record<string, unknown>;
@@ -500,6 +503,60 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
       } catch (e) {
         log.error("Database write failed (postToolUse tool)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
+      }
+
+      // Detect dev server URLs from Bash tool output
+      if (toolName === "Bash") {
+        const toolResponse = input.tool_response;
+        let responseText = "";
+
+        // Convert tool_response to string
+        if (typeof toolResponse === "string") {
+          responseText = toolResponse;
+        } else if (toolResponse && typeof toolResponse === "object") {
+          try {
+            responseText = JSON.stringify(toolResponse);
+          } catch {
+            responseText = String(toolResponse);
+          }
+        }
+
+        if (responseText) {
+          // Regex patterns for dev server URLs
+          const urlPatterns = [
+            /(?:Local|listening on|ready on|started at|running at|server running on)[:\s]+(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/gi,
+            /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/g,
+          ];
+
+          for (const pattern of urlPatterns) {
+            const matches = responseText.matchAll(pattern);
+            for (const match of matches) {
+              let url = match[0];
+
+              // Extract just the URL part if it's in a sentence
+              const urlMatch = url.match(/https?:\/\/[^\s]+/);
+              if (urlMatch) {
+                url = urlMatch[0];
+              } else {
+                // Add http:// if missing
+                const hostMatch = url.match(/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/);
+                if (hostMatch) {
+                  url = `http://${hostMatch[0]}`;
+                }
+              }
+
+              // Clean trailing punctuation
+              url = url.replace(/[,;.]+$/, "");
+
+              // Emit if new
+              if (url && !detectedDevServerUrls.has(url)) {
+                detectedDevServerUrls.add(url);
+                session.callbacks.onDevServerDetected?.(url);
+                log.debug("Dev server URL detected", { sessionId, url, toolUseId: actualToolUseId });
+              }
+            }
+          }
+        }
       }
     }
 
@@ -744,6 +801,78 @@ function buildSignalServer(sessionId: string, callbacks: SessionCallbacks) {
         async (args) => {
           callbacks.onSignal?.({ type: "status", data: args });
           return { content: [{ type: "text" as const, text: "Status reported." }] };
+        },
+      ),
+      tool(
+        "VerifyApp",
+        "Take a screenshot of the running web application in the browser tab. Use this to verify visual changes, check layouts, and inspect the UI. Returns a screenshot image of the app.",
+        {
+          url: z.string().optional().describe("Optional specific URL to verify. If not provided, captures the current page."),
+        },
+        async (args) => {
+          if (!callbacks.onCaptureScreenshot) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Error: Screenshot capability not available. No browser tab is open or the app is running in a non-Electron environment.",
+                },
+              ],
+            };
+          }
+
+          try {
+            const result = await callbacks.onCaptureScreenshot();
+
+            if (result.error) {
+              return {
+                content: [
+                  {
+                    type: "text" as const,
+                    text: `Error capturing screenshot: ${result.error}`,
+                  },
+                ],
+              };
+            }
+
+            if (!result.image) {
+              return {
+                content: [
+                  {
+                    type: "text" as const,
+                    text: "Error: No image data returned from browser tab.",
+                  },
+                ],
+              };
+            }
+
+            // Return both text description and the image
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Screenshot captured of ${result.url || "browser tab"}. The image shows the current state of the web application.`,
+                },
+                {
+                  type: "image" as const,
+                  source: {
+                    type: "base64" as const,
+                    media_type: "image/png" as const,
+                    data: result.image,
+                  },
+                },
+              ],
+            };
+          } catch (error) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Error: Failed to capture screenshot: ${String(error)}`,
+                },
+              ],
+            };
+          }
         },
       ),
     ],

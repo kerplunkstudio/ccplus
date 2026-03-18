@@ -13,6 +13,17 @@ import {
 } from '../utils/slashCommands';
 import './ChatInput.css';
 
+export interface ScheduledTask {
+  id: string;
+  prompt: string;
+  intervalMs: number;
+  recurring: boolean;
+  createdAt: number;
+  lastRunAt: number | null;
+  nextRunAt: number;
+  paused: boolean;
+}
+
 interface ChatInputProps {
   connected: boolean;
   streaming: boolean;
@@ -26,6 +37,11 @@ interface ChatInputProps {
   onClearPendingInput?: () => void;
   rateLimitState?: { active: boolean; retryAfterMs: number } | null;
   promptSuggestions?: string[];
+  scheduledTasks?: ScheduledTask[];
+  onCreateScheduledTask?: (prompt: string, interval: string) => void;
+  onDeleteScheduledTask?: (id: string) => void;
+  onPauseScheduledTask?: (id: string) => void;
+  onResumeScheduledTask?: (id: string) => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -41,6 +57,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onClearPendingInput,
   rateLimitState,
   promptSuggestions = [],
+  scheduledTasks = [],
+  onCreateScheduledTask,
+  onDeleteScheduledTask,
+  onPauseScheduledTask,
+  onResumeScheduledTask,
 }) => {
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
@@ -179,6 +200,47 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleSubmit = () => {
     const trimmed = input.trim();
     if ((!trimmed && uploadedImages.length === 0) || !connected) return;
+
+    // Check for /loop command
+    if (trimmed.startsWith('/loop')) {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length < 3) {
+        // Show usage hint
+        showToast('/loop usage: /loop <interval> <prompt>\nExample: /loop 5m check the deploy', 'info');
+        return;
+      }
+
+      const interval = parts[1];
+      const prompt = parts.slice(2).join(' ');
+
+      if (!onCreateScheduledTask) {
+        showToast('Scheduled tasks not available', 'error');
+        return;
+      }
+
+      // Validate interval format
+      if (!/^\d+(s|m|h|d)$/.test(interval)) {
+        showToast('Invalid interval format. Use: 30s, 5m, 2h, or 1d', 'error');
+        return;
+      }
+
+      onCreateScheduledTask(prompt, interval);
+      showToast(`Scheduled task created: "${prompt}" every ${interval}`, 'success');
+      setInput('');
+      setUploadedImages([]);
+      historyIndexRef.current = -1;
+      savedDraftRef.current = '';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      if (sessionId) {
+        inputDraftsRef.current = {
+          ...inputDraftsRef.current,
+          [sessionId]: '',
+        };
+      }
+      return;
+    }
 
     const imageIds = uploadedImages.map(img => img.id);
     onSendMessage(trimmed || '[Image]', undefined, undefined, imageIds.length > 0 ? imageIds : undefined);
