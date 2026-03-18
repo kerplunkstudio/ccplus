@@ -1007,6 +1007,16 @@
             pointer-events: none;
         }
 
+        .agent-card.completed {
+            border-color: #332F2C;
+            background: #1E1D2A;
+        }
+
+        .agent-card.completed::before {
+            background: #A3D977;
+            box-shadow: none;
+        }
+
         @keyframes agentShimmer {
             0% {
                 background-position: 200% 0;
@@ -1271,10 +1281,10 @@
                                             <span class="sidebar-session-dot"></span>
                                         </div>
                                         <div class="sidebar-session" onclick="switchSession(1)">
-                                            <span class="sidebar-session-label">Fix build errors</span>
+                                            <span class="sidebar-session-label">Add unit tests</span>
                                         </div>
                                         <div class="sidebar-session" onclick="switchSession(2)">
-                                            <span class="sidebar-session-label">Add unit tests</span>
+                                            <span class="sidebar-session-label">Preview</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1292,8 +1302,8 @@
                             <!-- Tab bar -->
                             <div class="app-tab-bar">
                                 <div class="app-tab active" onclick="switchSession(0)">Refactor auth module</div>
-                                <div class="app-tab" onclick="switchSession(1)">Fix build errors</div>
-                                <div class="app-tab" onclick="switchSession(2)">Add unit tests</div>
+                                <div class="app-tab" onclick="switchSession(1)">Add unit tests</div>
+                                <div class="app-tab" onclick="switchSession(2)">Preview</div>
                                 <button class="app-tab-new">+</button>
                             </div>
 
@@ -1329,44 +1339,8 @@
                                     </div>
                                 </div>
 
-                                <!-- Session 2: Fix build errors -->
+                                <!-- Session 2: Add unit tests -->
                                 <div class="app-chat-panel" id="chat-1">
-                                    <div class="chat-message user">
-                                        The TypeScript build is failing with 12 errors, fix them
-                                    </div>
-                                    <div class="chat-message assistant">
-                                        I'll analyze the build errors and fix them one by one.<span class="streaming-cursor"></span>
-                                    </div>
-                                    <div class="tool-log">
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Bash</span>
-                                            <span class="tool-file">tsc --noEmit</span>
-                                            <span class="tool-duration">1.2s</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Read</span>
-                                            <span class="tool-file">src/types/index.ts</span>
-                                            <span class="tool-duration">90ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Edit</span>
-                                            <span class="tool-file">src/types/index.ts</span>
-                                            <span class="tool-duration">240ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot running"></span>
-                                            <span class="tool-name">Bash</span>
-                                            <span class="tool-file">tsc --noEmit</span>
-                                            <span class="tool-spinner"></span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Session 3: Add unit tests -->
-                                <div class="app-chat-panel" id="chat-2">
                                     <div class="chat-message user">
                                         Add unit tests for the database module, target 80% coverage
                                     </div>
@@ -1401,11 +1375,21 @@
                                     </div>
                                 </div>
 
+                                <!-- Session 3: Preview -->
+                                <div class="app-chat-panel" id="chat-2">
+                                    <div class="chat-message user">
+                                        Build a landing page for ccplus.run
+                                    </div>
+                                    <div class="chat-message assistant">
+                                        I've built a single-page landing site with the Electric Ember theme, interactive app replica, and session switching.
+                                    </div>
+                                </div>
+
                                 <!-- Input bar -->
                                 <div class="app-input-bar">
                                     <div class="app-input-row">
                                         <div class="app-input-wrapper">
-                                            <span class="app-input-text">Ask Claude anything...</span>
+                                            <span class="app-input-text">Ask cc+ anything...</span>
                                         </div>
                                         <div class="app-send-btn">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="#141316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1462,59 +1446,8 @@
                                     </div>
                                 </div>
 
-                                <!-- Session 2: Fix build errors -->
+                                <!-- Session 2: Add unit tests -->
                                 <div class="app-activity-panel" id="activity-1">
-                                    <div class="activity-header">
-                                        <span class="activity-title">Activity</span>
-                                        <span class="activity-count">18</span>
-                                    </div>
-                                    <div class="activity-tabs">
-                                        <div class="activity-tab active">TREE</div>
-                                        <div class="activity-tab">TOOLS</div>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="agent-card running">
-                                            <div class="agent-type">build-error-resolver</div>
-                                            <div class="agent-desc">Fix TypeScript build errors</div>
-                                            <div class="agent-children">
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Bash</span>
-                                                        <span class="tool-target">tsc --noEmit</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">1.2s</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Read</span>
-                                                        <span class="tool-target">index.ts</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">90ms</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Edit</span>
-                                                        <span class="tool-target">index.ts</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">240ms</span>
-                                                </div>
-                                                <div class="tool-row running">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Bash</span>
-                                                        <span class="tool-target">tsc --noEmit</span>
-                                                    </div>
-                                                    <div class="tool-status-icon running"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Session 3: Add unit tests -->
-                                <div class="app-activity-panel" id="activity-2">
                                     <div class="activity-header">
                                         <span class="activity-title">Activity</span>
                                         <span class="activity-count">24</span>
@@ -1558,6 +1491,58 @@
                                                         <span class="tool-target">npm test</span>
                                                     </div>
                                                     <div class="tool-status-icon running"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Session 3: Preview -->
+                                <div class="app-activity-panel" id="activity-2">
+                                    <div class="activity-header">
+                                        <span class="activity-title">Activity</span>
+                                        <span class="activity-count">8</span>
+                                    </div>
+                                    <div class="activity-tabs">
+                                        <div class="activity-tab active">TREE</div>
+                                        <div class="activity-tab">TOOLS</div>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="agent-card completed">
+                                            <div class="agent-type">frontend-agent</div>
+                                            <div class="agent-desc">Build landing page</div>
+                                            <div class="agent-children">
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">index.css</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">90ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">ChatPanel.css</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">120ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Read</span>
+                                                        <span class="tool-target">ActivityTree.css</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">85ms</span>
+                                                </div>
+                                                <div class="tool-row completed">
+                                                    <div class="tool-info">
+                                                        <span class="tool-label">Write</span>
+                                                        <span class="tool-target">index.html</span>
+                                                    </div>
+                                                    <div class="tool-status-icon completed"></div>
+                                                    <span class="tool-time">2.4s</span>
                                                 </div>
                                             </div>
                                         </div>
