@@ -1,6 +1,6 @@
 {
   "name": "ccplus-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "cc+ backend - TypeScript rewrite",
   "type": "module",
   "main": "dist/server.js",
