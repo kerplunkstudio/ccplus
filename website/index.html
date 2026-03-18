@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>cc+ — Watch agents work</title>
     <meta name="description" content="Claude Code with eyes. Free desktop app. Multi-tab sessions. Real-time observability.">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -145,13 +146,17 @@
             border: 1px solid oklch(30% 0.01 60);
             border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: clamp(0.8rem, 1.3vw, 0.95rem);
+            font-size: clamp(0.75rem, 1.2vw, 0.9rem);
             color: var(--accent);
-            max-width: 500px;
+            max-width: 100%;
         }
 
         .hero-install-command code {
             flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .hero-copy-btn {
@@ -172,6 +177,15 @@
 
         .hero-copy-btn:hover {
             background: oklch(80% 0.19 45);
+        }
+
+        .hero-install-command.copied {
+            border-color: var(--accent);
+            transition: border-color 0.15s ease;
+        }
+
+        .hero-install-command.copied .hero-copy-btn {
+            background: oklch(55% 0.15 145);
         }
 
         .hero-cta {
@@ -521,7 +535,7 @@
         .app-activity-panel {
             display: none;
             padding: 1rem;
-            overflow-y: auto;
+            overflow: hidden;
             height: 100%;
         }
 
@@ -695,71 +709,166 @@
         }
 
         .preview-page {
-            padding: 2rem;
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            height: 100%;
             color: oklch(20% 0 0);
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 0.7rem;
         }
 
-        .preview-nav {
+        .preview-sidebar {
+            background: oklch(97% 0.005 260);
+            border-right: 1px solid oklch(90% 0.01 60);
+            padding: 1rem 0;
+        }
+
+        .preview-sidebar-brand {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: oklch(30% 0.1 260);
+            padding: 0 1rem 1rem;
+            border-bottom: 1px solid oklch(90% 0.01 60);
+            margin-bottom: 0.5rem;
+        }
+
+        .preview-sidebar-item {
+            padding: 0.4rem 1rem;
+            color: oklch(45% 0 0);
+            cursor: default;
+        }
+
+        .preview-sidebar-item.active {
+            background: oklch(93% 0.02 260);
+            color: oklch(30% 0.1 260);
+            font-weight: 600;
+            border-right: 2px solid oklch(55% 0.15 260);
+        }
+
+        .preview-main {
+            padding: 1.25rem;
+            overflow: hidden;
+        }
+
+        .preview-topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 3rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid oklch(85% 0.01 60);
-        }
-
-        .preview-logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: oklch(15% 0 0);
-        }
-
-        .preview-nav-links {
-            display: flex;
-            gap: 1.5rem;
-            font-size: 0.875rem;
-            color: oklch(40% 0 0);
-        }
-
-        .preview-hero {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-
-        .preview-heading {
-            font-size: 2rem;
-            font-weight: 700;
-            color: oklch(15% 0 0);
             margin-bottom: 1rem;
         }
 
-        .preview-subtext {
-            font-size: 1rem;
-            color: oklch(40% 0 0);
-            margin-bottom: 1.5rem;
+        .preview-page-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: oklch(15% 0 0);
         }
 
-        .preview-btn {
-            display: inline-block;
-            padding: 0.75rem 1.5rem;
+        .preview-topbar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .preview-btn-sm {
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+        }
+
+        .preview-btn-primary {
             background: oklch(55% 0.15 260);
             color: white;
-            font-weight: 600;
-            border-radius: 6px;
         }
 
-        .preview-cards {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
-        }
-
-        .preview-card {
-            background: oklch(95% 0.01 60);
+        .preview-btn-ghost {
+            background: none;
             border: 1px solid oklch(85% 0.01 60);
-            border-radius: 8px;
-            height: 120px;
+            color: oklch(40% 0 0);
+        }
+
+        .preview-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .preview-stat {
+            background: oklch(97% 0.005 60);
+            border: 1px solid oklch(90% 0.01 60);
+            border-radius: 6px;
+            padding: 0.6rem 0.75rem;
+        }
+
+        .preview-stat-label {
+            font-size: 0.6rem;
+            color: oklch(50% 0 0);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.25rem;
+        }
+
+        .preview-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: oklch(15% 0 0);
+        }
+
+        .preview-stat-value.green { color: oklch(50% 0.15 150); }
+        .preview-stat-value.red { color: oklch(55% 0.2 25); }
+        .preview-stat-value.blue { color: oklch(50% 0.15 260); }
+
+        .preview-table {
+            width: 100%;
+            border: 1px solid oklch(90% 0.01 60);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .preview-table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 80px;
+            background: oklch(97% 0.005 60);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.6rem;
+            font-weight: 600;
+            color: oklch(45% 0 0);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-bottom: 1px solid oklch(90% 0.01 60);
+        }
+
+        .preview-table-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 80px;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid oklch(94% 0.005 60);
+            align-items: center;
+        }
+
+        .preview-table-row:last-child { border-bottom: none; }
+
+        .preview-badge {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.55rem;
+            font-weight: 600;
+        }
+
+        .preview-badge.success {
+            background: oklch(92% 0.05 150);
+            color: oklch(40% 0.15 150);
+        }
+
+        .preview-badge.warning {
+            background: oklch(92% 0.05 80);
+            color: oklch(45% 0.15 80);
+        }
+
+        .preview-badge.pending {
+            background: oklch(92% 0.05 260);
+            color: oklch(45% 0.15 260);
         }
 
         /* Features Grid - NEW COMPACT DESIGN */
@@ -778,19 +887,27 @@
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 1.5rem;
             margin-bottom: clamp(2rem, 4vw, 3rem);
         }
 
-        @media (max-width: 900px) {
-            .features-grid {
+        .features-grid-secondary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: clamp(2rem, 4vw, 3rem);
+        }
+
+        @media (max-width: 1100px) {
+            .features-grid-secondary {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
-        @media (max-width: 600px) {
-            .features-grid {
+        @media (max-width: 768px) {
+            .features-grid,
+            .features-grid-secondary {
                 grid-template-columns: 1fr;
             }
         }
@@ -801,6 +918,11 @@
             border-radius: 6px;
             padding: 1.25rem;
             transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .feature-card.featured {
+            padding: 1.75rem;
+            border-top: 3px solid var(--accent);
         }
 
         .feature-card:hover {
@@ -815,6 +937,11 @@
             margin-bottom: 0.5rem;
             letter-spacing: -0.01em;
             color: var(--warm-white);
+        }
+
+        .feature-card.featured h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.75rem;
         }
 
         .feature-card p {
@@ -980,7 +1107,24 @@
             }
 
             .app-window {
+                height: auto;
+            }
+
+            .app-replica {
+                grid-template-columns: 1fr;
+                height: 400px;
+            }
+
+            .app-sidebar {
                 display: none;
+            }
+
+            .app-content {
+                grid-template-columns: 1fr;
+            }
+
+            .app-activity {
+                display: none !important;
             }
 
             .nav-links {
@@ -999,8 +1143,8 @@
         <div class="container">
             <a href="#" class="logo">cc+</a>
             <ul class="nav-links">
-                <li><a href="https://github.com/mjfuentes/ccplus">GitHub</a></li>
-                <li><a href="https://github.com/mjfuentes/ccplus#readme">Docs</a></li>
+                <li><a href="https://github.com/kerplunkstudio/ccplus">GitHub</a></li>
+                <li><a href="https://github.com/kerplunkstudio/ccplus#readme">Docs</a></li>
             </ul>
         </div>
     </nav>
@@ -1050,14 +1194,14 @@
                                     <span class="sidebar-activity-dot"></span>
                                 </div>
                                 <div class="sidebar-sessions">
-                                    <div class="sidebar-session active" onclick="switchSession(0)">
+                                    <div class="sidebar-session active">
                                         <span class="sidebar-session-label">Refactor auth module</span>
                                         <span class="sidebar-session-dot"></span>
                                     </div>
-                                    <div class="sidebar-session" onclick="switchSession(1)">
+                                    <div class="sidebar-session">
                                         <span class="sidebar-session-label">Add unit tests</span>
                                     </div>
-                                    <div class="sidebar-session" onclick="switchSession(2)">
+                                    <div class="sidebar-session">
                                         <span class="sidebar-session-label">Preview</span>
                                     </div>
                                 </div>
@@ -1069,9 +1213,9 @@
                     <div class="app-main">
                         <!-- Tab Bar -->
                         <div class="app-tabs">
-                            <div class="app-tab active" onclick="switchSession(0)">Refactor auth module</div>
-                            <div class="app-tab" onclick="switchSession(1)">Add unit tests</div>
-                            <div class="app-tab" onclick="switchSession(2)">Preview</div>
+                            <div class="app-tab active">Refactor auth module</div>
+                            <div class="app-tab">Add unit tests</div>
+                            <div class="app-tab">Preview</div>
                             <button class="app-tab-new">+</button>
                         </div>
 
@@ -1132,23 +1276,72 @@
                                         </div>
                                         <div class="browser-content">
                                             <div class="preview-page">
-                                                <div class="preview-nav">
-                                                    <span class="preview-logo">MyApp</span>
-                                                    <div class="preview-nav-links">
-                                                        <span>Features</span>
-                                                        <span>Pricing</span>
-                                                        <span>Docs</span>
+                                                <div class="preview-sidebar">
+                                                    <div class="preview-sidebar-brand">Acme</div>
+                                                    <div class="preview-sidebar-item active">Dashboard</div>
+                                                    <div class="preview-sidebar-item">Orders</div>
+                                                    <div class="preview-sidebar-item">Customers</div>
+                                                    <div class="preview-sidebar-item">Products</div>
+                                                    <div class="preview-sidebar-item">Settings</div>
+                                                </div>
+                                                <div class="preview-main">
+                                                    <div class="preview-topbar">
+                                                        <span class="preview-page-title">Dashboard</span>
+                                                        <div class="preview-topbar-actions">
+                                                            <span class="preview-btn-sm preview-btn-ghost">Export</span>
+                                                            <span class="preview-btn-sm preview-btn-primary">+ New Order</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div class="preview-hero">
-                                                    <div class="preview-heading">Ship faster with AI</div>
-                                                    <div class="preview-subtext">Build production apps in minutes, not months.</div>
-                                                    <div class="preview-btn">Get Started</div>
-                                                </div>
-                                                <div class="preview-cards">
-                                                    <div class="preview-card"></div>
-                                                    <div class="preview-card"></div>
-                                                    <div class="preview-card"></div>
+                                                    <div class="preview-stats">
+                                                        <div class="preview-stat">
+                                                            <div class="preview-stat-label">Revenue</div>
+                                                            <div class="preview-stat-value">$12,840</div>
+                                                        </div>
+                                                        <div class="preview-stat">
+                                                            <div class="preview-stat-label">Orders</div>
+                                                            <div class="preview-stat-value blue">384</div>
+                                                        </div>
+                                                        <div class="preview-stat">
+                                                            <div class="preview-stat-label">Conversion</div>
+                                                            <div class="preview-stat-value green">3.2%</div>
+                                                        </div>
+                                                        <div class="preview-stat">
+                                                            <div class="preview-stat-label">Refunds</div>
+                                                            <div class="preview-stat-value red">12</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="preview-table">
+                                                        <div class="preview-table-header">
+                                                            <span>Customer</span>
+                                                            <span>Amount</span>
+                                                            <span>Status</span>
+                                                            <span>Date</span>
+                                                        </div>
+                                                        <div class="preview-table-row">
+                                                            <span>Sarah Chen</span>
+                                                            <span>$249.00</span>
+                                                            <span><span class="preview-badge success">Paid</span></span>
+                                                            <span>Mar 18</span>
+                                                        </div>
+                                                        <div class="preview-table-row">
+                                                            <span>Alex Rivera</span>
+                                                            <span>$89.00</span>
+                                                            <span><span class="preview-badge pending">Pending</span></span>
+                                                            <span>Mar 17</span>
+                                                        </div>
+                                                        <div class="preview-table-row">
+                                                            <span>Jordan Lee</span>
+                                                            <span>$512.00</span>
+                                                            <span><span class="preview-badge success">Paid</span></span>
+                                                            <span>Mar 17</span>
+                                                        </div>
+                                                        <div class="preview-table-row">
+                                                            <span>Priya Gupta</span>
+                                                            <span>$147.00</span>
+                                                            <span><span class="preview-badge warning">Refund</span></span>
+                                                            <span>Mar 16</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1331,14 +1524,16 @@
         <div class="container">
             <h2>See what matters, not the code</h2>
             <div class="features-grid">
-                <div class="feature-card">
+                <div class="feature-card featured">
                     <h3>Multi-Tab Sessions</h3>
                     <p>Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Rename, duplicate, reorder. Each tab is its own Claude Code session.</p>
                 </div>
-                <div class="feature-card">
+                <div class="feature-card featured">
                     <h3>Agent Observability</h3>
                     <p>Watch agents work in real time. See what they're doing, not the code they're writing. Activity trees show every tool call, every agent spawn, every decision.</p>
                 </div>
+            </div>
+            <div class="features-grid-secondary">
                 <div class="feature-card">
                     <h3>Built-in Browser</h3>
                     <p>Browser tabs alongside chat. Dev server auto-detection opens tabs automatically.</p>
@@ -1363,9 +1558,14 @@
     <section class="cta">
         <div class="container">
             <h2>Ready to watch them work?</h2>
-            <div class="cta-buttons">
-                <a href="https://github.com/mjfuentes/ccplus/releases" class="btn btn-primary">Install cc+</a>
-                <a href="https://github.com/mjfuentes/ccplus" class="btn btn-secondary">View on GitHub</a>
+            <div style="max-width: 600px; margin: 0 auto;">
+                <div class="hero-install-command" style="margin-bottom: 1.5rem;">
+                    <code>curl -fsSL https://ccplus.run/install | sh</code>
+                    <button class="hero-copy-btn" onclick="copyHeroCommand()">Copy</button>
+                </div>
+                <div class="cta-buttons">
+                    <a href="https://github.com/kerplunkstudio/ccplus" class="btn btn-secondary">View on GitHub</a>
+                </div>
             </div>
         </div>
     </section>
@@ -1381,18 +1581,32 @@
         // Copy hero install command
         function copyHeroCommand() {
             const command = 'curl -fsSL https://ccplus.run/install | sh';
-            navigator.clipboard.writeText(command).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
+            const containers = document.querySelectorAll('.hero-install-command');
+            containers.forEach(container => {
+                const btn = container.querySelector('.hero-copy-btn');
+                navigator.clipboard.writeText(command).then(() => {
+                    btn.textContent = 'Copied';
+                    container.classList.add('copied');
+                    setTimeout(() => {
+                        btn.textContent = 'Copy';
+                        container.classList.remove('copied');
+                    }, 2000);
+                });
             });
         }
 
+        // Auto-cycling state
+        let cycleInterval = null;
+        let cycleTimeout = null;
+        let currentIndex = 0;
+        const totalTabs = 3;
+        const cycleDelay = 4000; // 4 seconds
+        const manualPauseDelay = 12000; // 12 seconds after manual click
+
         // Switch session in app replica
-        function switchSession(index) {
+        function switchSession(index, isAutomatic = false) {
+            currentIndex = index;
+
             // Update tabs
             document.querySelectorAll('.app-tab:not(.app-tab-new)').forEach((tab, i) => {
                 tab.classList.toggle('active', i === index);
@@ -1426,7 +1640,63 @@
                 inputBar.style.display = 'block';
                 if (appContent) appContent.style.gridTemplateColumns = '1fr 400px';
             }
+
+            // If manual click, pause cycling for 12 seconds
+            if (!isAutomatic) {
+                stopCycling();
+                cycleTimeout = setTimeout(() => {
+                    startCycling();
+                }, manualPauseDelay);
+            }
         }
+
+        // Start auto-cycling
+        function startCycling() {
+            if (cycleInterval) return; // Already cycling
+            cycleInterval = setInterval(() => {
+                currentIndex = (currentIndex + 1) % totalTabs;
+                switchSession(currentIndex, true);
+            }, cycleDelay);
+        }
+
+        // Stop auto-cycling
+        function stopCycling() {
+            if (cycleInterval) {
+                clearInterval(cycleInterval);
+                cycleInterval = null;
+            }
+            if (cycleTimeout) {
+                clearTimeout(cycleTimeout);
+                cycleTimeout = null;
+            }
+        }
+
+        // Initialize auto-cycling after page load animation completes
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                startCycling();
+            }, 1500); // Wait for initial animations
+        });
+
+        // Pause cycling on hover, resume on mouse leave
+        const appWindow = document.querySelector('.app-window');
+        if (appWindow) {
+            appWindow.addEventListener('mouseenter', () => {
+                stopCycling();
+            });
+
+            appWindow.addEventListener('mouseleave', () => {
+                startCycling();
+            });
+        }
+
+        // Update all clickable elements to notify the cycling system
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.app-tab:not(.app-tab-new), .sidebar-session').forEach((elem, i) => {
+                const index = i % totalTabs;
+                elem.addEventListener('click', () => switchSession(index, false));
+            });
+        });
     </script>
 </body>
 </html>

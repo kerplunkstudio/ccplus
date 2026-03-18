@@ -6,7 +6,7 @@ set -eu
 # Configuration
 # ============================================================================
 
-REPO="mjfuentes/ccplus"
+REPO="kerplunkstudio/ccplus"
 INSTALL_DIR="${CCPLUS_INSTALL:-$HOME/.ccplus}"
 BIN_DIR="${CCPLUS_BIN:-$HOME/.local/bin}"
 VERSION="${CCPLUS_VERSION:-latest}"
