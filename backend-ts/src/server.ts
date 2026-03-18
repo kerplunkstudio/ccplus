@@ -14,6 +14,7 @@ import * as config from "./config.js";
 import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
+import { connectionHealthMonitor } from "./connection-health.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -94,6 +95,7 @@ app.get("/health", (_req: Request, res: Response) => {
   } catch {
     // ignore
   }
+  const healthStatus = connectionHealthMonitor.getHealthStatus();
   res.json({
     status: "ok",
     version: config.VERSION,
@@ -101,7 +103,22 @@ app.get("/health", (_req: Request, res: Response) => {
     uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
     active_sessions: sdkSession.getActiveSessions().length,
     connected_clients: connectedClients.size,
+    stale_connections: healthStatus.stale,
     db: dbStats,
+  });
+});
+
+app.get("/api/health/connections", (_req: Request, res: Response) => {
+  const healthStatus = connectionHealthMonitor.getHealthStatus();
+  const config = connectionHealthMonitor.getConfig();
+  res.json({
+    ...healthStatus,
+    config: {
+      stale_threshold_ms: config.staleThresholdMs,
+      check_interval_ms: config.checkIntervalMs,
+      max_reconnects_per_hour: config.maxReconnectsPerHour,
+      grace_period_ms: config.gracePeriodMs,
+    },
   });
 });
 
@@ -827,6 +844,9 @@ io.on("connection", (socket) => {
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
   socket.join(sessionId);
 
+  // Track connection health
+  connectionHealthMonitor.onConnect(sessionId);
+
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
@@ -851,6 +871,9 @@ io.on("connection", (socket) => {
       socket.emit("error", { message: "Not authenticated" });
       return;
     }
+
+    // Track activity
+    connectionHealthMonitor.onEvent(client.session_id);
 
     const sid = client.session_id;
     const uid = client.user_id;
@@ -902,6 +925,7 @@ io.on("connection", (socket) => {
   socket.on("cancel", () => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
+    connectionHealthMonitor.onEvent(client.session_id);
     sdkSession.cancelQuery(client.session_id);
     socket.emit("cancelled", { status: "ok" });
   });
@@ -909,6 +933,10 @@ io.on("connection", (socket) => {
   // -- Ping --
 
   socket.on("ping", () => {
+    const client = connectedClients.get(socket.id);
+    if (client) {
+      connectionHealthMonitor.onEvent(client.session_id);
+    }
     socket.emit("pong", { timestamp: Date.now() });
   });
 
@@ -917,6 +945,7 @@ io.on("connection", (socket) => {
   socket.on("question_response", (data: Record<string, unknown>) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
+    connectionHealthMonitor.onEvent(client.session_id);
     const response = (data?.response as Record<string, unknown>) ?? {};
     sdkSession.sendQuestionResponse(client.session_id, response);
   });
@@ -927,6 +956,7 @@ io.on("connection", (socket) => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
     if (client) {
+      connectionHealthMonitor.onDisconnect(client.session_id);
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
   });
@@ -1015,6 +1045,9 @@ function removePidFile(): void {
   }
 }
 
+// Start connection health monitoring
+connectionHealthMonitor.start();
+
 // Start server
 console.log(`Starting ccplus server on ${config.HOST}:${config.PORT}`);
 console.log(`Local mode: ${config.LOCAL_MODE}`);
@@ -1025,10 +1058,14 @@ console.log(`Static dir: ${config.STATIC_DIR}`);
 writePidFile();
 process.on("SIGTERM", () => {
   console.log("Received SIGTERM, shutting down...");
+  connectionHealthMonitor.stop();
   removePidFile();
   process.exit(0);
 });
-process.on("exit", removePidFile);
+process.on("exit", () => {
+  connectionHealthMonitor.stop();
+  removePidFile();
+});
 
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
