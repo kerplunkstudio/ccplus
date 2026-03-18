@@ -1,14 +1,10 @@
-import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool, type ModelUsage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Query, type HookCallback, type HookCallbackMatcher } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream } from "fs";
 import { execFileSync } from "child_process";
 import { homedir } from "os";
 import path from "path";
-import { z } from "zod";
 import * as config from "./config.js";
 import * as database from "./database.js";
-import { findClaudeBinary } from "./utils.js";
-import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
-import { log } from "./logger.js";
 
 // ---- Skills discovery (cached) ----
 
@@ -28,9 +24,24 @@ function parseDescription(filePath: string): string | null {
       const descMatch = match[1].match(/description:\s*(.+)/);
       if (descMatch) return descMatch[1].trim();
     }
-  } catch (err) {
-    console.error('Failed to parse description from', filePath, ':', err);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function findClaudeBinary(): string | null {
+  const candidates = [
+    path.join(homedir(), ".local", "bin", "claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+    path.join(homedir(), ".claude", "local", "claude"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
   }
+  try {
+    const result = execFileSync("which", ["claude"], { encoding: "utf-8", timeout: 5000 }).trim();
+    if (result) return result;
+  } catch { /* ignore */ }
   return null;
 }
 
@@ -50,9 +61,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         const desc = parseDescription(path.join(userCmdDir, file));
         skills.push({ name, plugin: "user", description: desc || "" });
       }
-    } catch (err) {
-      console.error('Failed to discover user commands:', err);
-    }
+    } catch { /* ignore */ }
   }
 
   // 2. User skills
@@ -65,9 +74,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         const desc = parseDescription(skillFile);
         skills.push({ name: dir, plugin: "skill", description: desc || "" });
       }
-    } catch (err) {
-      console.error('Failed to discover user skills:', err);
-    }
+    } catch { /* ignore */ }
   }
 
   // 3. Plugin skills via Claude CLI
@@ -93,9 +100,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
                   const desc = existsSync(skillFile) ? parseDescription(skillFile) : null;
                   skills.push({ name: dir, plugin: pluginName, description: desc || "" });
                 }
-              } catch (err) {
-                console.error(`Failed to discover skills from plugin ${pluginName}:`, err);
-              }
+              } catch { /* ignore */ }
             }
             const cmdDir = path.join(installPath, "commands");
             if (existsSync(cmdDir)) {
@@ -107,9 +112,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
                   const desc = parseDescription(path.join(cmdDir, file));
                   skills.push({ name, plugin: pluginName, description: desc || "" });
                 }
-              } catch (err) {
-                console.error(`Failed to discover commands from plugin ${pluginName}:`, err);
-              }
+              } catch { /* ignore */ }
             }
           }
           if (Array.isArray(plugin.skills)) {
@@ -121,9 +124,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
         }
       }
     }
-  } catch (err) {
-    console.error('Failed to discover plugin skills via Claude CLI:', err);
-  }
+  } catch { /* ignore */ }
 
   // 4. Project-level commands
   if (projectPath) {
@@ -137,9 +138,7 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
           const desc = parseDescription(path.join(projCmdDir, file));
           skills.push({ name, plugin: "project", description: desc || "" });
         }
-      } catch (err) {
-        console.error('Failed to discover project commands:', err);
-      }
+      } catch { /* ignore */ }
     }
   }
 
@@ -170,9 +169,7 @@ function getInstalledPlugins(): Array<{ type: "local"; path: string }> {
         }
       }
     }
-  } catch (err) {
-    console.error('Failed to get installed plugins via Claude CLI:', err);
-  }
+  } catch { /* ignore */ }
 
   cachedPluginPaths = result;
   return result;
@@ -182,36 +179,38 @@ export { discoverSkills, type SkillInfo };
 
 // System prompt appended to every SDK session
 const CCPLUS_SYSTEM_PROMPT_BASE = `
-# cc+ Environment
+# cc+ Delegation Rules
 
-You are running inside cc+, a web UI for Claude Code with multi-session support.
+You are running inside cc+, a multi-session web UI.
 
-## Slash Commands
-When the user requests a slash command (e.g., "Run the /animate slash command"), call the Skill tool with the command name: Skill({ skill: "animate" }).
+## Slash commands / Skills
+When the user invokes a slash command (e.g. "Run the /animate slash command"), use the Skill tool to execute it. For example, to run /animate, call: Skill({ skill: "animate" }). The Skill tool is available to you — use it for any slash command the user requests.
 
-## User Questions
-When clarification is needed, use the AskUserQuestion tool. The UI renders these as interactive cards. Use it instead of listing options as text.
+## Asking the user questions
+When the user's request is ambiguous, has multiple valid approaches, or requires a choice, use the AskUserQuestion tool to present structured options. The cc+ UI renders these as selectable cards. Use it whenever you would normally ask the user to choose between approaches, confirm a direction, or clarify requirements. Do NOT just write out options as text — use AskUserQuestion so the user can click to select.
 
-## Observability Tools
-cc+ provides a custom tool for reporting your progress to the UI:
-- **emit_status**: Report phase transitions (planning, implementing, testing, reviewing, debugging, researching). Call when you begin a new phase.
+## Small tasks (handle directly)
+Questions, reading files, explaining code, searching, quick single-file edits, small bug fixes — handle these yourself using any tools you need.
 
-This tool is lightweight and has no side effects. Use it to keep the user informed during longer tasks.
+## Large tasks (delegate to a subagent)
+Tasks that involve reading or writing MANY files, implementing features across multiple modules, large refactors, or multi-step implementation work — delegate these to a subagent.
 
-## When to Delegate
-Consider spawning a subagent (Agent tool, typically with subagent_type "code_agent") when:
-- The task spans many files or modules
-- Parallel workstreams would help (e.g., implementing multiple features independently)
-- Verbose tool output would clutter the conversation (e.g., large refactors, build troubleshooting)
-- The work benefits from isolated context (e.g., exploring an unfamiliar codebase section)
+How to delegate:
+1. Say ONE short sentence (e.g., "Delegating to an agent.").
+2. Call the Agent tool ONCE with:
+   - \`subagent_type\`: "code_agent"
+   - \`prompt\`: The user's full request, followed by:
 
-Direct work often works better for:
-- Targeted single-file edits or quick fixes
-- Tasks where you need to see all tool output to guide next steps
-- Iterative refinement across multiple files where context matters
-- Work that requires tight feedback loops with the user
+\`\`\`
+You have full autonomy to complete this task end-to-end. Steps:
+1. Explore the codebase to understand the project structure and relevant files.
+2. Implement all changes needed.
+3. Run tests if applicable.
+4. Commit your changes when done.
+Do NOT ask for clarification. Make reasonable assumptions and proceed.
+\`\`\`
 
-When delegating, provide clear autonomy: "You have full autonomy to complete this task. Explore the codebase, implement changes, test, and commit when done."
+3. STOP after the Agent call. Do not continue working.
 `.trim();
 
 function buildSystemPrompt(projectPath?: string): string {
@@ -229,19 +228,13 @@ function buildSystemPrompt(projectPath?: string): string {
 // ---- Types ----
 
 interface SessionCallbacks {
-  onText: (text: string, messageIndex: number) => void;
+  onText: (text: string) => void;
   onToolEvent: (event: Record<string, unknown>) => void;
   onComplete: (result: Record<string, unknown>) => void;
   onError: (message: string) => void;
   onUserQuestion?: (data: Record<string, unknown>) => void;
   onThinkingDelta?: (text: string) => void;
-  onSignal?: (signal: { type: string; data: Record<string, unknown> }) => void;
-  onToolProgress?: (data: { tool_use_id: string; elapsed_seconds: number }) => void;
-  onRateLimit?: (data: { retryAfterMs: number; rateLimitedAt: string }) => void;
-  onPromptSuggestion?: (suggestions: string[]) => void;
-  onCompactBoundary?: () => void;
-  onDevServerDetected?: (url: string) => void;
-  onCaptureScreenshot?: () => Promise<{ image?: string; url?: string; error?: string }>;
+  sourceConnectionId?: string;
 }
 
 interface ActiveSession {
@@ -256,18 +249,11 @@ interface ActiveSession {
     resolve: (value: Record<string, unknown>) => void;
     data: Record<string, unknown>;
   } | null;
-  questionTimeout: NodeJS.Timeout | null;
-  streamingContent: string;
-  lastCompletedResponse: Record<string, unknown> | null;
 }
 
 // ---- Session Manager ----
 
 const sessions = new Map<string, ActiveSession>();
-
-// Maximum buffer size for streaming content (2MB)
-// This buffer is only used for reconnection sync, so trimming from the front is acceptable
-const MAX_STREAMING_BUFFER = 2 * 1024 * 1024;
 
 function getOrCreateSession(sessionId: string, workspace: string, model?: string): ActiveSession {
   const existing = sessions.get(sessionId);
@@ -279,9 +265,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     ) {
       // Interrupt existing query if running
       if (existing.activeQuery) {
-        existing.activeQuery.interrupt().catch((err) => {
-          log.error("Failed to interrupt query during session reset", { sessionId, error: String(err) });
-        });
+        existing.activeQuery.interrupt().catch(() => {});
       }
       sessions.delete(sessionId);
     } else {
@@ -298,9 +282,6 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     callbacks: null,
     cancelRequested: false,
     pendingQuestion: null,
-    questionTimeout: null,
-    streamingContent: '',
-    lastCompletedResponse: null,
   };
   sessions.set(sessionId, session);
   return session;
@@ -343,9 +324,7 @@ function safeParams(params: Record<string, unknown>): Record<string, unknown> {
 function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
   const toolTimers = new Map<string, number>();
   const agentIdToToolUseId = new Map<string, string>();
-  const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
-  const detectedDevServerUrls = new Set<string>();
 
   const preToolUse: HookCallback = async (hookInput, toolUseId) => {
     const input = hookInput as Record<string, unknown>;
@@ -361,10 +340,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
 
-    const agentDescription = isAgent
-      ? ((toolParams.description as string) ?? ((toolParams.prompt as string) ?? "").slice(0, 100))
-      : undefined;
-
     if (isAgent) {
       pendingAgentToolUseIds.push(actualToolUseId);
       const event = {
@@ -373,7 +348,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         tool_use_id: actualToolUseId,
         parent_agent_id: parentId ?? null,
         agent_type: (toolParams.subagent_type as string) ?? "agent",
-        description: agentDescription,
+        description: (toolParams.description as string) ?? ((toolParams.prompt as string) ?? "").slice(0, 100),
         timestamp: new Date().toISOString(),
         session_id: sessionId,
       };
@@ -389,26 +364,11 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         session_id: sessionId,
       };
       session.callbacks.onToolEvent(event);
-
-      // Emit dedicated todo_update for TodoWrite tools
-      if (toolName === 'TodoWrite') {
-        const todos = toolParams.todos as Array<{ content: string; status: string; activeForm: string }> | undefined;
-        if (todos) {
-          session.callbacks.onToolEvent({
-            type: 'todo_update',
-            tool_name: 'TodoWrite',
-            tool_use_id: actualToolUseId,
-            parent_agent_id: parentId ? (agentIdToToolUseId.get(parentId) ?? parentId) : null,
-            parameters: { todos },
-            timestamp: new Date().toISOString(),
-            session_id: sessionId,
-          });
-        }
-      }
     }
 
     // Record to database (success=null means "running")
     try {
+      const sourceConnId = session.callbacks?.sourceConnectionId;
       database.recordToolEvent(
         sessionId,
         toolName,
@@ -421,10 +381,10 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         isAgent ? undefined : JSON.stringify(safeParams(toolParams)),
         null,
         null,
-        agentDescription,
+        sourceConnId,
       );
     } catch (e) {
-      log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
+      console.error("Database write failed (preToolUse):", e);
     }
 
     return { continue: true };
@@ -447,7 +407,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     if (!session?.callbacks) return {};
 
     if (isAgent) {
-      const stopData = agentStopData.get(actualToolUseId);
       const event: Record<string, unknown> = {
         type: "agent_stop",
         tool_name: toolName,
@@ -456,25 +415,15 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         duration_ms: durationMs,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
-        transcript_path: stopData?.transcriptPath ?? null,
-        summary: stopData?.lastMessage ?? null,
       };
       session.callbacks.onToolEvent(event);
 
-      // Clean up agent_id mapping and stop data
+      // Clean up agent_id mapping
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
         if (tuId === actualToolUseId) {
           agentIdToToolUseId.delete(agentId);
           break;
         }
-      }
-      agentStopData.delete(actualToolUseId);
-
-      // Update database with summary
-      try {
-        database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs, stopData?.lastMessage ?? null);
-      } catch (e) {
-        log.error("Database write failed (postToolUse agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
       const event: Record<string, unknown> = {
@@ -497,67 +446,12 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       }
 
       session.callbacks.onToolEvent(event);
+    }
 
-      // Update database (tools only, agents updated above)
-      try {
-        database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
-      } catch (e) {
-        log.error("Database write failed (postToolUse tool)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
-      }
-
-      // Detect dev server URLs from Bash tool output
-      if (toolName === "Bash") {
-        const toolResponse = input.tool_response;
-        let responseText = "";
-
-        // Convert tool_response to string
-        if (typeof toolResponse === "string") {
-          responseText = toolResponse;
-        } else if (toolResponse && typeof toolResponse === "object") {
-          try {
-            responseText = JSON.stringify(toolResponse);
-          } catch {
-            responseText = String(toolResponse);
-          }
-        }
-
-        if (responseText) {
-          // Regex patterns for dev server URLs
-          const urlPatterns = [
-            /(?:Local|listening on|ready on|started at|running at|server running on)[:\s]+(?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/gi,
-            /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/g,
-          ];
-
-          for (const pattern of urlPatterns) {
-            const matches = responseText.matchAll(pattern);
-            for (const match of matches) {
-              let url = match[0];
-
-              // Extract just the URL part if it's in a sentence
-              const urlMatch = url.match(/https?:\/\/[^\s]+/);
-              if (urlMatch) {
-                url = urlMatch[0];
-              } else {
-                // Add http:// if missing
-                const hostMatch = url.match(/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/);
-                if (hostMatch) {
-                  url = `http://${hostMatch[0]}`;
-                }
-              }
-
-              // Clean trailing punctuation
-              url = url.replace(/[,;.]+$/, "");
-
-              // Emit if new
-              if (url && !detectedDevServerUrls.has(url)) {
-                detectedDevServerUrls.add(url);
-                session.callbacks.onDevServerDetected?.(url);
-                log.debug("Dev server URL detected", { sessionId, url, toolUseId: actualToolUseId });
-              }
-            }
-          }
-        }
-      }
+    try {
+      database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs);
+    } catch (e) {
+      console.error("Database write failed (postToolUse):", e);
     }
 
     return {};
@@ -580,7 +474,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     if (!session?.callbacks) return {};
 
     if (isAgent) {
-      const stopData = agentStopData.get(actualToolUseId);
       session.callbacks.onToolEvent({
         type: "agent_stop",
         tool_name: toolName,
@@ -590,24 +483,14 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         duration_ms: durationMs,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
-        transcript_path: stopData?.transcriptPath ?? null,
-        summary: stopData?.lastMessage ?? null,
       });
 
-      // Clean up agent_id mapping and stop data
+      // Clean up agent_id mapping
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
         if (tuId === actualToolUseId) {
           agentIdToToolUseId.delete(agentId);
           break;
         }
-      }
-      agentStopData.delete(actualToolUseId);
-
-      // Update database with summary (for failed agents)
-      try {
-        database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs, stopData?.lastMessage ?? null);
-      } catch (e) {
-        log.error("Database write failed (postToolUseFailure agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
       session.callbacks.onToolEvent({
@@ -621,13 +504,12 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         timestamp: new Date().toISOString(),
         session_id: sessionId,
       });
+    }
 
-      // Update database (tools only, agents updated above)
-      try {
-        database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs);
-      } catch (e) {
-        log.error("Database write failed (postToolUseFailure tool)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
-      }
+    try {
+      database.updateToolEvent(sessionId, actualToolUseId, false, errorMsg, durationMs);
+    } catch (e) {
+      console.error("Database write failed (postToolUseFailure):", e);
     }
 
     return {};
@@ -643,27 +525,11 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     return {};
   };
 
-  const subagentStop: HookCallback = async (hookInput) => {
-    const input = hookInput as Record<string, unknown>;
-    const agentId = input.agent_id as string;
-    if (agentId) {
-      const toolUseId = agentIdToToolUseId.get(agentId);
-      if (toolUseId) {
-        agentStopData.set(toolUseId, {
-          transcriptPath: input.agent_transcript_path as string | undefined,
-          lastMessage: input.last_assistant_message as string | undefined,
-        });
-      }
-    }
-    return {};
-  };
-
   return {
     PreToolUse: [{ hooks: [preToolUse] }],
     PostToolUse: [{ hooks: [postToolUse] }],
     PostToolUseFailure: [{ hooks: [postToolUseFailure] }],
     SubagentStart: [{ hooks: [subagentStart] }],
-    SubagentStop: [{ hooks: [subagentStop] }],
   };
 }
 
@@ -677,35 +543,13 @@ export function submitQuery(
   model?: string,
   imageIds?: string[],
 ): void {
-  // Check for session metadata model override
-  const metadata = database.getSessionMetadata(sessionId);
-  const effectiveModel = metadata?.model || model;
-
-  const session = getOrCreateSession(sessionId, workspace, effectiveModel);
-
-  // Force-close stale query if one is lingering
-  if (session.activeQuery !== null) {
-    log.warn("Forcing cleanup of stale query", { sessionId });
-    try {
-      session.activeQuery.interrupt().catch(() => {});
-      session.activeQuery.close();
-    } catch {
-      // already closed or invalid
-    }
-    session.activeQuery = null;
-    session.streamingContent = '';
-    session.cancelRequested = false;
-  }
-
-  // Clear last completed response when starting a new query
-  session.lastCompletedResponse = null;
-
+  const session = getOrCreateSession(sessionId, workspace, model);
   session.callbacks = callbacks;
   session.cancelRequested = false;
 
   // Run query in background (don't await)
-  streamQuery(session, prompt, workspace, effectiveModel, imageIds).catch((err) => {
-    log.error("Stream query error", { sessionId, error: String(err) });
+  streamQuery(session, prompt, workspace, model, imageIds).catch((err) => {
+    console.error(`Stream query error for ${sessionId}:`, err);
     callbacks.onError(String(err));
   });
 }
@@ -722,15 +566,9 @@ export function cancelQuery(sessionId: string): void {
   if (session) {
     session.cancelRequested = true;
     if (session.activeQuery) {
-      session.activeQuery.interrupt().catch((err) => {
-        log.error("Failed to interrupt query during cancellation", { sessionId, error: String(err) });
-      });
+      session.activeQuery.interrupt().catch(() => {});
     }
-    // Clear question timeout and unblock any pending question
-    if (session.questionTimeout) {
-      clearTimeout(session.questionTimeout);
-      session.questionTimeout = null;
-    }
+    // Unblock any pending question
     if (session.pendingQuestion) {
       session.pendingQuestion.resolve({});
       session.pendingQuestion = null;
@@ -752,9 +590,7 @@ export function getActiveSessions(): string[] {
 export function disconnectSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session?.activeQuery) {
-    session.activeQuery.interrupt().catch((err) => {
-      log.error("Failed to interrupt query during disconnect", { sessionId, error: String(err) });
-    });
+    session.activeQuery.interrupt().catch(() => {});
     session.activeQuery.close();
   }
   sessions.delete(sessionId);
@@ -763,10 +599,6 @@ export function disconnectSession(sessionId: string): void {
 export function sendQuestionResponse(sessionId: string, response: Record<string, unknown>): void {
   const session = sessions.get(sessionId);
   if (session?.pendingQuestion) {
-    if (session.questionTimeout) {
-      clearTimeout(session.questionTimeout);
-      session.questionTimeout = null;
-    }
     session.pendingQuestion.resolve(response);
     session.pendingQuestion = null;
   }
@@ -775,112 +607,6 @@ export function sendQuestionResponse(sessionId: string, response: Record<string,
 export function getPendingQuestion(sessionId: string): Record<string, unknown> | null {
   const session = sessions.get(sessionId);
   return session?.pendingQuestion?.data ?? null;
-}
-
-export function getStreamingContent(sessionId: string): string {
-  const session = sessions.get(sessionId);
-  return session?.streamingContent ?? '';
-}
-
-export function getLastCompletedResponse(sessionId: string): Record<string, unknown> | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  return session.lastCompletedResponse;
-}
-
-// ---- MCP Signal Server ----
-
-function buildSignalServer(sessionId: string, callbacks: SessionCallbacks) {
-  return createSdkMcpServer({
-    name: "ccplus-signals",
-    version: "1.0.0",
-    tools: [
-      tool(
-        "emit_status",
-        "Report your current work phase to the cc+ UI. Call this when transitioning between phases (planning, implementing, testing, etc.)",
-        {
-          phase: z.enum(["planning", "implementing", "testing", "reviewing", "debugging", "researching"]),
-          detail: z.string().optional(),
-        },
-        async (args) => {
-          callbacks.onSignal?.({ type: "status", data: args });
-          return { content: [{ type: "text" as const, text: "Status reported." }] };
-        },
-      ),
-      tool(
-        "VerifyApp",
-        "Take a screenshot of the running web application in the browser tab. Use this to verify visual changes, check layouts, and inspect the UI. Returns a screenshot image of the app.",
-        {
-          url: z.string().optional().describe("Optional specific URL to verify. If not provided, captures the current page."),
-        },
-        async (args) => {
-          if (!callbacks.onCaptureScreenshot) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: "Error: Screenshot capability not available. No browser tab is open or the app is running in a non-Electron environment.",
-                },
-              ],
-            };
-          }
-
-          try {
-            const result = await callbacks.onCaptureScreenshot();
-
-            if (result.error) {
-              return {
-                content: [
-                  {
-                    type: "text" as const,
-                    text: `Error capturing screenshot: ${result.error}`,
-                  },
-                ],
-              };
-            }
-
-            if (!result.image) {
-              return {
-                content: [
-                  {
-                    type: "text" as const,
-                    text: "Error: No image data returned from browser tab.",
-                  },
-                ],
-              };
-            }
-
-            // Return both text description and the image
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Screenshot captured of ${result.url || "browser tab"}. The image shows the current state of the web application.`,
-                },
-                {
-                  type: "image" as const,
-                  source: {
-                    type: "base64" as const,
-                    media_type: "image/png" as const,
-                    data: result.image,
-                  },
-                },
-              ],
-            };
-          } catch (error) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Error: Failed to capture screenshot: ${String(error)}`,
-                },
-              ],
-            };
-          }
-        },
-      ),
-    ],
-  });
 }
 
 // ---- Internal streaming logic ----
@@ -895,35 +621,19 @@ async function streamQuery(
   const resultText: string[] = [];
   let gotResult = false;
   let assistantMsgId: number | null = null;
-  let streamEventsActive = false;
-  let lastCompletionData: Record<string, unknown> = {};
-  let messageIndex = 0;
 
   const { sessionId } = session;
   const callbacks = session.callbacks;
   if (!callbacks) return;
 
-  // Reset streaming content at the start of each query
-  session.streamingContent = '';
-
   try {
     // Look up previous SDK session ID for resume
     const resumeId = database.getLastSdkSessionId(sessionId);
-    log.debug("Query started", { sessionId, resume: resumeId ?? 'none', workspace });
 
-    // Build environment with whitelist approach (only pass known-safe env vars)
-    // Legacy blacklist: k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY"
-    const envWhitelist = [
-      'PATH', 'HOME', 'SHELL', 'USER', 'LANG', 'TERM', 'NODE_ENV',
-      'WORKSPACE_PATH', 'SDK_MODEL', 'PORT', 'CCPLUS_AUTH',
-      'TMPDIR', 'TEMP', 'TMP',
-      'EDITOR', 'VISUAL', 'PAGER',
-      'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES',
-      'DISPLAY', 'COLORTERM',
-    ];
+    // Build environment without CLAUDECODE
     const cleanEnv: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) {
-      if (v !== undefined && (envWhitelist.includes(k) || k.startsWith('XDG_'))) {
+      if (k !== "CLAUDECODE" && k !== "ANTHROPIC_API_KEY" && v !== undefined) {
         cleanEnv[k] = v;
       }
     }
@@ -955,10 +665,9 @@ async function streamQuery(
         // Wait for user response (up to 5 minutes)
         const answers = await new Promise<Record<string, unknown>>((resolve) => {
           session.pendingQuestion = { resolve, data: questionData };
-          session.questionTimeout = setTimeout(() => {
+          setTimeout(() => {
             if (session.pendingQuestion) {
               session.pendingQuestion = null;
-              session.questionTimeout = null;
               resolve({});
             }
           }, 300_000);
@@ -1006,7 +715,7 @@ async function streamQuery(
             });
           }
         } catch (e) {
-          log.error("Failed to load image", { sessionId, imageId: imgId, error: String(e) });
+          console.error(`Failed to load image ${imgId}:`, e);
         }
       }
 
@@ -1026,28 +735,17 @@ async function streamQuery(
     // Load installed plugins so the SDK subprocess can execute skills
     const installedPlugins = getInstalledPlugins();
 
-    // Build signal server for progress reporting
-    const signalServer = buildSignalServer(sessionId, callbacks);
-
-    // Load MCP servers from user and project configs
-    const mcpServerEntries = getAllMcpServers(workspace);
-    const userMcpServers = buildSdkMcpServers(mcpServerEntries);
-
     const q = query({
       prompt: queryContent as string,
       options: {
-        model: model ?? config.getSDKModel(),
+        model: model ?? config.SDK_MODEL,
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
-        allowDangerouslySkipPermissions: config.getBypassPermissions(),
+        permissionMode: "bypassPermissions" as any,
+        allowDangerouslySkipPermissions: true,
         env: cleanEnv,
         hooks: hooks as any,
         plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,
-        mcpServers: {
-          "ccplus-signals": signalServer,
-          ...userMcpServers,
-        } as any,
         resume: resumeId ?? undefined,
         systemPrompt: {
           type: "preset",
@@ -1057,37 +755,29 @@ async function streamQuery(
         canUseTool: canUseTool as any,
         maxTurns: 50,
         includePartialMessages: true,
-        promptSuggestions: true,
       },
     });
 
     session.activeQuery = q;
+    let lastCompletionData: Record<string, unknown> = {};
 
     for await (const message of q) {
       // Check cancellation
       if (session.cancelRequested) {
         await q.interrupt();
-        try { q.close(); } catch { /* already closed */ }
         break;
       }
 
       if (message.type === "assistant") {
-        messageIndex++;
         const msg = message as any;
         let hasText = false;
         const currentMessageText: string[] = [];
 
         for (const block of (msg.message?.content ?? [])) {
           if (block.type === "text") {
-            if (!streamEventsActive) {
-              resultText.push(block.text);
-              session.streamingContent += block.text;
-              if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
-                session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
-              }
-              callbacks.onText(block.text, messageIndex);
-            }
+            resultText.push(block.text);
             currentMessageText.push(block.text);
+            callbacks.onText(block.text);
             hasText = true;
           } else if (block.type === "thinking" && block.thinking) {
             callbacks.onThinkingDelta?.(block.thinking);
@@ -1097,19 +787,15 @@ async function streamQuery(
         // Persist to DB
         if (hasText) {
           try {
+            const dbMsg = database.recordMessage(
+              sessionId, "assistant", "assistant",
+              currentMessageText.join(""),
+            );
             if (assistantMsgId === null) {
-              // First turn: create new record
-              const dbMsg = database.recordMessage(
-                sessionId, "assistant", "assistant",
-                currentMessageText.join(""),
-              );
               assistantMsgId = dbMsg.id as number;
-            } else {
-              // Subsequent turns: update existing record with accumulated text
-              database.updateMessage(assistantMsgId, resultText.join(""));
             }
           } catch (e) {
-            log.error("Failed to record/update assistant message", { sessionId, error: String(e) });
+            console.error("Failed to record assistant message:", e);
           }
 
           // Signal intermediate completion
@@ -1123,7 +809,6 @@ async function streamQuery(
             input_tokens: null,
             output_tokens: null,
             model: session.model,
-            message_index: messageIndex,
           });
         }
       } else if (message.type === "result") {
@@ -1131,14 +816,13 @@ async function streamQuery(
         const result = message as any;
 
         session.sdkSessionId = result.session_id;
-        log.debug("Query completed", { sessionId, sdkSessionId: result.session_id, resumed: resumeId === result.session_id });
 
         // Persist SDK session ID so next query can resume
         if (assistantMsgId !== null && result.session_id) {
           try {
             database.updateMessage(assistantMsgId, resultText.join(""), result.session_id);
           } catch (e) {
-            log.error("Failed to update SDK session ID", { sessionId, error: String(e) });
+            console.error("Failed to update SDK session ID:", e);
           }
         }
 
@@ -1147,17 +831,8 @@ async function streamQuery(
         const sdkResultText = result.result as string | undefined;
         if (sdkResultText && resultText.length === 0) {
           resultText.push(sdkResultText);
-          session.streamingContent += sdkResultText;
-          if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
-            session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
-          }
-          callbacks.onText(sdkResultText, messageIndex);
+          callbacks.onText(sdkResultText);
         }
-
-        // Extract cumulative context usage from modelUsage
-        const modelUsageValues: ModelUsage[] = Object.values(result.modelUsage || {});
-        const totalInputTokens = modelUsageValues.reduce((sum, mu) => sum + (mu.inputTokens || 0), 0);
-        const contextWindowSize = modelUsageValues[0]?.contextWindow ?? 0;
 
         lastCompletionData = {
           text: resultText.join(""),
@@ -1166,11 +841,9 @@ async function streamQuery(
           duration_ms: result.duration_ms,
           is_error: result.is_error ?? (result.subtype !== "success"),
           num_turns: result.num_turns,
-          input_tokens: totalInputTokens || result.usage?.input_tokens,
+          input_tokens: result.usage?.input_tokens,
           output_tokens: result.usage?.output_tokens,
-          context_window_size: contextWindowSize,
           model: session.model,
-          message_index: messageIndex,
         };
       }
       // StreamEvent handling for token-level streaming
@@ -1180,61 +853,11 @@ async function streamQuery(
         if (eventType === "content_block_delta") {
           const delta = eventData.delta ?? {};
           if (delta.type === "text_delta" && delta.text) {
-            streamEventsActive = true;
             resultText.push(delta.text);
-            session.streamingContent += delta.text;
-            if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
-              session.streamingContent = session.streamingContent.slice(-MAX_STREAMING_BUFFER);
-            }
-            callbacks.onText(delta.text, messageIndex);
+            callbacks.onText(delta.text);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
           }
-        }
-      }
-      // Tool progress: mid-tool elapsed time updates
-      else if (message.type === 'tool_progress') {
-        const msg = message as any;
-        callbacks.onToolProgress?.({
-          tool_use_id: msg.tool_use_id,
-          elapsed_seconds: msg.elapsed_time_seconds ?? 0,
-        });
-      }
-      // Rate limit events
-      else if (message.type === 'rate_limit_event') {
-        const msg = message as any;
-        callbacks.onRateLimit?.({
-          retryAfterMs: msg.retry_after_ms ?? 0,
-          rateLimitedAt: new Date().toISOString(),
-        });
-      }
-      // Prompt suggestions (predicted next prompts)
-      else if (message.type === 'prompt_suggestion') {
-        const msg = message as any;
-        const suggestions = msg.suggestions ?? [];
-        if (suggestions.length > 0) {
-          callbacks.onPromptSuggestion?.(suggestions);
-        }
-      }
-      // Context compaction boundary
-      else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
-        callbacks.onCompactBoundary?.();
-      }
-      // API errors (overloaded, server errors, etc.)
-      else if ((message as any).type === 'error') {
-        const msg = message as any;
-        const errorType = msg.error?.type ?? '';
-        const errorMessage = msg.error?.message ?? String(msg);
-
-        if (errorType === 'overloaded_error') {
-          log.warn("API overloaded", { sessionId, errorType });
-          callbacks.onError('Claude is currently overloaded. Please try again in a moment.');
-        } else if (errorType === 'api_error') {
-          log.warn("API internal error", { sessionId, errorType });
-          callbacks.onError('Claude API encountered an internal error. Please try again.');
-        } else {
-          log.error("API error during streaming", { sessionId, errorType, errorMessage });
-          callbacks.onError(errorMessage);
         }
       }
     }
@@ -1244,33 +867,11 @@ async function streamQuery(
       callbacks.onComplete(lastCompletionData);
     }
   } catch (err) {
-    const errorStr = String(err);
-    let userMessage = errorStr;
-
-    // Try to extract a cleaner message from API error JSON
-    if (errorStr.includes('overloaded_error') || errorStr.includes('api_error')) {
-      userMessage = 'Claude API is temporarily unavailable. Please try again in a moment.';
-      log.warn("Transient API error (exception)", { sessionId, error: errorStr });
-    } else {
-      log.error("SDK query error", { sessionId, error: errorStr });
-    }
-
-    callbacks.onError(userMessage);
+    console.error(`[sdk-session] SDK query CATCH for ${sessionId}:`, err);
+    callbacks.onError(String(err));
     sessions.delete(sessionId);
   } finally {
-    // Close query to release resources
-    if (session.activeQuery) {
-      try { session.activeQuery.close(); } catch { /* already closed */ }
-    }
-
-    // Store last completed response for tab-switch recovery
-    session.lastCompletedResponse = {
-      text: resultText.join(""),
-      ...lastCompletionData,
-    };
-
     session.activeQuery = null;
-    session.streamingContent = '';
 
     // Always send completion so frontend cursor clears
     if (!gotResult) {

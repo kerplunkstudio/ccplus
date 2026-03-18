@@ -2,7 +2,6 @@ import express, { Request, Response } from "express";
 import { createServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import cors from "cors";
-import helmet from "helmet";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import { execFileSync } from "child_process";
@@ -15,14 +14,28 @@ import * as config from "./config.js";
 import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
-import { findClaudeBinary } from "./utils.js";
-import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
-import { log } from "./logger.js";
-import { scheduler, parseInterval } from "./scheduler.js";
-import { configWatcher, type ConfigChange } from "./config-watcher.js";
+import { ProvenanceTracker } from "./provenance.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
+
+/** Find the Claude CLI binary path (mirrors Python PluginManager._find_claude_binary). */
+function findClaudeBinary(): string | null {
+  const candidates = [
+    path.join(homedir(), ".local", "bin", "claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  try {
+    const result = execFileSync("which", ["claude"], { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    const p = result.trim();
+    if (p) return p;
+  } catch { /* not in PATH */ }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Application setup
@@ -37,22 +50,6 @@ const ALLOWED_ORIGINS = (
 ).split(",");
 
 app.use(cors({ origin: ALLOWED_ORIGINS }));
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", ...ALLOWED_ORIGINS],
-      fontSrc: ["'self'", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-}));
 app.use(express.json());
 
 const io = new SocketIOServer(httpServer, {
@@ -68,25 +65,17 @@ const START_TIME = Date.now();
 // Mark orphaned tool events from previous run
 const orphanCount = database.markOrphanedToolEvents();
 if (orphanCount > 0) {
-  log.info(`Marked ${orphanCount} orphaned tool events from previous run`, { orphanCount });
+  console.log(`Marked ${orphanCount} orphaned tool events from previous run`);
 }
 
-// Maps socket.id -> { session_id, user_id, sessions }
-const connectedClients = new Map<string, { session_id: string; user_id: string; sessions: Set<string> }>();
+// Maps socket.id -> { session_id, user_id }
+const connectedClients = new Map<string, { session_id: string; user_id: string }>();
 
-// Track mutable workspace path (global default for new sessions)
+// Provenance tracker for all connections
+const provenanceTracker = new ProvenanceTracker();
+
+// Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
-
-// Per-session workspace paths (session_id -> workspace_path)
-const sessionWorkspaces = new Map<string, string>();
-
-// Helper: Get workspace path for a session (falls back to global default)
-function getWorkspaceForSession(sessionId: string | undefined): string {
-  if (sessionId && sessionWorkspaces.has(sessionId)) {
-    return sessionWorkspaces.get(sessionId)!;
-  }
-  return workspacePath;
-}
 
 // =========================================================================
 // HTTP Routes
@@ -116,7 +105,6 @@ app.get("/health", (_req: Request, res: Response) => {
     uptime_seconds: Math.floor((Date.now() - START_TIME) / 1000),
     active_sessions: sdkSession.getActiveSessions().length,
     connected_clients: connectedClients.size,
-    active_sessions_count: new Set([...connectedClients.values()].flatMap(c => [...c.sessions])).size,
     db: dbStats,
   });
 });
@@ -155,7 +143,6 @@ app.get("/api/version", (_req: Request, res: Response) => {
       timeout: 2000,
       cwd: config.PROJECT_ROOT,
       encoding: "utf-8",
-      stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
   } catch {
     // ignore
@@ -184,7 +171,6 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
     execFileSync("git", ["fetch", "--tags", "--quiet"], {
       timeout: 10000,
       cwd: config.PROJECT_ROOT,
-      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     if (config.CCPLUS_CHANNEL === "stable") {
@@ -192,7 +178,6 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
         timeout: 2000,
         cwd: config.PROJECT_ROOT,
         encoding: "utf-8",
-        stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
       if (tags) {
         latestVersion = tags.split("\n")[0];
@@ -203,7 +188,6 @@ app.get("/api/update-check", (_req: Request, res: Response) => {
         timeout: 2000,
         cwd: config.PROJECT_ROOT,
         encoding: "utf-8",
-        stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
       const commitsBehind = parseInt(countStr || "0", 10);
       updateAvailable = commitsBehind > 0;
@@ -239,15 +223,9 @@ app.get("/api/status/first-run", (req: Request, res: Response) => {
 app.get("/api/history/:sessionId", (req: Request, res: Response) => {
   try {
     const messages = database.getConversationHistory(req.params.sessionId);
-    const context = database.getSessionContext(req.params.sessionId);
-    res.json({
-      messages,
-      streaming: sdkSession.isActive(req.params.sessionId),
-      context_tokens: context?.input_tokens ?? null,
-      model: context?.model ?? null,
-    });
+    res.json({ messages, streaming: sdkSession.isActive(req.params.sessionId) });
   } catch (err) {
-    log.error("Failed to fetch history", { sessionId: req.params.sessionId, error: String(err) });
+    console.error("Failed to fetch history:", err);
     res.status(500).json({ error: "Failed to load history" });
   }
 });
@@ -257,7 +235,7 @@ app.get("/api/activity/:sessionId", (req: Request, res: Response) => {
     const events = database.getToolEvents(req.params.sessionId);
     res.json({ events });
   } catch (err) {
-    log.error("Failed to fetch activity", { sessionId: req.params.sessionId, error: String(err) });
+    console.error("Failed to fetch activity:", err);
     res.status(500).json({ error: "Failed to load activity" });
   }
 });
@@ -266,7 +244,7 @@ app.get("/api/stats", (_req: Request, res: Response) => {
   try {
     res.json(database.getStats());
   } catch (err) {
-    log.error("Failed to fetch stats", { error: String(err) });
+    console.error("Failed to fetch stats:", err);
     res.status(500).json({ error: "Failed to load stats" });
   }
 });
@@ -275,46 +253,28 @@ app.get("/api/stats/user", (_req: Request, res: Response) => {
   try {
     res.json(database.getUserStats("local"));
   } catch (err) {
-    log.error("Failed to fetch user stats", { userId: "local", error: String(err) });
+    console.error("Failed to fetch user stats:", err);
     res.status(500).json({ error: "Failed to load user stats" });
   }
 });
 
 app.get("/api/insights", (req: Request, res: Response) => {
-  let days = 30;
   try {
-    days = parseInt(req.query.days as string ?? "30", 10);
+    let days = parseInt(req.query.days as string ?? "30", 10);
     if (isNaN(days) || days < 1 || days > 365) days = 30;
     const project = (req.query.project as string) || undefined;
     res.json(database.getInsights(days, project));
   } catch (err) {
-    log.error("Failed to fetch insights", { days, error: String(err) });
+    console.error("Failed to fetch insights:", err);
     res.status(500).json({ error: "Failed to load insights" });
-  }
-});
-
-app.get("/api/search", (req: Request, res: Response) => {
-  try {
-    const query = (req.query.q as string) || "";
-    if (!query || query.trim().length === 0) {
-      return res.json({ results: [] });
-    }
-    const project = (req.query.project as string) || undefined;
-    const results = database.searchConversations(query.trim(), project);
-    res.json({ results });
-  } catch (err) {
-    log.error("Failed to search conversations", { query: req.query.q, error: String(err) });
-    res.status(500).json({ error: "Failed to search conversations" });
   }
 });
 
 // -- Projects --
 
-app.get("/api/projects", (req: Request, res: Response) => {
+app.get("/api/projects", (_req: Request, res: Response) => {
   try {
-    const sessionId = (req.query.session_id as string) || undefined;
-    const workspaceForSession = getWorkspaceForSession(sessionId);
-    const ws = path.resolve(workspaceForSession);
+    const ws = path.resolve(workspacePath);
     const projects: { name: string; path: string }[] = [];
     for (const name of readdirSync(ws).sort()) {
       const fullPath = path.join(ws, name);
@@ -322,15 +282,15 @@ app.get("/api/projects", (req: Request, res: Response) => {
         projects.push({ name, path: fullPath });
       }
     }
-    res.json({ projects, workspace: workspaceForSession });
+    res.json({ projects, workspace: workspacePath });
   } catch (err) {
-    log.error("Failed to list projects", { error: String(err) });
+    console.error("Failed to list projects:", err);
     res.status(500).json({ error: "Failed to list projects" });
   }
 });
 
 app.post("/api/projects/clone", (req: Request, res: Response) => {
-  const { url, session_id: sessionId } = req.body ?? {};
+  const { url } = req.body ?? {};
   if (!url?.trim()) {
     res.status(400).json({ error: "Missing 'url' in request body" });
     return;
@@ -344,8 +304,7 @@ app.post("/api/projects/clone", (req: Request, res: Response) => {
   }
 
   const repoName = repoUrl.replace(/\/$/, "").replace(/\.git$/, "").split("/").pop()!;
-  const workspaceForSession = getWorkspaceForSession(sessionId);
-  const targetPath = path.join(path.resolve(workspaceForSession), repoName);
+  const targetPath = path.join(path.resolve(workspacePath), repoName);
 
   if (existsSync(targetPath)) {
     res.status(409).json({ error: `Directory '${repoName}' already exists in workspace` });
@@ -353,10 +312,10 @@ app.post("/api/projects/clone", (req: Request, res: Response) => {
   }
 
   try {
-    execFileSync("git", ["clone", repoUrl, targetPath], { timeout: 300_000, stdio: ['pipe', 'pipe', 'pipe'] });
+    execFileSync("git", ["clone", repoUrl, targetPath], { timeout: 300_000 });
     res.json({ name: repoName, path: targetPath });
   } catch (err) {
-    log.error("Git clone failed", { repoUrl, destPath: targetPath, error: String(err) });
+    console.error("Git clone failed:", err);
     res.status(500).json({ error: "Failed to clone repository" });
   }
 });
@@ -413,118 +372,6 @@ app.get("/api/browse", (req: Request, res: Response) => {
   res.json({ path: currentPath, parent: parentPath, entries });
 });
 
-// -- Path completion --
-
-app.get("/api/path-complete", (req: Request, res: Response) => {
-  let partialPath = (req.query.partial as string ?? "").trim();
-  if (!partialPath) {
-    res.json({ entries: [], basePath: "" });
-    return;
-  }
-
-  // Resolve ~ to home directory
-  if (partialPath.startsWith("~/")) {
-    partialPath = path.join(homedir(), partialPath.slice(2));
-  } else if (partialPath === "~") {
-    partialPath = homedir();
-  }
-
-  // Resolve ./ paths relative to project directory
-  if (partialPath.startsWith("./") || partialPath === ".") {
-    const projectDir = (req.query.project as string ?? "").trim();
-    if (projectDir) {
-      // Security: ensure project directory is within home directory
-      const homeDir = path.resolve(homedir());
-      const resolvedProject = path.resolve(projectDir);
-      if (resolvedProject.startsWith(homeDir)) {
-        // Resolve relative to project directory
-        partialPath = path.join(projectDir, partialPath.slice(partialPath === "." ? 1 : 2));
-      }
-    }
-  }
-
-  // Security: ensure path is within home directory
-  const homeDir = path.resolve(homedir());
-  let resolvedBase: string;
-  try {
-    resolvedBase = path.resolve(partialPath);
-  } catch {
-    res.json({ entries: [], basePath: "" });
-    return;
-  }
-
-  // If path doesn't start with home dir, reject
-  if (!resolvedBase.startsWith(homeDir)) {
-    res.json({ entries: [], basePath: "" });
-    return;
-  }
-
-  // Determine the directory to list and the filename prefix to match
-  let dirToList: string;
-  let filePrefix: string;
-
-  if (existsSync(resolvedBase) && statSync(resolvedBase).isDirectory()) {
-    // Path is a complete directory - list its contents
-    dirToList = resolvedBase;
-    filePrefix = "";
-  } else {
-    // Path is partial - list parent directory and filter by filename
-    dirToList = path.dirname(resolvedBase);
-    filePrefix = path.basename(resolvedBase);
-  }
-
-  // Ensure directory exists and is accessible
-  if (!existsSync(dirToList) || !statSync(dirToList).isDirectory()) {
-    res.json({ entries: [], basePath: "" });
-    return;
-  }
-
-  // Read directory entries
-  const entries: Array<{ name: string; path: string; isDir: boolean }> = [];
-  try {
-    const items = readdirSync(dirToList);
-
-    for (const name of items) {
-      // Skip hidden files by default
-      if (name.startsWith(".")) continue;
-
-      // Filter by prefix
-      if (filePrefix && !name.toLowerCase().startsWith(filePrefix.toLowerCase())) {
-        continue;
-      }
-
-      const fullPath = path.join(dirToList, name);
-      try {
-        const stat = statSync(fullPath);
-        entries.push({
-          name: stat.isDirectory() ? `${name}/` : name,
-          path: fullPath,
-          isDir: stat.isDirectory(),
-        });
-
-        // Limit results
-        if (entries.length >= 20) break;
-      } catch {
-        // Skip inaccessible entries
-        continue;
-      }
-    }
-
-    // Sort: directories first, then alphabetically
-    entries.sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-
-  } catch {
-    // Permission denied or other error
-    res.json({ entries: [], basePath: dirToList });
-    return;
-  }
-
-  res.json({ entries, basePath: dirToList });
-});
-
 // -- Scan projects --
 
 app.get("/api/scan-projects", (_req: Request, res: Response) => {
@@ -572,7 +419,7 @@ app.get("/api/scan-projects", (_req: Request, res: Response) => {
 // -- Set workspace --
 
 app.post("/api/set-workspace", (req: Request, res: Response) => {
-  const { path: newPath, session_id: sessionId } = req.body ?? {};
+  const { path: newPath } = req.body ?? {};
   if (!newPath?.trim()) {
     res.status(400).json({ error: "Missing 'path' in request body" });
     return;
@@ -590,16 +437,8 @@ app.post("/api/set-workspace", (req: Request, res: Response) => {
     return;
   }
 
-  // If session_id provided, store per-session; otherwise update global default
-  if (sessionId?.trim()) {
-    sessionWorkspaces.set(sessionId.trim(), resolved);
-    log.info("Set workspace for session", { sessionId, workspace: resolved });
-  } else {
-    workspacePath = resolved;
-    process.env.WORKSPACE_PATH = resolved;
-    log.info("Set global workspace", { workspace: resolved });
-  }
-
+  workspacePath = resolved;
+  process.env.WORKSPACE_PATH = resolved;
   res.json({ workspace: resolved });
 });
 
@@ -612,10 +451,8 @@ app.get("/api/git/context", (req: Request, res: Response) => {
     return;
   }
 
-  const sessionId = (req.query.session_id as string) || undefined;
-  const workspaceForSession = getWorkspaceForSession(sessionId);
   const projectDir = path.resolve(projectPath);
-  const wsDir = path.resolve(workspaceForSession);
+  const wsDir = path.resolve(workspacePath);
   if (!projectDir.startsWith(wsDir)) {
     res.status(403).json({ error: "Project path is outside the configured workspace" });
     return;
@@ -630,7 +467,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     result.branch = execFileSync("git", ["-C", projectDir, "rev-parse", "--abbrev-ref", "HEAD"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
   } catch {
     result.branch = null;
@@ -638,7 +475,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const status = execFileSync("git", ["-C", projectDir, "status", "--porcelain"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
     result.dirty_count = status ? status.split("\n").filter(Boolean).length : 0;
   } catch {
@@ -647,7 +484,7 @@ app.get("/api/git/context", (req: Request, res: Response) => {
 
   try {
     const log = execFileSync("git", ["-C", projectDir, "log", "--format=%H|||%h|||%s|||%ar", "-n", "5"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
     result.commits = log
       ? log.split("\n").map((line) => {
@@ -673,7 +510,7 @@ app.get("/api/sessions", (req: Request, res: Response) => {
     const project = (req.query.project as string) || undefined;
     res.json({ sessions: database.getSessionsList(50, project) });
   } catch (err) {
-    log.error("Failed to list sessions", { error: String(err) });
+    console.error("Failed to list sessions:", err);
     res.status(500).json({ error: "Failed to list sessions" });
   }
 });
@@ -687,47 +524,8 @@ app.post("/api/sessions/:sessionId/archive", (req: Request, res: Response) => {
       res.status(500).json({ error: "Failed to archive session" });
     }
   } catch (err) {
-    log.error("Failed to archive session", { sessionId: req.params.sessionId, error: String(err) });
+    console.error("Failed to archive session:", err);
     res.status(500).json({ error: "Failed to archive session" });
-  }
-});
-
-// -- Session metadata --
-
-app.get("/api/sessions/:sessionId/metadata", (req: Request, res: Response) => {
-  try {
-    const metadata = database.getSessionMetadata(req.params.sessionId);
-    res.json({ metadata: metadata ?? {} });
-  } catch (err) {
-    log.error("Failed to get session metadata", { sessionId: req.params.sessionId, error: String(err) });
-    res.status(500).json({ error: "Failed to get session metadata" });
-  }
-});
-
-app.patch("/api/sessions/:sessionId/metadata", (req: Request, res: Response) => {
-  try {
-    const sessionId = req.params.sessionId;
-    const { model, thinking_level, verbose } = req.body;
-
-    // Validate model if provided
-    const validModels = ["sonnet", "opus", "haiku"];
-    if (model !== undefined && model !== null && !validModels.includes(model)) {
-      res.status(400).json({ error: `Invalid model. Must be one of: ${validModels.join(", ")}` });
-      return;
-    }
-
-    // Build metadata update
-    const update: Partial<database.SessionMetadata> = {};
-    if (model !== undefined) update.model = model;
-    if (thinking_level !== undefined) update.thinking_level = thinking_level;
-    if (verbose !== undefined) update.verbose = verbose;
-
-    const metadata = database.upsertSessionMetadata(sessionId, update);
-
-    res.json({ metadata });
-  } catch (err) {
-    log.error("Failed to patch session metadata", { sessionId: req.params.sessionId, error: String(err) });
-    res.status(500).json({ error: "Failed to patch session metadata" });
   }
 });
 
@@ -744,7 +542,7 @@ app.get("/api/workspace", (_req: Request, res: Response) => {
 
 app.put("/api/workspace", (req: Request, res: Response) => {
   const state = req.body;
-  if (!state || typeof state !== "object" || Object.keys(state).length === 0) {
+  if (!state) {
     res.status(400).json({ error: "No state provided" });
     return;
   }
@@ -755,7 +553,7 @@ app.put("/api/workspace", (req: Request, res: Response) => {
 app.post("/api/workspace", (req: Request, res: Response) => {
   // POST variant for sendBeacon during page unload
   const state = req.body;
-  if (!state || typeof state !== "object" || Object.keys(state).length === 0) {
+  if (!state) {
     res.status(400).json({ error: "No state provided" });
     return;
   }
@@ -800,7 +598,7 @@ app.post("/api/images/upload", upload.single("file"), (req: Request, res: Respon
     );
     res.json(meta);
   } catch (err) {
-    log.error("Failed to store image", { sessionId, filename: req.file?.originalname, error: String(err) });
+    console.error("Failed to store image:", err);
     res.status(500).json({ error: "Failed to store image" });
   }
 });
@@ -816,7 +614,7 @@ app.get("/api/images/:imageId", (req: Request, res: Response) => {
     res.set("Content-Disposition", `inline; filename="${image.filename}"`);
     res.send(image.data as Buffer);
   } catch (err) {
-    log.error("Failed to retrieve image", { imageId: req.params.imageId, error: String(err) });
+    console.error("Failed to retrieve image:", err);
     res.status(500).json({ error: "Failed to retrieve image" });
   }
 });
@@ -830,10 +628,8 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
     return;
   }
 
-  const sessionId = (req.query.session_id as string) || undefined;
-  const workspaceForSession = getWorkspaceForSession(sessionId);
   const projectDir = path.resolve(projectPath);
-  const wsDir = path.resolve(workspaceForSession);
+  const wsDir = path.resolve(workspacePath);
   if (!projectDir.startsWith(wsDir)) {
     res.status(403).json({ error: "Project path is outside the configured workspace" });
     return;
@@ -852,10 +648,10 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   // Git context
   try {
     const branch = execFileSync("git", ["-C", projectDir, "rev-parse", "--abbrev-ref", "HEAD"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
     const status = execFileSync("git", ["-C", projectDir, "status", "--porcelain"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
     result.git = { branch, dirty_count: status ? status.split("\n").filter(Boolean).length : 0 };
   } catch {
@@ -933,7 +729,7 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   // Commit count
   try {
     const count = execFileSync("git", ["-C", projectDir, "rev-list", "--count", "HEAD"], {
-      timeout: 5000, encoding: "utf-8", stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000, encoding: "utf-8",
     }).trim();
     result.commit_count = parseInt(count, 10);
   } catch {
@@ -1000,6 +796,28 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   res.json(result);
 });
 
+// -- Connections (provenance) --
+
+app.get("/api/connections", (_req: Request, res: Response) => {
+  try {
+    const connections = provenanceTracker.getAllConnections();
+    res.json({ connections, total: connections.length });
+  } catch (err) {
+    console.error("Failed to fetch connections:", err);
+    res.status(500).json({ error: "Failed to fetch connections" });
+  }
+});
+
+app.get("/api/connections/:sessionId", (req: Request, res: Response) => {
+  try {
+    const connections = provenanceTracker.getActiveConnections(req.params.sessionId);
+    res.json({ connections, session_id: req.params.sessionId });
+  } catch (err) {
+    console.error("Failed to fetch connections for session:", err);
+    res.status(500).json({ error: "Failed to fetch connections for session" });
+  }
+});
+
 // -- Plugins (stub) --
 
 app.get("/api/plugins", (_req: Request, res: Response) => {
@@ -1016,137 +834,42 @@ app.get("/api/skills", (req: Request, res: Response) => {
   res.json({ skills });
 });
 
-// -- MCP Servers --
-
-app.get("/api/mcp/servers", (req: Request, res: Response) => {
-  try {
-    const projectPath = req.query.project as string | undefined;
-    const servers = getAllMcpServers(projectPath);
-    res.json({ servers });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    res.status(500).json({ error: message });
-  }
-});
-
-app.post("/api/mcp/servers", (req: Request, res: Response) => {
-  try {
-    const { name, config, scope, projectPath } = req.body;
-
-    if (!name || !config) {
-      res.status(400).json({ error: 'name and config are required' });
-      return;
-    }
-
-    if (!scope || !['user', 'project'].includes(scope)) {
-      res.status(400).json({ error: 'scope must be "user" or "project"' });
-      return;
-    }
-
-    if (scope === 'project' && !projectPath) {
-      res.status(400).json({ error: 'projectPath is required for project scope' });
-      return;
-    }
-
-    addMcpServer(name, config as McpServerConfig, scope, projectPath);
-    res.json({ success: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    res.status(500).json({ error: message });
-  }
-});
-
-app.delete("/api/mcp/servers/:name", (req: Request, res: Response) => {
-  try {
-    const { name } = req.params;
-    const { scope, projectPath } = req.query as { scope?: string; projectPath?: string };
-
-    if (!scope || !['user', 'project'].includes(scope)) {
-      res.status(400).json({ error: 'scope query param must be "user" or "project"' });
-      return;
-    }
-
-    const removed = removeMcpServer(name, scope as 'user' | 'project', projectPath);
-    if (removed) {
-      res.json({ success: true });
-    } else {
-      res.status(404).json({ error: `Server "${name}" not found in ${scope} scope` });
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    res.status(500).json({ error: message });
-  }
-});
-
 // =========================================================================
 // WebSocket Events
 // =========================================================================
 
-// Helper: Join a session room and sync state
-function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string): void {
-  socket.join(sessionId);
+io.on("connection", (socket) => {
+  const token = socket.handshake.query.token as string ?? "";
+  const userId = auth.verifyToken(token);
 
-  const client = connectedClients.get(socket.id);
-  if (client) {
-    client.sessions.add(sessionId);
-    client.session_id = sessionId;
+  if (!userId) {
+    console.warn("WebSocket connection rejected: invalid token");
+    socket.disconnect(true);
+    return;
   }
+
+  const sessionId = (socket.handshake.query.session_id as string) ?? socket.id;
+
+  connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
+  provenanceTracker.register(socket, sessionId);
+  socket.join(sessionId);
 
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
-    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
-    socket.emit("stream_active", { session_id: sessionId });
-
-    const bufferedContent = sdkSession.getStreamingContent(sessionId);
-    if (bufferedContent) {
-      socket.emit("stream_content_sync", { content: bufferedContent, session_id: sessionId });
-    }
+    const provenance = provenanceTracker.getProvenance(socket.id);
+    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId, provenance?.connectionId ?? undefined));
+    io.to(sessionId).emit("stream_active", {});
 
     const pq = sdkSession.getPendingQuestion(sessionId);
     if (pq) {
-      socket.emit("user_question", {
+      io.to(sessionId).emit("user_question", {
         questions: pq.questions ?? [],
         tool_use_id: pq.tool_use_id ?? "",
-      });
-    }
-  } else {
-    const missedResponse = sdkSession.getLastCompletedResponse(sessionId);
-    if (missedResponse) {
-      socket.emit("response_complete", {
-        cost: missedResponse.cost,
-        duration_ms: missedResponse.duration_ms,
-        input_tokens: missedResponse.input_tokens,
-        output_tokens: missedResponse.output_tokens,
-        context_window_size: missedResponse.context_window_size,
-        model: missedResponse.model,
-        sdk_session_id: missedResponse.sdk_session_id,
-        content: missedResponse.text,
-        session_id: sessionId,
       });
     }
   }
 
   socket.emit("connected", { session_id: sessionId });
-}
-
-io.on("connection", (socket) => {
-  const token = socket.handshake.auth.token as string ?? "";
-  const userId = auth.verifyToken(token);
-
-  if (!userId) {
-    log.warn("WebSocket connection rejected: invalid token", { socketId: socket.id });
-    socket.disconnect(true);
-    return;
-  }
-
-  const sessionId = (socket.handshake.auth.session_id as string) ?? "";
-
-  connectedClients.set(socket.id, { session_id: sessionId, user_id: userId, sessions: new Set() });
-
-  // If session_id provided in auth (backward compat or initial connect), auto-join
-  if (sessionId) {
-    joinSession(socket, sessionId, userId);
-  }
 
   // -- Message handler --
 
@@ -1157,24 +880,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
+    const sid = client.session_id;
     const uid = client.user_id;
     const content = ((data?.content as string) ?? "").trim();
-    const workspace = (data?.workspace as string) ?? getWorkspaceForSession(sid);
+    const workspace = (data?.workspace as string) ?? workspacePath;
     const model = (data?.model as string) || undefined;
     const imageIdsData = (data?.image_ids as string[]) ?? [];
     const projectPathData = (data?.workspace as string) ?? "";
 
     if (!content && !imageIdsData.length) return;
 
-    // Record user message
+    // Record user message with provenance
     try {
+      const provenance = provenanceTracker.getProvenance(socket.id);
       database.recordMessage(
         sid, uid, "user",
         content || "[Image]",
         undefined,
         projectPathData || undefined,
         imageIdsData.length ? imageIdsData : undefined,
+        provenance?.connectionId ?? undefined,
+        provenance?.sourceIp ?? undefined,
+        provenance?.userAgent ?? undefined,
       );
 
       const existing = database.getConversationHistory(sid, 1);
@@ -1182,21 +909,22 @@ io.on("connection", (socket) => {
         try {
           database.incrementUserStats(uid, 1);
         } catch (e) {
-          log.error("Failed to increment session count", { userId, error: String(e) });
+          console.error("Failed to increment session count:", e);
         }
       }
     } catch (err) {
-      log.error("Failed to record user message", { sessionId, error: String(err) });
+      console.error("Failed to record user message:", err);
     }
 
     socket.emit("message_received", { status: "ok" });
 
-    // Submit to SDK
+    // Submit to SDK with provenance
+    const provenance = provenanceTracker.getProvenance(socket.id);
     sdkSession.submitQuery(
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid, uid),
+      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -1204,11 +932,10 @@ io.on("connection", (socket) => {
 
   // -- Cancel --
 
-  socket.on("cancel", (data?: { session_id?: string }) => {
+  socket.on("cancel", () => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
-    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
-    sdkSession.cancelQuery(sid);
+    sdkSession.cancelQuery(client.session_id);
     socket.emit("cancelled", { status: "ok" });
   });
 
@@ -1223,235 +950,8 @@ io.on("connection", (socket) => {
   socket.on("question_response", (data: Record<string, unknown>) => {
     const client = connectedClients.get(socket.id);
     if (!client) return;
-    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
     const response = (data?.response as Record<string, unknown>) ?? {};
-    sdkSession.sendQuestionResponse(sid, response);
-  });
-
-  // -- Duplicate session --
-
-  socket.on("duplicate_session", (data: { sourceSessionId: string; newSessionId: string }, callback?: (response: { success: boolean; error?: string; conversations?: number; toolEvents?: number; images?: number }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    try {
-      const result = database.duplicateSession(data.sourceSessionId, data.newSessionId, client.user_id);
-      callback?.({ success: true, conversations: result.conversations, toolEvents: result.toolEvents, images: result.images });
-    } catch (err) {
-      log.error("Failed to duplicate session", { sourceSessionId: data.sourceSessionId, newSessionId: data.newSessionId, error: String(err) });
-      callback?.({ success: false, error: String(err) });
-    }
-  });
-
-  // -- Join session (room-based multiplexing) --
-
-  socket.on("join_session", (data: { session_id: string }, callback?: (response: { status: string }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ status: "error" });
-      return;
-    }
-
-    const newSessionId = data?.session_id;
-    if (!newSessionId || typeof newSessionId !== "string") {
-      callback?.({ status: "error" });
-      return;
-    }
-
-    joinSession(socket, newSessionId, client.user_id);
-    callback?.({ status: "ok" });
-  });
-
-  // -- Leave session --
-
-  socket.on("leave_session", (data: { session_id: string }) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) return;
-
-    const oldSessionId = data?.session_id;
-    if (!oldSessionId || typeof oldSessionId !== "string") return;
-
-    socket.leave(oldSessionId);
-    client.sessions.delete(oldSessionId);
-  });
-
-  // -- Session metadata --
-
-  socket.on("session:get_metadata", (data: { session_id: string }, callback?: (response: { success: boolean; error?: string; metadata?: unknown }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const sessionId = data?.session_id;
-    if (!sessionId || typeof sessionId !== "string") {
-      callback?.({ success: false, error: "Invalid session_id" });
-      return;
-    }
-
-    try {
-      const metadata = database.getSessionMetadata(sessionId);
-      callback?.({ success: true, metadata: metadata ?? {} });
-    } catch (err) {
-      log.error("Failed to get session metadata", { sessionId, error: String(err) });
-      callback?.({ success: false, error: String(err) });
-    }
-  });
-
-  socket.on("session:patch", (data: { session_id: string; model?: string; thinking_level?: string; verbose?: boolean }, callback?: (response: { success: boolean; error?: string; metadata?: unknown }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const sessionId = data?.session_id;
-    if (!sessionId || typeof sessionId !== "string") {
-      callback?.({ success: false, error: "Invalid session_id" });
-      return;
-    }
-
-    try {
-      // Validate model if provided
-      const validModels = ["sonnet", "opus", "haiku"];
-      if (data.model !== undefined && data.model !== null && !validModels.includes(data.model)) {
-        callback?.({ success: false, error: `Invalid model. Must be one of: ${validModels.join(", ")}` });
-        return;
-      }
-
-      // Build metadata update
-      const update: Partial<database.SessionMetadata> = {};
-      if (data.model !== undefined) update.model = data.model;
-      if (data.thinking_level !== undefined) update.thinking_level = data.thinking_level;
-      if (data.verbose !== undefined) update.verbose = data.verbose;
-
-      const metadata = database.upsertSessionMetadata(sessionId, update);
-
-      // Emit update to all clients in this session room
-      io.to(sessionId).emit("session:updated", { session_id: sessionId, metadata });
-
-      callback?.({ success: true, metadata });
-    } catch (err) {
-      log.error("Failed to patch session metadata", { sessionId, error: String(err) });
-      callback?.({ success: false, error: String(err) });
-    }
-  });
-
-  // -- Scheduled tasks --
-
-  socket.on("schedule_create", (data: { prompt: string; interval: string; session_id?: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
-    const prompt = data?.prompt?.trim();
-    const interval = data?.interval?.trim();
-
-    if (!prompt || !interval) {
-      callback?.({ success: false, error: "Missing prompt or interval" });
-      return;
-    }
-
-    try {
-      const intervalMs = parseInterval(interval);
-      const task = scheduler.addTask(sid, prompt, intervalMs, true);
-      callback?.({ success: true, task });
-      socket.emit("schedule_created", { task });
-    } catch (err) {
-      const errorMsg = String(err);
-      log.error("Failed to create scheduled task", { sessionId: sid, error: errorMsg });
-      callback?.({ success: false, error: errorMsg });
-    }
-  });
-
-  socket.on("schedule_delete", (data: { id: string }, callback?: (response: { success: boolean; error?: string }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const taskId = data?.id;
-    if (!taskId) {
-      callback?.({ success: false, error: "Missing task id" });
-      return;
-    }
-
-    const removed = scheduler.removeTask(taskId);
-    if (removed) {
-      callback?.({ success: true });
-      socket.emit("schedule_deleted", { id: taskId });
-    } else {
-      callback?.({ success: false, error: "Task not found" });
-    }
-  });
-
-  socket.on("schedule_list", (data: { session_id?: string }, callback?: (response: { tasks: unknown[] }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ tasks: [] });
-      return;
-    }
-
-    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
-    const tasks = scheduler.listTasks(sid);
-    callback?.({ tasks });
-    socket.emit("schedule_list", { tasks });
-  });
-
-  socket.on("schedule_pause", (data: { id: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const taskId = data?.id;
-    if (!taskId) {
-      callback?.({ success: false, error: "Missing task id" });
-      return;
-    }
-
-    const paused = scheduler.pauseTask(taskId);
-    if (paused) {
-      const tasks = scheduler.listTasks(client.session_id);
-      const task = tasks.find(t => t.id === taskId);
-      callback?.({ success: true, task });
-      socket.emit("schedule_updated", { task });
-    } else {
-      callback?.({ success: false, error: "Task not found" });
-    }
-  });
-
-  socket.on("schedule_resume", (data: { id: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
-    const client = connectedClients.get(socket.id);
-    if (!client) {
-      callback?.({ success: false, error: "Not authenticated" });
-      return;
-    }
-
-    const taskId = data?.id;
-    if (!taskId) {
-      callback?.({ success: false, error: "Missing task id" });
-      return;
-    }
-
-    const resumed = scheduler.resumeTask(taskId);
-    if (resumed) {
-      const tasks = scheduler.listTasks(client.session_id);
-      const task = tasks.find(t => t.id === taskId);
-      callback?.({ success: true, task });
-      socket.emit("schedule_updated", { task });
-    } else {
-      callback?.({ success: false, error: "Task not found" });
-    }
+    sdkSession.sendQuestionResponse(client.session_id, response);
   });
 
   // -- Disconnect --
@@ -1459,21 +959,22 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
+    provenanceTracker.unregister(socket.id);
     if (client) {
-      log.debug("Client disconnected", { userId: client.user_id, sessions: [...client.sessions] });
+      console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
   });
 });
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
-function buildSocketCallbacks(sessionId: string, userId: string) {
+function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectionId?: string) {
   return {
-    onText: (text: string, messageIndex: number) => {
-      io.to(sessionId).emit("text_delta", { text, message_index: messageIndex, session_id: sessionId });
+    onText: (text: string) => {
+      io.to(sessionId).emit("text_delta", { text });
     },
     onToolEvent: (event: Record<string, unknown>) => {
-      io.to(sessionId).emit("tool_event", { ...event, session_id: sessionId });
+      io.to(sessionId).emit("tool_event", event);
       // Count lines of code
       if (event.type === "tool_complete" && (event.tool_name === "Write" || event.tool_name === "Edit")) {
         const params = event.parameters as Record<string, unknown> | undefined;
@@ -1483,11 +984,12 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           try {
             database.incrementUserStats(userId, 0, 0, 0, 0, 0, 0, lines);
           } catch (e) {
-            log.error("Failed to increment LOC", { sessionId, error: String(e) });
+            console.error("Failed to increment LOC:", e);
           }
         }
       }
     },
+    sourceConnectionId,
     onComplete: (result: Record<string, unknown>) => {
       try {
         database.incrementUserStats(
@@ -1500,18 +1002,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
           (result.output_tokens as number) ?? 0,
         );
       } catch (e) {
-        log.error("Failed to increment user stats", { sessionId, userId, error: String(e) });
-      }
-
-      // Persist session context for tab restoration
-      try {
-        database.updateSessionContext(
-          sessionId,
-          (result.input_tokens as number) ?? 0,
-          (result.model as string) ?? null
-        );
-      } catch (e) {
-        log.error("Failed to update session context", { sessionId, error: String(e) });
+        console.error("Failed to increment user stats:", e);
       }
 
       io.to(sessionId).emit("response_complete", {
@@ -1519,12 +1010,9 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         duration_ms: result.duration_ms,
         input_tokens: result.input_tokens,
         output_tokens: result.output_tokens,
-        context_window_size: result.context_window_size,
         model: result.model,
         sdk_session_id: result.sdk_session_id,
         content: result.text,
-        message_index: result.message_index,
-        session_id: sessionId,
       });
     },
     onError: (message: string) => {
@@ -1534,47 +1022,6 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
       io.to(sessionId).emit("user_question", {
         questions: data.questions ?? [],
         tool_use_id: data.tool_use_id ?? "",
-      });
-    },
-    onSignal: (signal: { type: string; data: Record<string, unknown> }) => {
-      io.to(sessionId).emit("signal", signal);
-    },
-    onToolProgress: (data: { tool_use_id: string; elapsed_seconds: number }) => {
-      io.to(sessionId).emit("tool_progress", data);
-    },
-    onRateLimit: (data: { retryAfterMs: number; rateLimitedAt: string }) => {
-      io.to(sessionId).emit("rate_limit", data);
-    },
-    onPromptSuggestion: (suggestions: string[]) => {
-      io.to(sessionId).emit("prompt_suggestions", { suggestions });
-    },
-    onCompactBoundary: () => {
-      io.to(sessionId).emit("compact_boundary", { timestamp: new Date().toISOString() });
-    },
-    onDevServerDetected: (url: string) => {
-      io.to(sessionId).emit("dev_server_detected", { url, session_id: sessionId });
-    },
-    onCaptureScreenshot: (): Promise<{ image?: string; url?: string; error?: string }> => {
-      return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          resolve({ error: "Screenshot timeout - no browser tab responded within 10 seconds" });
-        }, 10000);
-
-        // Set up one-time listener for screenshot result
-        const handleScreenshotResult = (data: { image?: string; url?: string; error?: string; session_id?: string }) => {
-          // Only handle responses for this session
-          if (data.session_id === sessionId) {
-            clearTimeout(timeout);
-            io.off("screenshot_result", handleScreenshotResult);
-            resolve(data);
-          }
-        };
-
-        // Listen for screenshot result
-        io.on("screenshot_result", handleScreenshotResult);
-
-        // Request screenshot from frontend
-        io.to(sessionId).emit("capture_screenshot", { session_id: sessionId });
       });
     },
     // Thinking deltas intentionally not emitted to frontend
@@ -1589,7 +1036,7 @@ function writePidFile(): void {
   try {
     writeFileSync(config.SERVER_PID_PATH, String(process.pid));
   } catch (e) {
-    log.error("Failed to write PID file", { pidPath: config.SERVER_PID_PATH, error: String(e) });
+    console.error("Failed to write PID file:", e);
   }
 }
 
@@ -1604,157 +1051,20 @@ function removePidFile(): void {
 }
 
 // Start server
-log.info("Starting ccplus server", {
-  host: config.HOST,
-  port: config.PORT,
-  localMode: config.LOCAL_MODE,
-  workspace: workspacePath,
-  database: config.DATABASE_PATH,
-  staticDir: config.STATIC_DIR,
-});
+console.log(`Starting ccplus server on ${config.HOST}:${config.PORT}`);
+console.log(`Local mode: ${config.LOCAL_MODE}`);
+console.log(`Workspace: ${workspacePath}`);
+console.log(`Database: ${config.DATABASE_PATH}`);
+console.log(`Static dir: ${config.STATIC_DIR}`);
 
 writePidFile();
-
-function gracefulShutdown(signal: string): void {
-  log.info("Received shutdown signal", { signal });
-
-  // Force exit after timeout if graceful shutdown hangs
-  const forceExitTimeout = setTimeout(() => {
-    log.error("Shutdown timed out, forcing exit");
-    process.exit(1);
-  }, 5000);
-  forceExitTimeout.unref(); // Don't keep process alive just for this timer
-
-  // 1. Stop accepting new connections
-  httpServer.close(() => {
-    console.log("HTTP server closed");
-  });
-
-  // 2. Close all active Socket.IO connections
-  io.close(() => {
-    console.log("Socket.IO server closed");
-  });
-
-  // 3. Stop config watcher
-  configWatcher.stop();
-  console.log("Config watcher stopped");
-
-  // 4. Close database connection
-  database.close();
-  console.log("Database closed");
-
-  // 5. Remove PID file
+process.on("SIGTERM", () => {
+  console.log("Received SIGTERM, shutting down...");
   removePidFile();
-
-  // 6. Exit
-  console.log("Shutdown complete");
-  clearTimeout(forceExitTimeout);
   process.exit(0);
-}
-
-process.on("uncaughtException", (err) => {
-  console.error("[server] Uncaught exception (not crashing):", err);
 });
-
-process.on("unhandledRejection", (reason) => {
-  const reasonStr = String(reason);
-  if (reasonStr.includes("ProcessTransport is not ready for writing")) {
-    return;
-  }
-  console.error("[server] Unhandled rejection (not crashing):", reason);
-});
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("exit", removePidFile);
-
-// ---- Scheduled tasks tick ----
-
-setInterval(() => {
-  // Get all active sessions from connectedClients
-  const activeSessions = new Set<string>();
-  for (const client of connectedClients.values()) {
-    for (const sid of client.sessions) {
-      activeSessions.add(sid);
-    }
-  }
-
-  // Check each active session for ready tasks
-  for (const sessionId of activeSessions) {
-    // Only fire if session is idle
-    if (!sdkSession.isActive(sessionId)) {
-      const readyTasks = scheduler.getReadyTasks(sessionId);
-
-      for (const task of readyTasks) {
-        log.info(`Firing scheduled task ${task.id} for session ${sessionId}`, { taskId: task.id, prompt: task.prompt });
-
-        // Get user_id from connected clients
-        let userId = "local";
-        for (const client of connectedClients.values()) {
-          if (client.sessions.has(sessionId)) {
-            userId = client.user_id;
-            break;
-          }
-        }
-
-        // Record user message
-        try {
-          database.recordMessage(sessionId, userId, "user", task.prompt, undefined, undefined, undefined);
-        } catch (err) {
-          log.error("Failed to record scheduled task message", { sessionId, taskId: task.id, error: String(err) });
-        }
-
-        // Emit fired event
-        io.to(sessionId).emit("schedule_fired", { id: task.id, prompt: task.prompt, timestamp: Date.now() });
-
-        // Submit query
-        const workspace = getWorkspaceForSession(sessionId);
-        sdkSession.submitQuery(
-          sessionId,
-          task.prompt,
-          workspace,
-          buildSocketCallbacks(sessionId, userId),
-          undefined,
-          undefined,
-        );
-
-        // Mark task as fired
-        scheduler.markFired(task.id);
-      }
-    }
-  }
-}, 5000); // Check every 5 seconds
-
-// ---- Config hot-reload ----
-
-configWatcher.on("config:changed", (change: ConfigChange) => {
-  if (change.hotReloadable) {
-    // Apply hot-reloadable config changes immediately
-    config.reloadConfig(change.key, change.newValue);
-    log.info(`Config hot-reloaded: ${change.key}`, {
-      key: change.key,
-      oldValue: change.oldValue,
-      newValue: change.newValue,
-    });
-    console.log(`[config] Hot-reloaded: ${change.key} = ${change.newValue}`);
-  } else {
-    // Warn about restart-required changes
-    log.warn(`Config change requires restart: ${change.key}`, {
-      key: change.key,
-      oldValue: change.oldValue,
-      newValue: change.newValue,
-    });
-    console.warn(
-      `[config] ⚠️  Config change requires server restart: ${change.key}\n` +
-      `       Old value: ${change.oldValue}\n` +
-      `       New value: ${change.newValue}\n` +
-      `       Run './ccplus server' to restart.`
-    );
-  }
-});
 
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
-  scheduler.start();
-  configWatcher.start();
 });
