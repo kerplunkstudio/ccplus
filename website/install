@@ -513,10 +513,25 @@ print_next_steps() {
         macos-*)
             info "Launch cc+ from Applications or run:"
             info "  open -a 'cc+'"
+            printf "\n"
+            step "Launching cc+..."
+            if open -a 'cc+' 2>/dev/null; then
+                success "cc+ launched"
+            else
+                warn "Could not auto-launch (launch manually from Applications)"
+            fi
             ;;
         linux-*)
             info "Run cc+ with:"
             info "  ccplus"
+            printf "\n"
+            step "Launching cc+..."
+            if command -v ccplus >/dev/null 2>&1; then
+                nohup ccplus >/dev/null 2>&1 &
+                success "cc+ launched in background"
+            else
+                warn "Could not auto-launch (run 'ccplus' manually)"
+            fi
             ;;
     esac
 
