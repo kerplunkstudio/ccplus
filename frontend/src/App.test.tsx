@@ -510,7 +510,7 @@ describe('App - Socket Connection', () => {
         totalDuration: 0,
         queryCount: 0,
         contextWindowSize: 200000,
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         linesOfCode: 0,
         totalSessions: 0,
       },
@@ -549,7 +549,7 @@ describe('App - Socket Connection', () => {
         totalDuration: 0,
         queryCount: 0,
         contextWindowSize: 200000,
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         linesOfCode: 0,
         totalSessions: 0,
       },
@@ -632,7 +632,7 @@ describe('App - Model Selection', () => {
         totalDuration: 0,
         queryCount: 0,
         contextWindowSize: 200000,
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         linesOfCode: 0,
         totalSessions: 0,
       },
@@ -642,7 +642,7 @@ describe('App - Model Selection', () => {
   it('loads selected model from localStorage', () => {
     const getItemSpy = jest.spyOn(Storage.prototype, 'getItem');
     getItemSpy.mockImplementation((key) => {
-      if (key === 'ccplus_selected_model') return 'claude-opus-4-20250514';
+      if (key === 'ccplus_selected_model') return 'claude-opus-4-6';
       if (key === 'ccplus_sidebar_width') return '260';
       return null;
     });
@@ -736,7 +736,7 @@ describe('App - Error Boundary', () => {
         totalDuration: 0,
         queryCount: 0,
         contextWindowSize: 200000,
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         linesOfCode: 0,
         totalSessions: 0,
       },

@@ -12,7 +12,7 @@ jest.mock('./NewSessionDashboard', () => ({
 jest.mock('./ModelSelector', () => ({
   ModelSelector: ({ selectedModel, onSelectModel }: any) => (
     <select data-testid="model-selector" value={selectedModel} onChange={(e) => onSelectModel(e.target.value)}>
-      <option value="claude-sonnet-4-20250514">Sonnet</option>
+      <option value="claude-sonnet-4-6">Sonnet</option>
     </select>
   ),
 }));
@@ -41,7 +41,7 @@ describe('ChatPanel', () => {
     totalDuration: 0,
     queryCount: 0,
     contextWindowSize: 0,
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     linesOfCode: 0,
     totalSessions: 0,
   };
@@ -60,7 +60,7 @@ describe('ChatPanel', () => {
     backgroundProcessing: false,
     sessionId: 'test_session',
     toolLog: [] as any[],
-    selectedModel: 'claude-sonnet-4-20250514',
+    selectedModel: 'claude-sonnet-4-6',
     usageStats: mockUsageStats,
     onSendMessage: jest.fn(),
     onSelectModel: jest.fn(),
