@@ -24,6 +24,7 @@ describe("Database Tests", () => {
       database.exec("DELETE FROM user_stats");
       database.exec("DELETE FROM workspace_state");
       database.exec("DELETE FROM session_context");
+      // FTS table is automatically cleaned when conversations are deleted (via trigger)
     } catch {
       // Tables might not exist yet, that's okay
     }
@@ -1166,7 +1167,7 @@ describe("Database Tests", () => {
       expect(tableExists.c).toBe(1);
     });
 
-    it("should mark new database as version 3", () => {
+    it("should mark new database as version 4", () => {
       const database = new Database(config.DATABASE_PATH);
 
       const version = database.prepare(
@@ -1175,7 +1176,7 @@ describe("Database Tests", () => {
 
       database.close();
 
-      expect(version.v).toBe(3);
+      expect(version.v).toBe(4);
     });
 
     it("should have applied_at timestamp", () => {
@@ -1299,6 +1300,59 @@ describe("Database Tests", () => {
       expect(oldRecord!.content).toBe("old message");
 
       database.close();
+    });
+  });
+
+  describe("Semantic Search", () => {
+    it("should search conversations using FTS5", () => {
+      db.recordMessage("sess1", "user1", "user", "I need help with TypeScript");
+      db.recordMessage("sess1", "user1", "assistant", "Sure, I can help with TypeScript");
+      db.recordMessage("sess2", "user1", "user", "JavaScript is great");
+      db.recordMessage("sess2", "user1", "assistant", "Yes, JavaScript is powerful");
+
+      const results = db.semanticSearchConversations("TypeScript");
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some((r) => r.content.includes("TypeScript"))).toBe(true);
+    });
+
+    it("should return results sorted by relevance", () => {
+      db.recordMessage("sess1", "user1", "user", "TypeScript is good");
+      db.recordMessage("sess2", "user1", "user", "I love TypeScript TypeScript TypeScript");
+
+      const results = db.semanticSearchConversations("TypeScript");
+
+      expect(results.length).toBe(2);
+      expect(results[0].content.includes("TypeScript TypeScript TypeScript")).toBe(true);
+    });
+
+    it("should limit results", () => {
+      for (let i = 0; i < 30; i++) {
+        db.recordMessage(`sess${i}`, "user1", "user", `Message ${i} about TypeScript`);
+      }
+
+      const results = db.semanticSearchConversations("TypeScript", 10);
+
+      expect(results.length).toBe(10);
+    });
+
+    it("should exclude archived conversations", () => {
+      db.recordMessage("sess1", "user1", "user", "TypeScript rocks");
+      const database = new Database(config.DATABASE_PATH);
+      database.exec("UPDATE conversations SET archived = 1 WHERE session_id = 'sess1'");
+      database.close();
+
+      const results = db.semanticSearchConversations("TypeScript");
+
+      expect(results.length).toBe(0);
+    });
+
+    it("should handle empty query gracefully", () => {
+      db.recordMessage("sess1", "user1", "user", "Hello world");
+
+      const results = db.semanticSearchConversations("");
+
+      expect(results.length).toBe(0);
     });
   });
 });
