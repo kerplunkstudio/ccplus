@@ -654,6 +654,27 @@ Tests are mandatory for all implementations:
 
 **Fix**: Pick one style per module. Use static `import` for modules always needed. Use dynamic `await import()` only for optional or lazy-loaded modules, and never mix with a static import of the same package.
 
+## PR Merge Policy
+
+### Bug Fixes
+All bug fix PRs must include:
+1. **Symptom**: What the user sees (error message, wrong behavior, crash)
+2. **Root cause**: The specific code path and why it fails (file:line reference)
+3. **Fix**: Changes that address the root cause (not a workaround)
+4. **Regression test**: A test that fails without the fix and passes with it
+
+### Features
+Feature PRs must include:
+- Unit tests for new logic
+- Integration test if it adds an API endpoint
+- No hardcoded values or secrets
+
+### All PRs
+- Backend tests pass: `cd backend-ts && npm test`
+- Frontend tests pass: `cd frontend && npm test`
+- No console.log statements
+- Follows immutable patterns (no object mutation)
+
 ## Multi-Agent Safety Rules
 
 When working as an AI agent (Claude Code or subagents), follow these rules to prevent conflicts in multi-agent scenarios:
