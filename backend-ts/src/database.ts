@@ -699,14 +699,26 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     SELECT
       tool_name,
       COUNT(*) as count,
-      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count
+      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+      COALESCE(AVG(duration_ms), 0) as avg_duration_ms,
+      COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+      COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+      SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as error_count
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND tool_name NOT LIKE 'toolu_%'
     ${toolProjectFilter}
     GROUP BY tool_name
     ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as { tool_name: string; count: number; success_count: number }[];
+  `).all(startDate, endDate, ...toolProjectParams) as {
+    tool_name: string;
+    count: number;
+    success_count: number;
+    avg_duration_ms: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    error_count: number;
+  }[];
 
   const byTool = byToolRows.map((row) => {
     const total = row.count || 0;
@@ -716,8 +728,94 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       tool: row.tool_name,
       count: total,
       success_rate: successRate,
+      avg_duration_ms: Math.round((row.avg_duration_ms || 0) * 100) / 100,
+      total_input_tokens: row.total_input_tokens || 0,
+      total_output_tokens: row.total_output_tokens || 0,
+      error_count: row.error_count || 0,
     };
   });
+
+  // By error category
+  const byErrorCategoryRows = d.prepare(`
+    SELECT
+      error_category,
+      COUNT(*) as count
+    FROM tool_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    AND error_category IS NOT NULL
+    ${toolProjectFilter}
+    GROUP BY error_category
+    ORDER BY count DESC
+  `).all(startDate, endDate, ...toolProjectParams) as { error_category: string; count: number }[];
+
+  const byErrorCategory = byErrorCategoryRows.map((row) => ({
+    category: row.error_category,
+    count: row.count,
+  }));
+
+  // By agent type
+  const byAgentTypeRows = d.prepare(`
+    SELECT
+      agent_type,
+      COUNT(*) as count,
+      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+      COALESCE(AVG(duration_ms), 0) as avg_duration_ms
+    FROM tool_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    AND agent_type IS NOT NULL
+    ${toolProjectFilter}
+    GROUP BY agent_type
+    ORDER BY count DESC
+  `).all(startDate, endDate, ...toolProjectParams) as {
+    agent_type: string;
+    count: number;
+    success_count: number;
+    avg_duration_ms: number;
+  }[];
+
+  const byAgentType = byAgentTypeRows.map((row) => ({
+    agent_type: row.agent_type,
+    count: row.count,
+    success_count: row.success_count,
+    avg_duration_ms: Math.round((row.avg_duration_ms || 0) * 100) / 100,
+  }));
+
+  // Hourly activity
+  const hourlyActivityRows = d.prepare(`
+    SELECT
+      CAST(strftime('%H', timestamp) AS INTEGER) as hour,
+      COUNT(CASE WHEN role = 'user' THEN 1 END) as queries
+    FROM conversations
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    AND (archived = 0 OR archived IS NULL)
+    ${convProjectFilter}
+    GROUP BY hour
+    ORDER BY hour ASC
+  `).all(startDate, endDate, ...convProjectParams) as { hour: number; queries: number }[];
+
+  // Fill missing hours with 0
+  const hourlyActivityMap = new Map(hourlyActivityRows.map((r) => [r.hour, r.queries]));
+  const hourlyActivity = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    queries: hourlyActivityMap.get(i) || 0,
+  }));
+
+  // Enhanced summary with efficiency metrics
+  const totalErrors = d.prepare(`
+    SELECT COUNT(*) as count
+    FROM tool_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    AND success = 0
+    ${toolProjectFilter}
+  `).get(startDate, endDate, ...toolProjectParams) as { count: number };
+
+  const avgCostPerQuery = currentQueries > 0 ? Math.round((totalCost / currentQueries) * 100) / 100 : 0;
+  const avgTokensPerQuery = currentQueries > 0
+    ? Math.round(((inputTokens + outputTokens) / currentQueries) * 100) / 100
+    : 0;
+  const avgQueriesPerSession = convSummary.total_sessions > 0
+    ? Math.round((currentQueries / convSummary.total_sessions) * 100) / 100
+    : 0;
 
   return {
     period: { start: startDate, end: endDate, days },
@@ -729,10 +827,17 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       total_tool_calls: toolSummary.total_tool_calls || 0,
       total_sessions: convSummary.total_sessions || 0,
       change_pct: changePct,
+      avg_cost_per_query: avgCostPerQuery,
+      avg_tokens_per_query: avgTokensPerQuery,
+      avg_queries_per_session: avgQueriesPerSession,
+      total_errors: totalErrors.count || 0,
     },
     daily,
     by_project: byProject,
     by_tool: byTool,
+    by_error_category: byErrorCategory,
+    by_agent_type: byAgentType,
+    hourly_activity: hourlyActivity,
   };
 }
 
