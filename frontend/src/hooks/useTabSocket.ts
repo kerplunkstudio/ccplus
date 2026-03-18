@@ -156,6 +156,7 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
 
   // Return the EXACT same interface as before
   return {
+    socket,
     connected,
     messages: streamingHook.messages,
     streaming: streamingHook.streaming,

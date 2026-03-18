@@ -18,6 +18,7 @@ export interface ScheduledTask {
 }
 
 interface ChatPanelProps {
+  socket: Socket | null;
   messages: Message[];
   connected: boolean;
   streaming: boolean;
@@ -64,6 +65,7 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
+  socket,
   messages,
   connected,
   streaming,
