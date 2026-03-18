@@ -234,6 +234,7 @@ interface SessionCallbacks {
   onError: (message: string) => void;
   onUserQuestion?: (data: Record<string, unknown>) => void;
   onThinkingDelta?: (text: string) => void;
+  sourceConnectionId?: string;
 }
 
 interface ActiveSession {
@@ -367,6 +368,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     // Record to database (success=null means "running")
     try {
+      const sourceConnId = session.callbacks?.sourceConnectionId;
       database.recordToolEvent(
         sessionId,
         toolName,
@@ -377,6 +379,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         null,
         null,
         isAgent ? undefined : JSON.stringify(safeParams(toolParams)),
+        null,
+        null,
+        sourceConnId,
       );
     } catch (e) {
       console.error("Database write failed (preToolUse):", e);

@@ -14,6 +14,7 @@ import * as config from "./config.js";
 import * as auth from "./auth.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
+import { ProvenanceTracker } from "./provenance.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -69,6 +70,9 @@ if (orphanCount > 0) {
 
 // Maps socket.id -> { session_id, user_id }
 const connectedClients = new Map<string, { session_id: string; user_id: string }>();
+
+// Provenance tracker for all connections
+const provenanceTracker = new ProvenanceTracker();
 
 // Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
@@ -792,6 +796,28 @@ app.get("/api/project/overview", (req: Request, res: Response) => {
   res.json(result);
 });
 
+// -- Connections (provenance) --
+
+app.get("/api/connections", (_req: Request, res: Response) => {
+  try {
+    const connections = provenanceTracker.getAllConnections();
+    res.json({ connections, total: connections.length });
+  } catch (err) {
+    console.error("Failed to fetch connections:", err);
+    res.status(500).json({ error: "Failed to fetch connections" });
+  }
+});
+
+app.get("/api/connections/:sessionId", (req: Request, res: Response) => {
+  try {
+    const connections = provenanceTracker.getActiveConnections(req.params.sessionId);
+    res.json({ connections, session_id: req.params.sessionId });
+  } catch (err) {
+    console.error("Failed to fetch connections for session:", err);
+    res.status(500).json({ error: "Failed to fetch connections for session" });
+  }
+});
+
 // -- Plugins (stub) --
 
 app.get("/api/plugins", (_req: Request, res: Response) => {
@@ -825,11 +851,13 @@ io.on("connection", (socket) => {
   const sessionId = (socket.handshake.query.session_id as string) ?? socket.id;
 
   connectedClients.set(socket.id, { session_id: sessionId, user_id: userId });
+  provenanceTracker.register(socket, sessionId);
   socket.join(sessionId);
 
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
-    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId));
+    const provenance = provenanceTracker.getProvenance(socket.id);
+    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, userId, provenance?.connectionId ?? undefined));
     io.to(sessionId).emit("stream_active", {});
 
     const pq = sdkSession.getPendingQuestion(sessionId);
@@ -862,14 +890,18 @@ io.on("connection", (socket) => {
 
     if (!content && !imageIdsData.length) return;
 
-    // Record user message
+    // Record user message with provenance
     try {
+      const provenance = provenanceTracker.getProvenance(socket.id);
       database.recordMessage(
         sid, uid, "user",
         content || "[Image]",
         undefined,
         projectPathData || undefined,
         imageIdsData.length ? imageIdsData : undefined,
+        provenance?.connectionId ?? undefined,
+        provenance?.sourceIp ?? undefined,
+        provenance?.userAgent ?? undefined,
       );
 
       const existing = database.getConversationHistory(sid, 1);
@@ -886,12 +918,13 @@ io.on("connection", (socket) => {
 
     socket.emit("message_received", { status: "ok" });
 
-    // Submit to SDK
+    // Submit to SDK with provenance
+    const provenance = provenanceTracker.getProvenance(socket.id);
     sdkSession.submitQuery(
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid, uid),
+      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -926,6 +959,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     const client = connectedClients.get(socket.id);
     connectedClients.delete(socket.id);
+    provenanceTracker.unregister(socket.id);
     if (client) {
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
@@ -934,7 +968,7 @@ io.on("connection", (socket) => {
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
-function buildSocketCallbacks(sessionId: string, userId: string) {
+function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectionId?: string) {
   return {
     onText: (text: string) => {
       io.to(sessionId).emit("text_delta", { text });
@@ -955,6 +989,7 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
         }
       }
     },
+    sourceConnectionId,
     onComplete: (result: Record<string, unknown>) => {
       try {
         database.incrementUserStats(

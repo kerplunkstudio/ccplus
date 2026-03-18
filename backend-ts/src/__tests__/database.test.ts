@@ -665,4 +665,134 @@ describe("Database Tests", () => {
       expect(events[0].tool_name).not.toBe("mutated");
     });
   });
+
+  describe("Provenance Tracking", () => {
+    it("should record message with provenance data", () => {
+      const result = db.recordMessage(
+        "sess1",
+        "user1",
+        "user",
+        "hello",
+        undefined,
+        undefined,
+        undefined,
+        "conn_123",
+        "192.168.1.100",
+        "Mozilla/5.0 Chrome"
+      );
+
+      expect(result.source_connection_id).toBe("conn_123");
+      expect(result.source_ip).toBe("192.168.1.100");
+      expect(result.user_agent).toBe("Mozilla/5.0 Chrome");
+    });
+
+    it("should default provenance fields to null when not provided", () => {
+      const result = db.recordMessage("sess1", "user1", "user", "hello");
+
+      expect(result.source_connection_id).toBeNull();
+      expect(result.source_ip).toBeNull();
+      expect(result.user_agent).toBeNull();
+    });
+
+    it("should retrieve provenance data from message", () => {
+      const inserted = db.recordMessage(
+        "sess1",
+        "user1",
+        "user",
+        "test message",
+        undefined,
+        undefined,
+        undefined,
+        "conn_456",
+        "10.0.0.1",
+        "Safari/15.0"
+      );
+
+      const provenance = db.getMessageProvenance(inserted.id as number);
+
+      expect(provenance).not.toBeNull();
+      expect(provenance?.id).toBe(inserted.id);
+      expect(provenance?.source_connection_id).toBe("conn_456");
+      expect(provenance?.source_ip).toBe("10.0.0.1");
+      expect(provenance?.user_agent).toBe("Safari/15.0");
+      expect(provenance?.session_id).toBe("sess1");
+    });
+
+    it("should return null for non-existent message ID", () => {
+      const provenance = db.getMessageProvenance(99999);
+
+      expect(provenance).toBeNull();
+    });
+
+    it("should record tool event with source connection ID", () => {
+      const result = db.recordToolEvent(
+        "sess1",
+        "Bash",
+        "tool_1",
+        undefined,
+        undefined,
+        true,
+        null,
+        1234.5,
+        JSON.stringify({ command: "ls" }),
+        100,
+        200,
+        "conn_789"
+      );
+
+      expect(result.source_connection_id).toBe("conn_789");
+    });
+
+    it("should default source connection ID to null for tool events", () => {
+      const result = db.recordToolEvent("sess1", "Read", "tool_2");
+
+      expect(result.source_connection_id).toBeNull();
+    });
+
+    it("should preserve provenance in conversation history", () => {
+      db.recordMessage(
+        "sess1",
+        "user1",
+        "user",
+        "msg1",
+        undefined,
+        undefined,
+        undefined,
+        "conn_a",
+        "127.0.0.1",
+        "Browser A"
+      );
+      db.recordMessage(
+        "sess1",
+        "user1",
+        "assistant",
+        "msg2",
+        undefined,
+        undefined,
+        undefined,
+        "conn_b",
+        "127.0.0.2",
+        "Browser B"
+      );
+
+      const history = db.getConversationHistory("sess1");
+
+      expect(history).toHaveLength(2);
+      expect(history[0].source_connection_id).toBe("conn_a");
+      expect(history[0].source_ip).toBe("127.0.0.1");
+      expect(history[1].source_connection_id).toBe("conn_b");
+      expect(history[1].source_ip).toBe("127.0.0.2");
+    });
+
+    it("should preserve provenance in tool events", () => {
+      db.recordToolEvent("sess1", "Bash", "t1", undefined, undefined, true, null, 100, null, null, null, "conn_x");
+      db.recordToolEvent("sess1", "Read", "t2", undefined, undefined, true, null, 200, null, null, null, "conn_y");
+
+      const events = db.getToolEvents("sess1");
+
+      expect(events).toHaveLength(2);
+      expect(events[0].source_connection_id).toBe("conn_x");
+      expect(events[1].source_connection_id).toBe("conn_y");
+    });
+  });
 });
