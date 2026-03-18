@@ -6,6 +6,17 @@ import { ChatInput } from './ChatInput';
 import { PluginModal } from './PluginModal';
 import './ChatPanel.css';
 
+export interface ScheduledTask {
+  id: string;
+  prompt: string;
+  intervalMs: number;
+  recurring: boolean;
+  createdAt: number;
+  lastRunAt: number | null;
+  nextRunAt: number;
+  paused: boolean;
+}
+
 interface ChatPanelProps {
   messages: Message[];
   connected: boolean;
@@ -45,6 +56,11 @@ interface ChatPanelProps {
   onClearPendingInput?: () => void;
   todos?: TodoItem[];
   onClearTodos?: () => void;
+  scheduledTasks?: ScheduledTask[];
+  onCreateScheduledTask?: (prompt: string, interval: string) => void;
+  onDeleteScheduledTask?: (id: string) => void;
+  onPauseScheduledTask?: (id: string) => void;
+  onResumeScheduledTask?: (id: string) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -78,6 +94,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onClearPendingInput,
   todos = [],
   onClearTodos,
+  scheduledTasks = [],
+  onCreateScheduledTask,
+  onDeleteScheduledTask,
+  onPauseScheduledTask,
+  onResumeScheduledTask,
 }) => {
   const [pluginModalOpen, setPluginModalOpen] = useState(false);
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
@@ -141,6 +162,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onClearPendingInput={onClearPendingInput}
           rateLimitState={rateLimitState}
           promptSuggestions={promptSuggestions}
+          scheduledTasks={scheduledTasks}
+          onCreateScheduledTask={onCreateScheduledTask}
+          onDeleteScheduledTask={onDeleteScheduledTask}
+          onPauseScheduledTask={onPauseScheduledTask}
+          onResumeScheduledTask={onResumeScheduledTask}
         />
       </div>
     </>

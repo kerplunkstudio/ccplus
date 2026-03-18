@@ -18,6 +18,7 @@ import * as sdkSession from "./sdk-session.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { log } from "./logger.js";
+import { scheduler, parseInterval } from "./scheduler.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -1237,6 +1238,119 @@ io.on("connection", (socket) => {
     client.sessions.delete(oldSessionId);
   });
 
+  // -- Scheduled tasks --
+
+  socket.on("schedule_create", (data: { prompt: string; interval: string; session_id?: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
+    const prompt = data?.prompt?.trim();
+    const interval = data?.interval?.trim();
+
+    if (!prompt || !interval) {
+      callback?.({ success: false, error: "Missing prompt or interval" });
+      return;
+    }
+
+    try {
+      const intervalMs = parseInterval(interval);
+      const task = scheduler.addTask(sid, prompt, intervalMs, true);
+      callback?.({ success: true, task });
+      socket.emit("schedule_created", { task });
+    } catch (err) {
+      const errorMsg = String(err);
+      log.error("Failed to create scheduled task", { sessionId: sid, error: errorMsg });
+      callback?.({ success: false, error: errorMsg });
+    }
+  });
+
+  socket.on("schedule_delete", (data: { id: string }, callback?: (response: { success: boolean; error?: string }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const taskId = data?.id;
+    if (!taskId) {
+      callback?.({ success: false, error: "Missing task id" });
+      return;
+    }
+
+    const removed = scheduler.removeTask(taskId);
+    if (removed) {
+      callback?.({ success: true });
+      socket.emit("schedule_deleted", { id: taskId });
+    } else {
+      callback?.({ success: false, error: "Task not found" });
+    }
+  });
+
+  socket.on("schedule_list", (data: { session_id?: string }, callback?: (response: { tasks: unknown[] }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ tasks: [] });
+      return;
+    }
+
+    const sid = (typeof data?.session_id === "string" && data.session_id) || client.session_id;
+    const tasks = scheduler.listTasks(sid);
+    callback?.({ tasks });
+    socket.emit("schedule_list", { tasks });
+  });
+
+  socket.on("schedule_pause", (data: { id: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const taskId = data?.id;
+    if (!taskId) {
+      callback?.({ success: false, error: "Missing task id" });
+      return;
+    }
+
+    const paused = scheduler.pauseTask(taskId);
+    if (paused) {
+      const tasks = scheduler.listTasks(client.session_id);
+      const task = tasks.find(t => t.id === taskId);
+      callback?.({ success: true, task });
+      socket.emit("schedule_updated", { task });
+    } else {
+      callback?.({ success: false, error: "Task not found" });
+    }
+  });
+
+  socket.on("schedule_resume", (data: { id: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const taskId = data?.id;
+    if (!taskId) {
+      callback?.({ success: false, error: "Missing task id" });
+      return;
+    }
+
+    const resumed = scheduler.resumeTask(taskId);
+    if (resumed) {
+      const tasks = scheduler.listTasks(client.session_id);
+      const task = tasks.find(t => t.id === taskId);
+      callback?.({ success: true, task });
+      socket.emit("schedule_updated", { task });
+    } else {
+      callback?.({ success: false, error: "Task not found" });
+    }
+  });
+
   // -- Disconnect --
 
   socket.on("disconnect", () => {
@@ -1334,6 +1448,32 @@ function buildSocketCallbacks(sessionId: string, userId: string) {
     onCompactBoundary: () => {
       io.to(sessionId).emit("compact_boundary", { timestamp: new Date().toISOString() });
     },
+    onDevServerDetected: (url: string) => {
+      io.to(sessionId).emit("dev_server_detected", { url, session_id: sessionId });
+    },
+    onCaptureScreenshot: (): Promise<{ image?: string; url?: string; error?: string }> => {
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve({ error: "Screenshot timeout - no browser tab responded within 10 seconds" });
+        }, 10000);
+
+        // Set up one-time listener for screenshot result
+        const handleScreenshotResult = (data: { image?: string; url?: string; error?: string; session_id?: string }) => {
+          // Only handle responses for this session
+          if (data.session_id === sessionId) {
+            clearTimeout(timeout);
+            io.off("screenshot_result", handleScreenshotResult);
+            resolve(data);
+          }
+        };
+
+        // Listen for screenshot result
+        io.on("screenshot_result", handleScreenshotResult);
+
+        // Request screenshot from frontend
+        io.to(sessionId).emit("capture_screenshot", { session_id: sessionId });
+      });
+    },
     // Thinking deltas intentionally not emitted to frontend
   };
 }
@@ -1421,6 +1561,64 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("exit", removePidFile);
 
+// ---- Scheduled tasks tick ----
+
+setInterval(() => {
+  // Get all active sessions from connectedClients
+  const activeSessions = new Set<string>();
+  for (const client of connectedClients.values()) {
+    for (const sid of client.sessions) {
+      activeSessions.add(sid);
+    }
+  }
+
+  // Check each active session for ready tasks
+  for (const sessionId of activeSessions) {
+    // Only fire if session is idle
+    if (!sdkSession.isActive(sessionId)) {
+      const readyTasks = scheduler.getReadyTasks(sessionId);
+
+      for (const task of readyTasks) {
+        log.info(`Firing scheduled task ${task.id} for session ${sessionId}`, { taskId: task.id, prompt: task.prompt });
+
+        // Get user_id from connected clients
+        let userId = "local";
+        for (const client of connectedClients.values()) {
+          if (client.sessions.has(sessionId)) {
+            userId = client.user_id;
+            break;
+          }
+        }
+
+        // Record user message
+        try {
+          database.recordMessage(sessionId, userId, "user", task.prompt, undefined, undefined, undefined);
+        } catch (err) {
+          log.error("Failed to record scheduled task message", { sessionId, taskId: task.id, error: String(err) });
+        }
+
+        // Emit fired event
+        io.to(sessionId).emit("schedule_fired", { id: task.id, prompt: task.prompt, timestamp: Date.now() });
+
+        // Submit query
+        const workspace = getWorkspaceForSession(sessionId);
+        sdkSession.submitQuery(
+          sessionId,
+          task.prompt,
+          workspace,
+          buildSocketCallbacks(sessionId, userId),
+          undefined,
+          undefined,
+        );
+
+        // Mark task as fired
+        scheduler.markFired(task.id);
+      }
+    }
+  }
+}, 5000); // Check every 5 seconds
+
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
+  scheduler.start();
 });

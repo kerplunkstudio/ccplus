@@ -6,6 +6,7 @@ import { useStreamingMessages } from './useStreamingMessages';
 import { useToolEvents } from './useToolEvents';
 import { useSessionRestore } from './useSessionRestore';
 import { useSessionActions } from './useSessionActions';
+import { useScheduler } from './useScheduler';
 
 type SessionCache = {
   messages: Message[];
@@ -150,6 +151,9 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
     clearToolTimerRef,
   });
 
+  // Scheduler hook
+  const scheduler = useScheduler({ socket, sessionId });
+
   // Return the EXACT same interface as before
   return {
     connected,
@@ -174,6 +178,11 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
     contextTokens: streamingHook.contextTokens,
     todos: toolEvents.todos,
     setTodos: toolEvents.setTodos,
+    scheduledTasks: scheduler.tasks,
+    createScheduledTask: scheduler.createTask,
+    deleteScheduledTask: scheduler.deleteTask,
+    pauseScheduledTask: scheduler.pauseTask,
+    resumeScheduledTask: scheduler.resumeTask,
   };
 }
 

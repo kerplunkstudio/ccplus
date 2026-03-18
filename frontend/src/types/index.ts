@@ -205,6 +205,12 @@ export interface SkillData {
   description?: string;
 }
 
+export interface NativeImage {
+  toDataURL: () => string;
+  toPNG: () => Buffer;
+  toJPEG: (quality: number) => Buffer;
+}
+
 export interface WebViewElement extends HTMLElement {
   loadURL: (url: string) => void;
   canGoBack: () => boolean;
@@ -213,6 +219,7 @@ export interface WebViewElement extends HTMLElement {
   goForward: () => void;
   reload: () => void;
   getURL: () => string;
+  capturePage: () => Promise<NativeImage>;
   addEventListener: (event: string, handler: (event?: unknown) => void) => void;
   removeEventListener: (event: string, handler: (event?: unknown) => void) => void;
 }

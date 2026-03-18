@@ -4,9 +4,10 @@ import './BrowserTab.css';
 
 interface BrowserTabProps {
   url: string;
+  onRegisterCapture?: (captureFn: () => Promise<{ image: string | null; url: string; error?: string }>) => void;
 }
 
-export const BrowserTab: React.FC<BrowserTabProps> = ({ url }) => {
+export const BrowserTab: React.FC<BrowserTabProps> = ({ url, onRegisterCapture }) => {
   const [currentUrl, setCurrentUrl] = useState(url);
   const [inputUrl, setInputUrl] = useState(url);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -22,6 +23,43 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ url }) => {
     setCurrentUrl(url);
     setInputUrl(url);
   }, [url]);
+
+  // Register screenshot capture function
+  useEffect(() => {
+    if (!onRegisterCapture) return;
+
+    const captureFn = async (): Promise<{ image: string | null; url: string; error?: string }> => {
+      // In Electron mode with webview
+      if (isElectron && webviewRef.current) {
+        try {
+          const webview = webviewRef.current;
+          const nativeImage = await webview.capturePage();
+          const dataUrl = nativeImage.toDataURL();
+          // Extract base64 data from data URL (remove "data:image/png;base64," prefix)
+          const base64Data = dataUrl.split(',')[1];
+          return {
+            image: base64Data,
+            url: webview.getURL(),
+          };
+        } catch (error) {
+          return {
+            image: null,
+            url: currentUrl,
+            error: `Failed to capture webview: ${String(error)}`,
+          };
+        }
+      }
+
+      // In iframe mode (non-Electron) - not supported
+      return {
+        image: null,
+        url: currentUrl,
+        error: 'Screenshot capture is only available in the desktop app (Electron mode). This feature requires webview.capturePage() which is not available in iframe mode.',
+      };
+    };
+
+    onRegisterCapture(captureFn);
+  }, [isElectron, currentUrl, onRegisterCapture]);
 
   useEffect(() => {
     if (!isElectron || !webviewRef.current) return;
