@@ -50,6 +50,13 @@
       "static/chat/**/*",
       "VERSION"
     ],
+    "asarUnpack": [
+      "backend-ts/dist/**/*",
+      "backend-ts/node_modules/**/*",
+      "backend-ts/package.json",
+      "static/chat/**/*",
+      "VERSION"
+    ],
     "directories": {
       "buildResources": "electron/assets"
     }

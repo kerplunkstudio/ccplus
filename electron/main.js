@@ -24,9 +24,8 @@ const getProjectRoot = () => {
     // In development, we're in the project root
     return process.cwd();
   } else {
-    // In production, we're bundled inside app.asar
-    // Go up from app.asar to the project root
-    return path.join(process.resourcesPath, 'app');
+    // In production, backend/static files are unpacked at app.asar.unpacked
+    return path.join(process.resourcesPath, 'app.asar.unpacked');
   }
 };
 
