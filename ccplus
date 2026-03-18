@@ -342,12 +342,24 @@ install_electron() {
     fi
 }
 
+# Patch Electron binary with CC+ branding (icon + app name)
+patch_electron_branding() {
+    local electron_app="$SCRIPT_DIR/node_modules/electron/dist/Electron.app"
+    if [ -d "$electron_app" ]; then
+        cp "$SCRIPT_DIR/electron/assets/icon.icns" "$electron_app/Contents/Resources/electron.icns" 2>/dev/null
+        local plist="$electron_app/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleName CC+" "$plist" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName CC+" "$plist" 2>/dev/null || true
+    fi
+}
+
 # Launch desktop app (exclusive mode - stops existing services)
 launch_desktop() {
     header "Launching desktop app"
 
     # Ensure electron is installed
     install_electron
+    patch_electron_branding
 
     # Build frontend first if needed
     if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then
@@ -375,6 +387,7 @@ launch_desktop_parallel() {
 
     # Ensure electron is installed
     install_electron
+    patch_electron_branding
 
     # Build frontend first if needed
     if [ ! -d "$SCRIPT_DIR/static/chat" ] || [ -z "$(ls -A "$SCRIPT_DIR/static/chat" 2>/dev/null)" ]; then

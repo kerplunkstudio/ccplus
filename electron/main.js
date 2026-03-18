@@ -227,6 +227,14 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Suppress noisy webview load errors (e.g., when a browser tab URL is unreachable)
+  mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
+    webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      if (errorCode === -3) return; // ERR_ABORTED — silently ignore
+      console.warn(`[Webview] Load failed: ${errorDescription} (${errorCode}) for ${validatedURL}`);
+    });
+  });
+
   // Create application menu
   createMenu();
 }
