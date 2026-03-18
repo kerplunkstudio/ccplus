@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+
+# committer - Safe, scoped git commit helper for cc+
+#
+# Usage: ./scripts/committer "commit message" file1 file2 ...
+#
+# This script stages ONLY the specified files and commits them with the given message.
+# It includes safety checks to prevent accidentally committing sensitive or generated files.
+
+set -euo pipefail
+
+# ANSI color codes
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RESET='\033[0m'
+
+# Helper functions
+error() {
+    echo -e "${RED}Error:${RESET} $1" >&2
+    exit 1
+}
+
+warning() {
+    echo -e "${YELLOW}Warning:${RESET} $1" >&2
+}
+
+success() {
+    echo -e "${GREEN}$1${RESET}"
+}
+
+info() {
+    echo -e "${BLUE}$1${RESET}"
+}
+
+# Validate arguments
+if [ $# -lt 2 ]; then
+    error "Usage: $0 \"commit message\" file1 file2 ...
+
+Example:
+    $0 \"feat: add search API endpoint\" backend-ts/src/database.ts backend-ts/src/server.ts"
+fi
+
+COMMIT_MESSAGE="$1"
+shift
+
+# Validate commit message is not empty
+if [ -z "$COMMIT_MESSAGE" ]; then
+    error "Commit message cannot be empty"
+fi
+
+# Array of files to commit
+FILES=("$@")
+
+# Blocked patterns (should never be committed)
+BLOCKED_PATTERNS=(
+    "^\.env$"
+    "^data/"
+    "^logs/"
+    "node_modules/"
+    "/dist/"
+    "^backend-ts/dist/"
+    "^static/chat/"
+    "^frontend/build/"
+    "\.pyc$"
+    "__pycache__/"
+    "\.DS_Store$"
+)
+
+# Warning patterns (files that might contain work-in-progress)
+WARNING_PATTERNS=(
+    "TODO"
+    "FIXME"
+    "HACK"
+    "XXX"
+)
+
+# Check if we're in a git repository
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    error "Not in a git repository"
+fi
+
+# Get list of files with changes
+CHANGED_FILES=$(git diff --name-only HEAD 2>/dev/null || true)
+STAGED_FILES=$(git diff --name-only --cached 2>/dev/null || true)
+UNTRACKED_FILES=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+
+# Combine all files with changes
+ALL_CHANGED_FILES=$(echo -e "${CHANGED_FILES}\n${STAGED_FILES}\n${UNTRACKED_FILES}" | sort -u | grep -v '^$' || true)
+
+info "Validating ${#FILES[@]} file(s)..."
+echo
+
+# Arrays to track validation results
+VALID_FILES=()
+WARNED_FILES=()
+
+# Validate each file
+for FILE in "${FILES[@]}"; do
+    # Remove leading ./ if present
+    FILE="${FILE#./}"
+
+    # Check if file exists
+    if [ ! -e "$FILE" ]; then
+        error "File does not exist: $FILE"
+    fi
+
+    # Check if file is blocked
+    BLOCKED=false
+    for PATTERN in "${BLOCKED_PATTERNS[@]}"; do
+        if echo "$FILE" | grep -qE "$PATTERN"; then
+            error "Refusing to commit blocked file: $FILE (matches pattern: $PATTERN)"
+        fi
+    done
+
+    # Check if file has changes
+    HAS_CHANGES=false
+    if echo "$ALL_CHANGED_FILES" | grep -qFx "$FILE"; then
+        HAS_CHANGES=true
+    fi
+
+    if [ "$HAS_CHANGES" = false ]; then
+        warning "File has no changes: $FILE (skipping)"
+        continue
+    fi
+
+    # Check for warning patterns in file content
+    FOUND_WARNINGS=()
+    for PATTERN in "${WARNING_PATTERNS[@]}"; do
+        if grep -q "$PATTERN" "$FILE" 2>/dev/null; then
+            FOUND_WARNINGS+=("$PATTERN")
+        fi
+    done
+
+    if [ ${#FOUND_WARNINGS[@]} -gt 0 ]; then
+        warning "File contains: ${FOUND_WARNINGS[*]} - $FILE"
+        WARNED_FILES+=("$FILE")
+    fi
+
+    VALID_FILES+=("$FILE")
+done
+
+# Check if we have any valid files to commit
+if [ ${#VALID_FILES[@]} -eq 0 ]; then
+    error "No valid files with changes to commit"
+fi
+
+# Show summary
+echo
+info "═══════════════════════════════════════════════════════"
+info "Commit Summary"
+info "═══════════════════════════════════════════════════════"
+echo
+echo "Message: $COMMIT_MESSAGE"
+echo
+echo "Files to commit (${#VALID_FILES[@]}):"
+for FILE in "${VALID_FILES[@]}"; do
+    # Check if file is staged or unstaged
+    if echo "$STAGED_FILES" | grep -qFx "$FILE"; then
+        echo "  📝 $FILE (already staged)"
+    elif echo "$UNTRACKED_FILES" | grep -qFx "$FILE"; then
+        echo "  ✨ $FILE (new file)"
+    else
+        echo "  📄 $FILE (modified)"
+    fi
+done
+
+if [ ${#WARNED_FILES[@]} -gt 0 ]; then
+    echo
+    warning "Files with TODOs/FIXMEs: ${#WARNED_FILES[@]}"
+fi
+
+echo
+info "═══════════════════════════════════════════════════════"
+echo
+
+# Stage the files
+info "Staging files..."
+for FILE in "${VALID_FILES[@]}"; do
+    git add "$FILE"
+    echo "  ✓ Staged: $FILE"
+done
+
+echo
+
+# Create the commit
+info "Creating commit..."
+git commit -m "$COMMIT_MESSAGE"
+
+echo
+success "✓ Commit successful!"
+echo
+
+# Show the commit
+git --no-pager log -1 --stat
+
+echo
+info "═══════════════════════════════════════════════════════"
+success "Committed ${#VALID_FILES[@]} file(s)"
+info "═══════════════════════════════════════════════════════"
