@@ -99,139 +99,92 @@ export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenPro
         />
       )}
 
-      <div className="welcome-hero">
-        <div className="welcome-logo">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M12 2L2 7L12 12L22 7L12 2Z"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 17L12 22L22 17"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 12L12 17L22 12"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <h1 className="welcome-title">Welcome to cc+</h1>
-        <p className="welcome-subtitle">
-          A web UI and observability layer for Claude Code
-        </p>
-      </div>
+      <header className="welcome-header">
+        <h1 className="welcome-title">cc+</h1>
+        <p className="welcome-subtitle">Watch your agents work.</p>
+      </header>
 
-      <div className="welcome-section">
-        <h2 className="section-heading">What you can do</h2>
+      <section className="welcome-section">
         <ul className="feature-list">
           <li className="feature-item">
-            <span className="feature-icon">🌳</span>
-            <div>
-              <strong>Real-time activity tree</strong>
-              <span className="feature-description">
-                Watch every agent spawn and tool call as it happens
-              </span>
-            </div>
+            <strong>Real-time activity tree</strong>
+            <span className="feature-description">
+              Watch every agent spawn and tool call as it happens
+            </span>
           </li>
           <li className="feature-item">
-            <span className="feature-icon">📊</span>
-            <div>
-              <strong>Tool usage tracking</strong>
-              <span className="feature-description">
-                Monitor API calls, tokens, and costs across sessions
-              </span>
-            </div>
+            <strong>Tool usage tracking</strong>
+            <span className="feature-description">
+              Monitor API calls, tokens, and costs across sessions
+            </span>
           </li>
           <li className="feature-item">
-            <span className="feature-icon">📁</span>
-            <div>
-              <strong>Multi-project workspaces</strong>
-              <span className="feature-description">
-                Organize conversations by project with tabbed sessions
-              </span>
-            </div>
+            <strong>Multi-project workspaces</strong>
+            <span className="feature-description">
+              Organize conversations by project with tabbed sessions
+            </span>
           </li>
         </ul>
-      </div>
+      </section>
 
-      <div className="welcome-section">
-        <h2 className="section-heading">Try an example</h2>
-        <div className="prompt-grid">
+      <section className="welcome-section">
+        <h2 className="section-label">Example prompts</h2>
+        <ul className="prompt-list">
           {EXAMPLE_PROMPTS.map((example) => (
-            <button
-              key={example.title}
-              className="prompt-card"
-              onClick={() => onSelectPrompt(example.prompt)}
-            >
-              <h3 className="prompt-title">{example.title}</h3>
-              <p className="prompt-description">{example.description}</p>
-            </button>
+            <li key={example.title}>
+              <button
+                className="prompt-link"
+                onClick={() => onSelectPrompt(example.prompt)}
+              >
+                <span className="prompt-title">{example.title}</span>
+                <span className="prompt-description">{example.description}</span>
+              </button>
+            </li>
           ))}
-        </div>
-      </div>
+        </ul>
+      </section>
 
-      {/* Workspace setup section */}
-      <div className="welcome-section">
-        <h2 className="section-heading">Set up workspace</h2>
-
+      <section className="welcome-section workspace-section">
         {isLoadingProjects ? (
           <div className="workspace-loading">
             <div className="spinner" />
             <span>Scanning for projects...</span>
           </div>
         ) : detectedProjects.length > 0 ? (
-          <div className="workspace-detected">
-            <p className="workspace-detected-description">
-              We found {detectedProjects.length} project{detectedProjects.length === 1 ? '' : 's'} on your system:
-            </p>
-            <div className="workspace-detected-list">
+          <>
+            <h2 className="section-label">
+              {detectedProjects.length} detected project{detectedProjects.length === 1 ? '' : 's'}
+            </h2>
+            <ul className="workspace-list">
               {detectedProjects.slice(0, 5).map((project) => (
-                <button
-                  key={project.path}
-                  className="workspace-detected-item"
-                  onClick={() => handleSelectDetectedProject(project.path)}
-                  title={project.path}
-                >
-                  <span className="workspace-detected-icon">📦</span>
-                  <div className="workspace-detected-content">
-                    <span className="workspace-detected-name">{project.name}</span>
-                    <span className="workspace-detected-path">{project.path}</span>
-                  </div>
-                </button>
+                <li key={project.path}>
+                  <button
+                    className="workspace-item"
+                    onClick={() => handleSelectDetectedProject(project.path)}
+                    title={project.path}
+                  >
+                    <span className="workspace-name">{project.name}</span>
+                    <span className="workspace-path">{project.path}</span>
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
             {detectedProjects.length > 5 && (
-              <p className="workspace-detected-more">
-                + {detectedProjects.length - 5} more project{detectedProjects.length - 5 === 1 ? '' : 's'}
+              <p className="workspace-more">
+                +{detectedProjects.length - 5} more
               </p>
             )}
-          </div>
+          </>
         ) : (
-          <p className="workspace-empty-message">
-            No projects detected. Browse to select a workspace directory.
+          <p className="workspace-empty">
+            No projects detected.
           </p>
         )}
 
-        <button className="workspace-browse-button" onClick={() => setShowBrowser(true)}>
-          Browse for workspace...
+        <button className="workspace-browse" onClick={() => setShowBrowser(true)}>
+          Browse for workspace
         </button>
-      </div>
-
-      <div className="welcome-cta">
-        <p className="cta-hint">
-          Select a workspace or add a project to start using Claude Code
-        </p>
-      </div>
+      </section>
     </div>
   );
 }
