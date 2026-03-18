@@ -14,7 +14,7 @@ import {
   formatCheckResult,
   type CheckResult,
 } from "../doctor.js";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs";
+import { mkdirSync, writeFileSync, rmSync, existsSync, utimesSync } from "fs";
 import Database from "better-sqlite3";
 import path from "path";
 
@@ -205,22 +205,23 @@ describe("checkNodeModulesFreshness", () => {
     mkdirSync(backendDir, { recursive: true });
     mkdirSync(frontendDir, { recursive: true });
 
-    // Create package-lock.json files
+    // Create package-lock.json files with an older mtime
     writeFileSync(path.join(backendDir, "package-lock.json"), "{}");
     writeFileSync(path.join(frontendDir, "package-lock.json"), "{}");
+    const pastTime = new Date(Date.now() - 10000);
+    utimesSync(path.join(backendDir, "package-lock.json"), pastTime, pastTime);
+    utimesSync(path.join(frontendDir, "package-lock.json"), pastTime, pastTime);
 
-    // Create node_modules directories (later mtime)
-    setTimeout(() => {
-      mkdirSync(path.join(backendDir, "node_modules"));
-      mkdirSync(path.join(frontendDir, "node_modules"));
+    // Create node_modules directories (newer mtime by default)
+    mkdirSync(path.join(backendDir, "node_modules"));
+    mkdirSync(path.join(frontendDir, "node_modules"));
 
-      const results = checkNodeModulesFreshness(projectRoot);
-      const backendCheck = results.find((r) => r.message.includes("backend-ts"));
-      const frontendCheck = results.find((r) => r.message.includes("frontend"));
+    const results = checkNodeModulesFreshness(projectRoot);
+    const backendCheck = results.find((r) => r.message.includes("backend-ts"));
+    const frontendCheck = results.find((r) => r.message.includes("frontend"));
 
-      expect(backendCheck?.status).toBe("ok");
-      expect(frontendCheck?.status).toBe("ok");
-    }, 100);
+    expect(backendCheck?.status).toBe("ok");
+    expect(frontendCheck?.status).toBe("ok");
   });
 
   it("should warn when package-lock.json is newer than node_modules", () => {
@@ -231,22 +232,23 @@ describe("checkNodeModulesFreshness", () => {
     mkdirSync(backendDir, { recursive: true });
     mkdirSync(frontendDir, { recursive: true });
 
-    // Create node_modules first
+    // Create node_modules with an older mtime
     mkdirSync(path.join(backendDir, "node_modules"));
     mkdirSync(path.join(frontendDir, "node_modules"));
+    const pastTime = new Date(Date.now() - 10000);
+    utimesSync(path.join(backendDir, "node_modules"), pastTime, pastTime);
+    utimesSync(path.join(frontendDir, "node_modules"), pastTime, pastTime);
 
-    // Create package-lock.json later
-    setTimeout(() => {
-      writeFileSync(path.join(backendDir, "package-lock.json"), "{}");
-      writeFileSync(path.join(frontendDir, "package-lock.json"), "{}");
+    // Create package-lock.json (newer mtime by default)
+    writeFileSync(path.join(backendDir, "package-lock.json"), "{}");
+    writeFileSync(path.join(frontendDir, "package-lock.json"), "{}");
 
-      const results = checkNodeModulesFreshness(projectRoot);
-      const backendCheck = results.find((r) => r.message.includes("backend-ts"));
-      const frontendCheck = results.find((r) => r.message.includes("frontend"));
+    const results = checkNodeModulesFreshness(projectRoot);
+    const backendCheck = results.find((r) => r.message.includes("backend-ts"));
+    const frontendCheck = results.find((r) => r.message.includes("frontend"));
 
-      expect(backendCheck?.status).toBe("warning");
-      expect(frontendCheck?.status).toBe("warning");
-    }, 100);
+    expect(backendCheck?.status).toBe("warning");
+    expect(frontendCheck?.status).toBe("warning");
   });
 });
 
