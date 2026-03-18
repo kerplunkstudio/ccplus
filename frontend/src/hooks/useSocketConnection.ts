@@ -4,11 +4,10 @@ import { io, Socket } from 'socket.io-client';
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface UseSocketConnectionProps {
-  token: string | null;
   currentSessionIdRef: MutableRefObject<string>;
 }
 
-export function useSocketConnection({ token, currentSessionIdRef }: UseSocketConnectionProps) {
+export function useSocketConnection({ currentSessionIdRef }: UseSocketConnectionProps) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -16,10 +15,7 @@ export function useSocketConnection({ token, currentSessionIdRef }: UseSocketCon
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!token) return;
-
     const newSocket = io(SOCKET_URL, {
-      auth: { token },
       transports: ['polling', 'websocket'],
     });
 
@@ -58,7 +54,7 @@ export function useSocketConnection({ token, currentSessionIdRef }: UseSocketCon
       socketRef.current = null;
       newSocket.close();
     };
-  }, [token, currentSessionIdRef]);
+  }, [currentSessionIdRef]);
 
   return {
     socket,

@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useAuth } from './hooks/useAuth';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTabSocket } from './hooks/useTabSocket';
 import { ChatPanel } from './components/ChatPanel';
@@ -39,12 +38,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   );
 }
 
-interface AppContentProps {
-  token: string | null;
-  loading: boolean;
-}
-
-function AppContent({ token, loading }: AppContentProps) {
+function AppContent() {
   const workspace = useWorkspace();
   const { activeProject, activeTab } = workspace;
   const profile = useProfile();
@@ -68,7 +62,7 @@ function AppContent({ token, loading }: AppContentProps) {
     setDevServerToast({ url });
   }, [activeProject, workspace]);
 
-  const socketData = useTabSocket(token, activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
+  const socketData = useTabSocket(activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
   const {
     socket,
     connected,
@@ -131,14 +125,18 @@ function AppContent({ token, loading }: AppContentProps) {
     localStorage.setItem('ccplus_selected_model', model);
   };
 
+  // One-time cleanup of old token for upgrading users
+  useEffect(() => {
+    localStorage.removeItem('ccplus_token');
+  }, []);
+
   // Setup socket connection for screenshot capture
   useEffect(() => {
-    if (!token || !activeTab?.sessionId) return;
+    if (!activeTab?.sessionId) return;
 
     // Create socket if not exists
     if (!screenshotSocketRef.current) {
       const newSocket = io(SOCKET_URL, {
-        auth: { token },
         transports: ['polling', 'websocket'],
       });
       screenshotSocketRef.current = newSocket;
@@ -181,7 +179,7 @@ function AppContent({ token, loading }: AppContentProps) {
     return () => {
       socket.off('capture_screenshot', handleCaptureScreenshot);
     };
-  }, [token, activeTab]);
+  }, [activeTab]);
 
   // Cleanup socket on unmount
   useEffect(() => {
@@ -195,17 +193,8 @@ function AppContent({ token, loading }: AppContentProps) {
 
   useEffect(() => {
     const checkFirstRun = async () => {
-      if (!token) {
-        setCheckingFirstRun(false);
-        return;
-      }
-
       try {
-        const response = await fetch('/api/status/first-run', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
+        const response = await fetch('/api/status/first-run');
 
         if (response.ok) {
           const data = await response.json();
@@ -219,7 +208,7 @@ function AppContent({ token, loading }: AppContentProps) {
     };
 
     checkFirstRun();
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -593,7 +582,7 @@ function AppContent({ token, loading }: AppContentProps) {
     : shouldShowChatPanel ? 'chat'
     : 'no-project';
 
-  const appReady = !loading && connected;
+  const appReady = connected;
 
   return (
     <>
@@ -773,13 +762,11 @@ function AppContent({ token, loading }: AppContentProps) {
 }
 
 function App() {
-  const { token, loading } = useAuth();
-
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
-          <AppContent token={token} loading={loading} />
+          <AppContent />
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>

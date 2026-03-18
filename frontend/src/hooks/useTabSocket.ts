@@ -26,7 +26,7 @@ interface UseTabSocketProps {
   onDevServerDetected?: (url: string) => void;
 }
 
-export function useTabSocket(token: string | null, sessionId: string, props?: UseTabSocketProps) {
+export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
   const onDevServerDetected = props?.onDevServerDetected;
   // Session tracking refs
   const currentSessionIdRef = useRef<string>(sessionId);
@@ -53,7 +53,7 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
     socketRef,
     connected,
     connectedRef,
-  } = useSocketConnection({ token, currentSessionIdRef });
+  } = useSocketConnection({ currentSessionIdRef });
 
   // Shared refs that need to exist before hooks
   const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +89,6 @@ export function useTabSocket(token: string | null, sessionId: string, props?: Us
   // Session restore hook
   const { isRestoringSession } = useSessionRestore({
     isRestoringSessionRef, // Pass the shared ref
-    token,
     sessionId,
     socket,
     currentSessionIdRef,

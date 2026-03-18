@@ -93,23 +93,7 @@ export function checkConfig(): CheckResult[] {
     });
   }
 
-  // Check SECRET_KEY security
-  if (config.SECRET_KEY === "ccplus-dev-secret-change-me" && !config.LOCAL_MODE) {
-    results.push({
-      status: "error",
-      message: "SECRET_KEY is insecure default in non-local mode",
-    });
-  } else if (config.SECRET_KEY === "ccplus-dev-secret-change-me") {
-    results.push({
-      status: "warning",
-      message: "SECRET_KEY is insecure default (OK for local dev)",
-    });
-  } else {
-    results.push({
-      status: "ok",
-      message: "SECRET_KEY is configured",
-    });
-  }
+  // Auth removed - no SECRET_KEY check needed
 
   // Check SDK_MODEL
   const validModels = ["sonnet", "opus", "haiku"];

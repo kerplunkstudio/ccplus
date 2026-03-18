@@ -8,7 +8,6 @@ import * as database from "../database.js";
 import "../server.js";
 
 // Test helpers
-let testToken: string;
 let testSessionId: string;
 
 /**
@@ -44,68 +43,14 @@ describe("Server HTTP Routes", () => {
     });
   });
 
-  describe("POST /api/auth/auto-login", () => {
-    it("returns token in local mode", async () => {
-      const response = await fetch(`${serverUrl}/api/auth/auto-login`, {
-        method: "POST",
-      });
+  describe("GET /api/status/first-run", () => {
+    it("returns first-run status", async () => {
+      const response = await fetch(`${serverUrl}/api/status/first-run`);
       const data = await response.json();
 
-      if (config.LOCAL_MODE) {
-        expect(response.status).toBe(200);
-        expect(data).toHaveProperty("token");
-        expect(typeof data.token).toBe("string");
-        expect(data.user.id).toBe("local");
-      } else {
-        expect(response.status).toBe(403);
-      }
-    });
-  });
-
-  describe("POST /api/auth/verify", () => {
-    it("rejects invalid token", async () => {
-      const response = await fetch(`${serverUrl}/api/auth/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: "clearly-invalid-token-that-wont-verify" }),
-      });
-      const data = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(data.valid).toBe(false);
-    });
-
-    it("rejects missing body", async () => {
-      const response = await fetch(`${serverUrl}/api/auth/verify`, {
-        method: "POST",
-      });
-
-      expect(response.status).toBe(401);
-    });
-
-    it("verifies valid token", async () => {
-      if (!config.LOCAL_MODE) {
-        return;
-      }
-
-      // Get a valid token first
-      const authResponse = await fetch(`${serverUrl}/api/auth/auto-login`, {
-        method: "POST",
-      });
-      const authData = await authResponse.json();
-
-      if (authData.token) {
-        const response = await fetch(`${serverUrl}/api/auth/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: authData.token }),
-        });
-        const data = await response.json();
-
-        expect(response.status).toBe(200);
-        expect(data.valid).toBe(true);
-        expect(data.user).toHaveProperty("id");
-      }
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty("first_run");
+      expect(typeof data.first_run).toBe("boolean");
     });
   });
 
@@ -163,35 +108,6 @@ describe("Server HTTP Routes", () => {
 
       expect(response.status).toBe(200);
       expect(typeof data).toBe("object");
-    });
-  });
-
-  describe("GET /api/status/first-run", () => {
-    it("rejects unauthorized request", async () => {
-      const response = await fetch(`${serverUrl}/api/status/first-run`);
-
-      expect(response.status).toBe(401);
-    });
-
-    it("returns first-run status with valid token", async () => {
-      // Get a valid token first
-      const authResponse = await fetch(`${serverUrl}/api/auth/auto-login`, {
-        method: "POST",
-      });
-      const authData = await authResponse.json();
-
-      if (config.LOCAL_MODE && authData.token) {
-        const response = await fetch(`${serverUrl}/api/status/first-run`, {
-          headers: {
-            Authorization: `Bearer ${authData.token}`,
-          },
-        });
-        const data = await response.json();
-
-        expect(response.status).toBe(200);
-        expect(data).toHaveProperty("first_run");
-        expect(typeof data.first_run).toBe("boolean");
-      }
     });
   });
 
@@ -910,12 +826,7 @@ describe("WebSocket Connection and Authentication", () => {
   let clientSocket: ClientSocket;
 
   beforeAll(async () => {
-    if (config.LOCAL_MODE) {
-      const response = await fetch(`${serverUrl}/api/auth/auto-login`, { method: "POST" });
-      const data = await response.json();
-      testToken = data.token;
-      testSessionId = `test-ws-${Date.now()}`;
-    }
+    testSessionId = `test-ws-${Date.now()}`;
   });
 
   afterEach(() => {
@@ -924,39 +835,9 @@ describe("WebSocket Connection and Authentication", () => {
     }
   });
 
-  it("rejects connection without valid token", async () => {
-    if (!config.LOCAL_MODE) return;
-
-    const socket = ioClient(serverUrl, {
-      auth: { token: "invalid-token" },
-      transports: ["websocket"],
-    });
-
-    await new Promise<void>((resolve) => {
-      socket.on("connect", () => {
-        socket.close();
-        throw new Error("Should not connect with invalid token");
-      });
-
-      socket.on("disconnect", () => {
-        socket.close();
-        resolve();
-      });
-
-      setTimeout(() => {
-        if (!socket.connected) {
-          socket.close();
-          resolve();
-        }
-      }, 2000);
-    });
-  }, 5000);
-
-  it("accepts connection with valid token", async () => {
-    if (!config.LOCAL_MODE) return;
-
+  it("accepts connection", async () => {
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -974,10 +855,8 @@ describe("WebSocket Connection and Authentication", () => {
   }, 5000);
 
   it("handles ping/pong", async () => {
-    if (!config.LOCAL_MODE) return;
-
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1014,12 +893,11 @@ describe("WebSocket Message Handling", () => {
   });
 
   it("receives message_received acknowledgement", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1040,12 +918,11 @@ describe("WebSocket Message Handling", () => {
   }, 10000);
 
   it("handles message with images", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-img-msg-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1067,12 +944,11 @@ describe("WebSocket Message Handling", () => {
   }, 10000);
 
   it("handles message without explicit session_id", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-implicit-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1093,12 +969,11 @@ describe("WebSocket Message Handling", () => {
   }, 10000);
 
   it("handles cancel event", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-cancel-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1115,12 +990,11 @@ describe("WebSocket Message Handling", () => {
   }, 5000);
 
   it("handles cancel without explicit session_id", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-cancel-implicit-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1138,12 +1012,11 @@ describe("WebSocket Message Handling", () => {
   }, 5000);
 
   it("handles join_session event", async () => {
-    if (!config.LOCAL_MODE) return;
 
     const newSessionId = `test-join-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken },
+      auth: {},
       transports: ["websocket"],
     });
 
@@ -1158,12 +1031,11 @@ describe("WebSocket Message Handling", () => {
   }, 5000);
 
   it("handles leave_session event", async () => {
-    if (!config.LOCAL_MODE) return;
 
     const sessionToLeave = `test-leave-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: sessionToLeave },
+      auth: { session_id: sessionToLeave },
       transports: ["websocket"],
     });
 
@@ -1178,7 +1050,6 @@ describe("WebSocket Message Handling", () => {
   }, 5000);
 
   it("handles duplicate_session event", async () => {
-    if (!config.LOCAL_MODE) return;
 
     const sourceSessionId = `test-source-${Date.now()}`;
     const newSessionId = `test-new-${Date.now()}`;
@@ -1187,7 +1058,7 @@ describe("WebSocket Message Handling", () => {
     database.recordMessage(sourceSessionId, "local", "user", "test message");
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: `test-dup-${Date.now()}` },
+      auth: { session_id: `test-dup-${Date.now()}` },
       transports: ["websocket"],
     });
 
@@ -1211,12 +1082,11 @@ describe("WebSocket Message Handling", () => {
   }, 10000);
 
   it("handles question_response event", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-question-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1687,12 +1557,11 @@ describe("WebSocket Error Paths", () => {
   });
 
   it("handles message without content or images", async () => {
-    if (!config.LOCAL_MODE) return;
 
     testSessionId = `test-empty-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: testSessionId },
+      auth: { session_id: testSessionId },
       transports: ["websocket"],
     });
 
@@ -1711,12 +1580,11 @@ describe("WebSocket Error Paths", () => {
   }, 5000);
 
   it("handles join_session without callback", async () => {
-    if (!config.LOCAL_MODE) return;
 
     const newSessionId = `test-join-nocb-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken },
+      auth: {},
       transports: ["websocket"],
     });
 
@@ -1730,13 +1598,12 @@ describe("WebSocket Error Paths", () => {
   }, 5000);
 
   it("handles duplicate_session without callback", async () => {
-    if (!config.LOCAL_MODE) return;
 
     const sourceSessionId = `test-dup-source-${Date.now()}`;
     const newSessionId = `test-dup-new-${Date.now()}`;
 
     clientSocket = ioClient(serverUrl, {
-      auth: { token: testToken, session_id: `test-dup-${Date.now()}` },
+      auth: { session_id: `test-dup-${Date.now()}` },
       transports: ["websocket"],
     });
 
