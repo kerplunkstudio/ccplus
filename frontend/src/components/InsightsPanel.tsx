@@ -300,9 +300,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   const maxToolCalls = Math.max(...insights.daily.map(d => d.tool_calls), 1);
   const chartMax = Math.max(maxQueries, maxToolCalls);
 
-  // Determine x-axis label frequency based on days
-  const labelFrequency = selectedDays <= 14 ? 2 : selectedDays <= 30 ? 5 : 10;
-
   // Computed metrics
   const avgCostPerQuery = insights.summary.avg_cost_per_query ??
     (insights.summary.total_queries > 0 ? insights.summary.total_cost / insights.summary.total_queries : 0);

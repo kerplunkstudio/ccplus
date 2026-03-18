@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ProjectEntry, TabState } from '../types/workspace';
+import { ProjectEntry } from '../types/workspace';
 import './CommandPalette.css';
 
 interface CommandPaletteProps {

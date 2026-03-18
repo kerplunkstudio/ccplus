@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, MutableRefObject, Dispatch } from 'react';
+import { useState, useEffect, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMessage, DBToolEvent } from '../types';
+import { Message, ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMessage } from '../types';
 import { TreeAction } from './useActivityTree';
-import { fetchUserStats } from './useStreamingMessages';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
@@ -113,6 +112,7 @@ export function useSessionRestore({
   const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   // Tab switch effect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
       const previousSessionId = prevSessionIdRef.current;
@@ -175,7 +175,7 @@ export function useSessionRestore({
         socket.emit('join_session', { session_id: sessionId });
       }
     }
-  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, isRestoringSessionRef, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket]);
+  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, isRestoringSessionRef, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket, contextTokens]);
 
   // Session restore effect
   useEffect(() => {
@@ -339,7 +339,8 @@ export function useSessionRestore({
     return () => {
       isMounted = false;
     };
-  }, [sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, isRestoringSessionRef, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setContextTokens, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, sessionCacheRef, streamingContentRef, streamingIdRef, toolLogRef, sequenceRef, seenToolUseIds, streamActiveRef, awaitingDeltaAfterRestore, isRestoringSessionRef, setMessages, setToolLog, setStreaming, setBackgroundProcessing, setThinking, setUsageStats, dispatchTree, setCurrentTool, setPendingRestore]);
 
   // Reconnect restore logic
   useEffect(() => {

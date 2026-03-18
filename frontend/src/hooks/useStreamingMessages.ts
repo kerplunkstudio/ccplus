@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback, MutableRefObject, Dispatch } from 'react';
+import { useState, useEffect, useRef, MutableRefObject } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, UsageStats, ToolEvent, ActivityNode } from '../types';
-import { TreeAction } from './useActivityTree';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
