@@ -1,6 +1,7 @@
 import {
   parseSlashCommand,
   shouldShowAutocomplete,
+  findSlashCommandAtCursor,
   filterSkills,
   getBuiltInCommands,
   getAllSuggestions,
@@ -86,6 +87,58 @@ describe('slashCommands', () => {
     });
   });
 
+  describe('findSlashCommandAtCursor', () => {
+    it('finds slash command at start of input', () => {
+      expect(findSlashCommandAtCursor('/help', 5)).toEqual({ start: 0, command: 'help' });
+      expect(findSlashCommandAtCursor('/com', 4)).toEqual({ start: 0, command: 'com' });
+      expect(findSlashCommandAtCursor('/c', 2)).toEqual({ start: 0, command: 'c' });
+    });
+
+    it('finds slash command in middle of text', () => {
+      expect(findSlashCommandAtCursor('text /help', 10)).toEqual({ start: 5, command: 'help' });
+      expect(findSlashCommandAtCursor('some text /commit', 17)).toEqual({ start: 10, command: 'commit' });
+      expect(findSlashCommandAtCursor('prefix /test suffix', 12)).toEqual({ start: 7, command: 'test' });
+    });
+
+    it('finds slash command with cursor in middle of command name', () => {
+      expect(findSlashCommandAtCursor('/help', 3)).toEqual({ start: 0, command: 'he' }); // cursor at /he|lp
+      expect(findSlashCommandAtCursor('/commit', 4)).toEqual({ start: 0, command: 'com' }); // cursor at /com|mit
+    });
+
+    it('finds slash command in middle of text with cursor in middle', () => {
+      expect(findSlashCommandAtCursor('text /help more', 8)).toEqual({ start: 5, command: 'he' }); // cursor at text /he|lp more (position 8 is between 'e' and 'l')
+    });
+
+    it('returns null if not at slash command', () => {
+      expect(findSlashCommandAtCursor('help', 4)).toBeNull();
+      expect(findSlashCommandAtCursor('text', 2)).toBeNull();
+    });
+
+    it('returns null if cursor is after whitespace in command', () => {
+      expect(findSlashCommandAtCursor('/commit ', 8)).toBeNull();
+      expect(findSlashCommandAtCursor('/commit -m', 10)).toBeNull();
+    });
+
+    it('returns null if there are newlines in command', () => {
+      expect(findSlashCommandAtCursor('/help\n', 6)).toBeNull();
+      expect(findSlashCommandAtCursor('/commit\ntext', 8)).toBeNull();
+    });
+
+    it('finds slash only', () => {
+      expect(findSlashCommandAtCursor('/', 1)).toEqual({ start: 0, command: '' });
+      expect(findSlashCommandAtCursor('text /', 6)).toEqual({ start: 5, command: '' });
+    });
+
+    it('returns null if cursor is at beginning (before slash)', () => {
+      expect(findSlashCommandAtCursor('/help', 0)).toBeNull();
+    });
+
+    it('handles multiple slashes correctly', () => {
+      expect(findSlashCommandAtCursor('/first /second', 14)).toEqual({ start: 7, command: 'second' });
+      expect(findSlashCommandAtCursor('/first /second', 6)).toEqual({ start: 0, command: 'first' });
+    });
+  });
+
   describe('shouldShowAutocomplete', () => {
     it('shows autocomplete at end of slash command', () => {
       expect(shouldShowAutocomplete('/help', 5)).toBe(true);
@@ -98,9 +151,14 @@ describe('slashCommands', () => {
       expect(shouldShowAutocomplete('/commit', 4)).toBe(true); // cursor at /com|mit
     });
 
-    it('does not show autocomplete if not starting with slash', () => {
+    it('shows autocomplete for slash command in middle of text', () => {
+      expect(shouldShowAutocomplete('text /help', 10)).toBe(true);
+      expect(shouldShowAutocomplete('some text /commit', 17)).toBe(true);
+    });
+
+    it('does not show autocomplete if cursor is not at slash command', () => {
       expect(shouldShowAutocomplete('help', 4)).toBe(false);
-      expect(shouldShowAutocomplete('text /help', 10)).toBe(false);
+      expect(shouldShowAutocomplete('text', 2)).toBe(false);
     });
 
     it('does not show autocomplete if cursor is after whitespace', () => {
@@ -108,7 +166,7 @@ describe('slashCommands', () => {
       expect(shouldShowAutocomplete('/commit -m', 10)).toBe(false);
     });
 
-    it('does not show autocomplete if there are newlines before cursor', () => {
+    it('does not show autocomplete if there are newlines in command', () => {
       expect(shouldShowAutocomplete('/help\n', 6)).toBe(false);
       expect(shouldShowAutocomplete('/commit\ntext', 8)).toBe(false);
     });
@@ -123,12 +181,6 @@ describe('slashCommands', () => {
 
     it('handles cursor in middle with no spaces', () => {
       expect(shouldShowAutocomplete('/command', 5)).toBe(true);
-    });
-
-    it('does not show if text after cursor (not at end or in command)', () => {
-      // This case is tricky: cursor at /com|mit (position 4)
-      // According to the implementation, it checks beforeCursor only
-      expect(shouldShowAutocomplete('/commit', 4)).toBe(true);
     });
   });
 
