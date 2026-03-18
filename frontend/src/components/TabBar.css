@@ -59,10 +59,30 @@
   opacity: 1;
 }
 
+.tab-item.editing {
+  cursor: default;
+}
+
 .tab-item-label {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 140px;
+}
+
+.tab-rename-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 140px;
+  outline: none;
+  line-height: inherit;
 }
 
 .tab-item-dot {

@@ -33,6 +33,7 @@ interface ProjectSidebarProps {
   onRemoveProject: (path: string) => void;
   onNewTabForProject: (projectPath: string) => void;
   onCloseTab: (projectPath: string, sessionId: string) => void;
+  onRenameTab: (projectPath: string, sessionId: string, newLabel: string) => void;
   sidebarWidth: number;
   onSidebarWidthChange: (width: number) => void;
   onNavigate: (page: string) => void;
@@ -54,6 +55,7 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   onRemoveProject,
   onNewTabForProject,
   onCloseTab,
+  onRenameTab,
   sidebarWidth,
   onSidebarWidthChange,
   onNavigate,
@@ -79,11 +81,15 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const { showToast } = useToast();
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<number>(0);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const sessionClickTimeRef = useRef<{ [key: string]: number }>({});
 
   // Auto-expand active project on mount
   useEffect(() => {
@@ -100,6 +106,14 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   useEffect(() => {
     localStorage.setItem(EXPANDED_KEY, JSON.stringify(Array.from(expandedProjects)));
   }, [expandedProjects]);
+
+  // Auto-focus and select input when entering edit mode
+  useEffect(() => {
+    if (editingSessionId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [editingSessionId]);
 
   // Drag resize handler
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -331,8 +345,56 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
   };
 
   const handleSelectSession = (projectPath: string, sessionId: string) => {
-    onSelectProject(projectPath);
-    onSelectTab(projectPath, sessionId);
+    const now = Date.now();
+    const lastClickTime = sessionClickTimeRef.current[sessionId] || 0;
+    const timeSinceLastClick = now - lastClickTime;
+
+    // Detect double-click (within 300ms) on the same session
+    if (timeSinceLastClick < 300 && sessionId === activeTabId && projectPath === activeProjectPath) {
+      // Start editing mode
+      const project = projects.find(p => p.path === projectPath);
+      const tab = project?.tabs.find(t => t.sessionId === sessionId);
+      if (tab) {
+        setEditingSessionId(sessionId);
+        setEditValue(tab.label);
+      }
+    } else {
+      // Single click - select session
+      onSelectProject(projectPath);
+      onSelectTab(projectPath, sessionId);
+    }
+
+    sessionClickTimeRef.current[sessionId] = now;
+  };
+
+  const commitSessionRename = (projectPath: string) => {
+    if (editingSessionId && editValue.trim() !== '') {
+      const trimmedValue = editValue.trim();
+      onRenameTab(projectPath, editingSessionId, trimmedValue);
+    }
+    setEditingSessionId(null);
+    setEditValue('');
+  };
+
+  const cancelSessionRename = () => {
+    setEditingSessionId(null);
+    setEditValue('');
+  };
+
+  const handleSessionRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, projectPath: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commitSessionRename(projectPath);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelSessionRename();
+    }
+  };
+
+  const handleSessionRenameBlur = (projectPath: string) => {
+    commitSessionRename(projectPath);
   };
 
   const handleSearchResultClick = (sessionId: string) => {
@@ -591,40 +653,58 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
                   <div className={`sb-session-list ${expanded ? 'expanded' : ''}`}>
                     {project.tabs
                       .filter(tab => matchesSearchQuery(tab.label))
-                      .map(tab => (
-                        <div
-                          key={tab.sessionId}
-                          className={`sb-session-item ${isSessionActive(project.path, tab.sessionId) ? 'active' : ''}`}
-                          onClick={() => handleSelectSession(project.path, tab.sessionId)}
-                          onMouseEnter={() => setHoveredSession(tab.sessionId)}
-                          onMouseLeave={() => setHoveredSession(null)}
-                          title={tab.label}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleSelectSession(project.path, tab.sessionId);
-                            }
-                          }}
-                        >
-                          <span className="sb-session-label">
-                            {tab.label}
-                          </span>
-                          {(tab.isStreaming || tab.hasRunningAgent) && (
-                            <span className="sb-session-dot" />
-                          )}
-                          {hoveredSession === tab.sessionId && (
-                            <button
-                              className="sb-session-close"
-                              onClick={(e) => handleCloseSession(e, project.path, tab.sessionId)}
-                              aria-label={`Close ${tab.label}`}
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      .map(tab => {
+                        const isEditing = editingSessionId === tab.sessionId;
+
+                        return (
+                          <div
+                            key={tab.sessionId}
+                            className={`sb-session-item ${isSessionActive(project.path, tab.sessionId) ? 'active' : ''} ${isEditing ? 'editing' : ''}`}
+                            onClick={() => !isEditing && handleSelectSession(project.path, tab.sessionId)}
+                            onMouseEnter={() => !isEditing && setHoveredSession(tab.sessionId)}
+                            onMouseLeave={() => setHoveredSession(null)}
+                            title={isEditing ? undefined : tab.label}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+                                e.preventDefault();
+                                handleSelectSession(project.path, tab.sessionId);
+                              }
+                            }}
+                          >
+                            {isEditing ? (
+                              <input
+                                ref={renameInputRef}
+                                type="text"
+                                className="session-rename-input"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => handleSessionRenameKeyDown(e, project.path)}
+                                onBlur={() => handleSessionRenameBlur(project.path)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Rename session"
+                              />
+                            ) : (
+                              <span className="sb-session-label">
+                                {tab.label}
+                              </span>
+                            )}
+                            {(tab.isStreaming || tab.hasRunningAgent) && !isEditing && (
+                              <span className="sb-session-dot" />
+                            )}
+                            {hoveredSession === tab.sessionId && !isEditing && (
+                              <button
+                                className="sb-session-close"
+                                onClick={(e) => handleCloseSession(e, project.path, tab.sessionId)}
+                                aria-label={`Close ${tab.label}`}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               );

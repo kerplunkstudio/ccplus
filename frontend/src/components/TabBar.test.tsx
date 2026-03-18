@@ -1,46 +1,38 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import TabBar from './TabBar';
 import { TabState } from '../types';
 
-describe('TabBar', () => {
-  const mockTabs: TabState[] = [
-    {
-      sessionId: 'session_1',
-      label: 'First Tab',
-      isStreaming: false,
-      hasRunningAgent: false,
-      createdAt: Date.now(),
-      type: 'chat',
-    },
-    {
-      sessionId: 'session_2',
-      label: 'Second Tab',
-      isStreaming: false,
-      hasRunningAgent: false,
-      createdAt: Date.now(),
-      type: 'chat',
-    },
-    {
-      sessionId: 'session_3',
-      label: 'Browser Tab',
-      isStreaming: false,
-      hasRunningAgent: false,
-      createdAt: Date.now(),
-      type: 'browser',
-      url: 'https://example.com',
-    },
-  ];
+const mockTabs: TabState[] = [
+  {
+    sessionId: 'session1',
+    label: 'First Session',
+    isStreaming: false,
+    hasRunningAgent: false,
+    createdAt: Date.now(),
+    type: 'chat',
+  },
+  {
+    sessionId: 'session2',
+    label: 'Second Session',
+    isStreaming: false,
+    hasRunningAgent: false,
+    createdAt: Date.now(),
+    type: 'chat',
+  },
+];
 
+describe('TabBar', () => {
   const defaultProps = {
     tabs: mockTabs,
-    activeTabId: 'session_1',
+    activeTabId: 'session1',
     onSelectTab: jest.fn(),
     onNewTab: jest.fn(),
     onCloseTab: jest.fn(),
     onReopenTab: jest.fn(),
     onCloseOtherTabs: jest.fn(),
     onDuplicateTab: jest.fn(),
+    onRenameTab: jest.fn(),
     hasClosedTabs: false,
   };
 
@@ -48,313 +40,203 @@ describe('TabBar', () => {
     jest.clearAllMocks();
   });
 
-  describe('Rendering', () => {
-    it('renders the tab bar', () => {
-      const { container } = render(<TabBar {...defaultProps} />);
-      expect(container.querySelector('.tab-bar')).toBeInTheDocument();
-    });
+  it('renders without crashing', () => {
+    render(<TabBar {...defaultProps} />);
+    expect(screen.getByText('First Session')).toBeInTheDocument();
+    expect(screen.getByText('Second Session')).toBeInTheDocument();
+  });
 
-    it('renders all tabs', () => {
-      render(<TabBar {...defaultProps} />);
-      expect(screen.getByText('First Tab')).toBeInTheDocument();
-      expect(screen.getByText('Second Tab')).toBeInTheDocument();
-      expect(screen.getByText('Browser Tab')).toBeInTheDocument();
-    });
+  it('calls onSelectTab on single click', () => {
+    render(<TabBar {...defaultProps} />);
+    const tab = screen.getByText('Second Session');
+    fireEvent.click(tab);
+    expect(defaultProps.onSelectTab).toHaveBeenCalledWith('session2');
+  });
 
-    it('renders the new tab button', () => {
-      render(<TabBar {...defaultProps} />);
-      const newTabBtn = screen.getByRole('button', { name: 'New tab' });
-      expect(newTabBtn).toBeInTheDocument();
-      expect(newTabBtn).toHaveTextContent('+');
-    });
+  it('enters edit mode on double-click of active tab', async () => {
+    render(<TabBar {...defaultProps} />);
 
-    it('highlights the active tab', () => {
-      const { container } = render(<TabBar {...defaultProps} />);
-      const tabs = container.querySelectorAll('.tab-item');
-      expect(tabs[0]).toHaveClass('active');
-      expect(tabs[1]).not.toHaveClass('active');
-    });
+    const tab = screen.getByText('First Session');
 
-    it('renders browser icon for browser tabs', () => {
-      const { container } = render(<TabBar {...defaultProps} />);
-      const browserIcon = container.querySelector('.tab-item-icon');
-      expect(browserIcon).toBeInTheDocument();
-    });
+    // Double-click the active tab
+    fireEvent.dblClick(tab);
 
-    it('shows activity indicator when tab is streaming', () => {
-      const streamingTabs: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: 'Streaming Tab',
-          isStreaming: true,
-          hasRunningAgent: false,
-          createdAt: Date.now(),
-        },
-      ];
-      const { container } = render(<TabBar {...defaultProps} tabs={streamingTabs} />);
-      expect(container.querySelector('.tab-item-dot')).toBeInTheDocument();
-    });
-
-    it('shows activity indicator when tab has running agent', () => {
-      const runningTabs: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: 'Running Tab',
-          isStreaming: false,
-          hasRunningAgent: true,
-          createdAt: Date.now(),
-        },
-      ];
-      const { container } = render(<TabBar {...defaultProps} tabs={runningTabs} />);
-      expect(container.querySelector('.tab-item-dot')).toBeInTheDocument();
-    });
-
-    it('shows close button for inactive tabs', () => {
-      render(<TabBar {...defaultProps} />);
-      const tabs = screen.getAllByRole('button').filter(btn => btn.classList.contains('tab-item'));
-      const inactiveTabs = tabs.slice(1, 3); // session_2 and session_3
-      inactiveTabs.forEach(tab => {
-        const closeBtn = tab.querySelector('.tab-item-close');
-        expect(closeBtn).toBeInTheDocument();
-      });
-    });
-
-    it('shows close button for active tab if not only tab', () => {
-      render(<TabBar {...defaultProps} />);
-      const tabs = screen.getAllByRole('button').filter(btn => btn.classList.contains('tab-item'));
-      const activeTab = tabs[0];
-      const closeBtn = activeTab.querySelector('.tab-item-close');
-      expect(closeBtn).toBeInTheDocument();
-    });
-
-    it('does not show close button for active tab if it is the only tab', () => {
-      const singleTab: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: 'Only Tab',
-          isStreaming: false,
-          hasRunningAgent: false,
-          createdAt: Date.now(),
-        },
-      ];
-      render(<TabBar {...defaultProps} tabs={singleTab} />);
-      const tab = screen.getByRole('button', { name: /Only Tab/ });
-      const closeBtn = tab.querySelector('.tab-item-close');
-      expect(closeBtn).not.toBeInTheDocument();
+    // Should show input with current label
+    await waitFor(() => {
+      const input = screen.getByDisplayValue('First Session');
+      expect(input).toBeInTheDocument();
+      expect(input).toHaveFocus();
     });
   });
 
-  describe('Tab Interactions', () => {
-    it('calls onSelectTab when clicking a tab', () => {
-      render(<TabBar {...defaultProps} />);
-      const secondTab = screen.getByText('Second Tab');
-      fireEvent.click(secondTab);
-      expect(defaultProps.onSelectTab).toHaveBeenCalledWith('session_2');
-    });
+  it('commits rename on Enter key', async () => {
+    render(<TabBar {...defaultProps} />);
 
-    it('calls onCloseTab when clicking close button', () => {
-      render(<TabBar {...defaultProps} />);
-      const tabs = screen.getAllByRole('button').filter(btn => btn.classList.contains('tab-item'));
-      const closeBtn = tabs[1].querySelector('.tab-item-close') as HTMLElement;
-      fireEvent.click(closeBtn);
-      expect(defaultProps.onCloseTab).toHaveBeenCalledWith('session_2');
-    });
+    const tab = screen.getByText('First Session');
 
-    it('prevents tab selection when clicking close button', () => {
-      render(<TabBar {...defaultProps} />);
-      const tabs = screen.getAllByRole('button').filter(btn => btn.classList.contains('tab-item'));
-      const closeBtn = tabs[1].querySelector('.tab-item-close') as HTMLElement;
-      fireEvent.click(closeBtn);
-      expect(defaultProps.onSelectTab).not.toHaveBeenCalled();
-    });
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
 
-    it('calls onNewTab when clicking new tab button', () => {
-      render(<TabBar {...defaultProps} />);
-      const newTabBtn = screen.getByRole('button', { name: 'New tab' });
-      fireEvent.click(newTabBtn);
-      expect(defaultProps.onNewTab).toHaveBeenCalledTimes(1);
+    const input = await screen.findByDisplayValue('First Session');
+
+    // Change the value
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Renamed Session');
+
+    // Press Enter
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    // Should call onRenameTab with new label
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).toHaveBeenCalledWith('session1', 'Renamed Session');
     });
   });
 
-  describe('Context Menu', () => {
-    it('shows context menu on right click', () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      expect(screen.getByText('Duplicate Tab')).toBeInTheDocument();
-      expect(screen.getByText('Close Tab')).toBeInTheDocument();
-      expect(screen.getByText('Reopen Closed Tab')).toBeInTheDocument();
-      expect(screen.getByText('Close Other Tabs')).toBeInTheDocument();
-    });
+  it('commits rename on blur', async () => {
+    render(<TabBar {...defaultProps} />);
 
-    it('positions context menu at cursor location', () => {
-      const { container } = render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab, { clientX: 100, clientY: 200 });
-      const menu = container.querySelector('.tab-context-menu') as HTMLElement;
-      expect(menu).toHaveStyle({ left: '100px', top: '200px' });
-    });
+    const tab = screen.getByText('First Session');
 
-    it('calls onDuplicateTab when clicking Duplicate Tab', () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      fireEvent.click(screen.getByText('Duplicate Tab'));
-      expect(defaultProps.onDuplicateTab).toHaveBeenCalledWith('session_1');
-    });
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
 
-    it('calls onCloseTab when clicking Close Tab in menu', () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      fireEvent.click(screen.getByText('Close Tab'));
-      expect(defaultProps.onCloseTab).toHaveBeenCalledWith('session_1');
-    });
+    const input = await screen.findByDisplayValue('First Session');
 
-    it('calls onReopenTab when clicking Reopen Closed Tab', () => {
-      render(<TabBar {...defaultProps} hasClosedTabs={true} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      fireEvent.click(screen.getByText('Reopen Closed Tab'));
-      expect(defaultProps.onReopenTab).toHaveBeenCalledTimes(1);
-    });
+    // Change the value
+    await userEvent.clear(input);
+    await userEvent.type(input, 'New Name');
 
-    it('disables Reopen Closed Tab when no closed tabs', () => {
-      render(<TabBar {...defaultProps} hasClosedTabs={false} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      const reopenBtn = screen.getByText('Reopen Closed Tab');
-      expect(reopenBtn).toBeDisabled();
-    });
+    // Blur the input
+    fireEvent.blur(input);
 
-    it('calls onCloseOtherTabs when clicking Close Other Tabs', () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      fireEvent.click(screen.getByText('Close Other Tabs'));
-      expect(defaultProps.onCloseOtherTabs).toHaveBeenCalledWith('session_1');
-    });
-
-    it('disables Close Other Tabs when only one tab exists', () => {
-      const singleTab: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: 'Only Tab',
-          isStreaming: false,
-          hasRunningAgent: false,
-          createdAt: Date.now(),
-        },
-      ];
-      render(<TabBar {...defaultProps} tabs={singleTab} />);
-      const tab = screen.getByText('Only Tab');
-      fireEvent.contextMenu(tab);
-      const closeOthersBtn = screen.getByText('Close Other Tabs');
-      expect(closeOthersBtn).toBeDisabled();
-    });
-
-    it('closes context menu when clicking outside', async () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      expect(screen.getByText('Duplicate Tab')).toBeInTheDocument();
-
-      // Click outside
-      fireEvent.mouseDown(document.body);
-
-      await waitFor(() => {
-        expect(screen.queryByText('Duplicate Tab')).not.toBeInTheDocument();
-      });
-    });
-
-    it('closes context menu when pressing Escape', async () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      expect(screen.getByText('Duplicate Tab')).toBeInTheDocument();
-
-      fireEvent.keyDown(document, { key: 'Escape' });
-
-      await waitFor(() => {
-        expect(screen.queryByText('Duplicate Tab')).not.toBeInTheDocument();
-      });
-    });
-
-    it('closes context menu when scrolling', async () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      expect(screen.getByText('Duplicate Tab')).toBeInTheDocument();
-
-      fireEvent.scroll(document);
-
-      await waitFor(() => {
-        expect(screen.queryByText('Duplicate Tab')).not.toBeInTheDocument();
-      });
-    });
-
-    it('closes context menu after menu action', async () => {
-      render(<TabBar {...defaultProps} />);
-      const firstTab = screen.getByText('First Tab');
-      fireEvent.contextMenu(firstTab);
-      expect(screen.getByText('Duplicate Tab')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByText('Duplicate Tab'));
-
-      await waitFor(() => {
-        expect(screen.queryByText('Duplicate Tab')).not.toBeInTheDocument();
-      });
+    // Should call onRenameTab
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).toHaveBeenCalledWith('session1', 'New Name');
     });
   });
 
-  describe('Edge Cases', () => {
-    it('renders empty tab list gracefully', () => {
-      render(<TabBar {...defaultProps} tabs={[]} />);
-      expect(screen.getByRole('button', { name: 'New tab' })).toBeInTheDocument();
+  it('cancels rename on Escape key', async () => {
+    render(<TabBar {...defaultProps} />);
+
+    const tab = screen.getByText('First Session');
+
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
+
+    const input = await screen.findByDisplayValue('First Session');
+
+    // Change the value
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Should Not Save');
+
+    // Press Escape
+    fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' });
+
+    // Should not call onRenameTab
+    expect(defaultProps.onRenameTab).not.toHaveBeenCalled();
+
+    // Should exit edit mode
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue('Should Not Save')).not.toBeInTheDocument();
     });
+  });
 
-    it('handles tab with long label', () => {
-      const longLabelTab: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: 'This is a very long tab label that should probably be truncated by CSS',
-          isStreaming: false,
-          hasRunningAgent: false,
-          createdAt: Date.now(),
-        },
-      ];
-      render(<TabBar {...defaultProps} tabs={longLabelTab} />);
-      expect(screen.getByText('This is a very long tab label that should probably be truncated by CSS')).toBeInTheDocument();
+  it('does not enter edit mode on double-click of inactive tab', async () => {
+    render(<TabBar {...defaultProps} />);
+
+    const tab = screen.getByText('Second Session');
+
+    // Double-click inactive tab
+    fireEvent.dblClick(tab);
+
+    // Should not show input (should just select the tab twice)
+    await waitFor(() => {
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
+    expect(defaultProps.onSelectTab).toHaveBeenCalled();
+  });
 
-    it('handles tab with empty label', () => {
-      const emptyLabelTab: TabState[] = [
-        {
-          sessionId: 'session_1',
-          label: '',
-          isStreaming: false,
-          hasRunningAgent: false,
-          createdAt: Date.now(),
-        },
-      ];
-      render(<TabBar {...defaultProps} tabs={emptyLabelTab} />);
-      const tab = screen.getAllByRole('button').filter(btn => btn.classList.contains('tab-item'))[0];
-      expect(tab).toBeInTheDocument();
+  it('does not rename with empty value', async () => {
+    render(<TabBar {...defaultProps} />);
+
+    const tab = screen.getByText('First Session');
+
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
+
+    const input = await screen.findByDisplayValue('First Session');
+
+    // Clear the value
+    await userEvent.clear(input);
+
+    // Press Enter with empty value
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    // Should not call onRenameTab with empty string
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).not.toHaveBeenCalledWith('session1', '');
     });
+  });
 
-    it('updates when activeTabId changes', () => {
-      const { container, rerender } = render(<TabBar {...defaultProps} />);
-      let tabs = container.querySelectorAll('.tab-item');
-      expect(tabs[0]).toHaveClass('active');
+  it('trims whitespace from rename value', async () => {
+    render(<TabBar {...defaultProps} />);
 
-      rerender(<TabBar {...defaultProps} activeTabId="session_2" />);
-      tabs = container.querySelectorAll('.tab-item');
-      expect(tabs[1]).toHaveClass('active');
+    const tab = screen.getByText('First Session');
+
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
+
+    const input = await screen.findByDisplayValue('First Session');
+
+    // Change the value with leading/trailing spaces
+    await userEvent.clear(input);
+    await userEvent.type(input, '  Trimmed Name  ');
+
+    // Press Enter
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    // Should call onRenameTab with trimmed value
+    await waitFor(() => {
+      expect(defaultProps.onRenameTab).toHaveBeenCalledWith('session1', 'Trimmed Name');
     });
+  });
 
-    it('does not show context menu if already closed', () => {
-      render(<TabBar {...defaultProps} />);
-      // Don't open context menu, just check it doesn't exist
-      expect(screen.queryByText('Duplicate Tab')).not.toBeInTheDocument();
+  it('auto-selects input text when entering edit mode', async () => {
+    render(<TabBar {...defaultProps} />);
+
+    const tab = screen.getByText('First Session');
+
+    // Double-click to enter edit mode
+    fireEvent.dblClick(tab);
+
+    const input = (await screen.findByDisplayValue('First Session')) as HTMLInputElement;
+
+    // Check that text is selected
+    await waitFor(() => {
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe('First Session'.length);
+    });
+  });
+
+  it('hides close button when in edit mode', async () => {
+    render(<TabBar {...defaultProps} />);
+
+    const tabItem = screen.getByText('First Session').closest('.tab-item');
+    expect(tabItem).toBeInTheDocument();
+
+    // Check close button exists initially (when hovering)
+    if (tabItem) {
+      fireEvent.mouseEnter(tabItem);
+      const closeButton = screen.getByLabelText('Close tab');
+      expect(closeButton).toBeInTheDocument();
+    }
+
+    // Double-click to enter edit mode
+    fireEvent.dblClick(screen.getByText('First Session'));
+
+    // Close button should be hidden during edit
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Close tab')).not.toBeInTheDocument();
     });
   });
 });

@@ -11,6 +11,7 @@ interface TabBarProps {
   onReopenTab: () => void;
   onCloseOtherTabs: (sessionId: string) => void;
   onDuplicateTab: (sessionId: string) => void;
+  onRenameTab: (sessionId: string, newLabel: string) => void;
   hasClosedTabs: boolean;
 }
 
@@ -30,6 +31,7 @@ const TabBar: React.FC<TabBarProps> = ({
   onReopenTab,
   onCloseOtherTabs,
   onDuplicateTab,
+  onRenameTab,
   hasClosedTabs,
 }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -38,10 +40,30 @@ const TabBar: React.FC<TabBarProps> = ({
     y: 0,
     sessionId: '',
   });
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const lastClickTimeRef = useRef<number>(0);
 
   const handleTabClick = (sessionId: string) => {
-    onSelectTab(sessionId);
+    const now = Date.now();
+    const timeSinceLastClick = now - lastClickTimeRef.current;
+
+    // Detect double-click (within 300ms)
+    if (timeSinceLastClick < 300 && sessionId === activeTabId) {
+      // Start editing mode
+      const tab = tabs.find(t => t.sessionId === sessionId);
+      if (tab) {
+        setEditingTabId(sessionId);
+        setEditValue(tab.label);
+      }
+    } else {
+      // Single click - select tab
+      onSelectTab(sessionId);
+    }
+
+    lastClickTimeRef.current = now;
   };
 
   const handleCloseClick = (e: React.MouseEvent, sessionId: string) => {
@@ -83,6 +105,36 @@ const TabBar: React.FC<TabBarProps> = ({
     closeContextMenu();
   };
 
+  const commitRename = () => {
+    if (editingTabId && editValue.trim() !== '') {
+      const trimmedValue = editValue.trim();
+      onRenameTab(editingTabId, trimmedValue);
+    }
+    setEditingTabId(null);
+    setEditValue('');
+  };
+
+  const cancelRename = () => {
+    setEditingTabId(null);
+    setEditValue('');
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commitRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelRename();
+    }
+  };
+
+  const handleRenameBlur = () => {
+    commitRename();
+  };
+
   // Close menu on click outside, scroll, or Escape
   useEffect(() => {
     if (!contextMenu.visible) return;
@@ -114,6 +166,14 @@ const TabBar: React.FC<TabBarProps> = ({
     };
   }, [contextMenu.visible]);
 
+  // Auto-focus and select input when entering edit mode
+  useEffect(() => {
+    if (editingTabId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingTabId]);
+
   const isOnlyTab = tabs.length === 1;
 
   return (
@@ -126,12 +186,22 @@ const TabBar: React.FC<TabBarProps> = ({
 
           const isBrowserTab = tab.type === 'browser';
 
+          const isEditing = editingTabId === tab.sessionId;
+
           return (
-            <button
+            <div
               key={tab.sessionId}
-              className={`tab-item ${isActive ? 'active' : ''}`}
-              onClick={() => handleTabClick(tab.sessionId)}
+              className={`tab-item ${isActive ? 'active' : ''} ${isEditing ? 'editing' : ''}`}
+              onClick={() => !isEditing && handleTabClick(tab.sessionId)}
               onContextMenu={(e) => handleContextMenu(e, tab.sessionId)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleTabClick(tab.sessionId);
+                }
+              }}
             >
               {showActivity && <span className="tab-item-dot" />}
               {isBrowserTab && (
@@ -149,8 +219,22 @@ const TabBar: React.FC<TabBarProps> = ({
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                 </svg>
               )}
-              <span className="tab-item-label">{tab.label}</span>
-              {showClose && (
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="tab-rename-input"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={handleRenameKeyDown}
+                  onBlur={handleRenameBlur}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Rename tab"
+                />
+              ) : (
+                <span className="tab-item-label">{tab.label}</span>
+              )}
+              {showClose && !isEditing && (
                 <button
                   className="tab-item-close"
                   onClick={(e) => handleCloseClick(e, tab.sessionId)}
@@ -170,7 +254,7 @@ const TabBar: React.FC<TabBarProps> = ({
                   </svg>
                 </button>
               )}
-            </button>
+            </div>
           );
         })}
         <button
