@@ -1,6 +1,6 @@
 {
   "name": "ccplus",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "cc+ Desktop - Observability for Claude Code",
   "main": "electron/main.js",
   "author": "kerplunkstudio",
