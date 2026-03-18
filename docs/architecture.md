@@ -76,23 +76,31 @@ Both have `status: 'running' | 'completed' | 'failed'` and optional `duration_ms
 
 ### Connection
 
-WebSocket connects to the Socket.IO server with query parameters:
+WebSocket connects to the Socket.IO server with no authentication:
 ```typescript
 io(SOCKET_URL, {
-    auth: { token, session_id },
     transports: ['polling', 'websocket'],
 });
 ```
 
-Server validates JWT on `connect` event. Invalid token causes `disconnect()`.
+On connection, the client can optionally provide a `session_id` in `auth` for backward compatibility. The server auto-joins the session if provided. Otherwise, the client emits `join_session` to join a specific session room.
 
 ### Client to Server Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `message` | `{ message: string }` | Send user message to Claude Code SDK |
-| `cancel` | (none) | Cancel the active SDK query for this session |
+| `message` | `{ content: string, session_id?: string, workspace?: string, model?: string, image_ids?: string[] }` | Send user message to Claude Code SDK |
+| `cancel` | `{ session_id?: string }` | Cancel the active SDK query for this session |
 | `ping` | (none) | Keepalive ping |
+| `join_session` | `{ session_id: string }` | Join a session room to receive events |
+| `leave_session` | `{ session_id: string }` | Leave a session room |
+| `question_response` | `{ answer: string, session_id: string, question_id: string }` | Respond to a user question from an SDK agent |
+| `duplicate_session` | `{ sourceSessionId: string, newSessionId: string }` | Duplicate a session's conversation and tool events |
+| `schedule_create` | `{ prompt: string, interval: string, session_id?: string }` | Create a scheduled task |
+| `schedule_delete` | `{ id: string }` | Delete a scheduled task |
+| `schedule_list` | `{ session_id?: string }` | List scheduled tasks |
+| `schedule_pause` | `{ id: string }` | Pause a scheduled task |
+| `schedule_resume` | `{ id: string }` | Resume a paused scheduled task |
 
 ### Server to Client Events
 
@@ -100,12 +108,21 @@ Server validates JWT on `connect` event. Invalid token causes `disconnect()`.
 |-------|---------|-------------|
 | `connected` | `{ session_id }` | Connection confirmed, session joined |
 | `message_received` | `{ status: "ok" }` | User message acknowledged |
-| `text_delta` | `{ text: string }` | Streaming text chunk from Claude |
+| `text_delta` | `{ text: string, message_index: number, session_id: string }` | Streaming text chunk from Claude |
 | `tool_event` | `ToolEvent` | Tool/agent lifecycle event (see below) |
 | `response_complete` | `{ cost, duration_ms, input_tokens, output_tokens }` | SDK query finished |
 | `error` | `{ message: string }` | Error during SDK query |
 | `cancelled` | `{ status: "ok" }` | Cancellation confirmed |
 | `pong` | `{ timestamp: number }` | Keepalive response |
+| `user_question` | `{ question: string, question_id: string, session_id: string }` | SDK agent asks for user input |
+| `signal` | `Signal` | Custom signal from SDK (type: "status", "log", "progress", etc.) |
+| `tool_progress` | `{ tool_use_id: string, progress: number, message?: string }` | Progress update from a long-running tool |
+| `rate_limit` | `{ seconds_until_reset: number, requests_remaining: number }` | Rate limit information |
+| `prompt_suggestions` | `{ suggestions: string[] }` | Suggested follow-up prompts |
+| `compact_boundary` | `{ timestamp: string }` | Marker for message grouping in UI |
+| `dev_server_detected` | `{ url: string, session_id: string }` | Dev server detection notification |
+| `capture_screenshot` | `{ session_id: string }` | Request screenshot from browser extension |
+| `schedule_fired` | `{ id: string, prompt: string, timestamp: number }` | Scheduled task executed |
 
 ### Tool Event Types
 
