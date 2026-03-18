@@ -24,6 +24,7 @@ describe("Database Tests", () => {
       database.exec("DELETE FROM user_stats");
       database.exec("DELETE FROM workspace_state");
       database.exec("DELETE FROM session_context");
+      database.exec("DELETE FROM session_metadata");
     } catch {
       // Tables might not exist yet, that's okay
     }
@@ -1166,7 +1167,7 @@ describe("Database Tests", () => {
       expect(tableExists.c).toBe(1);
     });
 
-    it("should mark new database as version 3", () => {
+    it("should mark new database as version 4", () => {
       const database = new Database(config.DATABASE_PATH);
 
       const version = database.prepare(
@@ -1175,7 +1176,7 @@ describe("Database Tests", () => {
 
       database.close();
 
-      expect(version.v).toBe(3);
+      expect(version.v).toBe(4);
     });
 
     it("should have applied_at timestamp", () => {

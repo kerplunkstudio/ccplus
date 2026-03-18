@@ -646,6 +646,27 @@ Tests are mandatory for all implementations:
 
 **Fix**: `safeParams()` in `sdk-session.ts` truncates string values longer than 200 characters and strips internal keys like `tool_use_id`.
 
+## Multi-Agent Safety Rules
+
+When working as an AI agent (Claude Code or subagents), follow these rules to prevent conflicts in multi-agent scenarios:
+
+### Git Safety
+- **Never** create, apply, or drop git stash entries
+- **Never** switch branches unless explicitly requested by the user
+- **Never** modify worktrees without explicit request
+- Commit only your own changes; keep unrelated WIP untouched
+
+### Scope Discipline
+- Focus reports on your edits only; avoid redundant disclaimers about unrelated code
+- Do not modify files outside your assigned scope
+- If you discover an issue in unrelated code, report it but do not fix it unless asked
+
+### Conflict Prevention
+- Before editing a shared file (server.ts, database.ts), check for recent changes
+- Use atomic, focused commits — one logical change per commit
+- Prefer additive changes (new files, new functions) over modifying hot paths
+- When multiple agents may edit the same file, coordinate via the orchestrator
+
 ## Claude Code Workflow
 
 ### Deploying Changes While the App Is Running

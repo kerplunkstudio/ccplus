@@ -677,7 +677,11 @@ export function submitQuery(
   model?: string,
   imageIds?: string[],
 ): void {
-  const session = getOrCreateSession(sessionId, workspace, model);
+  // Check for session metadata model override
+  const metadata = database.getSessionMetadata(sessionId);
+  const effectiveModel = metadata?.model || model;
+
+  const session = getOrCreateSession(sessionId, workspace, effectiveModel);
 
   // Force-close stale query if one is lingering
   if (session.activeQuery !== null) {
@@ -700,7 +704,7 @@ export function submitQuery(
   session.cancelRequested = false;
 
   // Run query in background (don't await)
-  streamQuery(session, prompt, workspace, model, imageIds).catch((err) => {
+  streamQuery(session, prompt, workspace, effectiveModel, imageIds).catch((err) => {
     log.error("Stream query error", { sessionId, error: String(err) });
     callbacks.onError(String(err));
   });
@@ -1032,11 +1036,11 @@ async function streamQuery(
     const q = query({
       prompt: queryContent as string,
       options: {
-        model: model ?? config.SDK_MODEL,
+        model: model ?? config.getSDKModel(),
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
-        allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
+        permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
+        allowDangerouslySkipPermissions: config.getBypassPermissions(),
         env: cleanEnv,
         hooks: hooks as any,
         plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,

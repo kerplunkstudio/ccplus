@@ -122,6 +122,19 @@ ALTER TABLE tool_usage ADD COLUMN description TEXT;
 ALTER TABLE tool_usage ADD COLUMN summary TEXT;
 `,
   },
+  {
+    version: 4,
+    sql: `
+CREATE TABLE IF NOT EXISTS session_metadata (
+  session_id TEXT PRIMARY KEY,
+  model TEXT,
+  thinking_level TEXT,
+  verbose BOOLEAN DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+`,
+  },
 ];
 
 function getCurrentSchemaVersion(database: Database.Database): number {
@@ -245,14 +258,15 @@ export function updateMessage(messageId: number, content: string, sdkSessionId?:
   }
 }
 
-export function getConversationHistory(sessionId: string, limit: number = 50): Record<string, unknown>[] {
+export function getConversationHistory(sessionId: string, limit?: number): Record<string, unknown>[] {
   const d = getDb();
+  const effectiveLimit = limit ?? config.getMaxConversationHistory();
   const rows = d.prepare(`
     SELECT * FROM conversations
     WHERE session_id = ?
     ORDER BY timestamp ASC
     LIMIT ?
-  `).all(sessionId, limit) as Record<string, unknown>[];
+  `).all(sessionId, effectiveLimit) as Record<string, unknown>[];
 
   return rows.map((row) => {
     const msg = { ...row };
@@ -327,14 +341,15 @@ export function updateToolEvent(
   );
 }
 
-export function getToolEvents(sessionId: string, limit: number = 200): Record<string, unknown>[] {
+export function getToolEvents(sessionId: string, limit?: number): Record<string, unknown>[] {
   const d = getDb();
+  const effectiveLimit = limit ?? config.getMaxActivityEvents();
   const rows = d.prepare(`
     SELECT * FROM tool_usage
     WHERE session_id = ?
     ORDER BY timestamp ASC
     LIMIT ?
-  `).all(sessionId, limit) as Record<string, unknown>[];
+  `).all(sessionId, effectiveLimit) as Record<string, unknown>[];
 
   return rows.map((row) => {
     const entry = { ...row };
@@ -717,6 +732,76 @@ export function searchConversations(query: string, projectPath?: string, limit: 
   }
 
   return Array.from(sessionMap.values());
+}
+
+// --- Session metadata ---
+
+export interface SessionMetadata {
+  session_id: string;
+  model?: string | null;
+  thinking_level?: string | null;
+  verbose?: boolean | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function getSessionMetadata(sessionId: string): SessionMetadata | null {
+  const d = getDb();
+  const row = d.prepare("SELECT * FROM session_metadata WHERE session_id = ?").get(sessionId) as SessionMetadata | undefined;
+  return row ?? null;
+}
+
+export function upsertSessionMetadata(sessionId: string, metadata: Partial<SessionMetadata>): SessionMetadata {
+  const d = getDb();
+  const existing = getSessionMetadata(sessionId);
+
+  if (existing) {
+    // Update only provided fields
+    const updates: string[] = [];
+    const values: unknown[] = [];
+
+    if (metadata.model !== undefined) {
+      updates.push("model = ?");
+      values.push(metadata.model);
+    }
+    if (metadata.thinking_level !== undefined) {
+      updates.push("thinking_level = ?");
+      values.push(metadata.thinking_level);
+    }
+    if (metadata.verbose !== undefined) {
+      updates.push("verbose = ?");
+      values.push(metadata.verbose ? 1 : 0);
+    }
+
+    if (updates.length > 0) {
+      updates.push("updated_at = datetime('now', 'localtime')");
+      values.push(sessionId);
+      d.prepare(`UPDATE session_metadata SET ${updates.join(", ")} WHERE session_id = ?`).run(...values);
+    }
+  } else {
+    // Insert new record
+    d.prepare(`
+      INSERT INTO session_metadata (session_id, model, thinking_level, verbose)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      sessionId,
+      metadata.model ?? null,
+      metadata.thinking_level ?? null,
+      metadata.verbose !== undefined ? (metadata.verbose ? 1 : 0) : 0,
+    );
+  }
+
+  const result = getSessionMetadata(sessionId);
+  if (!result) {
+    throw new Error(`Failed to upsert session metadata for ${sessionId}`);
+  }
+  return result;
+}
+
+export function deleteSessionMetadata(sessionId: string): boolean {
+  const d = getDb();
+  const info = d.prepare("DELETE FROM session_metadata WHERE session_id = ?").run(sessionId);
+  return info.changes > 0;
 }
 
 // --- Insights (analytics) ---

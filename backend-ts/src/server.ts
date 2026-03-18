@@ -19,6 +19,7 @@ import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { log } from "./logger.js";
 import { scheduler, parseInterval } from "./scheduler.js";
+import { configWatcher, type ConfigChange } from "./config-watcher.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -691,6 +692,45 @@ app.post("/api/sessions/:sessionId/archive", (req: Request, res: Response) => {
   }
 });
 
+// -- Session metadata --
+
+app.get("/api/sessions/:sessionId/metadata", (req: Request, res: Response) => {
+  try {
+    const metadata = database.getSessionMetadata(req.params.sessionId);
+    res.json({ metadata: metadata ?? {} });
+  } catch (err) {
+    log.error("Failed to get session metadata", { sessionId: req.params.sessionId, error: String(err) });
+    res.status(500).json({ error: "Failed to get session metadata" });
+  }
+});
+
+app.patch("/api/sessions/:sessionId/metadata", (req: Request, res: Response) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const { model, thinking_level, verbose } = req.body;
+
+    // Validate model if provided
+    const validModels = ["sonnet", "opus", "haiku"];
+    if (model !== undefined && model !== null && !validModels.includes(model)) {
+      res.status(400).json({ error: `Invalid model. Must be one of: ${validModels.join(", ")}` });
+      return;
+    }
+
+    // Build metadata update
+    const update: Partial<database.SessionMetadata> = {};
+    if (model !== undefined) update.model = model;
+    if (thinking_level !== undefined) update.thinking_level = thinking_level;
+    if (verbose !== undefined) update.verbose = verbose;
+
+    const metadata = database.upsertSessionMetadata(sessionId, update);
+
+    res.json({ metadata });
+  } catch (err) {
+    log.error("Failed to patch session metadata", { sessionId: req.params.sessionId, error: String(err) });
+    res.status(500).json({ error: "Failed to patch session metadata" });
+  }
+});
+
 // -- Workspace state --
 
 app.get("/api/workspace", (_req: Request, res: Response) => {
@@ -1238,6 +1278,69 @@ io.on("connection", (socket) => {
     client.sessions.delete(oldSessionId);
   });
 
+  // -- Session metadata --
+
+  socket.on("session:get_metadata", (data: { session_id: string }, callback?: (response: { success: boolean; error?: string; metadata?: unknown }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const sessionId = data?.session_id;
+    if (!sessionId || typeof sessionId !== "string") {
+      callback?.({ success: false, error: "Invalid session_id" });
+      return;
+    }
+
+    try {
+      const metadata = database.getSessionMetadata(sessionId);
+      callback?.({ success: true, metadata: metadata ?? {} });
+    } catch (err) {
+      log.error("Failed to get session metadata", { sessionId, error: String(err) });
+      callback?.({ success: false, error: String(err) });
+    }
+  });
+
+  socket.on("session:patch", (data: { session_id: string; model?: string; thinking_level?: string; verbose?: boolean }, callback?: (response: { success: boolean; error?: string; metadata?: unknown }) => void) => {
+    const client = connectedClients.get(socket.id);
+    if (!client) {
+      callback?.({ success: false, error: "Not authenticated" });
+      return;
+    }
+
+    const sessionId = data?.session_id;
+    if (!sessionId || typeof sessionId !== "string") {
+      callback?.({ success: false, error: "Invalid session_id" });
+      return;
+    }
+
+    try {
+      // Validate model if provided
+      const validModels = ["sonnet", "opus", "haiku"];
+      if (data.model !== undefined && data.model !== null && !validModels.includes(data.model)) {
+        callback?.({ success: false, error: `Invalid model. Must be one of: ${validModels.join(", ")}` });
+        return;
+      }
+
+      // Build metadata update
+      const update: Partial<database.SessionMetadata> = {};
+      if (data.model !== undefined) update.model = data.model;
+      if (data.thinking_level !== undefined) update.thinking_level = data.thinking_level;
+      if (data.verbose !== undefined) update.verbose = data.verbose;
+
+      const metadata = database.upsertSessionMetadata(sessionId, update);
+
+      // Emit update to all clients in this session room
+      io.to(sessionId).emit("session:updated", { session_id: sessionId, metadata });
+
+      callback?.({ success: true, metadata });
+    } catch (err) {
+      log.error("Failed to patch session metadata", { sessionId, error: String(err) });
+      callback?.({ success: false, error: String(err) });
+    }
+  });
+
   // -- Scheduled tasks --
 
   socket.on("schedule_create", (data: { prompt: string; interval: string; session_id?: string }, callback?: (response: { success: boolean; error?: string; task?: unknown }) => void) => {
@@ -1532,14 +1635,18 @@ function gracefulShutdown(signal: string): void {
     console.log("Socket.IO server closed");
   });
 
-  // 3. Close database connection
+  // 3. Stop config watcher
+  configWatcher.stop();
+  console.log("Config watcher stopped");
+
+  // 4. Close database connection
   database.close();
   console.log("Database closed");
 
-  // 4. Remove PID file
+  // 5. Remove PID file
   removePidFile();
 
-  // 5. Exit
+  // 6. Exit
   console.log("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
@@ -1618,7 +1725,36 @@ setInterval(() => {
   }
 }, 5000); // Check every 5 seconds
 
+// ---- Config hot-reload ----
+
+configWatcher.on("config:changed", (change: ConfigChange) => {
+  if (change.hotReloadable) {
+    // Apply hot-reloadable config changes immediately
+    config.reloadConfig(change.key, change.newValue);
+    log.info(`Config hot-reloaded: ${change.key}`, {
+      key: change.key,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+    });
+    console.log(`[config] Hot-reloaded: ${change.key} = ${change.newValue}`);
+  } else {
+    // Warn about restart-required changes
+    log.warn(`Config change requires restart: ${change.key}`, {
+      key: change.key,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+    });
+    console.warn(
+      `[config] ⚠️  Config change requires server restart: ${change.key}\n` +
+      `       Old value: ${change.oldValue}\n` +
+      `       New value: ${change.newValue}\n` +
+      `       Run './ccplus server' to restart.`
+    );
+  }
+});
+
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
   scheduler.start();
+  configWatcher.start();
 });
