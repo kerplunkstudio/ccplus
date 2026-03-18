@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { ToastProvider, useToast, Toast } from './ToastContext';
+import { ToastProvider, useToast } from './ToastContext';
 
 // Test component that uses the toast context
 const TestComponent: React.FC<{ onToastReady?: (showToast: any, removeToast: any) => void }> = ({ onToastReady }) => {

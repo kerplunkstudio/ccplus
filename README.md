@@ -23,6 +23,14 @@ Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) subsc
 
 cc+ wraps the Claude Agent SDK in a desktop app with full observability. Watch agents work in real time, manage multiple sessions in browser-style tabs, and get instant visual feedback without touching a single file.
 
+## Install
+
+```sh
+curl -fsSL https://ccplus.run/install | sh
+```
+
+Requires a [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) subscription. macOS and Linux only.
+
 ## Features
 
 | Feature | Description |

@@ -163,7 +163,7 @@ describe('QuestionPrompt', () => {
     });
 
     it('shows filled radio indicator when selected', () => {
-      const { container } = render(<QuestionPrompt {...defaultProps} />);
+      render(<QuestionPrompt {...defaultProps} />);
       const optionA = screen.getByRole('radio', { name: /Option A/ });
 
       fireEvent.click(optionA);
@@ -173,7 +173,7 @@ describe('QuestionPrompt', () => {
     });
 
     it('shows empty radio indicator when not selected', () => {
-      const { container } = render(<QuestionPrompt {...defaultProps} />);
+      render(<QuestionPrompt {...defaultProps} />);
       const optionB = screen.getByRole('radio', { name: /Option B/ });
 
       const indicator = optionB.querySelector('.option-indicator');

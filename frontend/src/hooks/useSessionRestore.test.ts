@@ -1,7 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSessionRestore } from './useSessionRestore';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, ActivityNode } from '../types';
+import { Message, ToolEvent } from '../types';
 
 // Mock socket.io-client
 let mockSocket: any;

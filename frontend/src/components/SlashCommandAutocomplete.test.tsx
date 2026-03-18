@@ -85,7 +85,7 @@ describe('SlashCommandAutocomplete', () => {
   });
 
   it('does not render description element when description is missing', () => {
-    const { container } = render(
+    render(
       <SlashCommandAutocomplete
         suggestions={mockSuggestions}
         selectedIndex={0}

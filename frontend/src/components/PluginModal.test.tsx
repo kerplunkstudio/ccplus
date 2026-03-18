@@ -221,7 +221,7 @@ describe('PluginModal', () => {
   });
 
   it('renders SVG icon in close button', () => {
-    const { container } = render(<PluginModal isOpen={true} onClose={mockOnClose} />);
+    render(<PluginModal isOpen={true} onClose={mockOnClose} />);
 
     const closeButton = screen.getByRole('button', { name: /close plugin modal/i });
     const svg = closeButton.querySelector('svg');

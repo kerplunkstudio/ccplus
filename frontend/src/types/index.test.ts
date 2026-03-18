@@ -1,4 +1,4 @@
-import { isAgentNode, AgentNode, ToolNode, ActivityNode } from './index';
+import { isAgentNode, AgentNode, ToolNode } from './index';
 
 describe('types', () => {
   describe('isAgentNode', () => {
