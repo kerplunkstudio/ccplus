@@ -291,6 +291,21 @@ app.get("/api/insights", (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/search", (req: Request, res: Response) => {
+  try {
+    const query = (req.query.q as string) || "";
+    if (!query || query.trim().length === 0) {
+      return res.json({ results: [] });
+    }
+    const project = (req.query.project as string) || undefined;
+    const results = database.searchConversations(query.trim(), project);
+    res.json({ results });
+  } catch (err) {
+    log.error("Failed to search conversations", { query: req.query.q, error: String(err) });
+    res.status(500).json({ error: "Failed to search conversations" });
+  }
+});
+
 // -- Projects --
 
 app.get("/api/projects", (req: Request, res: Response) => {
