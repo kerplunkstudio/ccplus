@@ -18,10 +18,13 @@ Requires a [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) sub
 
 - **Live Activity Tree** — Real-time nested visualization of every tool call and agent spawn
 - **Tabbed Sessions** — Multiple concurrent conversations with independent context
-- **Usage Insights** — Aggregate statistics across conversations (tool patterns, costs, performance)
-- **Desktop App** — Native wrapper for macOS, Linux, Windows (Electron)
-- **Workspace Browser** — Navigate your codebase directly from the UI
-- **Markdown Rendering** — GitHub-flavored markdown with syntax highlighting and LaTeX
+- **Built-in Browser** — Dev server auto-detection opens browser tabs automatically. VerifyApp screenshots for visual testing.
+- **Voice Input** — Push-to-talk with global Space shortcut. Web Speech API.
+- **Cmd+K Command Palette** — Fuzzy search across sessions, projects, and actions
+- **Conversation Search** — Full-text search across all message history
+- **Scheduled Tasks** — `/loop 5m check the deploy` — recurring prompts on intervals
+- **Usage Insights** — Cost trends, tool success rates, token usage, per-project breakdowns
+- **Desktop App** — Native wrapper for macOS and Linux (Electron)
 
 ## Architecture
 
@@ -59,7 +62,7 @@ npm test
 npm run test:coverage
 ```
 
-**Test suite**: 149 tests across 5 files (config, auth, database, sdk-session, server). Coverage targets: 80%+ on critical paths (sdk-session, database), 100% on utilities (auth, config).
+**Test suite**: 389 tests across 9 files. Coverage targets: 80%+ on critical paths (sdk-session, database), 100% on utilities (auth, config).
 
 ### Frontend Development
 
@@ -109,7 +112,7 @@ ccplus/
 │   │   ├── database.ts        # SQLite operations (better-sqlite3)
 │   │   ├── auth.ts            # JWT auth (jsonwebtoken)
 │   │   ├── config.ts          # Environment config
-│   │   └── __tests__/         # Vitest tests (149 tests)
+│   │   └── __tests__/         # Vitest tests (389 tests)
 │   ├── dist/                  # Compiled JS (gitignored)
 │   └── tsconfig.json
 ├── electron/
@@ -119,8 +122,8 @@ ccplus/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx
-│   │   ├── components/        # ChatPanel, ActivityTree, MessageBubble
-│   │   ├── hooks/             # useSocket, useAuth
+│   │   ├── components/        # ChatPanel, ActivityTree, MessageBubble, CommandPalette, BrowserTab, DevServerToast
+│   │   ├── hooks/             # useSocket, useAuth, useVoiceInput, useScheduler, useWorkspace
 │   │   └── types/             # TypeScript interfaces
 │   └── build/                 # Generated (gitignored)
 ├── static/chat/               # Deployed build (gitignored)
@@ -168,12 +171,9 @@ cd backend-ts && npx vitest run src/__tests__/database.test.ts
 cd backend-ts && npm run test:coverage
 ```
 
-**Test files** (149 tests total):
-- `config.test.ts` (6 tests) — Environment variable loading, defaults, directory creation
-- `auth.test.ts` (12 tests) — JWT generation, verification, expiry, local mode
-- `database.test.ts` (58 tests) — CRUD operations, conversation history, tool events, stats, images
-- `sdk-session.test.ts` (29 tests) — Session lifecycle, cancellation, callback dispatch, hooks
-- `server.test.ts` (44 tests) — HTTP routes, WebSocket events, auth flow, health check
+**Test files** (389 tests total across 9 files):
+- Core modules: config, auth, database, sdk-session, server
+- Features: search, logger, mcp-api, mcp-config
 
 ### Frontend Tests
 
@@ -182,10 +182,7 @@ cd backend-ts && npm run test:coverage
 cd frontend && npm test
 ```
 
-**Test files**:
-- `ChatPanel.test.tsx` — Chat interface, streaming, auto-resize textarea, send/cancel
-- `ActivityTree.test.tsx` — Tree rendering, collapsible nodes, status icons
-- `MessageBubble.test.tsx` — Markdown rendering, code highlighting
+**Test suite**: 1100+ tests covering components, hooks, and utilities.
 
 ### Test Policy
 
