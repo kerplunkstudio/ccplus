@@ -1400,8 +1400,14 @@ describe("SDK Session", () => {
         callbacks,
       );
 
-      // Wait for content to be streamed
-      await new Promise((r) => setTimeout(r, 100));
+      // Wait for content to be streamed (poll until onText is called)
+      for (let i = 0; i < 20; i++) {
+        if (callbacks.onText.mock.calls.length > 0) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      // Verify onText was called with the expected content
+      expect(callbacks.onText).toHaveBeenCalledWith("Some content", expect.any(Number));
 
       // Streaming content should be available while query is still active
       const content = sdkSession.getStreamingContent("buffer-test");
