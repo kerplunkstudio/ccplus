@@ -10,11 +10,15 @@ const MODELS = [
 interface ModelSelectorProps {
   selectedModel: string;
   onSelectModel: (model: string) => void;
+  sessionModel?: string | null;
+  isOverridden?: boolean;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   selectedModel,
   onSelectModel,
+  sessionModel,
+  isOverridden = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -98,13 +102,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   return (
     <div className="model-selector" ref={dropdownRef} onKeyDown={handleKeyDown}>
       <button
-        className="model-selector-trigger"
+        className={`model-selector-trigger ${isOverridden ? 'overridden' : ''}`}
         onClick={() => (open ? handleClose() : handleOpen())}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        aria-label={`Model: ${currentLabel}`}
-        title={selectedModel}
+        aria-label={`Model: ${currentLabel}${isOverridden ? ' (session override)' : ''}`}
+        title={isOverridden ? `Session: ${selectedModel}\nDefault: ${sessionModel || 'N/A'}` : selectedModel}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />

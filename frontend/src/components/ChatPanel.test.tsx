@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatPanel } from './ChatPanel';
 import { Message, UsageStats } from '../types';
+import { Socket } from 'socket.io-client';
 
 describe('ChatPanel', () => {
   const mockUsageStats: UsageStats = {
@@ -16,7 +17,14 @@ describe('ChatPanel', () => {
     totalSessions: 0,
   };
 
+  const mockSocket = {
+    on: jest.fn(),
+    off: jest.fn(),
+    emit: jest.fn(),
+  } as unknown as Socket;
+
   const defaultProps = {
+    socket: mockSocket,
     messages: [] as Message[],
     connected: true,
     streaming: false,

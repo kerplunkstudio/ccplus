@@ -79,6 +79,12 @@ export interface UsageStats {
   totalSessions: number;
 }
 
+export interface SessionMetadata {
+  model?: string;
+  thinking_level?: string;
+  verbose?: boolean;
+}
+
 export interface PluginAuthor {
   name: string;
   url?: string;

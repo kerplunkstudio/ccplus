@@ -958,6 +958,7 @@ export function useTabSocket(token: string | null, sessionId: string) {
   );
 
   return {
+    socket,
     connected,
     messages,
     streaming,

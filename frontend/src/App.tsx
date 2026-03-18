@@ -47,6 +47,7 @@ function AppContent({ token, loading }: AppContentProps) {
   const profile = useProfile();
 
   const {
+    socket,
     connected,
     messages,
     streaming,
@@ -519,6 +520,7 @@ function AppContent({ token, loading }: AppContentProps) {
                   <BrowserTab url={activeTab.url} />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel
+                    socket={socket}
                     messages={messages}
                     connected={connected}
                     streaming={streaming}

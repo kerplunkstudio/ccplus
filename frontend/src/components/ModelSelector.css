@@ -3,6 +3,7 @@
 }
 
 .model-selector-trigger {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -19,6 +20,25 @@
 .model-selector-trigger:hover {
   background: var(--button-bg-hover);
   border-color: var(--button-border-hover);
+}
+
+.model-selector-trigger.overridden {
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--button-border));
+}
+
+.model-selector-trigger.overridden::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+.model-selector-trigger.overridden:hover {
+  border-color: color-mix(in oklch, var(--accent) 60%, var(--button-border-hover));
 }
 
 .model-selector-label {

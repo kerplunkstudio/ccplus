@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Socket } from 'socket.io-client';
 import { Message, ToolEvent, UsageStats } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { ModelSelector } from './ModelSelector';
@@ -10,6 +11,7 @@ import { NewSessionDashboard } from './NewSessionDashboard';
 import { TextSelectionPopup } from './TextSelectionPopup';
 import { formatToolLabelVerbose } from '../utils/formatToolLabel';
 import { useSkills } from '../hooks/useSkills';
+import { useSessionMetadata } from '../hooks/useSessionMetadata';
 import {
   parseSlashCommand,
   shouldShowAutocomplete,
@@ -64,6 +66,7 @@ const formatTimeAgo = (timestamp: string): string => {
 };
 
 interface ChatPanelProps {
+  socket: Socket | null;
   messages: Message[];
   connected: boolean;
   streaming: boolean;
@@ -98,6 +101,7 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
+  socket,
   messages,
   connected,
   streaming,
@@ -122,6 +126,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onOpenBrowserTab,
   pendingRestore = false,
 }) => {
+  const { metadata, updateMetadata } = useSessionMetadata(socket);
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
   const previousSessionIdRef = useRef<string | undefined>(sessionId);
@@ -535,8 +540,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
           <div className="header-right">
             <ModelSelector
-              selectedModel={selectedModel}
-              onSelectModel={onSelectModel}
+              selectedModel={metadata.model || selectedModel}
+              onSelectModel={(model) => updateMetadata({ model })}
+              sessionModel={selectedModel}
+              isOverridden={!!metadata.model && metadata.model !== selectedModel}
             />
             <PluginButton onClick={() => setPluginModalOpen(true)} />
             {onToggleActivity && (
