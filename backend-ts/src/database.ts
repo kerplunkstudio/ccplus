@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import path from "path";
+import { randomUUID } from "crypto";
 import * as config from "./config.js";
+import type { TranscriptEvent, TranscriptEventInput, TranscriptEventType } from "./types.js";
 
 let db: Database.Database | null = null;
 
@@ -89,6 +91,20 @@ CREATE TABLE IF NOT EXISTS workspace_state (
     state TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS transcript_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    parent_event_id TEXT,
+    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    data TEXT NOT NULL,
+    metadata TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_transcript_session ON transcript_events(session_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_transcript_event_id ON transcript_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_transcript_type ON transcript_events(session_id, event_type);
 `;
 
 function getDb(): Database.Database {
@@ -688,4 +704,112 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     by_project: byProject,
     by_tool: byTool,
   };
+}
+
+// --- Transcript events ---
+
+export function recordTranscriptEvent(event: TranscriptEventInput): TranscriptEvent {
+  const d = getDb();
+  const eventId = event.event_id ?? randomUUID();
+  const dataJson = JSON.stringify(event.data);
+  const metadataJson = event.metadata ? JSON.stringify(event.metadata) : null;
+
+  const stmt = d.prepare(`
+    INSERT INTO transcript_events (session_id, event_type, event_id, parent_event_id, data, metadata)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const info = stmt.run(
+    event.session_id,
+    event.event_type,
+    eventId,
+    event.parent_event_id ?? null,
+    dataJson,
+    metadataJson,
+  );
+
+  const row = d.prepare("SELECT * FROM transcript_events WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
+
+  return {
+    id: row.id as number,
+    session_id: row.session_id as string,
+    event_type: row.event_type as TranscriptEventType,
+    event_id: row.event_id as string,
+    parent_event_id: (row.parent_event_id as string) ?? null,
+    timestamp: row.timestamp as string,
+    data: JSON.parse(row.data as string),
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
+  };
+}
+
+export function getTranscript(
+  sessionId: string,
+  options?: { eventTypes?: string[]; limit?: number; offset?: number },
+): TranscriptEvent[] {
+  const d = getDb();
+  const limit = options?.limit ?? 1000;
+  const offset = options?.offset ?? 0;
+
+  let query = "SELECT * FROM transcript_events WHERE session_id = ?";
+  const params: unknown[] = [sessionId];
+
+  if (options?.eventTypes && options.eventTypes.length > 0) {
+    const placeholders = options.eventTypes.map(() => "?").join(",");
+    query += ` AND event_type IN (${placeholders})`;
+    params.push(...options.eventTypes);
+  }
+
+  query += " ORDER BY timestamp ASC LIMIT ? OFFSET ?";
+  params.push(limit, offset);
+
+  const rows = d.prepare(query).all(...params) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    id: row.id as number,
+    session_id: row.session_id as string,
+    event_type: row.event_type as TranscriptEventType,
+    event_id: row.event_id as string,
+    parent_event_id: (row.parent_event_id as string) ?? null,
+    timestamp: row.timestamp as string,
+    data: JSON.parse(row.data as string),
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
+  }));
+}
+
+export function getTranscriptEvent(eventId: string): TranscriptEvent | null {
+  const d = getDb();
+  const row = d.prepare("SELECT * FROM transcript_events WHERE event_id = ?").get(eventId) as Record<string, unknown> | undefined;
+
+  if (!row) return null;
+
+  return {
+    id: row.id as number,
+    session_id: row.session_id as string,
+    event_type: row.event_type as TranscriptEventType,
+    event_id: row.event_id as string,
+    parent_event_id: (row.parent_event_id as string) ?? null,
+    timestamp: row.timestamp as string,
+    data: JSON.parse(row.data as string),
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
+  };
+}
+
+export function exportTranscript(sessionId: string): TranscriptEvent[] {
+  const d = getDb();
+  const rows = d.prepare(`
+    SELECT * FROM transcript_events
+    WHERE session_id = ?
+    ORDER BY timestamp ASC
+  `).all(sessionId) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    id: row.id as number,
+    session_id: row.session_id as string,
+    event_type: row.event_type as TranscriptEventType,
+    event_id: row.event_id as string,
+    parent_event_id: (row.parent_event_id as string) ?? null,
+    timestamp: row.timestamp as string,
+    data: JSON.parse(row.data as string),
+    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
+  }));
 }
