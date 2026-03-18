@@ -73,7 +73,7 @@ describe('useToolEvents', () => {
 
   describe('Tool event processing - tool_start', () => {
     it('should process tool_start event', () => {
-      const { result } = renderHook(() => useToolEvents(mockProps));
+      renderHook(() => useToolEvents(mockProps));
 
       const toolEvent: ToolEvent = {
         type: 'tool_start',
@@ -733,7 +733,7 @@ describe('useToolEvents', () => {
 
   describe('Cleanup', () => {
     it('should clear debounce timer on unmount', () => {
-      const { result, unmount } = renderHook(() => useToolEvents(mockProps));
+      const { unmount } = renderHook(() => useToolEvents(mockProps));
 
       const startEvent: ToolEvent = {
         type: 'tool_start',

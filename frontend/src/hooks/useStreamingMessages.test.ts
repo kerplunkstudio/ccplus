@@ -1,7 +1,7 @@
 // Import from /pure to disable automatic cleanup
 import { renderHook, waitFor, cleanup, act } from '@testing-library/react/pure';
 import { useStreamingMessages, fetchUserStats } from './useStreamingMessages';
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 import { MutableRefObject } from 'react';
 import { ToolEvent, ActivityNode } from '../types';
 

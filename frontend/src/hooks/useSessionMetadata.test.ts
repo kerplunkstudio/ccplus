@@ -1,5 +1,5 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { io, Socket } from 'socket.io-client';
+import { renderHook, act } from '@testing-library/react';
+import { Socket } from 'socket.io-client';
 import { useSessionMetadata } from './useSessionMetadata';
 import { SessionMetadata } from '../types';
 

@@ -374,7 +374,6 @@ describe('useWorkspace', () => {
       });
 
       const projectPath = '/test/project';
-      const initialTab = result.current.state.projects[0]!.tabs[0]!.sessionId;
 
       act(() => {
         result.current.addTab(projectPath, 'tab2');
@@ -964,7 +963,6 @@ describe('useWorkspace', () => {
       });
 
       const projectPath = '/test/project';
-      const originalActiveTabId = result.current.state.projects[0]!.activeTabId;
 
       // Try to select non-existent tab
       act(() => {
