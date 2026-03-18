@@ -1,0 +1,621 @@
+#!/bin/sh
+# cc+ installer — inspired by rustup, deno_install, and starship
+set -eu
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+REPO="mjfuentes/ccplus"
+INSTALL_DIR="${CCPLUS_INSTALL:-$HOME/.ccplus}"
+BIN_DIR="${CCPLUS_BIN:-$HOME/.local/bin}"
+VERSION="${CCPLUS_VERSION:-latest}"
+
+# ============================================================================
+# Color handling
+# ============================================================================
+
+NO_COLOR="${NO_COLOR:-}"
+USE_COLOR=0
+
+if [ -z "$NO_COLOR" ] && [ -t 1 ]; then
+    if command -v tput >/dev/null 2>&1; then
+        if [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+            USE_COLOR=1
+        fi
+    fi
+fi
+
+if [ "$USE_COLOR" = "1" ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    DIM='\033[0;90m'
+    BOLD='\033[1m'
+    RESET='\033[0m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    DIM=''
+    BOLD=''
+    RESET=''
+fi
+
+# ============================================================================
+# Output helpers
+# ============================================================================
+
+header() {
+    printf "\n${BOLD}${BLUE}  cc+ installer${RESET}\n"
+    printf "${DIM}  ccplus.run${RESET}\n\n"
+}
+
+step() {
+    printf "${BLUE}→${RESET} %s\n" "$1"
+}
+
+success() {
+    printf "${GREEN}✓${RESET} %s\n" "$1"
+}
+
+error() {
+    printf "${RED}✗${RESET} %s\n" "$1" >&2
+}
+
+info() {
+    printf "${DIM}  %s${RESET}\n" "$1"
+}
+
+warn() {
+    printf "${YELLOW}!${RESET} %s\n" "$1"
+}
+
+# ============================================================================
+# Error handling
+# ============================================================================
+
+cleanup() {
+    if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR:-}" ]; then
+        rm -rf "$TMPDIR"
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+die() {
+    error "$1"
+    exit 1
+}
+
+need_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        die "Required command not found: $1"
+    fi
+}
+
+# ============================================================================
+# Platform detection
+# ============================================================================
+
+detect_platform() {
+    local os arch
+
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$os" in
+        Darwin) os="macos" ;;
+        Linux) os="linux" ;;
+        MINGW*|MSYS*|CYGWIN*|Windows*)
+            die "Windows is not supported. Download from: https://github.com/$REPO/releases"
+            ;;
+        *) die "Unsupported OS: $os" ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64) arch="x64" ;;
+        arm64|aarch64) arch="arm64" ;;
+        *) die "Unsupported architecture: $arch" ;;
+    esac
+
+    echo "${os}-${arch}"
+}
+
+# ============================================================================
+# Version handling
+# ============================================================================
+
+get_latest_version() {
+    local release_url="https://api.github.com/repos/$REPO/releases/latest"
+    local version
+
+    version="$(curl -fsSL "$release_url" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//')"
+
+    if [ -z "$version" ]; then
+        return 1
+    fi
+
+    echo "$version"
+}
+
+get_download_url() {
+    local version="$1"
+    local platform="$2"
+    local release_url
+
+    if [ "$version" = "latest" ]; then
+        release_url="https://api.github.com/repos/$REPO/releases/latest"
+    else
+        release_url="https://api.github.com/repos/$REPO/releases/tags/$version"
+    fi
+
+    local release_info
+    release_info="$(curl -fsSL "$release_url")" || return 1
+
+    # Extract version if latest
+    if [ "$version" = "latest" ]; then
+        version="$(echo "$release_info" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"//;s/".*//')"
+    fi
+
+    # Find matching asset
+    local asset_url
+    case "$platform" in
+        macos-arm64)
+            asset_url="$(echo "$release_info" | grep '"browser_download_url"' | grep -i 'arm64' | head -1 | sed 's/.*"browser_download_url": *"//;s/".*//')"
+            ;;
+        macos-x64)
+            asset_url="$(echo "$release_info" | grep '"browser_download_url"' | grep -i 'x64\|x86_64' | head -1 | sed 's/.*"browser_download_url": *"//;s/".*//')"
+            ;;
+        linux-arm64)
+            asset_url="$(echo "$release_info" | grep '"browser_download_url"' | grep -i 'linux.*arm64\|linux.*aarch64' | head -1 | sed 's/.*"browser_download_url": *"//;s/".*//')"
+            ;;
+        linux-x64)
+            asset_url="$(echo "$release_info" | grep '"browser_download_url"' | grep -i 'linux.*x64\|linux.*x86_64' | head -1 | sed 's/.*"browser_download_url": *"//;s/".*//')"
+            ;;
+    esac
+
+    if [ -z "$asset_url" ]; then
+        return 1
+    fi
+
+    echo "$version|$asset_url"
+}
+
+# ============================================================================
+# Prerequisites check
+# ============================================================================
+
+check_prerequisites() {
+    step "Checking prerequisites"
+
+    need_cmd curl
+    need_cmd uname
+
+    # Check for existing installation
+    if [ -d "$INSTALL_DIR" ] || [ -d "/Applications/cc+.app" ]; then
+        warn "Existing installation detected"
+        printf "  Replace it? [y/N] "
+        read -r answer
+        case "$answer" in
+            [yY]|[yY][eE][sS])
+                info "Will upgrade existing installation"
+                ;;
+            *)
+                info "Installation cancelled"
+                exit 0
+                ;;
+        esac
+    fi
+
+    success "Prerequisites OK"
+}
+
+# ============================================================================
+# Binary installation
+# ============================================================================
+
+install_binary() {
+    local version="$1"
+    local platform="$2"
+
+    step "Fetching release information"
+
+    local result
+    result="$(get_download_url "$version" "$platform")" || {
+        warn "No pre-built binary available for $platform"
+        return 1
+    }
+
+    version="$(echo "$result" | cut -d'|' -f1)"
+    local download_url="$(echo "$result" | cut -d'|' -f2)"
+
+    success "Found version $version"
+
+    # Create temp directory
+    TMPDIR="$(mktemp -d)"
+    local download_file="$TMPDIR/ccplus-download"
+
+    step "Downloading ($platform)"
+    info "URL: $download_url"
+
+    if ! curl -fL --progress-bar "$download_url" -o "$download_file"; then
+        die "Download failed"
+    fi
+
+    # Verify download
+    local file_size
+    file_size="$(wc -c < "$download_file" | tr -d ' ')"
+    if [ "$file_size" -lt 1000 ]; then
+        die "Download incomplete or corrupted (size: $file_size bytes)"
+    fi
+
+    success "Downloaded $(format_bytes "$file_size")"
+
+    # Install based on platform and file type
+    case "$platform" in
+        macos-*)
+            install_macos "$download_file" "$download_url"
+            ;;
+        linux-*)
+            install_linux "$download_file" "$download_url"
+            ;;
+    esac
+
+    return 0
+}
+
+install_macos() {
+    local download_file="$1"
+    local download_url="$2"
+
+    case "$download_url" in
+        *.dmg)
+            step "Installing from DMG"
+            local mount_point="$TMPDIR/mount"
+            mkdir -p "$mount_point"
+
+            if ! hdiutil attach "$download_file" -mountpoint "$mount_point" -quiet; then
+                die "Failed to mount DMG"
+            fi
+
+            # Copy app to /Applications
+            if ls "$mount_point"/*.app >/dev/null 2>&1; then
+                if ! cp -R "$mount_point"/*.app /Applications/ 2>/dev/null; then
+                    hdiutil detach "$mount_point" -quiet 2>/dev/null || true
+                    die "Failed to copy to /Applications (permission denied). Try: sudo $(basename "$0")"
+                fi
+                hdiutil detach "$mount_point" -quiet
+                success "Installed to /Applications/cc+.app"
+            else
+                hdiutil detach "$mount_point" -quiet
+                die "No .app found in DMG"
+            fi
+            ;;
+        *.zip)
+            step "Installing from ZIP"
+            need_cmd unzip
+
+            local extract_dir="$TMPDIR/extracted"
+            mkdir -p "$extract_dir"
+
+            if ! unzip -q "$download_file" -d "$extract_dir"; then
+                die "Failed to extract ZIP"
+            fi
+
+            if ls "$extract_dir"/*.app >/dev/null 2>&1; then
+                if ! cp -R "$extract_dir"/*.app /Applications/ 2>/dev/null; then
+                    die "Failed to copy to /Applications (permission denied). Try: sudo $(basename "$0")"
+                fi
+                success "Installed to /Applications/cc+.app"
+            else
+                die "No .app found in ZIP"
+            fi
+            ;;
+        *)
+            die "Unsupported file format for macOS"
+            ;;
+    esac
+}
+
+install_linux() {
+    local download_file="$1"
+    local download_url="$2"
+
+    case "$download_url" in
+        *.AppImage)
+            step "Installing AppImage"
+
+            # Try /usr/local/bin first, fallback to ~/.local/bin
+            local install_target="/usr/local/bin/ccplus"
+            if ! install -m 755 "$download_file" "$install_target" 2>/dev/null; then
+                warn "Cannot write to /usr/local/bin (try: sudo $(basename "$0"))"
+                install_target="$BIN_DIR/ccplus"
+                mkdir -p "$BIN_DIR"
+                if ! install -m 755 "$download_file" "$install_target"; then
+                    die "Failed to install AppImage"
+                fi
+                info "Installed to $install_target"
+            else
+                info "Installed to $install_target"
+            fi
+
+            success "AppImage installed"
+
+            # Check if BIN_DIR is in PATH
+            if [ "$install_target" = "$BIN_DIR/ccplus" ]; then
+                case ":$PATH:" in
+                    *":$BIN_DIR:"*) ;;
+                    *)
+                        warn "Add to your PATH:"
+                        info "export PATH=\"$BIN_DIR:\$PATH\""
+                        ;;
+                esac
+            fi
+            ;;
+        *)
+            die "Unsupported file format for Linux"
+            ;;
+    esac
+}
+
+# ============================================================================
+# Source installation
+# ============================================================================
+
+install_from_source() {
+    step "Installing from source"
+
+    need_cmd git
+    need_cmd node
+
+    # Check Node.js version
+    local node_version
+    node_version="$(node -v | sed 's/v//' | cut -d. -f1)"
+    if [ "$node_version" -lt 18 ]; then
+        die "Node.js 18+ required (found: v$node_version)"
+    fi
+    success "Node.js v$node_version detected"
+
+    # Check Claude Code CLI
+    if ! command -v claude >/dev/null 2>&1; then
+        warn "Claude Code CLI not found"
+        info "Install from: https://claude.ai/download"
+    fi
+
+    step "Cloning repository"
+
+    if [ -d "$INSTALL_DIR" ]; then
+        info "Updating existing installation"
+        (cd "$INSTALL_DIR" && git pull --quiet) || die "Failed to update repository"
+    else
+        git clone --quiet "https://github.com/$REPO.git" "$INSTALL_DIR" || die "Failed to clone repository"
+    fi
+
+    success "Repository cloned to $INSTALL_DIR"
+
+    step "Building cc+"
+    (cd "$INSTALL_DIR" && ./ccplus) || die "Build failed"
+
+    success "Build complete"
+
+    # Create symlink
+    step "Creating launcher"
+    mkdir -p "$BIN_DIR"
+    ln -sf "$INSTALL_DIR/ccplus" "$BIN_DIR/ccplus"
+    success "Launcher created at $BIN_DIR/ccplus"
+
+    # Check PATH
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ;;
+        *)
+            warn "Add to your PATH:"
+            info "export PATH=\"$BIN_DIR:\$PATH\""
+            ;;
+    esac
+}
+
+# ============================================================================
+# Uninstall
+# ============================================================================
+
+uninstall() {
+    header
+    step "Uninstalling cc+"
+
+    local removed=0
+
+    # Remove macOS app
+    if [ -d "/Applications/cc+.app" ]; then
+        if rm -rf "/Applications/cc+.app" 2>/dev/null; then
+            success "Removed /Applications/cc+.app"
+            removed=1
+        else
+            warn "Cannot remove /Applications/cc+.app (try: sudo $(basename "$0") --uninstall)"
+        fi
+    fi
+
+    # Remove Linux binary
+    if [ -f "/usr/local/bin/ccplus" ]; then
+        if rm -f "/usr/local/bin/ccplus" 2>/dev/null; then
+            success "Removed /usr/local/bin/ccplus"
+            removed=1
+        else
+            warn "Cannot remove /usr/local/bin/ccplus (try: sudo $(basename "$0") --uninstall)"
+        fi
+    fi
+
+    if [ -f "$BIN_DIR/ccplus" ]; then
+        rm -f "$BIN_DIR/ccplus"
+        success "Removed $BIN_DIR/ccplus"
+        removed=1
+    fi
+
+    # Remove source installation
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        success "Removed $INSTALL_DIR"
+        removed=1
+    fi
+
+    if [ "$removed" -eq 0 ]; then
+        info "cc+ is not installed"
+    else
+        printf "\n${GREEN}cc+ has been uninstalled${RESET}\n\n"
+    fi
+
+    exit 0
+}
+
+# ============================================================================
+# Utilities
+# ============================================================================
+
+format_bytes() {
+    local bytes="$1"
+    if [ "$bytes" -lt 1024 ]; then
+        echo "${bytes}B"
+    elif [ "$bytes" -lt 1048576 ]; then
+        echo "$((bytes / 1024))KB"
+    else
+        echo "$((bytes / 1048576))MB"
+    fi
+}
+
+verify_installation() {
+    step "Verifying installation"
+
+    # Check for macOS app
+    if [ -d "/Applications/cc+.app" ]; then
+        success "Installation verified"
+        return 0
+    fi
+
+    # Check for Linux binary
+    if [ -f "/usr/local/bin/ccplus" ] || [ -f "$BIN_DIR/ccplus" ]; then
+        if ccplus --version >/dev/null 2>&1; then
+            success "Installation verified"
+            return 0
+        fi
+    fi
+
+    warn "Installation verification failed"
+    return 1
+}
+
+print_next_steps() {
+    printf "\n${GREEN}${BOLD}Installation complete!${RESET}\n\n"
+
+    local platform="$(detect_platform)"
+    case "$platform" in
+        macos-*)
+            info "Launch cc+ from Applications or run:"
+            info "  open -a 'cc+'"
+            ;;
+        linux-*)
+            info "Run cc+ with:"
+            info "  ccplus"
+            ;;
+    esac
+
+    printf "\n${DIM}Documentation: https://github.com/$REPO#readme${RESET}\n"
+    printf "${DIM}Issues: https://github.com/$REPO/issues${RESET}\n\n"
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+usage() {
+    cat << EOF
+cc+ installer
+
+USAGE:
+    curl -fsSL https://ccplus.run/install | sh
+
+OPTIONS:
+    --help              Show this help message
+    --version VERSION   Install specific version (e.g., v1.0.0)
+    --source            Force source installation
+    --uninstall         Remove cc+
+    --no-color          Disable colored output
+
+ENVIRONMENT:
+    CCPLUS_INSTALL      Installation directory (default: ~/.ccplus)
+    CCPLUS_BIN          Binary directory (default: ~/.local/bin)
+    CCPLUS_VERSION      Version to install (default: latest)
+    NO_COLOR            Disable colored output
+
+EOF
+}
+
+main() {
+    # Parse arguments
+    local force_source=0
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            --version)
+                VERSION="$2"
+                shift 2
+                ;;
+            --source)
+                force_source=1
+                shift
+                ;;
+            --uninstall)
+                uninstall
+                ;;
+            --no-color)
+                NO_COLOR=1
+                USE_COLOR=0
+                RED=''
+                GREEN=''
+                YELLOW=''
+                BLUE=''
+                DIM=''
+                BOLD=''
+                RESET=''
+                shift
+                ;;
+            *)
+                die "Unknown option: $1 (use --help for usage)"
+                ;;
+        esac
+    done
+
+    header
+
+    local platform
+    platform="$(detect_platform)"
+    info "Platform: $platform"
+    printf "\n"
+
+    check_prerequisites
+    printf "\n"
+
+    # Try binary installation first (unless --source)
+    if [ "$force_source" -eq 0 ]; then
+        if install_binary "$VERSION" "$platform"; then
+            printf "\n"
+            verify_installation || true
+            print_next_steps
+            exit 0
+        fi
+    fi
+
+    # Fall back to source installation
+    printf "\n"
+    install_from_source
+    printf "\n"
+    verify_installation || true
+    print_next_steps
+}
+
+main "$@"
