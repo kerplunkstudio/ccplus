@@ -1,12 +1,19 @@
 import Database from "better-sqlite3";
 import path from "path";
-import { randomUUID } from "crypto";
 import * as config from "./config.js";
-import type { TranscriptEvent, TranscriptEventInput, TranscriptEventType } from "./types.js";
 
 let db: Database.Database | null = null;
 
-const SCHEMA_SQL = `
+// Migration definitions (version → SQL)
+interface Migration {
+  version: number;
+  sql: string;
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    sql: `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
@@ -67,7 +74,8 @@ CREATE TABLE IF NOT EXISTS tool_usage (
     parent_agent_id TEXT,
     agent_type TEXT,
     input_tokens INTEGER,
-    output_tokens INTEGER
+    output_tokens INTEGER,
+    description TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tool_usage_session
     ON tool_usage(session_id, timestamp);
@@ -92,80 +100,115 @@ CREATE TABLE IF NOT EXISTS workspace_state (
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
-CREATE TABLE IF NOT EXISTS transcript_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    event_id TEXT NOT NULL,
-    parent_event_id TEXT,
-    timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    data TEXT NOT NULL,
-    metadata TEXT
+CREATE TABLE IF NOT EXISTS session_context (
+    session_id TEXT PRIMARY KEY,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    model TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
-CREATE INDEX IF NOT EXISTS idx_transcript_session ON transcript_events(session_id, timestamp);
-CREATE INDEX IF NOT EXISTS idx_transcript_event_id ON transcript_events(event_id);
-CREATE INDEX IF NOT EXISTS idx_transcript_type ON transcript_events(session_id, event_type);
-`;
+`,
+  },
+  {
+    version: 2,
+    sql: `
+-- Add description column for agent descriptions
+ALTER TABLE tool_usage ADD COLUMN description TEXT;
+`,
+  },
+  {
+    version: 3,
+    sql: `
+-- Add summary column for agent output/summary
+ALTER TABLE tool_usage ADD COLUMN summary TEXT;
+`,
+  },
+];
+
+function getCurrentSchemaVersion(database: Database.Database): number {
+  // Check if schema_version table exists
+  const tableExists = database.prepare(`
+    SELECT COUNT(*) as c FROM sqlite_master
+    WHERE type = 'table' AND name = 'schema_version'
+  `).get() as { c: number };
+
+  if (tableExists.c === 0) {
+    // Check if this is an existing database with tables already created
+    const conversationsExists = database.prepare(`
+      SELECT COUNT(*) as c FROM sqlite_master
+      WHERE type = 'table' AND name = 'conversations'
+    `).get() as { c: number };
+
+    if (conversationsExists.c > 0) {
+      // Existing database without schema_version table → mark as v1
+      database.exec(`
+        CREATE TABLE schema_version (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
+        INSERT INTO schema_version (version) VALUES (1);
+      `);
+      return 1;
+    }
+
+    // Brand new database
+    return 0;
+  }
+
+  // Schema version table exists, get current version
+  const row = database.prepare("SELECT MAX(version) as v FROM schema_version").get() as { v: number | null };
+  return row.v ?? 0;
+}
+
+function applyMigrations(database: Database.Database): void {
+  const currentVersion = getCurrentSchemaVersion(database);
+  const pendingMigrations = MIGRATIONS.filter((m) => m.version > currentVersion);
+
+  if (pendingMigrations.length === 0) {
+    return;
+  }
+
+  // Create schema_version table if it doesn't exist (for brand new databases)
+  if (currentVersion === 0) {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+  }
+
+  // Apply each pending migration in a transaction
+  for (const migration of pendingMigrations) {
+    const transaction = database.transaction(() => {
+      try {
+        database.exec(migration.sql);
+      } catch (err) {
+        // If column already exists, this is fine (idempotent migrations)
+        const errMsg = String(err);
+        if (!errMsg.includes("duplicate column name")) {
+          throw err;
+        }
+      }
+      database.prepare("INSERT INTO schema_version (version) VALUES (?)").run(migration.version);
+    });
+
+    transaction();
+  }
+}
 
 function getDb(): Database.Database {
   if (!db) {
     db = new Database(config.DATABASE_PATH);
     db.pragma("journal_mode = WAL");
-    db.exec(SCHEMA_SQL);
-    runProvenanceMigration(db);
-    runCorrelationMigration(db);
+    applyMigrations(db);
   }
   return db;
 }
 
-/**
- * Add provenance columns to conversations and tool_usage tables.
- * Wrapped in try/catch since columns may already exist.
- */
-function runProvenanceMigration(database: Database.Database): void {
-  const migrations = [
-    "ALTER TABLE conversations ADD COLUMN source_connection_id TEXT",
-    "ALTER TABLE conversations ADD COLUMN source_ip TEXT",
-    "ALTER TABLE conversations ADD COLUMN user_agent TEXT",
-    "ALTER TABLE tool_usage ADD COLUMN source_connection_id TEXT",
-  ];
-
-  for (const sql of migrations) {
-    try {
-      database.exec(sql);
-    } catch (err) {
-      // Column already exists or other error - ignore
-      // SQLite doesn't have IF NOT EXISTS for ALTER TABLE ADD COLUMN
-      const message = (err as Error).message ?? "";
-      if (!message.includes("duplicate column name")) {
-        console.warn(`Provenance migration warning: ${message}`);
-      }
-    }
-  }
-}
-
-/**
- * Add correlation_id columns to conversations, tool_usage, and transcript_events tables.
- * Wrapped in try/catch since columns may already exist.
- */
-function runCorrelationMigration(database: Database.Database): void {
-  const migrations = [
-    "ALTER TABLE conversations ADD COLUMN correlation_id TEXT",
-    "ALTER TABLE tool_usage ADD COLUMN correlation_id TEXT",
-    "ALTER TABLE transcript_events ADD COLUMN correlation_id TEXT",
-    "CREATE INDEX IF NOT EXISTS idx_tool_usage_correlation ON tool_usage(correlation_id)",
-    "CREATE INDEX IF NOT EXISTS idx_transcript_correlation ON transcript_events(correlation_id)",
-  ];
-
-  for (const sql of migrations) {
-    try {
-      database.exec(sql);
-    } catch (err) {
-      const message = (err as Error).message ?? "";
-      if (!message.includes("duplicate column name") && !message.includes("already exists")) {
-        console.warn(`Correlation migration warning: ${message}`);
-      }
-    }
+export function close(): void {
+  if (db) {
+    db.close();
+    db = null;
   }
 }
 
@@ -179,28 +222,14 @@ export function recordMessage(
   sdkSessionId?: string,
   projectPath?: string,
   imageIds?: string[],
-  sourceConnectionId?: string,
-  sourceIp?: string,
-  userAgent?: string,
-  correlationId?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const imagesJson = imageIds ? JSON.stringify(imageIds) : null;
   const stmt = d.prepare(`
-    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images,
-                               source_connection_id, source_ip, user_agent, correlation_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(
-    sessionId, userId, role, content,
-    sdkSessionId ?? null,
-    projectPath ?? null,
-    imagesJson,
-    sourceConnectionId ?? null,
-    sourceIp ?? null,
-    userAgent ?? null,
-    correlationId ?? null
-  );
+  const info = stmt.run(sessionId, userId, role, content, sdkSessionId ?? null, projectPath ?? null, imagesJson);
   const row = d.prepare("SELECT * FROM conversations WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
 }
@@ -214,16 +243,6 @@ export function updateMessage(messageId: number, content: string, sdkSessionId?:
     d.prepare("UPDATE conversations SET content = ? WHERE id = ?")
       .run(content, messageId);
   }
-}
-
-export function getMessageProvenance(messageId: number): Record<string, unknown> | null {
-  const d = getDb();
-  const row = d.prepare(`
-    SELECT id, session_id, source_connection_id, source_ip, user_agent, timestamp
-    FROM conversations
-    WHERE id = ?
-  `).get(messageId) as Record<string, unknown> | undefined;
-  return row ?? null;
 }
 
 export function getConversationHistory(sessionId: string, limit: number = 50): Record<string, unknown>[] {
@@ -265,8 +284,7 @@ export function recordToolEvent(
   parameters?: string | Record<string, unknown> | null,
   inputTokens?: number | null,
   outputTokens?: number | null,
-  sourceConnectionId?: string,
-  correlationId?: string,
+  description?: string | null,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -275,8 +293,8 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens, source_connection_id, correlation_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, description)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, toolName, toolUseId,
@@ -284,8 +302,7 @@ export function recordToolEvent(
     success === null || success === undefined ? null : (success ? 1 : 0),
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
-    sourceConnectionId ?? null,
-    correlationId ?? null
+    description ?? null,
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -297,15 +314,16 @@ export function updateToolEvent(
   success?: boolean | null,
   error?: string | null,
   durationMs?: number | null,
+  summary?: string | null,
 ): void {
   const d = getDb();
   d.prepare(`
     UPDATE tool_usage
-    SET success = ?, error = ?, duration_ms = ?
+    SET success = ?, error = ?, duration_ms = ?, summary = COALESCE(?, summary)
     WHERE session_id = ? AND tool_use_id = ?
   `).run(
     success === null || success === undefined ? null : (success ? 1 : 0),
-    error ?? null, durationMs ?? null, sessionId, toolUseId
+    error ?? null, durationMs ?? null, summary ?? null, sessionId, toolUseId
   );
 }
 
@@ -386,6 +404,7 @@ export function archiveSession(sessionId: string): boolean {
   const d = getDb();
   try {
     d.prepare("UPDATE conversations SET archived = 1 WHERE session_id = ?").run(sessionId);
+    d.prepare("DELETE FROM images WHERE session_id = ?").run(sessionId);
     return true;
   } catch {
     return false;
@@ -521,6 +540,77 @@ export function saveWorkspaceState(userId: string, state: Record<string, unknown
   `).run(userId, stateJson);
 }
 
+// --- Session context ---
+
+export function updateSessionContext(sessionId: string, inputTokens: number, model: string | null): void {
+  const d = getDb();
+  d.prepare(`
+    INSERT INTO session_context (session_id, input_tokens, model, updated_at)
+    VALUES (?, ?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(session_id) DO UPDATE SET
+      input_tokens = excluded.input_tokens,
+      model = excluded.model,
+      updated_at = excluded.updated_at
+  `).run(sessionId, inputTokens, model);
+}
+
+export function getSessionContext(sessionId: string): { input_tokens: number; model: string | null } | null {
+  const d = getDb();
+  const row = d.prepare(`SELECT input_tokens, model FROM session_context WHERE session_id = ?`).get(sessionId) as { input_tokens: number; model: string | null } | undefined;
+  return row ?? null;
+}
+
+// --- Session duplication ---
+
+export function duplicateSession(sourceSessionId: string, newSessionId: string, userId: string): { conversations: number; toolEvents: number; images: number } {
+  const d = getDb();
+
+  // Copy conversations (update session_id to new, keep everything else)
+  const convResult = d.prepare(`
+    INSERT INTO conversations (session_id, user_id, role, content, timestamp, sdk_session_id, project_path, archived, images)
+    SELECT ?, user_id, role, content, timestamp, sdk_session_id, project_path, 0, images
+    FROM conversations WHERE session_id = ? ORDER BY id
+  `).run(newSessionId, sourceSessionId);
+
+  // Copy tool_usage (update session_id, keep parent relationships intact)
+  const toolResult = d.prepare(`
+    INSERT INTO tool_usage (timestamp, session_id, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description)
+    SELECT timestamp, ?, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description
+    FROM tool_usage WHERE session_id = ? ORDER BY id
+  `).run(newSessionId, sourceSessionId);
+
+  // Copy images (generate new UUIDs to avoid UNIQUE constraint violations)
+  const sourceImages = d.prepare(`SELECT * FROM images WHERE session_id = ?`).all(sourceSessionId) as Array<{
+    id: string;
+    filename: string;
+    mime_type: string;
+    size: number;
+    data: Buffer;
+    uploaded_at: string;
+  }>;
+
+  let imagesCopied = 0;
+  const insertImage = d.prepare(`
+    INSERT INTO images (id, filename, mime_type, size, data, uploaded_at, session_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const img of sourceImages) {
+    // Generate new UUID for the duplicated image
+    const newImageId = `${img.id.split('-')[0]}-dup-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    insertImage.run(newImageId, img.filename, img.mime_type, img.size, img.data, img.uploaded_at, newSessionId);
+    imagesCopied++;
+  }
+
+  const imageResult = { changes: imagesCopied };
+
+  return {
+    conversations: convResult.changes,
+    toolEvents: toolResult.changes,
+    images: imageResult.changes,
+  };
+}
+
 // --- Utility ---
 
 export function markOrphanedToolEvents(): number {
@@ -533,12 +623,100 @@ export function markOrphanedToolEvents(): number {
   return info.changes;
 }
 
+export function cleanupOrphanedImages(): number {
+  const d = getDb();
+  const info = d.prepare(`
+    DELETE FROM images
+    WHERE session_id NOT IN (
+      SELECT DISTINCT session_id FROM conversations
+    )
+  `).run();
+  return info.changes;
+}
+
 export function isFirstRun(): boolean {
   const d = getDb();
   const row = d.prepare(
     "SELECT COUNT(*) as c FROM conversations WHERE archived = 0 OR archived IS NULL"
   ).get() as { c: number };
   return row.c === 0;
+}
+
+// --- Search ---
+
+export function searchConversations(query: string, projectPath?: string, limit: number = 50): Record<string, unknown>[] {
+  const d = getDb();
+  const searchPattern = `%${query}%`;
+  const projectFilter = projectPath ? "AND project_path = ?" : "";
+  const params: unknown[] = projectPath ? [searchPattern, projectPath, limit] : [searchPattern, limit];
+
+  const rows = d.prepare(`
+    WITH session_matches AS (
+      SELECT
+        session_id,
+        content,
+        role,
+        timestamp,
+        (SELECT content FROM conversations c2
+         WHERE c2.session_id = c1.session_id AND c2.role = 'user'
+         ORDER BY c2.timestamp ASC LIMIT 1) as session_label
+      FROM conversations c1
+      WHERE content LIKE ?
+      AND (archived = 0 OR archived IS NULL)
+      ${projectFilter}
+      ORDER BY timestamp DESC
+    )
+    SELECT * FROM session_matches
+    LIMIT ?
+  `).all(...params) as Array<{
+    session_id: string;
+    content: string;
+    role: string;
+    timestamp: string;
+    session_label: string;
+  }>;
+
+  // Group by session_id and create snippets
+  const sessionMap = new Map<string, {
+    session_id: string;
+    session_label: string;
+    matches: Array<{ content: string; role: string; timestamp: string }>;
+  }>();
+
+  for (const row of rows) {
+    if (!sessionMap.has(row.session_id)) {
+      sessionMap.set(row.session_id, {
+        session_id: row.session_id,
+        session_label: row.session_label || "Untitled session",
+        matches: [],
+      });
+    }
+
+    // Create snippet with context around the match
+    const content = row.content;
+    const lowerContent = content.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const matchIndex = lowerContent.indexOf(lowerQuery);
+
+    let snippet = content;
+    if (matchIndex !== -1 && content.length > 200) {
+      const contextStart = Math.max(0, matchIndex - 50);
+      const contextEnd = Math.min(content.length, matchIndex + query.length + 150);
+      snippet = (contextStart > 0 ? "..." : "") +
+                content.slice(contextStart, contextEnd) +
+                (contextEnd < content.length ? "..." : "");
+    } else if (content.length > 200) {
+      snippet = content.slice(0, 200) + "...";
+    }
+
+    sessionMap.get(row.session_id)!.matches.push({
+      content: snippet,
+      role: row.role,
+      timestamp: row.timestamp,
+    });
+  }
+
+  return Array.from(sessionMap.values());
 }
 
 // --- Insights (analytics) ---
@@ -699,26 +877,14 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     SELECT
       tool_name,
       COUNT(*) as count,
-      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
-      COALESCE(AVG(duration_ms), 0) as avg_duration_ms,
-      COALESCE(SUM(input_tokens), 0) as total_input_tokens,
-      COALESCE(SUM(output_tokens), 0) as total_output_tokens,
-      SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as error_count
+      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND tool_name NOT LIKE 'toolu_%'
     ${toolProjectFilter}
     GROUP BY tool_name
     ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as {
-    tool_name: string;
-    count: number;
-    success_count: number;
-    avg_duration_ms: number;
-    total_input_tokens: number;
-    total_output_tokens: number;
-    error_count: number;
-  }[];
+  `).all(startDate, endDate, ...toolProjectParams) as { tool_name: string; count: number; success_count: number }[];
 
   const byTool = byToolRows.map((row) => {
     const total = row.count || 0;
@@ -728,94 +894,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       tool: row.tool_name,
       count: total,
       success_rate: successRate,
-      avg_duration_ms: Math.round((row.avg_duration_ms || 0) * 100) / 100,
-      total_input_tokens: row.total_input_tokens || 0,
-      total_output_tokens: row.total_output_tokens || 0,
-      error_count: row.error_count || 0,
     };
   });
-
-  // By error category
-  const byErrorCategoryRows = d.prepare(`
-    SELECT
-      error_category,
-      COUNT(*) as count
-    FROM tool_usage
-    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    AND error_category IS NOT NULL
-    ${toolProjectFilter}
-    GROUP BY error_category
-    ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as { error_category: string; count: number }[];
-
-  const byErrorCategory = byErrorCategoryRows.map((row) => ({
-    category: row.error_category,
-    count: row.count,
-  }));
-
-  // By agent type
-  const byAgentTypeRows = d.prepare(`
-    SELECT
-      agent_type,
-      COUNT(*) as count,
-      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
-      COALESCE(AVG(duration_ms), 0) as avg_duration_ms
-    FROM tool_usage
-    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    AND agent_type IS NOT NULL
-    ${toolProjectFilter}
-    GROUP BY agent_type
-    ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as {
-    agent_type: string;
-    count: number;
-    success_count: number;
-    avg_duration_ms: number;
-  }[];
-
-  const byAgentType = byAgentTypeRows.map((row) => ({
-    agent_type: row.agent_type,
-    count: row.count,
-    success_count: row.success_count,
-    avg_duration_ms: Math.round((row.avg_duration_ms || 0) * 100) / 100,
-  }));
-
-  // Hourly activity
-  const hourlyActivityRows = d.prepare(`
-    SELECT
-      CAST(strftime('%H', timestamp) AS INTEGER) as hour,
-      COUNT(CASE WHEN role = 'user' THEN 1 END) as queries
-    FROM conversations
-    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    AND (archived = 0 OR archived IS NULL)
-    ${convProjectFilter}
-    GROUP BY hour
-    ORDER BY hour ASC
-  `).all(startDate, endDate, ...convProjectParams) as { hour: number; queries: number }[];
-
-  // Fill missing hours with 0
-  const hourlyActivityMap = new Map(hourlyActivityRows.map((r) => [r.hour, r.queries]));
-  const hourlyActivity = Array.from({ length: 24 }, (_, i) => ({
-    hour: i,
-    queries: hourlyActivityMap.get(i) || 0,
-  }));
-
-  // Enhanced summary with efficiency metrics
-  const totalErrors = d.prepare(`
-    SELECT COUNT(*) as count
-    FROM tool_usage
-    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    AND success = 0
-    ${toolProjectFilter}
-  `).get(startDate, endDate, ...toolProjectParams) as { count: number };
-
-  const avgCostPerQuery = currentQueries > 0 ? Math.round((totalCost / currentQueries) * 100) / 100 : 0;
-  const avgTokensPerQuery = currentQueries > 0
-    ? Math.round(((inputTokens + outputTokens) / currentQueries) * 100) / 100
-    : 0;
-  const avgQueriesPerSession = convSummary.total_sessions > 0
-    ? Math.round((currentQueries / convSummary.total_sessions) * 100) / 100
-    : 0;
 
   return {
     period: { start: startDate, end: endDate, days },
@@ -827,132 +907,9 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       total_tool_calls: toolSummary.total_tool_calls || 0,
       total_sessions: convSummary.total_sessions || 0,
       change_pct: changePct,
-      avg_cost_per_query: avgCostPerQuery,
-      avg_tokens_per_query: avgTokensPerQuery,
-      avg_queries_per_session: avgQueriesPerSession,
-      total_errors: totalErrors.count || 0,
     },
     daily,
     by_project: byProject,
     by_tool: byTool,
-    by_error_category: byErrorCategory,
-    by_agent_type: byAgentType,
-    hourly_activity: hourlyActivity,
   };
-}
-
-// --- Transcript events ---
-
-export function recordTranscriptEvent(event: TranscriptEventInput): TranscriptEvent {
-  const d = getDb();
-  const eventId = event.event_id ?? randomUUID();
-  const dataJson = JSON.stringify(event.data);
-  const metadataJson = event.metadata ? JSON.stringify(event.metadata) : null;
-
-  const stmt = d.prepare(`
-    INSERT INTO transcript_events (session_id, event_type, event_id, parent_event_id, data, metadata, correlation_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const info = stmt.run(
-    event.session_id,
-    event.event_type,
-    eventId,
-    event.parent_event_id ?? null,
-    dataJson,
-    metadataJson,
-    event.correlation_id ?? null
-  );
-
-  const row = d.prepare("SELECT * FROM transcript_events WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
-
-  return {
-    id: row.id as number,
-    session_id: row.session_id as string,
-    event_type: row.event_type as TranscriptEventType,
-    event_id: row.event_id as string,
-    parent_event_id: (row.parent_event_id as string) ?? null,
-    timestamp: row.timestamp as string,
-    data: JSON.parse(row.data as string),
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
-  };
-}
-
-export function getTranscript(
-  sessionId: string,
-  options?: { eventTypes?: string[]; limit?: number; offset?: number },
-): TranscriptEvent[] {
-  const d = getDb();
-  const limit = options?.limit ?? 1000;
-  const offset = options?.offset ?? 0;
-
-  let query = "SELECT * FROM transcript_events WHERE session_id = ?";
-  const params: unknown[] = [sessionId];
-
-  if (options?.eventTypes && options.eventTypes.length > 0) {
-    const placeholders = options.eventTypes.map(() => "?").join(",");
-    query += ` AND event_type IN (${placeholders})`;
-    params.push(...options.eventTypes);
-  }
-
-  query += " ORDER BY timestamp ASC LIMIT ? OFFSET ?";
-  params.push(limit, offset);
-
-  const rows = d.prepare(query).all(...params) as Record<string, unknown>[];
-
-  return rows.map((row) => ({
-    id: row.id as number,
-    session_id: row.session_id as string,
-    event_type: row.event_type as TranscriptEventType,
-    event_id: row.event_id as string,
-    parent_event_id: (row.parent_event_id as string) ?? null,
-    timestamp: row.timestamp as string,
-    data: JSON.parse(row.data as string),
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
-  }));
-}
-
-export function getTranscriptEvent(eventId: string): TranscriptEvent | null {
-  const d = getDb();
-  const row = d.prepare("SELECT * FROM transcript_events WHERE event_id = ?").get(eventId) as Record<string, unknown> | undefined;
-
-  if (!row) return null;
-
-  return {
-    id: row.id as number,
-    session_id: row.session_id as string,
-    event_type: row.event_type as TranscriptEventType,
-    event_id: row.event_id as string,
-    parent_event_id: (row.parent_event_id as string) ?? null,
-    timestamp: row.timestamp as string,
-    data: JSON.parse(row.data as string),
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
-  };
-}
-
-export function exportTranscript(sessionId: string): TranscriptEvent[] {
-  const d = getDb();
-  const rows = d.prepare(`
-    SELECT * FROM transcript_events
-    WHERE session_id = ?
-    ORDER BY timestamp ASC
-  `).all(sessionId) as Record<string, unknown>[];
-
-  return rows.map((row) => ({
-    id: row.id as number,
-    session_id: row.session_id as string,
-    event_type: row.event_type as TranscriptEventType,
-    event_id: row.event_id as string,
-    parent_event_id: (row.parent_event_id as string) ?? null,
-    timestamp: row.timestamp as string,
-    data: JSON.parse(row.data as string),
-    metadata: row.metadata ? JSON.parse(row.metadata as string) : null,
-  }));
-}
-
-export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
 }

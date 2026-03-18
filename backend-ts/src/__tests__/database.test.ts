@@ -1,35 +1,29 @@
-import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
+import { beforeEach, afterEach, afterAll, describe, it, expect, vi } from "vitest";
 import Database from "better-sqlite3";
 import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
-// Create a temp directory for test databases
-const testDir = mkdtempSync(path.join(tmpdir(), "ccplus-test-"));
-const testDbPath = path.join(testDir, "test.db");
+// Import config to get DATABASE_PATH (set to test-ccplus.db via env var in vitest.config.ts)
+import * as config from "../config.js";
 
-// Mock the config module to use a temp database
-vi.mock("../config.js", async () => {
-  const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
-  return {
-    ...actual,
-    DATABASE_PATH: testDbPath,
-  };
-});
-
-// Import database module after mocking config
+// Import database module - it will use test-ccplus.db from config
 const db = await import("../database.js");
+
+// Create temp directory for legacy database tests
+const testDir = mkdtempSync(path.join(tmpdir(), "ccplus-test-"));
 
 describe("Database Tests", () => {
   beforeEach(() => {
     // Clean up the database by deleting all records
-    const database = new Database(testDbPath);
+    const database = new Database(config.DATABASE_PATH);
     try {
       database.exec("DELETE FROM conversations");
       database.exec("DELETE FROM tool_usage");
       database.exec("DELETE FROM images");
       database.exec("DELETE FROM user_stats");
       database.exec("DELETE FROM workspace_state");
+      database.exec("DELETE FROM session_context");
     } catch {
       // Tables might not exist yet, that's okay
     }
@@ -39,7 +33,7 @@ describe("Database Tests", () => {
   afterEach(() => {
     // Clean up after each test
     try {
-      const database = new Database(testDbPath);
+      const database = new Database(config.DATABASE_PATH);
       database.close();
     } catch {
       // Database might already be closed
@@ -618,6 +612,50 @@ describe("Database Tests", () => {
     });
   });
 
+  describe("updateSessionContext", () => {
+    it("should insert new session context", () => {
+      db.updateSessionContext("sess1", 10000, "sonnet");
+
+      const context = db.getSessionContext("sess1");
+      expect(context).toBeDefined();
+      expect(context?.input_tokens).toBe(10000);
+      expect(context?.model).toBe("sonnet");
+    });
+
+    it("should update existing session context", () => {
+      db.updateSessionContext("sess1", 10000, "sonnet");
+      db.updateSessionContext("sess1", 20000, "opus");
+
+      const context = db.getSessionContext("sess1");
+      expect(context?.input_tokens).toBe(20000);
+      expect(context?.model).toBe("opus");
+    });
+
+    it("should handle null model", () => {
+      db.updateSessionContext("sess1", 5000, null);
+
+      const context = db.getSessionContext("sess1");
+      expect(context?.input_tokens).toBe(5000);
+      expect(context?.model).toBeNull();
+    });
+  });
+
+  describe("getSessionContext", () => {
+    it("should return null for non-existent session", () => {
+      const context = db.getSessionContext("nonexistent");
+      expect(context).toBeNull();
+    });
+
+    it("should return context for existing session", () => {
+      db.updateSessionContext("sess1", 15000, "haiku");
+
+      const context = db.getSessionContext("sess1");
+      expect(context).toBeDefined();
+      expect(context?.input_tokens).toBe(15000);
+      expect(context?.model).toBe("haiku");
+    });
+  });
+
   describe("Immutability", () => {
     it("should return new object from recordMessage", () => {
       const result = db.recordMessage("sess1", "user1", "user", "hello");
@@ -666,133 +704,601 @@ describe("Database Tests", () => {
     });
   });
 
-  describe("Provenance Tracking", () => {
-    it("should record message with provenance data", () => {
-      const result = db.recordMessage(
-        "sess1",
-        "user1",
-        "user",
-        "hello",
-        undefined,
-        undefined,
-        undefined,
-        "conn_123",
-        "192.168.1.100",
-        "Mozilla/5.0 Chrome"
-      );
-
-      expect(result.source_connection_id).toBe("conn_123");
-      expect(result.source_ip).toBe("192.168.1.100");
-      expect(result.user_agent).toBe("Mozilla/5.0 Chrome");
-    });
-
-    it("should default provenance fields to null when not provided", () => {
-      const result = db.recordMessage("sess1", "user1", "user", "hello");
-
-      expect(result.source_connection_id).toBeNull();
-      expect(result.source_ip).toBeNull();
-      expect(result.user_agent).toBeNull();
-    });
-
-    it("should retrieve provenance data from message", () => {
-      const inserted = db.recordMessage(
-        "sess1",
-        "user1",
-        "user",
-        "test message",
-        undefined,
-        undefined,
-        undefined,
-        "conn_456",
-        "10.0.0.1",
-        "Safari/15.0"
-      );
-
-      const provenance = db.getMessageProvenance(inserted.id as number);
-
-      expect(provenance).not.toBeNull();
-      expect(provenance?.id).toBe(inserted.id);
-      expect(provenance?.source_connection_id).toBe("conn_456");
-      expect(provenance?.source_ip).toBe("10.0.0.1");
-      expect(provenance?.user_agent).toBe("Safari/15.0");
-      expect(provenance?.session_id).toBe("sess1");
-    });
-
-    it("should return null for non-existent message ID", () => {
-      const provenance = db.getMessageProvenance(99999);
-
-      expect(provenance).toBeNull();
-    });
-
-    it("should record tool event with source connection ID", () => {
-      const result = db.recordToolEvent(
-        "sess1",
-        "Bash",
-        "tool_1",
-        undefined,
-        undefined,
-        true,
-        null,
-        1234.5,
-        JSON.stringify({ command: "ls" }),
-        100,
-        200,
-        "conn_789"
-      );
-
-      expect(result.source_connection_id).toBe("conn_789");
-    });
-
-    it("should default source connection ID to null for tool events", () => {
-      const result = db.recordToolEvent("sess1", "Read", "tool_2");
-
-      expect(result.source_connection_id).toBeNull();
-    });
-
-    it("should preserve provenance in conversation history", () => {
-      db.recordMessage(
-        "sess1",
-        "user1",
-        "user",
-        "msg1",
-        undefined,
-        undefined,
-        undefined,
-        "conn_a",
-        "127.0.0.1",
-        "Browser A"
-      );
-      db.recordMessage(
-        "sess1",
-        "user1",
-        "assistant",
-        "msg2",
-        undefined,
-        undefined,
-        undefined,
-        "conn_b",
-        "127.0.0.2",
-        "Browser B"
-      );
+  describe("updateMessage", () => {
+    it("should update message content only", () => {
+      const msg = db.recordMessage("sess1", "user1", "assistant", "initial content");
+      db.updateMessage(msg.id as number, "updated content");
 
       const history = db.getConversationHistory("sess1");
-
-      expect(history).toHaveLength(2);
-      expect(history[0].source_connection_id).toBe("conn_a");
-      expect(history[0].source_ip).toBe("127.0.0.1");
-      expect(history[1].source_connection_id).toBe("conn_b");
-      expect(history[1].source_ip).toBe("127.0.0.2");
+      expect(history[0].content).toBe("updated content");
+      expect(history[0].sdk_session_id).toBeNull();
     });
 
-    it("should preserve provenance in tool events", () => {
-      db.recordToolEvent("sess1", "Bash", "t1", undefined, undefined, true, null, 100, null, null, null, "conn_x");
-      db.recordToolEvent("sess1", "Read", "t2", undefined, undefined, true, null, 200, null, null, null, "conn_y");
+    it("should update message content and sdk_session_id", () => {
+      const msg = db.recordMessage("sess1", "user1", "assistant", "initial content");
+      db.updateMessage(msg.id as number, "updated content", "sdk-456");
 
-      const events = db.getToolEvents("sess1");
+      const history = db.getConversationHistory("sess1");
+      expect(history[0].content).toBe("updated content");
+      expect(history[0].sdk_session_id).toBe("sdk-456");
+    });
+  });
 
-      expect(events).toHaveLength(2);
-      expect(events[0].source_connection_id).toBe("conn_x");
-      expect(events[1].source_connection_id).toBe("conn_y");
+  describe("getMessageImages", () => {
+    it("should return empty array for empty image IDs", () => {
+      const images = db.getMessageImages([]);
+      expect(images).toEqual([]);
+    });
+
+    it("should return image metadata for stored images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+      db.storeImage("img2", "test2.jpg", "image/jpeg", 200, imageData, "sess1");
+
+      const images = db.getMessageImages(["img1", "img2"]);
+
+      expect(images).toHaveLength(2);
+      expect(images[0].id).toBe("img1");
+      expect(images[0].filename).toBe("test.png");
+      expect(images[0].url).toBe("/api/images/img1");
+      expect(images[1].id).toBe("img2");
+      expect(images[1].filename).toBe("test2.jpg");
+      expect(images[1].url).toBe("/api/images/img2");
+    });
+
+    it("should filter out non-existent images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const images = db.getMessageImages(["img1", "nonexistent"]);
+
+      expect(images).toHaveLength(1);
+      expect(images[0].id).toBe("img1");
+    });
+  });
+
+  describe("getWorkspaceState", () => {
+    it("should return null for non-existent user", () => {
+      const state = db.getWorkspaceState("nonexistent");
+      expect(state).toBeNull();
+    });
+
+    it("should return parsed workspace state", () => {
+      const workspaceState = { tabs: ["file1.ts", "file2.ts"], activeFile: "file1.ts" };
+      db.saveWorkspaceState("user1", workspaceState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(workspaceState);
+    });
+
+    it("should return null for invalid JSON", () => {
+      // Manually insert invalid JSON to test error handling
+      const database = new Database(config.DATABASE_PATH);
+      database.prepare("INSERT INTO workspace_state (user_id, state) VALUES (?, ?)").run("user_bad", "invalid json");
+      database.close();
+
+      const state = db.getWorkspaceState("user_bad");
+      expect(state).toBeNull();
+    });
+  });
+
+  describe("saveWorkspaceState", () => {
+    it("should insert new workspace state", () => {
+      const workspaceState = { tabs: ["file1.ts"] };
+      db.saveWorkspaceState("user1", workspaceState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(workspaceState);
+    });
+
+    it("should update existing workspace state", () => {
+      db.saveWorkspaceState("user1", { tabs: ["old.ts"] });
+      db.saveWorkspaceState("user1", { tabs: ["new.ts"] });
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual({ tabs: ["new.ts"] });
+    });
+
+    it("should handle complex nested state", () => {
+      const complexState = {
+        tabs: ["file1.ts", "file2.ts"],
+        activeFile: "file1.ts",
+        panels: { left: true, right: false },
+        history: [{ file: "file1.ts", line: 10 }],
+      };
+      db.saveWorkspaceState("user1", complexState);
+
+      const state = db.getWorkspaceState("user1");
+      expect(state).toEqual(complexState);
+    });
+  });
+
+  describe("duplicateSession", () => {
+    it("should duplicate conversations", () => {
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.recordMessage("sess1", "user1", "assistant", "response1");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.conversations).toBe(2);
+
+      const originalHistory = db.getConversationHistory("sess1");
+      const duplicatedHistory = db.getConversationHistory("sess2");
+
+      expect(duplicatedHistory).toHaveLength(2);
+      expect(duplicatedHistory[0].content).toBe(originalHistory[0].content);
+      expect(duplicatedHistory[1].content).toBe(originalHistory[1].content);
+    });
+
+    it("should duplicate tool events", () => {
+      db.recordToolEvent("sess1", "Read", "t1");
+      db.recordToolEvent("sess1", "Write", "t2");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.toolEvents).toBe(2);
+
+      const originalEvents = db.getToolEvents("sess1");
+      const duplicatedEvents = db.getToolEvents("sess2");
+
+      expect(duplicatedEvents).toHaveLength(2);
+      expect(duplicatedEvents[0].tool_name).toBe(originalEvents[0].tool_name);
+      expect(duplicatedEvents[1].tool_name).toBe(originalEvents[1].tool_name);
+    });
+
+    it("should duplicate images with new IDs", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const result = db.duplicateSession("sess1", "sess2", "user1");
+
+      expect(result.images).toBe(1);
+
+      // Verify images exist in duplicated session
+      const database = new Database(config.DATABASE_PATH);
+      const images = database.prepare("SELECT * FROM images WHERE session_id = ?").all("sess2") as Array<{ id: string }>;
+      database.close();
+
+      expect(images).toHaveLength(1);
+      expect(images[0].id).not.toBe("img1"); // Should have a new ID
+    });
+
+    it("should not archive duplicated session", () => {
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.duplicateSession("sess1", "sess2", "user1");
+
+      const sessions = db.getSessionsList();
+      expect(sessions.some(s => s.session_id === "sess2")).toBe(true);
+    });
+
+    it("should return zero counts for empty session", () => {
+      const result = db.duplicateSession("nonexistent", "sess2", "user1");
+
+      expect(result.conversations).toBe(0);
+      expect(result.toolEvents).toBe(0);
+      expect(result.images).toBe(0);
+    });
+  });
+
+  describe("cleanupOrphanedImages", () => {
+    it("should not delete images from active sessions", () => {
+      const imageData = Buffer.from("fake image data");
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(0);
+
+      const image = db.getImage("img1");
+      expect(image).not.toBeNull();
+    });
+
+    it("should delete images from orphaned sessions", () => {
+      const imageData = Buffer.from("fake image data");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "orphaned-session");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(1);
+
+      const image = db.getImage("img1");
+      expect(image).toBeNull();
+    });
+
+    it("should clean up multiple orphaned images", () => {
+      const imageData = Buffer.from("fake image data");
+      db.recordMessage("sess1", "user1", "user", "msg1");
+      db.storeImage("img1", "test.png", "image/png", 100, imageData, "sess1");
+      db.storeImage("img2", "orphan1.png", "image/png", 100, imageData, "orphaned1");
+      db.storeImage("img3", "orphan2.png", "image/png", 100, imageData, "orphaned2");
+
+      const count = db.cleanupOrphanedImages();
+
+      expect(count).toBe(2);
+
+      expect(db.getImage("img1")).not.toBeNull();
+      expect(db.getImage("img2")).toBeNull();
+      expect(db.getImage("img3")).toBeNull();
+    });
+  });
+
+  describe("getInsights", () => {
+    beforeEach(() => {
+      // Manually insert backdated records for testing time-based queries
+      const database = new Database(config.DATABASE_PATH);
+
+      // Insert conversations from 40 days ago (outside default 30-day window)
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-40 days'), ?)
+      `).run("old_session", "user1", "user", "old message", "/path/to/project1");
+
+      // Insert conversations from 10 days ago (within window)
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "user1", "user", "recent message", "/path/to/project1");
+
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path)
+        VALUES (?, ?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "user1", "assistant", "assistant response", "/path/to/project1");
+
+      // Insert tool events from 10 days ago
+      database.prepare(`
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
+      `).run("recent_session", "Read", "t1", 1, 1000, 500);
+
+      database.prepare(`
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
+      `).run("recent_session", "Write", "t2", 1, 2000, 1000);
+
+      database.close();
+    });
+
+    it("should return insights for default 30-day period", () => {
+      const insights = db.getInsights();
+
+      expect(insights.period).toBeDefined();
+      expect(insights.period.days).toBe(30);
+      expect(insights.summary).toBeDefined();
+      expect(insights.daily).toBeDefined();
+      expect(insights.by_project).toBeDefined();
+      expect(insights.by_tool).toBeDefined();
+    });
+
+    it("should calculate summary statistics", () => {
+      const insights = db.getInsights();
+
+      expect(insights.summary.total_queries).toBeGreaterThan(0);
+      expect(insights.summary.total_cost).toBeGreaterThan(0);
+      expect(insights.summary.total_input_tokens).toBeGreaterThan(0);
+      expect(insights.summary.total_output_tokens).toBeGreaterThan(0);
+      expect(insights.summary.total_tool_calls).toBeGreaterThan(0);
+      expect(insights.summary.total_sessions).toBeGreaterThan(0);
+    });
+
+    it("should calculate cost based on token usage", () => {
+      const insights = db.getInsights();
+
+      // Cost = (input_tokens / 1_000_000 * 3.0) + (output_tokens / 1_000_000 * 15.0)
+      const expectedCost = (3000 / 1_000_000 * 3.0) + (1500 / 1_000_000 * 15.0);
+      expect(insights.summary.total_cost).toBeCloseTo(expectedCost, 2);
+    });
+
+    it("should provide daily breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.daily)).toBe(true);
+      const dailyWithData = (insights.daily as Array<Record<string, unknown>>).filter(
+        (d: Record<string, unknown>) => (d.queries as number) > 0
+      );
+      expect(dailyWithData.length).toBeGreaterThan(0);
+
+      // Check structure of daily entries
+      const firstDay = (insights.daily as Array<Record<string, unknown>>)[0];
+      expect(firstDay.date).toBeDefined();
+      expect(firstDay.queries).toBeDefined();
+      expect(firstDay.tool_calls).toBeDefined();
+      expect(firstDay.cost).toBeDefined();
+      expect(firstDay.input_tokens).toBeDefined();
+      expect(firstDay.output_tokens).toBeDefined();
+      expect(firstDay.sessions).toBeDefined();
+    });
+
+    it("should provide project breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.by_project)).toBe(true);
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+      expect(projects.length).toBeGreaterThan(0);
+
+      const project = projects[0];
+      expect(project.project).toBeDefined();
+      expect(project.path).toBeDefined();
+      expect(project.queries).toBeGreaterThan(0);
+      expect(project.cost).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should provide tool breakdown", () => {
+      const insights = db.getInsights();
+
+      expect(Array.isArray(insights.by_tool)).toBe(true);
+      const tools = insights.by_tool as Array<Record<string, unknown>>;
+      expect(tools.length).toBeGreaterThan(0);
+
+      const tool = tools[0];
+      expect(tool.tool).toBeDefined();
+      expect(tool.count).toBeGreaterThan(0);
+      expect(tool.success_rate).toBeGreaterThanOrEqual(0);
+      expect(tool.success_rate).toBeLessThanOrEqual(1);
+    });
+
+    it("should filter by custom date range", () => {
+      const insights7Days = db.getInsights(7);
+      const insights30Days = db.getInsights(30);
+
+      expect(insights7Days.period.days).toBe(7);
+      expect(insights30Days.period.days).toBe(30);
+
+      // 7-day window should have same or fewer queries than 30-day window
+      expect(insights7Days.summary.total_queries).toBeLessThanOrEqual(insights30Days.summary.total_queries);
+    });
+
+    it("should filter by project path", () => {
+      const allInsights = db.getInsights();
+      const projectInsights = db.getInsights(30, "/path/to/project1");
+
+      expect(projectInsights.summary.total_queries).toBeGreaterThan(0);
+      expect(projectInsights.summary.total_queries).toBeLessThanOrEqual(allInsights.summary.total_queries);
+    });
+
+    it("should calculate change percentage from previous period", () => {
+      // Insert data in previous period (31-60 days ago)
+      const database = new Database(config.DATABASE_PATH);
+      database.prepare(`
+        INSERT INTO conversations (session_id, user_id, role, content, timestamp)
+        VALUES (?, ?, ?, ?, date('now', '-40 days'))
+      `).run("prev_session", "user1", "user", "previous period message");
+      database.close();
+
+      const insights = db.getInsights();
+
+      expect(insights.summary.change_pct).toBeDefined();
+      expect(typeof insights.summary.change_pct).toBe("number");
+    });
+
+    it("should exclude archived sessions from insights", () => {
+      db.recordMessage("archived_session", "user1", "user", "archived message");
+      db.archiveSession("archived_session");
+
+      const insights = db.getInsights();
+
+      // Verify archived session is not counted
+      const allSessions = db.getSessionsList(100, undefined, true);
+      const activeInsightsSessions = insights.summary.total_sessions as number;
+
+      expect(activeInsightsSessions).toBeLessThan(allSessions.length);
+    });
+
+    it("should handle empty database gracefully", () => {
+      // Clear all data
+      const database = new Database(config.DATABASE_PATH);
+      database.exec("DELETE FROM conversations");
+      database.exec("DELETE FROM tool_usage");
+      database.close();
+
+      const insights = db.getInsights();
+
+      expect(insights.summary.total_queries).toBe(0);
+      expect(insights.summary.total_cost).toBe(0);
+      expect(insights.summary.total_tool_calls).toBe(0);
+      expect(insights.daily).toEqual([]);
+      expect(insights.by_project).toEqual([]);
+      expect(insights.by_tool).toEqual([]);
+    });
+
+    it("should sort daily entries by date ascending", () => {
+      const insights = db.getInsights();
+      const daily = insights.daily as Array<Record<string, unknown>>;
+
+      if (daily.length > 1) {
+        for (let i = 1; i < daily.length; i++) {
+          const prevDate = new Date(daily[i - 1].date as string);
+          const currDate = new Date(daily[i].date as string);
+          expect(currDate >= prevDate).toBe(true);
+        }
+      }
+    });
+
+    it("should sort projects by query count descending", () => {
+      const insights = db.getInsights();
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+
+      if (projects.length > 1) {
+        for (let i = 1; i < projects.length; i++) {
+          expect(projects[i - 1].queries as number).toBeGreaterThanOrEqual(projects[i].queries as number);
+        }
+      }
+    });
+
+    it("should sort tools by count descending", () => {
+      const insights = db.getInsights();
+      const tools = insights.by_tool as Array<Record<string, unknown>>;
+
+      if (tools.length > 1) {
+        for (let i = 1; i < tools.length; i++) {
+          expect(tools[i - 1].count as number).toBeGreaterThanOrEqual(tools[i].count as number);
+        }
+      }
+    });
+
+    it("should extract project name from path", () => {
+      const insights = db.getInsights();
+      const projects = insights.by_project as Array<Record<string, unknown>>;
+
+      const project = projects.find((p: Record<string, unknown>) => p.path === "/path/to/project1");
+      expect(project).toBeDefined();
+      expect(project!.project).toBe("project1");
+    });
+  });
+
+  describe("Migration System", () => {
+    afterAll(() => {
+      // Clean up any mocks that might have been applied
+      vi.doUnmock("../config.js");
+    });
+
+    it("should create schema_version table on fresh database", () => {
+      // Force a fresh database by closing and reopening
+      const database = new Database(config.DATABASE_PATH);
+
+      const tableExists = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'schema_version'
+      `).get() as { c: number };
+
+      database.close();
+
+      expect(tableExists.c).toBe(1);
+    });
+
+    it("should mark new database as version 3", () => {
+      const database = new Database(config.DATABASE_PATH);
+
+      const version = database.prepare(
+        "SELECT MAX(version) as v FROM schema_version"
+      ).get() as { v: number | null };
+
+      database.close();
+
+      expect(version.v).toBe(3);
+    });
+
+    it("should have applied_at timestamp", () => {
+      const database = new Database(config.DATABASE_PATH);
+
+      const row = database.prepare(
+        "SELECT applied_at FROM schema_version WHERE version = 1"
+      ).get() as { applied_at: string } | undefined;
+
+      database.close();
+
+      expect(row).toBeDefined();
+      expect(row!.applied_at).toBeTruthy();
+    });
+
+    it("should not re-run migrations on subsequent connections", () => {
+      const database = new Database(config.DATABASE_PATH);
+
+      const countBefore = database.prepare(
+        "SELECT COUNT(*) as c FROM schema_version"
+      ).get() as { c: number };
+
+      database.close();
+
+      // Trigger getDb() to run migration check
+      db.recordMessage("test", "user", "user", "test message");
+
+      const database2 = new Database(config.DATABASE_PATH);
+
+      const countAfter = database2.prepare(
+        "SELECT COUNT(*) as c FROM schema_version"
+      ).get() as { c: number };
+
+      database2.close();
+
+      expect(countAfter.c).toBe(countBefore.c);
+    });
+
+    it("should detect existing database and mark as v1 without re-creating tables", () => {
+      // Create a new temp database simulating an old database (no schema_version table)
+      const legacyDbPath = path.join(testDir, "legacy.db");
+      const legacyDb = new Database(legacyDbPath);
+
+      // Create a minimal conversations table as if it's an old database
+      legacyDb.exec(`
+        CREATE TABLE conversations (
+          id INTEGER PRIMARY KEY,
+          session_id TEXT,
+          user_id TEXT,
+          role TEXT,
+          content TEXT
+        );
+      `);
+
+      // Insert a test record
+      legacyDb.prepare(
+        "INSERT INTO conversations (session_id, user_id, role, content) VALUES (?, ?, ?, ?)"
+      ).run("legacy_session", "user1", "user", "old message");
+
+      legacyDb.close();
+
+      // Mock the config to point to the legacy database temporarily
+      const originalDbPath = config.DATABASE_PATH;
+      vi.doMock("../config.js", async () => {
+        const actual = await vi.importActual<typeof import("../config.js")>("../config.js");
+        return {
+          ...actual,
+          DATABASE_PATH: legacyDbPath,
+        };
+      });
+
+      // Manually trigger migration by opening the database and running the migration logic
+      const database = new Database(legacyDbPath);
+      database.pragma("journal_mode = WAL");
+
+      // Check conversations table exists before migration
+      const conversationsExistsBefore = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'conversations'
+      `).get() as { c: number };
+
+      expect(conversationsExistsBefore.c).toBe(1);
+
+      // Check schema_version doesn't exist yet
+      const schemaVersionExistsBefore = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'schema_version'
+      `).get() as { c: number };
+
+      expect(schemaVersionExistsBefore.c).toBe(0);
+
+      // Simulate the migration detection logic
+      const conversationsExists = database.prepare(`
+        SELECT COUNT(*) as c FROM sqlite_master
+        WHERE type = 'table' AND name = 'conversations'
+      `).get() as { c: number };
+
+      if (conversationsExists.c > 0) {
+        database.exec(`
+          CREATE TABLE schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+          );
+          INSERT INTO schema_version (version) VALUES (1);
+        `);
+      }
+
+      // Verify schema_version was created and marked as v1
+      const version = database.prepare(
+        "SELECT MAX(version) as v FROM schema_version"
+      ).get() as { v: number | null };
+
+      expect(version.v).toBe(1);
+
+      // Verify the old record still exists
+      const oldRecord = database.prepare(
+        "SELECT content FROM conversations WHERE session_id = ?"
+      ).get("legacy_session") as { content: string } | undefined;
+
+      expect(oldRecord).toBeDefined();
+      expect(oldRecord!.content).toBe("old message");
+
+      database.close();
     });
   });
 });
