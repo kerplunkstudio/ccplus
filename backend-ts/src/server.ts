@@ -21,6 +21,7 @@ import { RateLimiter } from "./rate-limiter.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { GracefulShutdown } from "./graceful-shutdown.js";
+import { createCorrelationContext } from "./correlation.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -85,6 +86,9 @@ const connectionHealthMonitor = new ConnectionHealthMonitor();
 
 // Rate limiter
 const rateLimiter = new RateLimiter();
+
+// Circuit breaker
+const circuitBreaker = new CircuitBreaker();
 
 // Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
@@ -1031,6 +1035,13 @@ io.on("connection", (socket) => {
       return;
     }
 
+    // Circuit breaker check
+    const circuitCheck = circuitBreaker.canExecute(client.session_id);
+    if (!circuitCheck.allowed) {
+      socket.emit("circuit_open", { message: circuitCheck.reason });
+      return;
+    }
+
     // Track activity
     connectionHealthMonitor.onEvent(client.session_id);
 
@@ -1044,6 +1055,9 @@ io.on("connection", (socket) => {
 
     if (!content && !imageIdsData.length) return;
 
+    // Generate correlation context for this user message
+    const correlation = createCorrelationContext(sid);
+
     // Record user message with provenance
     try {
       const provenance = provenanceTracker.getProvenance(socket.id);
@@ -1056,6 +1070,7 @@ io.on("connection", (socket) => {
         provenance?.connectionId ?? undefined,
         provenance?.sourceIp ?? undefined,
         provenance?.userAgent ?? undefined,
+        correlation.correlationId,
       );
 
       // Record transcript event
@@ -1071,6 +1086,7 @@ io.on("connection", (socket) => {
         metadata: {
           project_path: projectPathData || null,
         },
+        correlation_id: correlation.correlationId,
       });
 
       const existing = database.getConversationHistory(sid, 1);
@@ -1244,6 +1260,13 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
     },
     sourceConnectionId,
     onComplete: (result: Record<string, unknown>) => {
+      // Circuit breaker: record success/failure based on is_error
+      if (result.is_error) {
+        circuitBreaker.recordFailure(sessionId);
+      } else {
+        circuitBreaker.recordSuccess(sessionId);
+      }
+
       try {
         database.incrementUserStats(
           userId,
@@ -1291,6 +1314,9 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
       });
     },
     onError: (message: string) => {
+      // Circuit breaker: record failure on error
+      circuitBreaker.recordFailure(sessionId);
+
       io.to(sessionId).emit("error", { message });
 
       // Record error transcript event
