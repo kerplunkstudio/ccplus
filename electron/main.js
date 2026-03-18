@@ -138,11 +138,13 @@ async function startBackend() {
 
 // Stop backend process
 function stopBackend() {
-  console.log('[Backend] Stopping backend process...');
-
-  if (serverProcess) {
-    serverProcess.kill();
-    serverProcess = null;
+  try {
+    if (serverProcess) {
+      serverProcess.kill();
+      serverProcess = null;
+    }
+  } catch (err) {
+    // Process already dead, ignore
   }
 }
 
