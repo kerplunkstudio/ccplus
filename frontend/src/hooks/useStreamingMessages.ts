@@ -301,14 +301,22 @@ export function useStreamingMessages({
         // so subsequent text_deltas update the same message instead of creating duplicates
       }
 
-      if (data.input_tokens !== undefined) {
+      if (data.input_tokens != null && data.input_tokens > 0) {
         setContextTokens(data.input_tokens);
       }
 
-      if (data.model) {
-        // Prefer context_window_size from backend (from SDK modelUsage)
-        const windowSize = data.context_window_size || MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW;
-        setUsageStats(prev => ({ ...prev, contextWindowSize: windowSize, model: data.model || prev.model }));
+      // Update context window size - try backend value, then model lookup, then default
+      const windowSize = (data.context_window_size && data.context_window_size > 0)
+        ? data.context_window_size
+        : data.model
+          ? (MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW)
+          : null;
+      if (windowSize || data.model) {
+        setUsageStats(prev => ({
+          ...prev,
+          contextWindowSize: windowSize || prev.contextWindowSize,
+          model: data.model || prev.model,
+        }));
       }
 
       if (isFinalCompletion) {

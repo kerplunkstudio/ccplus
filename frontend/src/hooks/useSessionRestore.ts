@@ -180,7 +180,7 @@ export function useSessionRestore({
         socket.emit('join_session', { session_id: sessionId });
       }
     }
-  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, contextTokens, isRestoringSessionRef, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket]);
+  }, [sessionId, prevSessionIdRef, currentSessionIdRef, sessionCacheRef, messagesRef, streamingRef, backgroundProcessingRef, thinkingRef, streamingContentRef, streamingIdRef, toolLogRef, activityTreeRef, sequenceRef, seenToolUseIds, isRestoringSessionRef, setMessages, dispatchTree, setStreaming, setBackgroundProcessing, setThinking, clearToolTimerRef, setCurrentTool, setToolLog, responseCompleteRef, streamActiveRef, setPendingQuestion, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, awaitingDeltaAfterRestore, setPendingRestore, setSignals, setContextTokens, socket]);
 
   // Session restore effect
   useEffect(() => {
