@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cc+ — Claude Code with eyes</title>
+    <title>cc+ — Watch agents work</title>
     <meta name="description" content="Claude Code with eyes. Free desktop app. Multi-tab sessions. Real-time observability.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -197,9 +197,15 @@
         }
 
         .hero-note {
-            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
-            color: var(--warm-gray-light);
-            font-weight: 400;
+            font-size: clamp(0.8rem, 1.2vw, 0.9rem);
+            color: var(--warm-white);
+            font-weight: 500;
+            letter-spacing: 0.02em;
+        }
+
+        .hero-note .prereq {
+            color: var(--accent);
+            font-weight: 600;
         }
 
         /* App Replica Container */
@@ -1003,18 +1009,18 @@
     <section class="hero">
         <div class="container">
             <h1>
-                <span class="line1">See everything.</span>
-                <span class="line2">Miss nothing.</span>
+                <span class="line1">Full visibility.</span>
+                <span class="line2">Zero code.</span>
             </h1>
             <p class="subtitle">
-                Claude Code with eyes. Multi-tab sessions. Real-time observability. Built-in browser. Free, open source.
+                See what agents do, not what code they write. Multi-tab sessions. Activity trees. Built-in browser. Free, open source.
             </p>
             <div class="hero-cta-group">
                 <div class="hero-install-command">
                     <code>curl -fsSL https://ccplus.run/install | sh</code>
                     <button class="hero-copy-btn" onclick="copyHeroCommand()">Copy</button>
                 </div>
-                <span class="hero-note">macOS & Linux · Requires Claude Code CLI</span>
+                <span class="hero-note">macOS & Linux · <span class="prereq">Requires Claude Code CLI</span></span>
             </div>
         </div>
     </section>
@@ -1323,7 +1329,7 @@
     <!-- Features Grid - NEW COMPACT DESIGN -->
     <section class="features">
         <div class="container">
-            <h2>Everything you need to see the process, not just the output</h2>
+            <h2>See what matters, not the code</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <h3>Multi-Tab Sessions</h3>
@@ -1331,7 +1337,7 @@
                 </div>
                 <div class="feature-card">
                     <h3>Agent Observability</h3>
-                    <p>Real-time tree of every agent spawn and tool call. See the process, not just output.</p>
+                    <p>Watch agents work in real time. See what they're doing, not the code they're writing. Activity trees show every tool call, every agent spawn, every decision.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Built-in Browser</h3>
@@ -1356,7 +1362,7 @@
     <!-- CTA -->
     <section class="cta">
         <div class="container">
-            <h2>Ready to see everything?</h2>
+            <h2>Ready to watch them work?</h2>
             <div class="cta-buttons">
                 <a href="https://github.com/mjfuentes/ccplus/releases" class="btn btn-primary">Install cc+</a>
                 <a href="https://github.com/mjfuentes/ccplus" class="btn btn-secondary">View on GitHub</a>
