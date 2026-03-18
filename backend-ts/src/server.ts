@@ -1268,25 +1268,30 @@ connectionHealthMonitor.start();
 console.log(`Connection health monitor started`);
 
 // Start config watcher
-configWatcher.on('config-reloaded', (changes: ConfigChange[]) => {
-  console.log(`[config-watcher] Configuration reloaded. Changed keys: ${changes.map(c => c.key).join(', ')}`);
-});
-
-configWatcher.on('restart-required', (changes: ConfigChange[]) => {
-  console.warn(`[config-watcher] Server restart required due to changes: ${changes.map(c => c.key).join(', ')}`);
+configWatcher.on('config:changed', (change: ConfigChange) => {
+  if (change.hotReloadable) {
+    console.log(`[config-watcher] Hot-reloaded ${change.key}: ${change.oldValue} -> ${change.newValue}`);
+  } else {
+    console.warn(`[config-watcher] Server restart required for ${change.key}: ${change.oldValue} -> ${change.newValue}`);
+  }
 });
 
 configWatcher.start();
 console.log(`Config watcher started`);
 
 writePidFile();
-process.on("SIGTERM", () => {
-  console.log("Received SIGTERM, shutting down...");
+
+// Graceful shutdown handlers
+const shutdown = () => {
+  console.log("Shutting down...");
   connectionHealthMonitor.stop();
   configWatcher.stop();
   removePidFile();
   process.exit(0);
-});
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 process.on("exit", () => {
   connectionHealthMonitor.stop();
   configWatcher.stop();
