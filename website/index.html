@@ -35,32 +35,6 @@
             position: relative;
         }
 
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image:
-                repeating-linear-gradient(
-                    0deg,
-                    transparent,
-                    transparent 2px,
-                    oklch(15% 0.01 60 / 0.03) 2px,
-                    oklch(15% 0.01 60 / 0.03) 4px
-                ),
-                repeating-linear-gradient(
-                    90deg,
-                    transparent,
-                    transparent 2px,
-                    oklch(15% 0.01 60 / 0.03) 2px,
-                    oklch(15% 0.01 60 / 0.03) 4px
-                );
-            pointer-events: none;
-            z-index: 1;
-            opacity: 0.5;
-        }
 
         .container {
             max-width: 1400px;
@@ -102,7 +76,7 @@
             color: var(--warm-white);
             text-decoration: none;
             font-size: clamp(0.875rem, 1.5vw, 1rem);
-            font-weight: 700;
+            font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             transition: color 0.2s;
@@ -114,16 +88,16 @@
 
         /* Hero */
         .hero {
-            padding: clamp(3rem, 6vw, 6rem) 0;
+            padding: clamp(1rem, 3vw, 2rem) 0;
         }
 
         .hero h1 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(4rem, 12vw, 11rem);
+            font-size: clamp(2.5rem, 6vw, 5rem);
             font-weight: 700;
             line-height: 0.9;
             letter-spacing: -0.04em;
-            margin-bottom: clamp(2rem, 4vw, 3rem);
+            margin-bottom: clamp(1rem, 2vw, 1.5rem);
             max-width: 70%;
             position: relative;
         }
@@ -146,7 +120,7 @@
             font-size: clamp(1rem, 2vw, 1.25rem);
             color: var(--warm-gray-light);
             max-width: 50ch;
-            margin-bottom: clamp(3rem, 5vw, 4rem);
+            margin-bottom: clamp(1.5rem, 3vw, 2rem);
             font-weight: 400;
             line-height: 1.6;
             opacity: 0;
@@ -166,14 +140,14 @@
             display: inline-flex;
             align-items: center;
             gap: 1rem;
-            padding: 1.25rem 2.5rem;
+            padding: 0.875rem 1.75rem;
             background: var(--accent);
             color: var(--warm-black);
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             text-decoration: none;
-            font-size: clamp(0.875rem, 1.5vw, 1.125rem);
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
             transition: transform 0.2s, box-shadow 0.2s;
             border: none;
         }
@@ -192,7 +166,7 @@
         /* Divider stripe */
         .stripe {
             width: 100%;
-            height: 6px;
+            height: 3px;
             background: var(--accent);
             margin: clamp(3rem, 5vw, 4rem) 0;
             opacity: 0;
@@ -252,7 +226,7 @@
 
         .feature-content h3 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-size: clamp(1.5rem, 3vw, 2.5rem);
             font-weight: 700;
             margin-bottom: 1.5rem;
             letter-spacing: -0.03em;
@@ -281,13 +255,13 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 6px;
+            height: 3px;
             background: var(--accent);
         }
 
         .how-it-works h2 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-size: clamp(2rem, 4vw, 3.5rem);
             font-weight: 700;
             margin-bottom: clamp(3rem, 6vw, 6rem);
             letter-spacing: -0.03em;
@@ -319,7 +293,7 @@
         .install-command {
             background: var(--warm-black);
             padding: 2rem;
-            border: 3px solid var(--accent);
+            border: 2px solid var(--accent);
             font-family: 'JetBrains Mono', monospace;
             font-size: clamp(0.875rem, 1.6vw, 1rem);
             color: var(--accent);
@@ -374,7 +348,7 @@
 
         .cta h2 {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-size: clamp(2rem, 4vw, 3.5rem);
             font-weight: 700;
             margin-bottom: clamp(3rem, 6vw, 5rem);
             letter-spacing: -0.03em;
@@ -411,7 +385,7 @@
         .btn-secondary {
             background: transparent;
             color: var(--warm-white);
-            border: 3px solid var(--warm-white);
+            border: 2px solid var(--warm-white);
         }
 
         .btn:hover {
@@ -554,7 +528,7 @@
 
         /* APP REPLICA */
         .app-replica-section {
-            margin-top: clamp(3rem, 6vw, 5rem);
+            margin-top: clamp(2rem, 3vw, 3rem);
             opacity: 0;
             animation: slideUpScale 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.2s forwards;
         }
@@ -1138,7 +1112,8 @@
         }
 
         .app-chat-panel.active {
-            display: block;
+            display: flex;
+            flex-direction: column;
         }
 
         .app-input-bar {
@@ -1223,6 +1198,127 @@
                 transform: scale(0.85);
                 transform-origin: top center;
             }
+        }
+
+        .browser-preview {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1E1D20;
+        }
+
+        .browser-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #1E1D20;
+            border-bottom: 1px solid #332F2C;
+        }
+
+        .browser-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .browser-dot-sm {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #332F2C;
+        }
+
+        .browser-url-bar {
+            flex: 1;
+            background: #141316;
+            border: 1px solid #332F2C;
+            border-radius: 4px;
+            padding: 4px 10px;
+        }
+
+        .browser-url {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            color: #8A8680;
+        }
+
+        .browser-content {
+            flex: 1;
+            background: #fafaf8;
+            overflow: hidden;
+        }
+
+        .preview-page {
+            padding: 16px;
+            height: 100%;
+        }
+
+        .preview-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e8e6e3;
+        }
+
+        .preview-logo {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1c1b1a;
+        }
+
+        .preview-nav-links {
+            display: flex;
+            gap: 12px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            color: #6b6660;
+        }
+
+        .preview-hero {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .preview-heading {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1c1b1a;
+            margin-bottom: 6px;
+        }
+
+        .preview-subtext {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 12px;
+            color: #6b6660;
+            margin-bottom: 12px;
+        }
+
+        .preview-btn {
+            display: inline-block;
+            background: #F07B3F;
+            color: white;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 16px;
+            border-radius: 4px;
+        }
+
+        .preview-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        .preview-card {
+            height: 60px;
+            background: #f0efed;
+            border: 1px solid #e8e6e3;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -1317,26 +1413,6 @@
                                     <div class="chat-message assistant">
                                         I'll refactor the auth middleware. Let me start by examining the current implementation.<span class="streaming-cursor"></span>
                                     </div>
-                                    <div class="tool-log">
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Read</span>
-                                            <span class="tool-file">src/auth/middleware.ts</span>
-                                            <span class="tool-duration">320ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Read</span>
-                                            <span class="tool-file">src/auth/session.ts</span>
-                                            <span class="tool-duration">180ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot running"></span>
-                                            <span class="tool-name">Edit</span>
-                                            <span class="tool-file">src/auth/middleware.ts</span>
-                                            <span class="tool-spinner"></span>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <!-- Session 2: Add unit tests -->
@@ -1347,41 +1423,43 @@
                                     <div class="chat-message assistant">
                                         I'll write comprehensive tests for the database module.<span class="streaming-cursor"></span>
                                     </div>
-                                    <div class="tool-log">
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Read</span>
-                                            <span class="tool-file">src/database.ts</span>
-                                            <span class="tool-duration">150ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Read</span>
-                                            <span class="tool-file">src/__tests__/database.test.ts</span>
-                                            <span class="tool-duration">120ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot completed"></span>
-                                            <span class="tool-name">Write</span>
-                                            <span class="tool-file">src/__tests__/database.test.ts</span>
-                                            <span class="tool-duration">380ms</span>
-                                        </div>
-                                        <div class="tool-log-entry">
-                                            <span class="tool-dot running"></span>
-                                            <span class="tool-name">Bash</span>
-                                            <span class="tool-file">npm test</span>
-                                            <span class="tool-spinner"></span>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <!-- Session 3: Preview -->
                                 <div class="app-chat-panel" id="chat-2">
-                                    <div class="chat-message user">
-                                        Build a landing page for ccplus.run
-                                    </div>
-                                    <div class="chat-message assistant">
-                                        I've built a single-page landing site with the Electric Ember theme, interactive app replica, and session switching.
+                                    <div class="browser-preview">
+                                        <div class="browser-bar">
+                                            <div class="browser-dots">
+                                                <span class="browser-dot-sm"></span>
+                                                <span class="browser-dot-sm"></span>
+                                                <span class="browser-dot-sm"></span>
+                                            </div>
+                                            <div class="browser-url-bar">
+                                                <span class="browser-url">localhost:3000</span>
+                                            </div>
+                                        </div>
+                                        <div class="browser-content">
+                                            <div class="preview-page">
+                                                <div class="preview-nav">
+                                                    <span class="preview-logo">MyApp</span>
+                                                    <div class="preview-nav-links">
+                                                        <span>Features</span>
+                                                        <span>Pricing</span>
+                                                        <span>Docs</span>
+                                                    </div>
+                                                </div>
+                                                <div class="preview-hero">
+                                                    <div class="preview-heading">Ship faster with AI</div>
+                                                    <div class="preview-subtext">Build production apps in minutes, not months.</div>
+                                                    <div class="preview-btn">Get Started</div>
+                                                </div>
+                                                <div class="preview-cards">
+                                                    <div class="preview-card"></div>
+                                                    <div class="preview-card"></div>
+                                                    <div class="preview-card"></div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1497,57 +1575,8 @@
                                     </div>
                                 </div>
 
-                                <!-- Session 3: Preview -->
-                                <div class="app-activity-panel" id="activity-2">
-                                    <div class="activity-header">
-                                        <span class="activity-title">Activity</span>
-                                        <span class="activity-count">8</span>
-                                    </div>
-                                    <div class="activity-tabs">
-                                        <div class="activity-tab active">TREE</div>
-                                        <div class="activity-tab">TOOLS</div>
-                                    </div>
-                                    <div class="activity-content">
-                                        <div class="agent-card completed">
-                                            <div class="agent-type">frontend-agent</div>
-                                            <div class="agent-desc">Build landing page</div>
-                                            <div class="agent-children">
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Read</span>
-                                                        <span class="tool-target">index.css</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">90ms</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Read</span>
-                                                        <span class="tool-target">ChatPanel.css</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">120ms</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Read</span>
-                                                        <span class="tool-target">ActivityTree.css</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">85ms</span>
-                                                </div>
-                                                <div class="tool-row completed">
-                                                    <div class="tool-info">
-                                                        <span class="tool-label">Write</span>
-                                                        <span class="tool-target">index.html</span>
-                                                    </div>
-                                                    <div class="tool-status-icon completed"></div>
-                                                    <span class="tool-time">2.4s</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- Session 3: Preview (no activity panel) -->
+                                <div class="app-activity-panel" id="activity-2"></div>
                             </div>
                         </div>
                     </div>
@@ -1720,6 +1749,20 @@
                     panel.classList.remove('active');
                 }
             });
+
+            // Hide activity column and input bar for Preview tab (index 2)
+            const activityColumn = document.querySelector('.app-activity');
+            const appMain = document.querySelector('.app-main');
+            const inputBar = document.querySelector('.app-input-bar');
+            if (index === 2) {
+                activityColumn.style.display = 'none';
+                inputBar.style.display = 'none';
+                appMain.style.gridTemplateColumns = '1fr';
+            } else {
+                activityColumn.style.display = 'flex';
+                inputBar.style.display = 'block';
+                appMain.style.gridTemplateColumns = '1fr 280px';
+            }
         }
     </script>
 </body>
