@@ -171,7 +171,7 @@ build_frontend() {
 
     if [ ! -d "node_modules" ]; then
         warn "node_modules not found, running npm install..."
-        run_with_spinner "Installing frontend dependencies..." "npm install --silent" || { error "npm install failed"; exit 1; }
+        run_with_spinner "Installing frontend dependencies..." "npm install --silent --legacy-peer-deps" || { error "npm install failed"; exit 1; }
     fi
 
     # Type-check before build — catches missing imports, type errors
@@ -439,7 +439,7 @@ run_setup() {
     fi
 
     # Install frontend dependencies
-    run_with_spinner "Installing frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
+    run_with_spinner "Installing frontend dependencies..." "cd frontend && npm install --silent --legacy-peer-deps && cd '$SCRIPT_DIR'" || exit 1
 
     # Install backend dependencies
     run_with_spinner "Installing backend dependencies..." "cd backend-ts && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
@@ -1035,7 +1035,7 @@ run_update() {
     # Check if frontend/package.json changed
     if git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -q "^frontend/package.json$"; then
         info "Frontend dependencies changed, reinstalling npm packages..."
-        run_with_spinner "Reinstalling frontend dependencies..." "cd frontend && npm install --silent && cd '$SCRIPT_DIR'" || exit 1
+        run_with_spinner "Reinstalling frontend dependencies..." "cd frontend && npm install --silent --legacy-peer-deps && cd '$SCRIPT_DIR'" || exit 1
     fi
 
     # Always rebuild frontend and backend
