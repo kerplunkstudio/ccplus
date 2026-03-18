@@ -57,8 +57,39 @@ if (SECRET_KEY === DEFAULT_SECRET) {
   }
 }
 
-export const MAX_CONVERSATION_HISTORY = 50;
-export const MAX_ACTIVITY_EVENTS = 200;
+// Hot-reloadable config values (can be updated dynamically)
+let runtimeConfig = {
+  SDK_MODEL: process.env.SDK_MODEL ?? "sonnet",
+  MAX_CONVERSATION_HISTORY: 50,
+  MAX_ACTIVITY_EVENTS: 200,
+  BYPASS_PERMISSIONS: process.env.CCPLUS_BYPASS_PERMISSIONS
+    ? process.env.CCPLUS_BYPASS_PERMISSIONS === 'true'
+    : LOCAL_MODE,
+};
+
+export const MAX_CONVERSATION_HISTORY_DEFAULT = 50;
+export const MAX_ACTIVITY_EVENTS_DEFAULT = 200;
+
+// Export getters for hot-reloadable values
+export function getSDKModel(): string {
+  return runtimeConfig.SDK_MODEL;
+}
+
+export function getMaxConversationHistory(): number {
+  return runtimeConfig.MAX_CONVERSATION_HISTORY;
+}
+
+export function getMaxActivityEvents(): number {
+  return runtimeConfig.MAX_ACTIVITY_EVENTS;
+}
+
+export function getBypassPermissions(): boolean {
+  return runtimeConfig.BYPASS_PERMISSIONS;
+}
+
+// Legacy exports for backward compatibility (deprecated, use getters)
+export const MAX_CONVERSATION_HISTORY = MAX_CONVERSATION_HISTORY_DEFAULT;
+export const MAX_ACTIVITY_EVENTS = MAX_ACTIVITY_EVENTS_DEFAULT;
 
 // Server PID path (for process management)
 export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
@@ -67,3 +98,31 @@ export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
 export const BYPASS_PERMISSIONS = process.env.CCPLUS_BYPASS_PERMISSIONS
   ? process.env.CCPLUS_BYPASS_PERMISSIONS === 'true'
   : LOCAL_MODE;
+
+/**
+ * Reload hot-reloadable config values from environment
+ * Called by ConfigWatcher when .env changes
+ */
+export function reloadConfig(key: string, value: string | undefined): void {
+  switch (key) {
+    case "SDK_MODEL":
+      runtimeConfig.SDK_MODEL = value ?? "sonnet";
+      break;
+    case "MAX_CONVERSATION_HISTORY":
+      runtimeConfig.MAX_CONVERSATION_HISTORY = value ? parseInt(value, 10) : MAX_CONVERSATION_HISTORY_DEFAULT;
+      break;
+    case "MAX_ACTIVITY_EVENTS":
+      runtimeConfig.MAX_ACTIVITY_EVENTS = value ? parseInt(value, 10) : MAX_ACTIVITY_EVENTS_DEFAULT;
+      break;
+    case "CCPLUS_BYPASS_PERMISSIONS":
+      runtimeConfig.BYPASS_PERMISSIONS = value === 'true';
+      break;
+  }
+}
+
+/**
+ * Get all runtime config values (for testing/debugging)
+ */
+export function getRuntimeConfig() {
+  return { ...runtimeConfig };
+}

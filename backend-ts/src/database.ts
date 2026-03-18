@@ -4,16 +4,7 @@ import * as config from "./config.js";
 
 let db: Database.Database | null = null;
 
-// Migration definitions (version → SQL)
-interface Migration {
-  version: number;
-  sql: string;
-}
-
-const MIGRATIONS: Migration[] = [
-  {
-    version: 1,
-    sql: `
+const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
@@ -74,8 +65,7 @@ CREATE TABLE IF NOT EXISTS tool_usage (
     parent_agent_id TEXT,
     agent_type TEXT,
     input_tokens INTEGER,
-    output_tokens INTEGER,
-    description TEXT
+    output_tokens INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tool_usage_session
     ON tool_usage(session_id, timestamp);
@@ -99,129 +89,41 @@ CREATE TABLE IF NOT EXISTS workspace_state (
     state TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
-
-CREATE TABLE IF NOT EXISTS session_context (
-    session_id TEXT PRIMARY KEY,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    model TEXT,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-`,
-  },
-  {
-    version: 2,
-    sql: `
--- Add description column for agent descriptions
-ALTER TABLE tool_usage ADD COLUMN description TEXT;
-`,
-  },
-  {
-    version: 3,
-    sql: `
--- Add summary column for agent output/summary
-ALTER TABLE tool_usage ADD COLUMN summary TEXT;
-`,
-  },
-  {
-    version: 4,
-    sql: `
-CREATE TABLE IF NOT EXISTS session_metadata (
-  session_id TEXT PRIMARY KEY,
-  model TEXT,
-  thinking_level TEXT,
-  verbose BOOLEAN DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-`,
-  },
-];
-
-function getCurrentSchemaVersion(database: Database.Database): number {
-  // Check if schema_version table exists
-  const tableExists = database.prepare(`
-    SELECT COUNT(*) as c FROM sqlite_master
-    WHERE type = 'table' AND name = 'schema_version'
-  `).get() as { c: number };
-
-  if (tableExists.c === 0) {
-    // Check if this is an existing database with tables already created
-    const conversationsExists = database.prepare(`
-      SELECT COUNT(*) as c FROM sqlite_master
-      WHERE type = 'table' AND name = 'conversations'
-    `).get() as { c: number };
-
-    if (conversationsExists.c > 0) {
-      // Existing database without schema_version table → mark as v1
-      database.exec(`
-        CREATE TABLE schema_version (
-          version INTEGER PRIMARY KEY,
-          applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-        INSERT INTO schema_version (version) VALUES (1);
-      `);
-      return 1;
-    }
-
-    // Brand new database
-    return 0;
-  }
-
-  // Schema version table exists, get current version
-  const row = database.prepare("SELECT MAX(version) as v FROM schema_version").get() as { v: number | null };
-  return row.v ?? 0;
-}
-
-function applyMigrations(database: Database.Database): void {
-  const currentVersion = getCurrentSchemaVersion(database);
-  const pendingMigrations = MIGRATIONS.filter((m) => m.version > currentVersion);
-
-  if (pendingMigrations.length === 0) {
-    return;
-  }
-
-  // Create schema_version table if it doesn't exist (for brand new databases)
-  if (currentVersion === 0) {
-    database.exec(`
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-      );
-    `);
-  }
-
-  // Apply each pending migration in a transaction
-  for (const migration of pendingMigrations) {
-    const transaction = database.transaction(() => {
-      try {
-        database.exec(migration.sql);
-      } catch (err) {
-        // If column already exists, this is fine (idempotent migrations)
-        const errMsg = String(err);
-        if (!errMsg.includes("duplicate column name")) {
-          throw err;
-        }
-      }
-      database.prepare("INSERT INTO schema_version (version) VALUES (?)").run(migration.version);
-    });
-
-    transaction();
-  }
-}
+`;
 
 function getDb(): Database.Database {
   if (!db) {
     db = new Database(config.DATABASE_PATH);
     db.pragma("journal_mode = WAL");
-    applyMigrations(db);
+    db.exec(SCHEMA_SQL);
+    runProvenanceMigration(db);
   }
   return db;
 }
 
-export function close(): void {
-  if (db) {
-    db.close();
-    db = null;
+/**
+ * Add provenance columns to conversations and tool_usage tables.
+ * Wrapped in try/catch since columns may already exist.
+ */
+function runProvenanceMigration(database: Database.Database): void {
+  const migrations = [
+    "ALTER TABLE conversations ADD COLUMN source_connection_id TEXT",
+    "ALTER TABLE conversations ADD COLUMN source_ip TEXT",
+    "ALTER TABLE conversations ADD COLUMN user_agent TEXT",
+    "ALTER TABLE tool_usage ADD COLUMN source_connection_id TEXT",
+  ];
+
+  for (const sql of migrations) {
+    try {
+      database.exec(sql);
+    } catch (err) {
+      // Column already exists or other error - ignore
+      // SQLite doesn't have IF NOT EXISTS for ALTER TABLE ADD COLUMN
+      const message = (err as Error).message ?? "";
+      if (!message.includes("duplicate column name")) {
+        console.warn(`Provenance migration warning: ${message}`);
+      }
+    }
   }
 }
 
@@ -235,14 +137,26 @@ export function recordMessage(
   sdkSessionId?: string,
   projectPath?: string,
   imageIds?: string[],
+  sourceConnectionId?: string,
+  sourceIp?: string,
+  userAgent?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const imagesJson = imageIds ? JSON.stringify(imageIds) : null;
   const stmt = d.prepare(`
-    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO conversations (session_id, user_id, role, content, sdk_session_id, project_path, images,
+                               source_connection_id, source_ip, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(sessionId, userId, role, content, sdkSessionId ?? null, projectPath ?? null, imagesJson);
+  const info = stmt.run(
+    sessionId, userId, role, content,
+    sdkSessionId ?? null,
+    projectPath ?? null,
+    imagesJson,
+    sourceConnectionId ?? null,
+    sourceIp ?? null,
+    userAgent ?? null
+  );
   const row = d.prepare("SELECT * FROM conversations WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
 }
@@ -258,15 +172,24 @@ export function updateMessage(messageId: number, content: string, sdkSessionId?:
   }
 }
 
-export function getConversationHistory(sessionId: string, limit?: number): Record<string, unknown>[] {
+export function getMessageProvenance(messageId: number): Record<string, unknown> | null {
   const d = getDb();
-  const effectiveLimit = limit ?? config.getMaxConversationHistory();
+  const row = d.prepare(`
+    SELECT id, session_id, source_connection_id, source_ip, user_agent, timestamp
+    FROM conversations
+    WHERE id = ?
+  `).get(messageId) as Record<string, unknown> | undefined;
+  return row ?? null;
+}
+
+export function getConversationHistory(sessionId: string, limit: number = 50): Record<string, unknown>[] {
+  const d = getDb();
   const rows = d.prepare(`
     SELECT * FROM conversations
     WHERE session_id = ?
     ORDER BY timestamp ASC
     LIMIT ?
-  `).all(sessionId, effectiveLimit) as Record<string, unknown>[];
+  `).all(sessionId, limit) as Record<string, unknown>[];
 
   return rows.map((row) => {
     const msg = { ...row };
@@ -298,7 +221,7 @@ export function recordToolEvent(
   parameters?: string | Record<string, unknown> | null,
   inputTokens?: number | null,
   outputTokens?: number | null,
-  description?: string | null,
+  sourceConnectionId?: string,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -307,7 +230,7 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens, description)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, source_connection_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
@@ -316,7 +239,7 @@ export function recordToolEvent(
     success === null || success === undefined ? null : (success ? 1 : 0),
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
-    description ?? null,
+    sourceConnectionId ?? null,
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -328,28 +251,26 @@ export function updateToolEvent(
   success?: boolean | null,
   error?: string | null,
   durationMs?: number | null,
-  summary?: string | null,
 ): void {
   const d = getDb();
   d.prepare(`
     UPDATE tool_usage
-    SET success = ?, error = ?, duration_ms = ?, summary = COALESCE(?, summary)
+    SET success = ?, error = ?, duration_ms = ?
     WHERE session_id = ? AND tool_use_id = ?
   `).run(
     success === null || success === undefined ? null : (success ? 1 : 0),
-    error ?? null, durationMs ?? null, summary ?? null, sessionId, toolUseId
+    error ?? null, durationMs ?? null, sessionId, toolUseId
   );
 }
 
-export function getToolEvents(sessionId: string, limit?: number): Record<string, unknown>[] {
+export function getToolEvents(sessionId: string, limit: number = 200): Record<string, unknown>[] {
   const d = getDb();
-  const effectiveLimit = limit ?? config.getMaxActivityEvents();
   const rows = d.prepare(`
     SELECT * FROM tool_usage
     WHERE session_id = ?
     ORDER BY timestamp ASC
     LIMIT ?
-  `).all(sessionId, effectiveLimit) as Record<string, unknown>[];
+  `).all(sessionId, limit) as Record<string, unknown>[];
 
   return rows.map((row) => {
     const entry = { ...row };
@@ -419,7 +340,6 @@ export function archiveSession(sessionId: string): boolean {
   const d = getDb();
   try {
     d.prepare("UPDATE conversations SET archived = 1 WHERE session_id = ?").run(sessionId);
-    d.prepare("DELETE FROM images WHERE session_id = ?").run(sessionId);
     return true;
   } catch {
     return false;
@@ -555,77 +475,6 @@ export function saveWorkspaceState(userId: string, state: Record<string, unknown
   `).run(userId, stateJson);
 }
 
-// --- Session context ---
-
-export function updateSessionContext(sessionId: string, inputTokens: number, model: string | null): void {
-  const d = getDb();
-  d.prepare(`
-    INSERT INTO session_context (session_id, input_tokens, model, updated_at)
-    VALUES (?, ?, ?, datetime('now', 'localtime'))
-    ON CONFLICT(session_id) DO UPDATE SET
-      input_tokens = excluded.input_tokens,
-      model = excluded.model,
-      updated_at = excluded.updated_at
-  `).run(sessionId, inputTokens, model);
-}
-
-export function getSessionContext(sessionId: string): { input_tokens: number; model: string | null } | null {
-  const d = getDb();
-  const row = d.prepare(`SELECT input_tokens, model FROM session_context WHERE session_id = ?`).get(sessionId) as { input_tokens: number; model: string | null } | undefined;
-  return row ?? null;
-}
-
-// --- Session duplication ---
-
-export function duplicateSession(sourceSessionId: string, newSessionId: string, userId: string): { conversations: number; toolEvents: number; images: number } {
-  const d = getDb();
-
-  // Copy conversations (update session_id to new, keep everything else)
-  const convResult = d.prepare(`
-    INSERT INTO conversations (session_id, user_id, role, content, timestamp, sdk_session_id, project_path, archived, images)
-    SELECT ?, user_id, role, content, timestamp, sdk_session_id, project_path, 0, images
-    FROM conversations WHERE session_id = ? ORDER BY id
-  `).run(newSessionId, sourceSessionId);
-
-  // Copy tool_usage (update session_id, keep parent relationships intact)
-  const toolResult = d.prepare(`
-    INSERT INTO tool_usage (timestamp, session_id, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description)
-    SELECT timestamp, ?, tool_name, duration_ms, success, error, error_category, parameters, tool_use_id, parent_agent_id, agent_type, input_tokens, output_tokens, description
-    FROM tool_usage WHERE session_id = ? ORDER BY id
-  `).run(newSessionId, sourceSessionId);
-
-  // Copy images (generate new UUIDs to avoid UNIQUE constraint violations)
-  const sourceImages = d.prepare(`SELECT * FROM images WHERE session_id = ?`).all(sourceSessionId) as Array<{
-    id: string;
-    filename: string;
-    mime_type: string;
-    size: number;
-    data: Buffer;
-    uploaded_at: string;
-  }>;
-
-  let imagesCopied = 0;
-  const insertImage = d.prepare(`
-    INSERT INTO images (id, filename, mime_type, size, data, uploaded_at, session_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  for (const img of sourceImages) {
-    // Generate new UUID for the duplicated image
-    const newImageId = `${img.id.split('-')[0]}-dup-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    insertImage.run(newImageId, img.filename, img.mime_type, img.size, img.data, img.uploaded_at, newSessionId);
-    imagesCopied++;
-  }
-
-  const imageResult = { changes: imagesCopied };
-
-  return {
-    conversations: convResult.changes,
-    toolEvents: toolResult.changes,
-    images: imageResult.changes,
-  };
-}
-
 // --- Utility ---
 
 export function markOrphanedToolEvents(): number {
@@ -638,170 +487,12 @@ export function markOrphanedToolEvents(): number {
   return info.changes;
 }
 
-export function cleanupOrphanedImages(): number {
-  const d = getDb();
-  const info = d.prepare(`
-    DELETE FROM images
-    WHERE session_id NOT IN (
-      SELECT DISTINCT session_id FROM conversations
-    )
-  `).run();
-  return info.changes;
-}
-
 export function isFirstRun(): boolean {
   const d = getDb();
   const row = d.prepare(
     "SELECT COUNT(*) as c FROM conversations WHERE archived = 0 OR archived IS NULL"
   ).get() as { c: number };
   return row.c === 0;
-}
-
-// --- Search ---
-
-export function searchConversations(query: string, projectPath?: string, limit: number = 50): Record<string, unknown>[] {
-  const d = getDb();
-  const searchPattern = `%${query}%`;
-  const projectFilter = projectPath ? "AND project_path = ?" : "";
-  const params: unknown[] = projectPath ? [searchPattern, projectPath, limit] : [searchPattern, limit];
-
-  const rows = d.prepare(`
-    WITH session_matches AS (
-      SELECT
-        session_id,
-        content,
-        role,
-        timestamp,
-        (SELECT content FROM conversations c2
-         WHERE c2.session_id = c1.session_id AND c2.role = 'user'
-         ORDER BY c2.timestamp ASC LIMIT 1) as session_label
-      FROM conversations c1
-      WHERE content LIKE ?
-      AND (archived = 0 OR archived IS NULL)
-      ${projectFilter}
-      ORDER BY timestamp DESC
-    )
-    SELECT * FROM session_matches
-    LIMIT ?
-  `).all(...params) as Array<{
-    session_id: string;
-    content: string;
-    role: string;
-    timestamp: string;
-    session_label: string;
-  }>;
-
-  // Group by session_id and create snippets
-  const sessionMap = new Map<string, {
-    session_id: string;
-    session_label: string;
-    matches: Array<{ content: string; role: string; timestamp: string }>;
-  }>();
-
-  for (const row of rows) {
-    if (!sessionMap.has(row.session_id)) {
-      sessionMap.set(row.session_id, {
-        session_id: row.session_id,
-        session_label: row.session_label || "Untitled session",
-        matches: [],
-      });
-    }
-
-    // Create snippet with context around the match
-    const content = row.content;
-    const lowerContent = content.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    const matchIndex = lowerContent.indexOf(lowerQuery);
-
-    let snippet = content;
-    if (matchIndex !== -1 && content.length > 200) {
-      const contextStart = Math.max(0, matchIndex - 50);
-      const contextEnd = Math.min(content.length, matchIndex + query.length + 150);
-      snippet = (contextStart > 0 ? "..." : "") +
-                content.slice(contextStart, contextEnd) +
-                (contextEnd < content.length ? "..." : "");
-    } else if (content.length > 200) {
-      snippet = content.slice(0, 200) + "...";
-    }
-
-    sessionMap.get(row.session_id)!.matches.push({
-      content: snippet,
-      role: row.role,
-      timestamp: row.timestamp,
-    });
-  }
-
-  return Array.from(sessionMap.values());
-}
-
-// --- Session metadata ---
-
-export interface SessionMetadata {
-  session_id: string;
-  model?: string | null;
-  thinking_level?: string | null;
-  verbose?: boolean | null;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export function getSessionMetadata(sessionId: string): SessionMetadata | null {
-  const d = getDb();
-  const row = d.prepare("SELECT * FROM session_metadata WHERE session_id = ?").get(sessionId) as SessionMetadata | undefined;
-  return row ?? null;
-}
-
-export function upsertSessionMetadata(sessionId: string, metadata: Partial<SessionMetadata>): SessionMetadata {
-  const d = getDb();
-  const existing = getSessionMetadata(sessionId);
-
-  if (existing) {
-    // Update only provided fields
-    const updates: string[] = [];
-    const values: unknown[] = [];
-
-    if (metadata.model !== undefined) {
-      updates.push("model = ?");
-      values.push(metadata.model);
-    }
-    if (metadata.thinking_level !== undefined) {
-      updates.push("thinking_level = ?");
-      values.push(metadata.thinking_level);
-    }
-    if (metadata.verbose !== undefined) {
-      updates.push("verbose = ?");
-      values.push(metadata.verbose ? 1 : 0);
-    }
-
-    if (updates.length > 0) {
-      updates.push("updated_at = datetime('now', 'localtime')");
-      values.push(sessionId);
-      d.prepare(`UPDATE session_metadata SET ${updates.join(", ")} WHERE session_id = ?`).run(...values);
-    }
-  } else {
-    // Insert new record
-    d.prepare(`
-      INSERT INTO session_metadata (session_id, model, thinking_level, verbose)
-      VALUES (?, ?, ?, ?)
-    `).run(
-      sessionId,
-      metadata.model ?? null,
-      metadata.thinking_level ?? null,
-      metadata.verbose !== undefined ? (metadata.verbose ? 1 : 0) : 0,
-    );
-  }
-
-  const result = getSessionMetadata(sessionId);
-  if (!result) {
-    throw new Error(`Failed to upsert session metadata for ${sessionId}`);
-  }
-  return result;
-}
-
-export function deleteSessionMetadata(sessionId: string): boolean {
-  const d = getDb();
-  const info = d.prepare("DELETE FROM session_metadata WHERE session_id = ?").run(sessionId);
-  return info.changes > 0;
 }
 
 // --- Insights (analytics) ---
