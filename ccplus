@@ -601,11 +601,21 @@ run_doctor() {
     # Port availability
     if lsof -ti:$PORT >/dev/null 2>&1; then
         pass "Port $PORT is in use (server likely running)"
+
+        # Server health check
+        if command -v curl >/dev/null 2>&1; then
+            health_status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/health" 2>/dev/null || echo "000")
+            if [ "$health_status" = "200" ]; then
+                # Get connected clients count
+                clients=$(curl -s "http://localhost:$PORT/health" 2>/dev/null | node -e "process.stdin.on('data', d => console.log(JSON.parse(d).connected_clients || 0))" 2>/dev/null || echo "N/A")
+                pass "Server health check OK ($clients active connections)"
+            else
+                warn "Server health check failed (status: $health_status)"
+            fi
+        fi
     else
         warn "Port $PORT is free (server not running)"
     fi
-
-    # Note: No separate worker in TS backend - SDK runs in-process
 
     echo ""
     echo "${BOLD}Build${RESET}"
@@ -655,8 +665,17 @@ run_doctor() {
     if [ -f "data/ccplus.db" ]; then
         pass "Database file exists"
 
-        # Table count
+        # Database integrity check
         if command -v sqlite3 >/dev/null 2>&1; then
+            integrity_result=$(sqlite3 data/ccplus.db "PRAGMA integrity_check" 2>/dev/null | head -1 || echo "error")
+            if [ "$integrity_result" = "ok" ]; then
+                pass "Database integrity: OK"
+            else
+                fail "Database integrity: $integrity_result"
+                exit_code=1
+            fi
+
+            # Table count
             table_count=$(sqlite3 data/ccplus.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table'" 2>/dev/null || echo "0")
             if [ "$table_count" -gt 0 ]; then
                 pass "Database has $table_count tables"
@@ -676,6 +695,76 @@ run_doctor() {
         fi
     else
         warn "Database not found (will be created on first run)"
+    fi
+
+    echo ""
+    echo "${BOLD}Resources${RESET}"
+    echo ""
+
+    # Disk space check
+    if command -v df >/dev/null 2>&1; then
+        available_kb=$(df -k "$SCRIPT_DIR/data" 2>/dev/null | tail -1 | awk '{print $4}' || echo "0")
+        available_mb=$((available_kb / 1024))
+        available_gb=$(echo "scale=1; $available_mb / 1024" | bc 2>/dev/null || echo "0")
+
+        if [ "$available_mb" -lt 1024 ]; then
+            warn "Disk space: Only ${available_mb}MB available in data/"
+        else
+            pass "Disk space: ${available_gb}GB available"
+        fi
+    fi
+
+    # Log file size check
+    if [ -f "logs/server.log" ]; then
+        log_size_bytes=$(stat -f%z "logs/server.log" 2>/dev/null || stat -c%s "logs/server.log" 2>/dev/null || echo "0")
+        log_size_mb=$(echo "scale=1; $log_size_bytes / 1048576" | bc 2>/dev/null || echo "0")
+
+        # Convert to float comparison (bc returns empty on some systems)
+        if [ -n "$log_size_mb" ] && [ "$(echo "$log_size_mb > 100" | bc 2>/dev/null || echo "0")" -eq 1 ]; then
+            warn "Log file size: ${log_size_mb}MB (consider rotation)"
+        else
+            pass "Log file size: ${log_size_mb}MB"
+        fi
+    else
+        pass "Log file: Does not exist yet"
+    fi
+
+    echo ""
+    echo "${BOLD}Dependencies${RESET}"
+    echo ""
+
+    # Node modules freshness - backend
+    if [ -d "backend-ts/node_modules" ] && [ -f "backend-ts/package-lock.json" ]; then
+        backend_lock_time=$(stat -f%m "backend-ts/package-lock.json" 2>/dev/null || stat -c%Y "backend-ts/package-lock.json" 2>/dev/null || echo "0")
+        backend_modules_time=$(stat -f%m "backend-ts/node_modules" 2>/dev/null || stat -c%Y "backend-ts/node_modules" 2>/dev/null || echo "0")
+
+        if [ "$backend_lock_time" -gt "$backend_modules_time" ]; then
+            warn "backend-ts/node_modules may be stale (package-lock.json is newer)"
+        else
+            pass "backend-ts/node_modules is up to date"
+        fi
+    elif [ ! -d "backend-ts/node_modules" ]; then
+        fail "backend-ts/node_modules not found"
+        exit_code=1
+    else
+        pass "backend-ts/node_modules exists"
+    fi
+
+    # Node modules freshness - frontend
+    if [ -d "frontend/node_modules" ] && [ -f "frontend/package-lock.json" ]; then
+        frontend_lock_time=$(stat -f%m "frontend/package-lock.json" 2>/dev/null || stat -c%Y "frontend/package-lock.json" 2>/dev/null || echo "0")
+        frontend_modules_time=$(stat -f%m "frontend/node_modules" 2>/dev/null || stat -c%Y "frontend/node_modules" 2>/dev/null || echo "0")
+
+        if [ "$frontend_lock_time" -gt "$frontend_modules_time" ]; then
+            warn "frontend/node_modules may be stale (package-lock.json is newer)"
+        else
+            pass "frontend/node_modules is up to date"
+        fi
+    elif [ ! -d "frontend/node_modules" ]; then
+        fail "frontend/node_modules not found"
+        exit_code=1
+    else
+        pass "frontend/node_modules exists"
     fi
 
     echo ""
