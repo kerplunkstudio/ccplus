@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem } from '../types';
+import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, ImageAttachment } from '../types';
 import { ChatPanelHeader } from './ChatPanelHeader';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
@@ -28,7 +28,7 @@ interface ChatPanelProps {
   toolLog: ToolEvent[];
   selectedModel: string;
   usageStats: UsageStats;
-  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[]) => void;
+  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => void;
   onSelectModel: (model: string) => void;
   onCancel: () => void;
   onToggleSessions?: () => void;

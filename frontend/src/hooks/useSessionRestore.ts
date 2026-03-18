@@ -226,6 +226,7 @@ export function useSessionRestore({
                 content: m.content,
                 role: m.role as 'user' | 'assistant',
                 timestamp: new Date(m.timestamp).getTime(),
+                images: m.images || [],
               }));
 
               if (sessionIsActive) {
@@ -368,6 +369,7 @@ export function useSessionRestore({
                 content: m.content,
                 role: m.role as 'user' | 'assistant',
                 timestamp: new Date(m.timestamp).getTime(),
+                images: m.images || [],
               }));
 
               if (sessionIsActive) {

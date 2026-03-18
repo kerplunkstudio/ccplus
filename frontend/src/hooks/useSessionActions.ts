@@ -1,6 +1,6 @@
 import { useCallback, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, PendingQuestion, SignalState } from '../types';
+import { Message, ToolEvent, PendingQuestion, SignalState, ImageAttachment } from '../types';
 import { TreeAction } from './useActivityTree';
 
 interface UseSessionActionsProps {
@@ -51,7 +51,7 @@ export function useSessionActions({
   clearToolTimerRef,
 }: UseSessionActionsProps) {
   const sendMessage = useCallback(
-    (content: string, workspace?: string, model?: string, imageIds?: string[]) => {
+    (content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
       if (!socket || !connected) return;
 
       setPromptSuggestions([]);
@@ -83,6 +83,7 @@ export function useSessionActions({
         content,
         role: 'user',
         timestamp: Date.now(),
+        images: images || [],
       };
       setMessages((prev) => [...prev, userMessage]);
       setStreaming(true);

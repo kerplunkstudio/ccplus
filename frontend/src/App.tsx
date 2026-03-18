@@ -21,7 +21,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
 import { DevServerToast } from './components/DevServerToast';
-import { WindowWithElectron } from './types';
+import { WindowWithElectron, ImageAttachment } from './types';
 import { ensureMruOrder } from './utils/tabs';
 import './App.css';
 
@@ -498,8 +498,8 @@ function AppContent({ token, loading }: AppContentProps) {
     };
   }, [activeProject, activeTab, workspace, workspace.state.projects, handleSelectTabInActiveProject, handleSelectTabInActiveProjectQuiet, handleSelectTab, handleSelectTabQuiet, handleNewTab, handleCloseTabInActiveProject, handleSelectProject, streaming, cancelQuery, activePage, showCommandPalette]);
 
-  const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[]) => {
-    sendMessage(content, workspace || activeTab?.projectPath || activeProject?.path || undefined, model || selectedModel, imageIds);
+  const handleSendMessage = useCallback((content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
+    sendMessage(content, workspace || activeTab?.projectPath || activeProject?.path || undefined, model || selectedModel, imageIds, images);
   }, [sendMessage, activeTab, activeProject, selectedModel]);
 
   const toggleDrawer = useCallback((drawer: 'sessions' | 'activity') => {
