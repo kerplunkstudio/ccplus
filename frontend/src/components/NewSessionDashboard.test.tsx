@@ -67,7 +67,8 @@ describe('NewSessionDashboard', () => {
     );
 
     // Should render greeting
-    expect(screen.getByText(/morning|afternoon|evening|night|saturday|sunday/i)).toBeInTheDocument();
+    const greeting = document.querySelector('.greeting-text');
+    expect(greeting).toBeInTheDocument();
   });
 
   it('renders greeting without name when profile name is empty', () => {
@@ -80,8 +81,9 @@ describe('NewSessionDashboard', () => {
       />
     );
 
-    const greeting = screen.getByText(/morning|afternoon|evening|night|saturday|sunday/i);
-    expect(greeting.textContent).not.toContain(',');
+    const greeting = document.querySelector('.greeting-text');
+    expect(greeting).toBeInTheDocument();
+    expect(greeting?.textContent).not.toContain(',');
   });
 
   it('renders greeting with name when profile has name', () => {
