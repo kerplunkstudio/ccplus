@@ -19,8 +19,8 @@ import { configWatcher, type ConfigChange } from "./config-watcher.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
-import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { GracefulShutdown } from "./graceful-shutdown.js";
+import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { createCorrelationContext } from "./correlation.js";
 
 // Remove CLAUDECODE env var
@@ -89,6 +89,9 @@ const rateLimiter = new RateLimiter();
 
 // Circuit breaker
 const circuitBreaker = new CircuitBreaker();
+
+// Rate limiter
+const rateLimiter = new RateLimiter();
 
 // Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
@@ -1055,9 +1058,6 @@ io.on("connection", (socket) => {
 
     if (!content && !imageIdsData.length) return;
 
-    // Generate correlation context for this user message
-    const correlation = createCorrelationContext(sid);
-
     // Record user message with provenance
     try {
       const provenance = provenanceTracker.getProvenance(socket.id);
@@ -1070,7 +1070,7 @@ io.on("connection", (socket) => {
         provenance?.connectionId ?? undefined,
         provenance?.sourceIp ?? undefined,
         provenance?.userAgent ?? undefined,
-        correlation.correlationId,
+        undefined,
       );
 
       // Record transcript event
@@ -1259,6 +1259,7 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
       }
     },
     sourceConnectionId,
+    correlationId,
     onComplete: (result: Record<string, unknown>) => {
       // Circuit breaker: record success/failure based on is_error
       if (result.is_error) {
@@ -1298,6 +1299,7 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
             model: result.model ?? null,
             sdk_session_id: result.sdk_session_id ?? null,
           },
+          correlation_id: correlationId,
         });
       } catch (e) {
         console.error("Failed to record assistant message transcript event:", e);
@@ -1311,6 +1313,7 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
         model: result.model,
         sdk_session_id: result.sdk_session_id,
         content: result.text,
+        correlation_id: correlationId,
       });
     },
     onError: (message: string) => {
@@ -1328,6 +1331,7 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
             message,
           },
           metadata: null,
+          correlation_id: correlationId,
         });
       } catch (e) {
         console.error("Failed to record error transcript event:", e);
