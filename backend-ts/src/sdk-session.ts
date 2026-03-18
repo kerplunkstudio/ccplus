@@ -1150,10 +1150,35 @@ async function streamQuery(
           callbacks.onText(sdkResultText, messageIndex);
         }
 
-        // Extract cumulative context usage from modelUsage
+        // Extract context usage from SDK result
         const modelUsageValues: ModelUsage[] = Object.values(result.modelUsage || {});
-        const totalInputTokens = modelUsageValues.reduce((sum, mu) => sum + (mu.inputTokens || 0), 0);
-        const contextWindowSize = modelUsageValues[0]?.contextWindow ?? 0;
+        // Use result.usage.input_tokens (last turn = current context size) as primary,
+        // falling back to cumulative modelUsage sum
+        const cumulativeInputTokens = modelUsageValues.reduce((sum, mu) => sum + (mu.inputTokens || 0), 0);
+        const currentInputTokens = result.usage?.input_tokens || cumulativeInputTokens || 0;
+        // Context window from modelUsage, or derive from model name
+        const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+          'opus': 500_000,
+          'sonnet': 500_000,
+          'haiku': 200_000,
+          'claude-sonnet-4-5-20250514': 500_000,
+          'claude-opus-4-5-20250514': 500_000,
+          'claude-sonnet-4-6': 1_000_000,
+          'claude-opus-4-6': 1_000_000,
+          'claude-sonnet-4-20250514': 500_000,
+          'claude-haiku-4-5-20251001': 200_000,
+        };
+        const DEFAULT_CONTEXT_WINDOW = 500_000;
+        const contextWindowSize = modelUsageValues[0]?.contextWindow
+          || (session.model ? MODEL_CONTEXT_WINDOWS[session.model] : null)
+          || DEFAULT_CONTEXT_WINDOW;
+
+        log.debug("Context usage", {
+          inputTokens: currentInputTokens,
+          contextWindow: contextWindowSize,
+          model: session.model,
+          pct: Math.round((currentInputTokens / contextWindowSize) * 100),
+        });
 
         lastCompletionData = {
           text: resultText.join(""),
@@ -1162,7 +1187,7 @@ async function streamQuery(
           duration_ms: result.duration_ms,
           is_error: result.is_error ?? (result.subtype !== "success"),
           num_turns: result.num_turns,
-          input_tokens: totalInputTokens || result.usage?.input_tokens,
+          input_tokens: currentInputTokens,
           output_tokens: result.usage?.output_tokens,
           context_window_size: contextWindowSize,
           model: session.model,
