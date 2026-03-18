@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Message, FileWithPath } from '../types';
+import { Message, FileWithPath, ImageAttachment } from '../types';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { PathAutocomplete } from './PathAutocomplete';
 import { useSkills } from '../hooks/useSkills';
@@ -28,7 +28,7 @@ interface ChatInputProps {
   connected: boolean;
   streaming: boolean;
   backgroundProcessing: boolean;
-  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[]) => void;
+  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => void;
   onCancel: () => void;
   sessionId?: string;
   projectPath?: string | null;
@@ -244,7 +244,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const imageIds = uploadedImages.map(img => img.id);
-    onSendMessage(trimmed || '[Image]', undefined, undefined, imageIds.length > 0 ? imageIds : undefined);
+    const images = uploadedImages.map(img => ({
+      id: img.id,
+      filename: img.filename,
+      mime_type: 'image/png',
+      size: 0,
+      url: img.url,
+    }));
+    onSendMessage(
+      trimmed || '[Image]',
+      undefined,
+      undefined,
+      imageIds.length > 0 ? imageIds : undefined,
+      images.length > 0 ? images : undefined
+    );
     setInput('');
     setUploadedImages([]);
     setShowAutocomplete(false);

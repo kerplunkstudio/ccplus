@@ -190,6 +190,7 @@ export interface DBMessage {
   content: string;
   role: 'user' | 'assistant';
   timestamp: string;
+  images?: ImageAttachment[];
 }
 
 export interface DBToolEvent {
