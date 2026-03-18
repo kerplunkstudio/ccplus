@@ -105,6 +105,7 @@ export function WelcomeScreen({ onSelectPrompt, onAddProject }: WelcomeScreenPro
       </header>
 
       <section className="welcome-section">
+        <h2 className="sr-only">Features</h2>
         <ul className="feature-list">
           <li className="feature-item">
             <strong>Real-time activity tree</strong>

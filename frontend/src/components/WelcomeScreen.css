@@ -104,6 +104,7 @@
 
 .prompt-link {
   all: unset;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -111,6 +112,11 @@
   cursor: pointer;
   border-bottom: 1px solid transparent;
   transition: border-color var(--transition-fast);
+}
+
+.prompt-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .prompt-link:hover {
@@ -177,6 +183,7 @@
 
 .workspace-item {
   all: unset;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -184,6 +191,11 @@
   cursor: pointer;
   border-bottom: 1px solid transparent;
   transition: border-color var(--transition-fast);
+}
+
+.workspace-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .workspace-item:hover {
@@ -227,6 +239,7 @@
 
 .workspace-browse {
   all: unset;
+  box-sizing: border-box;
   display: inline-block;
   padding: var(--space-sm) var(--space-md);
   margin-top: var(--space-lg);
@@ -241,9 +254,27 @@
   transition: all var(--transition-fast);
 }
 
+.workspace-browse:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .workspace-browse:hover {
   border-color: var(--text-secondary);
   color: var(--text-primary);
+}
+
+/* Accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Responsive */
