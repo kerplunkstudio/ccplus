@@ -1162,8 +1162,13 @@ async function streamQuery(
         const currentInputTokens = (usageObj.input_tokens || 0)
           + (usageObj.cache_read_input_tokens || 0)
           + (usageObj.cache_creation_input_tokens || 0);
-        // Context window from modelUsage (SDK reports 200k for all models)
-        const contextWindowSize = modelUsageValues[0]?.contextWindow || 200_000;
+        // SDK contextWindow is the agent's working limit (200k), not the model's actual capacity
+        const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+          'claude-sonnet-4-6': 1_000_000,
+          'claude-opus-4-6': 1_000_000,
+          'claude-haiku-4-5-20251001': 200_000,
+        };
+        const contextWindowSize = (session.model && MODEL_CONTEXT_LIMITS[session.model]) || 1_000_000;
 
         log.info("Context usage", {
           inputTokens: currentInputTokens,
