@@ -45,6 +45,7 @@ describe('ProjectSidebar - Session Rename', () => {
     onNewTabForProject: jest.fn(),
     onCloseTab: jest.fn(),
     onRenameTab: jest.fn(),
+    onOpenSession: jest.fn(),
     sidebarWidth: 260,
     onSidebarWidthChange: jest.fn(),
     onNavigate: jest.fn(),
