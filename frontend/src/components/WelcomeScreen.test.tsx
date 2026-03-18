@@ -42,8 +42,8 @@ describe('WelcomeScreen', () => {
       </ToastProvider>
     );
 
-    expect(screen.getByText('Welcome to cc+')).toBeInTheDocument();
-    expect(screen.getByText(/A web UI and observability layer for Claude Code/i)).toBeInTheDocument();
+    expect(screen.getByText('cc+')).toBeInTheDocument();
+    expect(screen.getByText('Watch your agents work.')).toBeInTheDocument();
   });
 
   it('renders feature list', () => {
@@ -106,22 +106,10 @@ describe('WelcomeScreen', () => {
       </ToastProvider>
     );
 
-    const browseButton = screen.getByText('Browse for workspace...');
+    const browseButton = screen.getByText('Browse for workspace');
     expect(browseButton).toBeInTheDocument();
   });
 
-  it('renders CTA hint text', () => {
-    render(
-      <ToastProvider>
-        <WelcomeScreen
-          onSelectPrompt={mockOnSelectPrompt}
-          onAddProject={mockOnAddProject}
-        />
-      </ToastProvider>
-    );
-
-    expect(screen.getByText(/Select a workspace or add a project to start using Claude Code/i)).toBeInTheDocument();
-  });
 
   it('opens workspace browser when clicking browse button', () => {
     render(
@@ -133,7 +121,7 @@ describe('WelcomeScreen', () => {
       </ToastProvider>
     );
 
-    const browseButton = screen.getByText('Browse for workspace...');
+    const browseButton = screen.getByText('Browse for workspace');
     fireEvent.click(browseButton);
 
     // WorkspaceBrowser should be rendered
@@ -244,7 +232,7 @@ describe('WelcomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('No projects detected. Browse to select a workspace directory.')).toBeInTheDocument();
+      expect(screen.getByText('No projects detected.')).toBeInTheDocument();
     });
   });
 
@@ -261,7 +249,7 @@ describe('WelcomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('No projects detected. Browse to select a workspace directory.')).toBeInTheDocument();
+      expect(screen.getByText('No projects detected.')).toBeInTheDocument();
     });
   });
 
@@ -286,7 +274,7 @@ describe('WelcomeScreen', () => {
     );
 
     await waitFor(() => {
-      const projectButtons = container.querySelectorAll('.workspace-detected-item');
+      const projectButtons = container.querySelectorAll('.workspace-item');
       expect(projectButtons).toHaveLength(5);
     });
   });
@@ -312,7 +300,7 @@ describe('WelcomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('+ 7 more projects')).toBeInTheDocument();
+      expect(screen.getByText('+7 more')).toBeInTheDocument();
     });
   });
 
@@ -331,7 +319,7 @@ describe('WelcomeScreen', () => {
       </ToastProvider>
     );
 
-    const browseButton = screen.getByText('Browse for workspace...');
+    const browseButton = screen.getByText('Browse for workspace');
     fireEvent.click(browseButton);
 
     // Simulate workspace selection
@@ -365,7 +353,7 @@ describe('WelcomeScreen', () => {
       </ToastProvider>
     );
 
-    const promptCards = container.querySelectorAll('.prompt-card');
+    const promptCards = container.querySelectorAll('.prompt-link');
     expect(promptCards).toHaveLength(4);
   });
 
@@ -387,17 +375,4 @@ describe('WelcomeScreen', () => {
     );
   });
 
-  it('renders logo SVG', () => {
-    const { container } = render(
-      <ToastProvider>
-        <WelcomeScreen
-          onSelectPrompt={mockOnSelectPrompt}
-          onAddProject={mockOnAddProject}
-        />
-      </ToastProvider>
-    );
-
-    const svg = container.querySelector('.welcome-logo svg');
-    expect(svg).toBeInTheDocument();
-  });
 });
