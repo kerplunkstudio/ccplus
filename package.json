@@ -10,7 +10,8 @@
     "electron:dev": "ELECTRON_IS_DEV=1 electron .",
     "package:mac": "electron-builder --mac",
     "package:linux": "electron-builder --linux",
-    "package:win": "electron-builder --win"
+    "package:win": "electron-builder --win",
+    "prepare": "husky"
   },
   "build": {
     "appId": "com.ccplus.desktop",
@@ -18,18 +19,27 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "electron/assets/icon.icns",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "linux": {
       "category": "Development",
       "icon": "electron/assets/icon.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "maintainer": "kerplunkstudio",
       "description": "Web UI and observability layer for Claude Code"
     },
     "win": {
       "icon": "electron/assets/icon.ico",
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "files": [
       "electron/**/*",
@@ -41,7 +51,8 @@
   },
   "devDependencies": {
     "electron": "^35.4.0",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "husky": "^9.1.7"
   },
   "dependencies": {
     "electron-store": "^8.1.0"
