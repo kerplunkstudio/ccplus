@@ -19,9 +19,7 @@ import { configWatcher, type ConfigChange } from "./config-watcher.js";
 import { ConnectionHealthMonitor } from "./connection-health.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
-import { GracefulShutdown } from "./graceful-shutdown.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
-import { createCorrelationContext } from "./correlation.js";
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -90,10 +88,6 @@ const rateLimiter = new RateLimiter();
 // Circuit breaker
 const circuitBreaker = new CircuitBreaker();
 
-// Rate limiter
-const rateLimiter = new RateLimiter();
-
-// Track mutable workspace path
 let workspacePath = config.WORKSPACE_PATH;
 
 // =========================================================================
@@ -1031,22 +1025,8 @@ io.on("connection", (socket) => {
 
     connectionHealthMonitor.onEvent(client.session_id);
 
-    // Rate limiting check
-    const rateCheck = rateLimiter.check(client.session_id);
-    if (!rateCheck.allowed) {
-      socket.emit("rate_limited", { retry_after_ms: rateCheck.retryAfterMs });
-      return;
-    }
 
-    // Circuit breaker check
-    const circuitCheck = circuitBreaker.canExecute(client.session_id);
-    if (!circuitCheck.allowed) {
-      socket.emit("circuit_open", { message: circuitCheck.reason });
-      return;
-    }
 
-    // Track activity
-    connectionHealthMonitor.onEvent(client.session_id);
 
     const sid = client.session_id;
     const uid = client.user_id;
@@ -1058,6 +1038,9 @@ io.on("connection", (socket) => {
 
     if (!content && !imageIdsData.length) return;
 
+
+    // Generate correlation context for this user message
+    const correlation = createCorrelationContext(sid);
     // Record user message with provenance
     try {
       const provenance = provenanceTracker.getProvenance(socket.id);
@@ -1070,7 +1053,7 @@ io.on("connection", (socket) => {
         provenance?.connectionId ?? undefined,
         provenance?.sourceIp ?? undefined,
         provenance?.userAgent ?? undefined,
-        undefined,
+        correlation.correlationId,
       );
 
       // Record transcript event
@@ -1109,7 +1092,7 @@ io.on("connection", (socket) => {
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined),
+      buildSocketCallbacks(sid, uid, provenance?.connectionId ?? undefined, correlation.correlationId),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -1168,7 +1151,6 @@ io.on("connection", (socket) => {
     provenanceTracker.unregister(socket.id);
     if (client) {
       connectionHealthMonitor.onDisconnect(client.session_id);
-      rateLimiter.reset(client.session_id);
       console.log(`Client disconnected: user=${client.user_id} session=${client.session_id}`);
     }
   });
@@ -1176,7 +1158,7 @@ io.on("connection", (socket) => {
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
-function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectionId?: string) {
+function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectionId?: string, correlationId?: string) {
   return {
     onText: (text: string) => {
       io.to(sessionId).emit("text_delta", { text });
@@ -1261,12 +1243,6 @@ function buildSocketCallbacks(sessionId: string, userId: string, sourceConnectio
     sourceConnectionId,
     correlationId,
     onComplete: (result: Record<string, unknown>) => {
-      // Circuit breaker: record success/failure based on is_error
-      if (result.is_error) {
-        circuitBreaker.recordFailure(sessionId);
-      } else {
-        circuitBreaker.recordSuccess(sessionId);
-      }
 
       try {
         database.incrementUserStats(
