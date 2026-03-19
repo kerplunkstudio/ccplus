@@ -478,7 +478,6 @@ describe('ChatInput', () => {
 
       // Queued indicator should appear
       await waitFor(() => {
-        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
         expect(screen.getByText(/Queued message/i)).toBeInTheDocument();
       });
 
@@ -502,7 +501,7 @@ describe('ChatInput', () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
       await waitFor(() => {
-        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
+        expect(screen.getByText(/Queued message/i)).toBeInTheDocument();
       });
 
       // End streaming
@@ -517,8 +516,8 @@ describe('ChatInput', () => {
         expect(mockOnSendMessage).toHaveBeenCalledWith('Queued message', undefined, undefined, undefined, undefined);
       });
 
-      // Queued indicator should disappear
-      expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+      // Queued indicator should disappear (check by querying cancel button or indicator class)
+      expect(screen.queryByLabelText(/Cancel queued message/i)).not.toBeInTheDocument();
     });
 
     it('allows dismissing queued message', async () => {
@@ -530,7 +529,7 @@ describe('ChatInput', () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
       await waitFor(() => {
-        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
+        expect(screen.getByText(/Queued message/i)).toBeInTheDocument();
       });
 
       // Click dismiss button
@@ -539,7 +538,7 @@ describe('ChatInput', () => {
 
       // Queued indicator should disappear
       await waitFor(() => {
-        expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Queued message/i)).not.toBeInTheDocument();
       });
 
       // Message should not be sent
@@ -600,7 +599,7 @@ describe('ChatInput', () => {
       });
 
       // No queued indicator should appear
-      expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Cancel queued message/i)).not.toBeInTheDocument();
     });
 
     it('truncates long queued messages in indicator', async () => {
@@ -612,9 +611,11 @@ describe('ChatInput', () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
 
       await waitFor(() => {
-        const indicator = screen.getByText(/Queued:/i);
-        expect(indicator.textContent).toContain('...');
-        expect(indicator.textContent?.length).toBeLessThan(longMessage.length + 10);
+        // Find the queued text element by class
+        const indicator = document.querySelector('.queued-text');
+        expect(indicator?.textContent).toContain('...');
+        // Should truncate to 80 chars + "..." (83 total), much shorter than 100
+        expect(indicator?.textContent?.length).toBeLessThan(90);
       });
     });
   });
