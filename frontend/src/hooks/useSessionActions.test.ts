@@ -1,8 +1,9 @@
 import { renderHook, act } from '@testing-library/react';
 import { useSessionActions } from './useSessionActions';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent } from '../types';
+import { ToolEvent } from '../types';
 import { TreeAction } from './useActivityTree';
+import { StreamAction } from './streamReducer';
 
 describe('useSessionActions', () => {
   let mockSocket: jest.Mocked<Socket>;
@@ -11,15 +12,7 @@ describe('useSessionActions', () => {
     connected: boolean;
     currentSessionIdRef: { current: string };
     backgroundProcessing: boolean;
-    streamingIdRef: { current: string | null };
-    streamingContentRef: { current: string };
-    responseCompleteRef: { current: boolean };
-    completionFinalizedRef: { current: boolean };
-    messageIndexRef: { current: number };
-    setMessages: jest.Mock;
-    setStreaming: jest.Mock;
-    setBackgroundProcessing: jest.Mock;
-    setThinking: jest.Mock;
+    streamDispatch: jest.Mock<void, [StreamAction]>;
     setCurrentTool: jest.Mock;
     setPendingQuestion: jest.Mock;
     setPromptSuggestions: jest.Mock;
@@ -43,15 +36,7 @@ describe('useSessionActions', () => {
       connected: true,
       currentSessionIdRef: { current: 'session-123' },
       backgroundProcessing: false,
-      streamingIdRef: { current: null },
-      streamingContentRef: { current: '' },
-      responseCompleteRef: { current: false },
-      completionFinalizedRef: { current: false },
-      messageIndexRef: { current: 0 },
-      setMessages: jest.fn(),
-      setStreaming: jest.fn(),
-      setBackgroundProcessing: jest.fn(),
-      setThinking: jest.fn(),
+      streamDispatch: jest.fn(),
       setCurrentTool: jest.fn(),
       setPendingQuestion: jest.fn(),
       setPromptSuggestions: jest.fn(),
@@ -141,67 +126,30 @@ describe('useSessionActions', () => {
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
 
-    it('should reset streaming state on send', () => {
-      mockProps.streamingIdRef.current = 'streaming-msg-id';
-      mockProps.streamingContentRef.current = 'Partial content';
-
+    it('should dispatch CANCEL_QUERY before sending new message', () => {
       const { result } = renderHook(() => useSessionActions(mockProps));
 
       act(() => {
         result.current.sendMessage('New message');
       });
 
-      expect(mockProps.streamingIdRef.current).toBeNull();
-      expect(mockProps.streamingContentRef.current).toBe('');
-      expect(mockProps.responseCompleteRef.current).toBe(false);
-      expect(mockProps.completionFinalizedRef.current).toBe(false);
-      expect(mockProps.messageIndexRef.current).toBe(0);
-      expect(mockProps.setThinking).toHaveBeenCalledWith('');
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'CANCEL_QUERY' });
     });
 
-    it('should finalize streaming message before sending new one', () => {
-      mockProps.streamingIdRef.current = 'streaming-msg-id';
-      mockProps.streamingContentRef.current = 'Final content';
-
-      const { result } = renderHook(() => useSessionActions(mockProps));
-
-      act(() => {
-        result.current.sendMessage('New message');
-      });
-
-      expect(mockProps.setMessages).toHaveBeenCalledWith(expect.any(Function));
-      const updater = mockProps.setMessages.mock.calls[0][0];
-      const prevMessages: Message[] = [
-        { id: 'streaming-msg-id', content: 'Partial', role: 'assistant', timestamp: Date.now(), streaming: true },
-      ];
-      const updated = updater(prevMessages);
-      expect(updated[0].content).toBe('Final content');
-      expect(updated[0].streaming).toBe(false);
-    });
-
-    it('should add user message to messages', () => {
+    it('should dispatch SEND_MESSAGE with user message', () => {
       const { result } = renderHook(() => useSessionActions(mockProps));
 
       act(() => {
         result.current.sendMessage('User question');
       });
 
-      expect(mockProps.setMessages).toHaveBeenCalledWith(expect.any(Function));
-      const updater = mockProps.setMessages.mock.calls[mockProps.setMessages.mock.calls.length - 1][0];
-      const updated = updater([]);
-      expect(updated).toHaveLength(1);
-      expect(updated[0].role).toBe('user');
-      expect(updated[0].content).toBe('User question');
-    });
-
-    it('should set streaming to true', () => {
-      const { result } = renderHook(() => useSessionActions(mockProps));
-
-      act(() => {
-        result.current.sendMessage('Hello');
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({
+        type: 'SEND_MESSAGE',
+        message: expect.objectContaining({
+          role: 'user',
+          content: 'User question',
+        }),
       });
-
-      expect(mockProps.setStreaming).toHaveBeenCalledWith(true);
     });
 
     it('should clear tool log', () => {
@@ -248,7 +196,7 @@ describe('useSessionActions', () => {
       });
 
       expect(mockSocket.emit).toHaveBeenCalledWith('cancel', { session_id: 'session-123' });
-      expect(mockProps.setBackgroundProcessing).toHaveBeenCalledWith(false);
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'SET_BACKGROUND_PROCESSING', value: false });
       expect(mockProps.dispatchTree).toHaveBeenCalledWith({ type: 'MARK_ALL_STOPPED' });
     });
   });
@@ -296,51 +244,14 @@ describe('useSessionActions', () => {
       expect(mockProps.dispatchTree).toHaveBeenCalledWith({ type: 'MARK_ALL_STOPPED' });
     });
 
-    it('should finalize streaming message', () => {
-      mockProps.streamingIdRef.current = 'msg-123';
-
+    it('should dispatch CANCEL_QUERY', () => {
       const { result } = renderHook(() => useSessionActions(mockProps));
 
       act(() => {
         result.current.cancelQuery();
       });
 
-      expect(mockProps.setMessages).toHaveBeenCalledWith(expect.any(Function));
-      const updater = mockProps.setMessages.mock.calls[0][0];
-      const prevMessages: Message[] = [
-        { id: 'msg-123', content: 'Content', role: 'assistant', timestamp: Date.now(), streaming: true },
-      ];
-      const updated = updater(prevMessages);
-      expect(updated[0].streaming).toBe(false);
-    });
-
-    it('should reset streaming refs', () => {
-      mockProps.streamingIdRef.current = 'msg-123';
-      mockProps.streamingContentRef.current = 'Content';
-      mockProps.responseCompleteRef.current = true;
-      mockProps.completionFinalizedRef.current = true;
-
-      const { result } = renderHook(() => useSessionActions(mockProps));
-
-      act(() => {
-        result.current.cancelQuery();
-      });
-
-      expect(mockProps.streamingIdRef.current).toBeNull();
-      expect(mockProps.streamingContentRef.current).toBe('');
-      expect(mockProps.responseCompleteRef.current).toBe(false);
-      expect(mockProps.completionFinalizedRef.current).toBe(false);
-    });
-
-    it('should set streaming to false', () => {
-      const { result } = renderHook(() => useSessionActions(mockProps));
-
-      act(() => {
-        result.current.cancelQuery();
-      });
-
-      expect(mockProps.setStreaming).toHaveBeenCalledWith(false);
-      expect(mockProps.setBackgroundProcessing).toHaveBeenCalledWith(false);
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'CANCEL_QUERY' });
     });
 
     it('should clear current tool and pending question', () => {

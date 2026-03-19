@@ -18,7 +18,7 @@ afterEach(() => {
   }
 });
 
-describe('useTabSocket session cache', () => {
+describe('useTabSocket session restore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Mock fetch to resolve immediately
@@ -39,86 +39,26 @@ describe('useTabSocket session cache', () => {
     });
   });
 
-  it('should cache session state when switching tabs during streaming', async () => {
+  it('should restore session from database', async () => {
     const mockSocket = {
       on: jest.fn(),
       emit: jest.fn(),
       close: jest.fn(),
+      connected: true,
       io: { on: jest.fn() },
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    // Render hook with session A
-    const { result, rerender } = renderHook(
-      ({ sessionId }) => useTabSocket(sessionId),
-      {
-        initialProps: { sessionId: 'session-a' },
-      }
-    );
-
-    // Wait for initial restore to complete
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Simulate receiving text_delta to populate streaming content
-    const textDeltaHandler = mockSocket.on.mock.calls.find(
-      (call) => call[0] === 'text_delta'
-    )?.[1];
-
-    await act(async () => {
-      textDeltaHandler?.({ text: 'Hello world', message_id: 'msg-1' });
-    });
-
-    // Verify messages were added
-    expect(result.current.messages.length).toBeGreaterThan(0);
-    const messagesBefore = result.current.messages;
-
-    // Switch to session B (this should cache session A's state)
-    await act(async () => {
-      rerender({ sessionId: 'session-b' });
-    });
-
-    // Wait for session B restore to complete
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify session A was reset
-    expect(result.current.messages.length).toBe(0);
-
-    // Switch back to session A (should restore from cache, not DB)
-    await act(async () => {
-      rerender({ sessionId: 'session-a' });
-    });
-
-    // Wait for restore to complete
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify messages were restored from cache
-    expect(result.current.messages.length).toBe(messagesBefore.length);
-    expect(result.current.messages[0].content).toBe(messagesBefore[0].content);
-  });
-
-  it('should delete cache entry on final completion', async () => {
-    const mockSocket = {
-      on: jest.fn(),
-      emit: jest.fn(),
-      close: jest.fn(),
-      io: { on: jest.fn() },
-    };
-    (io as jest.Mock).mockReturnValue(mockSocket);
-
-    // Override default fetch mock for this test to return a message
+    // Override default fetch mock for this test to return messages
     (global.fetch as jest.Mock).mockImplementation((url: string) => {
       return Promise.resolve({
         ok: true,
         json: async () => {
           if (url.includes('/api/history/')) {
             return {
-              messages: [{ id: 1, content: 'Test', role: 'user', timestamp: new Date().toISOString() }],
+              messages: [
+                { id: 1, content: 'Test message', role: 'user', timestamp: new Date().toISOString() }
+              ],
               streaming: false
             };
           }
@@ -130,93 +70,34 @@ describe('useTabSocket session cache', () => {
       });
     });
 
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
       ({ sessionId }) => useTabSocket(sessionId),
       {
         initialProps: { sessionId: 'session-a' },
       }
     );
 
-    // Wait for initial restore
+    // Wait for restore to complete
     await waitFor(() => {
       expect(result.current.isRestoringSession).toBe(false);
-    });
+    }, { timeout: 3000 });
 
-    // Simulate text_delta
-    const textDeltaHandler = mockSocket.on.mock.calls.find(
-      (call) => call[0] === 'text_delta'
-    )?.[1];
-
-    await act(async () => {
-      textDeltaHandler?.({ text: 'Response', message_id: 'msg-1' });
-    });
-
-    // Switch to session B to cache session A
-    await act(async () => {
-      rerender({ sessionId: 'session-b' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Simulate response_complete with final completion flag
-    const responseCompleteHandler = mockSocket.on.mock.calls.find(
-      (call) => call[0] === 'response_complete'
-    )?.[1];
-
-    // Switch back to session A
-    await act(async () => {
-      rerender({ sessionId: 'session-a' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Simulate final completion
-    await act(async () => {
-      responseCompleteHandler?.({
-        sdk_session_id: 'final-session-id',
-        cost: 0.01,
-        duration_ms: 1000,
-      });
-    });
-
-    // Switch to session B and back to session A again
-    await act(async () => {
-      rerender({ sessionId: 'session-b' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    await act(async () => {
-      rerender({ sessionId: 'session-a' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify session A state comes from DB fetch (cache was deleted)
-    // We can check this by verifying fetch was called
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/history/session-a')
-    );
+    // Verify message was restored from database
+    expect(result.current.messages.length).toBe(1);
+    expect(result.current.messages[0].content).toBe('Test message');
   });
 
-  it('should preserve streaming state during tab switch', async () => {
+  it('should handle empty sessions', async () => {
     const mockSocket = {
       on: jest.fn(),
       emit: jest.fn(),
       close: jest.fn(),
+      connected: true,
       io: { on: jest.fn() },
     };
     (io as jest.Mock).mockReturnValue(mockSocket);
 
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
       ({ sessionId }) => useTabSocket(sessionId),
       {
         initialProps: { sessionId: 'session-a' },
@@ -226,91 +107,11 @@ describe('useTabSocket session cache', () => {
     // Wait for initial restore
     await waitFor(() => {
       expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Simulate text_delta to start streaming
-    const textDeltaHandler = mockSocket.on.mock.calls.find(
-      (call) => call[0] === 'text_delta'
-    )?.[1];
-
-    await act(async () => {
-      textDeltaHandler?.({ text: 'Streaming...', message_id: 'msg-1' });
-    });
-
-    // Verify streaming is active
-    expect(result.current.streaming).toBe(true);
-
-    // Switch to session B
-    await act(async () => {
-      rerender({ sessionId: 'session-b' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify streaming was reset for session B
-    expect(result.current.streaming).toBe(false);
-
-    // Switch back to session A
-    await act(async () => {
-      rerender({ sessionId: 'session-a' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify streaming state was restored
-    expect(result.current.streaming).toBe(true);
-  });
-
-  it('should not cache empty sessions', async () => {
-    const mockSocket = {
-      on: jest.fn(),
-      emit: jest.fn(),
-      close: jest.fn(),
-      io: { on: jest.fn() },
-    };
-    (io as jest.Mock).mockReturnValue(mockSocket);
-
-    const { result, rerender } = renderHook(
-      ({ sessionId }) => useTabSocket(sessionId),
-      {
-        initialProps: { sessionId: 'session-a' },
-      }
-    );
-
-    // Wait for initial restore
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
+    }, { timeout: 3000 });
 
     // Verify no messages
     expect(result.current.messages.length).toBe(0);
-
-    // Switch to session B (should not cache session A since it's empty)
-    await act(async () => {
-      rerender({ sessionId: 'session-b' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Switch back to session A
-    await act(async () => {
-      rerender({ sessionId: 'session-a' });
-    });
-
-    await waitFor(() => {
-      expect(result.current.isRestoringSession).toBe(false);
-    });
-
-    // Verify fetch was called (cache was not used because session was empty)
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/history/session-a')
-    );
+    expect(result.current.streaming).toBe(false);
   });
 });
 
@@ -497,8 +298,8 @@ describe('useTabSocket persistent socket', () => {
     // Verify leave_session was called for session-a
     expect(mockSocket.emit).toHaveBeenCalledWith('leave_session', { session_id: 'session-a' });
 
-    // Verify join_session was called for session-b
-    expect(mockSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-b' });
+    // Verify join_session was called for session-b (now includes last_seq)
+    expect(mockSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-b', last_seq: 0 });
   });
 
   it('should include session_id in message emit', async () => {

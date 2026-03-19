@@ -48,7 +48,6 @@ interface ChatPanelProps {
   isRestoringSession?: boolean;
   onSendToNewSession?: (text: string) => void;
   onOpenBrowserTab?: (url: string, label: string) => void;
-  pendingRestore?: boolean;
   signals?: SignalState;
   promptSuggestions?: string[];
   rateLimitState?: { active: boolean; retryAfterMs: number } | null;
@@ -87,7 +86,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isRestoringSession = false,
   onSendToNewSession,
   onOpenBrowserTab,
-  pendingRestore = false,
   signals,
   promptSuggestions = [],
   rateLimitState,

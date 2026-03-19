@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef, useCallback, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { ToolEvent, SignalState, Message, TodoItem } from '../types';
+import { ToolEvent, SignalState, TodoItem } from '../types';
 import { TreeAction } from './useActivityTree';
+import { StreamAction } from './streamReducer';
 
 interface UseToolEventsProps {
   socket: Socket | null;
   dispatchTree: Dispatch<TreeAction>;
   currentSessionIdRef: MutableRefObject<string>;
-  streamingIdRef: MutableRefObject<string | null>;
-  streamingContentRef: MutableRefObject<string>;
-  setMessages: Dispatch<React.SetStateAction<Message[]>>;
-  setStreaming: (streaming: boolean) => void;
+  streamDispatch: Dispatch<StreamAction>;
   sequenceRef: MutableRefObject<number>;
   seenToolUseIds: MutableRefObject<Set<string>>;
-  toolLogRef: MutableRefObject<ToolEvent[]>; // Accept from outside
+  toolLogRef: MutableRefObject<ToolEvent[]>;
   onDevServerDetected?: (url: string) => void;
 }
 
@@ -21,13 +19,10 @@ export function useToolEvents({
   socket,
   dispatchTree,
   currentSessionIdRef,
-  streamingIdRef,
-  streamingContentRef,
-  setMessages,
-  setStreaming,
+  streamDispatch,
   sequenceRef,
   seenToolUseIds,
-  toolLogRef, // Use external ref
+  toolLogRef,
   onDevServerDetected,
 }: UseToolEventsProps) {
   const [currentTool, setCurrentTool] = useState<ToolEvent | null>(null);
@@ -63,35 +58,6 @@ export function useToolEvents({
     }
   }, []);
 
-  const checkAndFinalizeToolState = useCallback(() => {
-    if (!streamingIdRef.current && toolLogRef.current.length > 0) {
-      const allToolsCompleted = toolLogRef.current.every(tool =>
-        tool.type === 'tool_complete' || tool.type === 'agent_stop'
-      );
-
-      if (allToolsCompleted) {
-        setMessages(prev => {
-          const messages = [...prev];
-          if (messages.length > 0) {
-            const lastMessage = messages[messages.length - 1];
-            if (lastMessage.role === 'assistant') {
-              messages[messages.length - 1] = {
-                ...lastMessage,
-                toolLog: [...toolLogRef.current]
-              };
-            }
-          }
-          return messages;
-        });
-
-        setTimeout(() => {
-          toolLogRef.current = [];
-          setToolLog([]);
-        }, 1500);
-      }
-    }
-  }, [streamingIdRef, toolLogRef, setMessages]);
-
   // Socket event listeners
   useEffect(() => {
     if (!socket) return;
@@ -114,42 +80,24 @@ export function useToolEvents({
           break;
         }
         case 'agent_start': {
-          if (streamingIdRef.current && streamingContentRef.current.trim()) {
-            const msgId = streamingIdRef.current;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === msgId ? { ...m, streaming: false } : m
-              )
-            );
-            streamingIdRef.current = null;
-            streamingContentRef.current = '';
-          }
+          streamDispatch({ type: 'FINALIZE_STREAM' });
+          streamDispatch({ type: 'SET_STREAMING', value: true });
 
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'AGENT_START', event, sequence: seq });
           setCurrentToolDebounced(event);
-          setStreaming(true);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
           break;
         }
         case 'tool_start': {
-          if (streamingIdRef.current && streamingContentRef.current.trim()) {
-            const msgId = streamingIdRef.current;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === msgId ? { ...m, streaming: false } : m
-              )
-            );
-            streamingIdRef.current = null;
-            streamingContentRef.current = '';
-          }
+          streamDispatch({ type: 'FINALIZE_STREAM' });
+          streamDispatch({ type: 'SET_STREAMING', value: true });
 
           const seq = ++sequenceRef.current;
           dispatchTree({ type: 'TOOL_START', event, sequence: seq });
           setCurrentToolDebounced(event);
-          setStreaming(true);
           const newEntry = { ...event };
           toolLogRef.current = [...toolLogRef.current, newEntry];
           setToolLog([...toolLogRef.current]);
@@ -165,10 +113,6 @@ export function useToolEvents({
               : t
           );
           setToolLog([...toolLogRef.current]);
-
-          setTimeout(() => {
-            checkAndFinalizeToolState();
-          }, 50);
           break;
         }
         case 'agent_stop':
@@ -181,10 +125,6 @@ export function useToolEvents({
               : t
           );
           setToolLog([...toolLogRef.current]);
-
-          setTimeout(() => {
-            checkAndFinalizeToolState();
-          }, 50);
           break;
       }
     });
@@ -244,8 +184,7 @@ export function useToolEvents({
         clearToolTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, dispatchTree, currentSessionIdRef, streamingIdRef, streamingContentRef, setMessages, setStreaming, sequenceRef, seenToolUseIds, setCurrentToolDebounced, checkAndFinalizeToolState, onDevServerDetected]);
+  }, [socket, dispatchTree, currentSessionIdRef, streamDispatch, sequenceRef, seenToolUseIds, toolLogRef, setCurrentToolDebounced, onDevServerDetected]);
 
   return {
     currentTool,
