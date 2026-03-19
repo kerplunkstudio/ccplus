@@ -9,10 +9,11 @@ dotenvConfig({ path: path.resolve(import.meta.dirname, "../../.env") });
 export const PROJECT_ROOT = path.resolve(import.meta.dirname, "../..");
 export const DATA_DIR = path.join(PROJECT_ROOT, "data");
 export const LOG_DIR = path.join(PROJECT_ROOT, "logs");
+export const WORKFLOWS_DIR = path.join(DATA_DIR, "workflows");
 export const STATIC_DIR = path.join(PROJECT_ROOT, "static", "chat");
 
 // Ensure dirs exist
-for (const dir of [DATA_DIR, LOG_DIR]) {
+for (const dir of [DATA_DIR, LOG_DIR, WORKFLOWS_DIR]) {
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -86,6 +87,9 @@ export const MEMORY_SEARCH_TIMEOUT_MS = 5000;
 export const MEMORY_INIT_TIMEOUT_MS = 30000;
 export const MEMORY_HOOK_TIMEOUT_MS = 2000;
 export const MEMORY_DISTILL_DEBOUNCE_MS = 60000;
+
+// Workflow state machine configuration
+export const WORKFLOW_ENABLED = process.env.CCPLUS_WORKFLOW_ENABLED === 'true';
 
 /**
  * Reload hot-reloadable config values from environment

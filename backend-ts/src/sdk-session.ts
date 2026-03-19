@@ -11,6 +11,9 @@ import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 import { log } from "./logger.js";
 import { searchMemories } from './memory-client.js';
 import { distillSession } from './memory-distiller.js';
+import { eventLog } from './event-log.js';
+import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase } from './workflow-state.js';
+import { WORKFLOW_ENABLED } from './config.js';
 
 // ---- Skills discovery (cached) ----
 
@@ -450,6 +453,30 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
     }
 
+    // Workflow phase enforcement
+    if (WORKFLOW_ENABLED) {
+      const wfState = getWorkflowState(sessionId);
+      const enforcement = evaluatePreToolUse(wfState.phase, toolName, (input.tool_input as Record<string, unknown>) ?? {});
+      if (enforcement.action === 'block') {
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse' as const,
+            permissionDecision: 'deny' as const,
+            permissionDecisionReason: enforcement.message ?? 'Blocked by workflow phase',
+          },
+        };
+      }
+      if (enforcement.action === 'warn') {
+        const session = sessions.get(sessionId);
+        if (session?.callbacks) {
+          session.callbacks.onSignal?.({
+            type: 'workflow_warning',
+            data: { message: enforcement.message, phase: wfState.phase },
+          });
+        }
+      }
+    }
+
     return { continue: true };
   };
 
@@ -664,7 +691,39 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       agentIdToToolUseId.set(agentId, toolUseIdForAgent);
     }
 
-    // Inject relevant memories into subagent context
+    // Auto-transition workflow phase based on agent type
+    if (WORKFLOW_ENABLED) {
+      const agentType = ((input.tool_input as Record<string, unknown>)?.subagent_type as string) ?? '';
+      const inferredPhase = inferPhaseFromAgent(agentType);
+      if (inferredPhase) {
+        const currentState = getWorkflowState(sessionId);
+        if (currentState.phase !== inferredPhase) {
+          const newState = transitionPhase(sessionId, inferredPhase, `agent:${agentType}`);
+          if (newState) {
+            const session = sessions.get(sessionId);
+            if (session?.callbacks) {
+              session.callbacks.onSignal?.({
+                type: 'workflow_phase',
+                data: {
+                  phase: newState.phase,
+                  previous: currentState.phase,
+                  sessionId,
+                },
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Build additional context (workflow + memory)
+    let workflowContext = '';
+    if (WORKFLOW_ENABLED) {
+      const phaseCtx = getPhaseContext(getWorkflowState(sessionId).phase);
+      if (phaseCtx) workflowContext = phaseCtx + '\n\n';
+    }
+
+    let memoryContext = '';
     if (config.MEMORY_ENABLED) {
       try {
         const session = sessions.get(sessionId);
@@ -685,17 +744,23 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
             timeoutPromise,
           ]);
           if (memoryText) {
-            return {
-              hookSpecificOutput: {
-                hookEventName: 'SubagentStart' as const,
-                additionalContext: `## Prior Knowledge\n${memoryText}`,
-              },
-            };
+            memoryContext = `## Prior Knowledge\n${memoryText}`;
           }
         }
       } catch (error) {
         log.warn('Memory injection into subagent failed', { error: String(error) });
       }
+    }
+
+    // Return combined context if we have any
+    const combinedContext = workflowContext + memoryContext;
+    if (combinedContext) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'SubagentStart' as const,
+          additionalContext: combinedContext,
+        },
+      };
     }
 
     return {};
@@ -810,6 +875,7 @@ export function disconnectSession(sessionId: string): void {
     });
     session.activeQuery.close();
   }
+  eventLog.clear(sessionId);
   sessions.delete(sessionId);
 }
 
