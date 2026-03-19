@@ -60,7 +60,6 @@ export const MessageList: React.FC<MessageListProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [lastMessageCount, setLastMessageCount] = useState(0);
   const userScrolledUpRef = useRef(false);
-  const programmaticScrollRef = useRef(false);
 
   const isNearBottom = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -73,7 +72,6 @@ export const MessageList: React.FC<MessageListProps> = ({
     const container = messagesContainerRef.current;
     if (!container) return;
 
-    programmaticScrollRef.current = true;
     if (immediate) {
       container.scrollTop = container.scrollHeight;
     } else {
@@ -82,9 +80,6 @@ export const MessageList: React.FC<MessageListProps> = ({
         behavior: 'smooth',
       });
     }
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
-    });
   }, []);
 
   // Detect manual user scrolling
@@ -93,14 +88,11 @@ export const MessageList: React.FC<MessageListProps> = ({
     if (!container) return;
 
     const handleScroll = () => {
-      // Ignore programmatic scrolls
-      if (programmaticScrollRef.current) return;
-
-      // Check if user scrolled away from bottom
+      // Check if user is near bottom or scrolled away
       if (!isNearBottom()) {
         userScrolledUpRef.current = true;
       } else {
-        // User scrolled back to bottom
+        // User scrolled back to bottom - resume autoscroll
         userScrolledUpRef.current = false;
       }
     };
@@ -109,13 +101,14 @@ export const MessageList: React.FC<MessageListProps> = ({
     return () => container.removeEventListener('scroll', handleScroll);
   }, [isNearBottom]);
 
-  // Auto-scroll on new messages, streaming content, or tool activity updates
+  // Auto-scroll on new messages, streaming content, tool activity updates, or thinking indicator changes
   useEffect(() => {
     const isSessionChange = Math.abs(messages.length - lastMessageCount) > 1;
     const hasStreamingMessage = messages.some((m) => m.streaming);
 
     if (isSessionChange || messages.length === 0) {
-      // Session switch: instant jump, always scroll
+      // Session switch: instant jump, always scroll, reset user scroll state
+      userScrolledUpRef.current = false;
       requestAnimationFrame(() => {
         scrollToBottom(true);
       });
@@ -126,12 +119,14 @@ export const MessageList: React.FC<MessageListProps> = ({
       }
     } else if (messages.length !== lastMessageCount) {
       // New message added (not streaming): smooth scroll unless user scrolled up
+      // Also reset user scroll state to resume autoscroll
+      userScrolledUpRef.current = false;
       if (!userScrolledUpRef.current) {
         scrollToBottom(false);
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, currentTool, toolLog]);
+  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, currentTool, toolLog, activityTree, signals]);
 
   return (
     <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
