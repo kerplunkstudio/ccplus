@@ -22,6 +22,8 @@ Located in `~/.claude/agents/`:
 | refactor-cleaner | Dead code cleanup | Code maintenance |
 | doc-updater | Documentation | Updating docs |
 | frontend-agent | Frontend code with skill consultation | ALL frontend/UI changes (components, CSS, hooks) |
+| debugger | Systematic debugging | Bug reports, test failures, unexpected behavior |
+| debugger | Systematic debugging | Bug reports, test failures, unexpected behavior |
 
 ## Immediate Agent Usage
 
@@ -31,6 +33,8 @@ No user prompt needed:
 3. Bug fix or new feature - Use **tdd-guide** agent
 4. Architectural decision - Use **architect** agent
 5. Frontend changes (components, styling, hooks) - Use **frontend-agent** (NOT code_agent)
+6. Bug report or failing test - Use **debugger** agent (NOT code_agent)
+6. Bug report or failing test - Use **debugger** agent (NOT code_agent)
 
 ## Workflow Prerequisites
 
@@ -42,6 +46,8 @@ Agents have prerequisites — run them in order. Do NOT skip steps.
 | frontend-agent commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
 | `/landpr` or PR creation | code-reviewer must have run | Verdict: READY or WARNING |
 | code_agent implements feature | planner must have run (if >1 file touched) | Plan approved by user |
+| debugger fixes bug | Must complete 4-phase protocol | Root cause documented |
+| debugger fixes bug | Must complete 4-phase protocol | Root cause documented |
 
 ### How it works
 
