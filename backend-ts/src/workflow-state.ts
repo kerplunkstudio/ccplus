@@ -228,6 +228,14 @@ export function evaluatePreToolUse(
 ): PhaseEnforcementResult {
   const filePath = (toolInput.file_path as string) ?? '';
 
+  // Block native Plan Mode in all phases — always use planner agent instead
+  if (toolName === 'EnterPlanMode') {
+    return {
+      action: 'block',
+      message: 'EnterPlanMode is disabled. Use Agent tool with subagent_type "planner" instead.',
+    };
+  }
+
   switch (phase) {
     case 'design':
       if (toolName === 'Edit' || toolName === 'Write') {

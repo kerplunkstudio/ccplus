@@ -210,6 +210,15 @@ describe('workflow-state', () => {
       const result = evaluatePreToolUse('idle', 'Read', { file_path: 'src/app.ts' });
       expect(result.action).toBe('allow');
     });
+
+    it('blocks EnterPlanMode in all phases', () => {
+      const phases: WorkflowPhase[] = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];
+      for (const phase of phases) {
+        const result = evaluatePreToolUse(phase, 'EnterPlanMode', {});
+        expect(result.action).toBe('block');
+        expect(result.message).toContain('planner');
+      }
+    });
   });
 
   describe('getPhaseContext', () => {
