@@ -1,6 +1,5 @@
 import React from 'react';
 import { ModelSelector } from './ModelSelector';
-import { PluginButton } from './PluginButton';
 import './ChatPanelHeader.css';
 
 interface ChatPanelHeaderProps {
@@ -9,7 +8,6 @@ interface ChatPanelHeaderProps {
   onSelectModel: (model: string) => void;
   onToggleSessions?: () => void;
   onToggleActivity?: () => void;
-  onOpenPluginModal: () => void;
 }
 
 export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
@@ -18,7 +16,6 @@ export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
   onSelectModel,
   onToggleSessions,
   onToggleActivity,
-  onOpenPluginModal,
 }) => {
   return (
     <div className="chat-panel-header">
@@ -47,7 +44,6 @@ export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
         />
-        <PluginButton onClick={onOpenPluginModal} />
         {onToggleActivity && (
           <button
             className="mobile-drawer-btn"
