@@ -47,10 +47,11 @@ htmlcov/
 .coverage
 coverage.xml
 
-# Claude Code personal files (but keep .claude/rules/ and .claude/agents/)
+# Claude Code personal files (but keep rules, agents, and skills)
 .claude/*
 !.claude/rules/
 !.claude/agents/
+!.claude/skills/
 
 # Test artifacts
 backend-ts/test-ccplus.db*
