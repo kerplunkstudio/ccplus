@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useToolEvents } from './useToolEvents';
 import { ToolEvent } from '../types';
+import './streamReducer';
 
 // Mock Socket.IO
 const mockOn = jest.fn();
@@ -24,10 +25,7 @@ describe('useToolEvents', () => {
       socket: mockSocket,
       dispatchTree: jest.fn(),
       currentSessionIdRef: { current: 'test-session-123' },
-      streamingIdRef: { current: null },
-      streamingContentRef: { current: '' },
-      setMessages: jest.fn(),
-      setStreaming: jest.fn(),
+      streamDispatch: jest.fn(),
       sequenceRef: { current: 0 },
       seenToolUseIds: { current: new Set() },
       toolLogRef,
@@ -95,15 +93,13 @@ describe('useToolEvents', () => {
         event: toolEvent,
         sequence: 1,
       });
-      expect(mockProps.setStreaming).toHaveBeenCalledWith(true);
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'FINALIZE_STREAM' });
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'SET_STREAMING', value: true });
       expect(toolLogRef.current).toHaveLength(1);
       expect(toolLogRef.current[0]).toEqual(toolEvent);
     });
 
     it('should finalize streaming message when tool_start arrives', () => {
-      mockProps.streamingIdRef.current = 'streaming-msg-123';
-      mockProps.streamingContentRef.current = 'Some streaming content';
-
       renderHook(() => useToolEvents(mockProps));
 
       const toolEvent: ToolEvent = {
@@ -120,9 +116,8 @@ describe('useToolEvents', () => {
         toolEventHandler(toolEvent);
       });
 
-      expect(mockProps.setMessages).toHaveBeenCalledWith(expect.any(Function));
-      expect(mockProps.streamingIdRef.current).toBeNull();
-      expect(mockProps.streamingContentRef.current).toBe('');
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'FINALIZE_STREAM' });
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'SET_STREAMING', value: true });
     });
 
     it('should ignore duplicate tool_use_id', () => {
@@ -347,14 +342,12 @@ describe('useToolEvents', () => {
         event: agentEvent,
         sequence: 1,
       });
-      expect(mockProps.setStreaming).toHaveBeenCalledWith(true);
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'FINALIZE_STREAM' });
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'SET_STREAMING', value: true });
       expect(toolLogRef.current).toHaveLength(1);
     });
 
     it('should finalize streaming message on agent_start', () => {
-      mockProps.streamingIdRef.current = 'stream-msg-456';
-      mockProps.streamingContentRef.current = 'Content here';
-
       renderHook(() => useToolEvents(mockProps));
 
       const agentEvent: ToolEvent = {
@@ -372,8 +365,8 @@ describe('useToolEvents', () => {
         toolEventHandler(agentEvent);
       });
 
-      expect(mockProps.setMessages).toHaveBeenCalled();
-      expect(mockProps.streamingIdRef.current).toBeNull();
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'FINALIZE_STREAM' });
+      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'SET_STREAMING', value: true });
     });
   });
 

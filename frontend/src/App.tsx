@@ -73,7 +73,6 @@ function AppContent() {
     respondToQuestion,
     duplicateSession,
     isRestoringSession,
-    pendingRestore,
     signals,
     promptSuggestions,
     rateLimitState,
@@ -704,7 +703,6 @@ function AppContent() {
                     isRestoringSession={isRestoringSession}
                     onSendToNewSession={handleSendToNewSession}
                     onOpenBrowserTab={handleOpenBrowserTab}
-                    pendingRestore={pendingRestore}
                     signals={signals}
                     promptSuggestions={promptSuggestions}
                     rateLimitState={rateLimitState}

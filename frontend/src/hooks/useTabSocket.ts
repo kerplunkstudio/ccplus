@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Message, ToolEvent, ActivityNode, UsageStats } from '../types';
+import { ToolEvent, UsageStats } from '../types';
 import { useActivityTree } from './useActivityTree';
 import { useSocketConnection } from './useSocketConnection';
 import { useStreamingMessages } from './useStreamingMessages';
@@ -7,20 +7,6 @@ import { useToolEvents } from './useToolEvents';
 import { useSessionRestore } from './useSessionRestore';
 import { useSessionActions } from './useSessionActions';
 import { useScheduler } from './useScheduler';
-
-type SessionCache = {
-  messages: Message[];
-  streamingContent: string;
-  streamingId: string | null;
-  toolLog: ToolEvent[];
-  activityTree: ActivityNode[];
-  sequenceCounter: number;
-  seenIds: Set<string>;
-  streaming: boolean;
-  backgroundProcessing: boolean;
-  thinking: string;
-  contextTokens: number | null;
-};
 
 interface UseTabSocketProps {
   onDevServerDetected?: (url: string) => void;
@@ -31,7 +17,6 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
   // Session tracking refs
   const currentSessionIdRef = useRef<string>(sessionId);
   const prevSessionIdRef = useRef(sessionId);
-  const sessionCacheRef = useRef<Map<string, SessionCache>>(new Map());
   const sequenceRef = useRef(0);
   const seenToolUseIds = useRef<Set<string>>(new Set());
 
@@ -55,8 +40,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
 
   // Shared refs that need to exist before hooks
   const clearToolTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const toolLogRef = useRef<ToolEvent[]>([]); // Create outside both hooks to break circular dependency
-  const isRestoringSessionRef = useRef(true); // Shared ref for session restore state
+  const toolLogRef = useRef<ToolEvent[]>([]);
 
   // Streaming messages hook
   const streamingHook = useStreamingMessages({
@@ -64,58 +48,37 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     toolLogRef,
     activityTreeRef,
     hasRunningAgents,
-    isRestoringSessionRef,
     currentSessionIdRef,
     sessionId,
   });
 
-  // Tool events hook (uses streaming refs from streamingHook)
+  // Tool events hook
   const toolEvents = useToolEvents({
     socket,
     dispatchTree,
     currentSessionIdRef,
-    streamingIdRef: streamingHook.streamingIdRef,
-    streamingContentRef: streamingHook.streamingContentRef,
-    setMessages: streamingHook.setMessages,
-    setStreaming: streamingHook.setStreaming,
+    streamDispatch: streamingHook.streamDispatch,
     sequenceRef,
     seenToolUseIds,
-    toolLogRef, // Pass the shared ref
+    toolLogRef,
     onDevServerDetected,
   });
 
   // Session restore hook
   const { isRestoringSession } = useSessionRestore({
-    isRestoringSessionRef, // Pass the shared ref
     sessionId,
     socket,
     currentSessionIdRef,
     prevSessionIdRef,
-    sessionCacheRef,
-    messagesRef: streamingHook.messagesRef,
-    streamingRef: streamingHook.streamingRef,
-    backgroundProcessingRef: streamingHook.backgroundProcessingRef,
-    thinkingRef: streamingHook.thinkingRef,
-    streamingContentRef: streamingHook.streamingContentRef,
-    streamingIdRef: streamingHook.streamingIdRef,
-    toolLogRef, // Use the shared ref
+    lastSeq: streamingHook.lastSeq,
+    streamDispatch: streamingHook.streamDispatch,
+    toolLogRef,
     activityTreeRef,
     sequenceRef,
     seenToolUseIds,
-    streamActiveRef: streamingHook.streamActiveRef,
-    awaitingDeltaAfterRestore: streamingHook.awaitingDeltaAfterRestore,
-    responseCompleteRef: streamingHook.responseCompleteRef,
-    completionFinalizedRef: streamingHook.completionFinalizedRef,
-    messageIndexRef: streamingHook.messageIndexRef,
-    contextTokens: streamingHook.contextTokens,
-    setMessages: streamingHook.setMessages,
-    setStreaming: streamingHook.setStreaming,
-    setBackgroundProcessing: streamingHook.setBackgroundProcessing,
-    setThinking: streamingHook.setThinking,
     setToolLog: toolEvents.setToolLog,
     setCurrentTool: toolEvents.setCurrentTool,
     setPendingQuestion: toolEvents.setPendingQuestion,
-    setPendingRestore: streamingHook.setPendingRestore,
     setSignals: toolEvents.setSignals,
     setContextTokens: streamingHook.setContextTokens,
     setUsageStats: streamingHook.setUsageStats,
@@ -131,20 +94,12 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     connected,
     currentSessionIdRef,
     backgroundProcessing: streamingHook.backgroundProcessing,
-    streamingIdRef: streamingHook.streamingIdRef,
-    streamingContentRef: streamingHook.streamingContentRef,
-    responseCompleteRef: streamingHook.responseCompleteRef,
-    completionFinalizedRef: streamingHook.completionFinalizedRef,
-    messageIndexRef: streamingHook.messageIndexRef,
-    setMessages: streamingHook.setMessages,
-    setStreaming: streamingHook.setStreaming,
-    setBackgroundProcessing: streamingHook.setBackgroundProcessing,
-    setThinking: streamingHook.setThinking,
+    streamDispatch: streamingHook.streamDispatch,
     setCurrentTool: toolEvents.setCurrentTool,
     setPendingQuestion: toolEvents.setPendingQuestion,
     setPromptSuggestions: toolEvents.setPromptSuggestions,
     setSignals: toolEvents.setSignals,
-    toolLogRef, // Use the shared ref
+    toolLogRef,
     setToolLog: toolEvents.setToolLog,
     dispatchTree,
     clearToolTimerRef,
@@ -153,7 +108,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
   // Scheduler hook
   const scheduler = useScheduler({ socket, sessionId });
 
-  // Return the EXACT same interface as before
+  // Return the interface (pendingRestore removed)
   return {
     socket,
     connected,
@@ -171,7 +126,6 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     respondToQuestion: actions.respondToQuestion,
     duplicateSession: actions.duplicateSession,
     isRestoringSession,
-    pendingRestore: streamingHook.pendingRestore,
     signals: toolEvents.signals,
     promptSuggestions: toolEvents.promptSuggestions,
     rateLimitState: toolEvents.rateLimitState,

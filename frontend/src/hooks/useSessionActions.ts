@@ -2,21 +2,14 @@ import { useCallback, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, ToolEvent, PendingQuestion, SignalState, ImageAttachment } from '../types';
 import { TreeAction } from './useActivityTree';
+import { StreamAction } from './streamReducer';
 
 interface UseSessionActionsProps {
   socket: Socket | null;
   connected: boolean;
   currentSessionIdRef: MutableRefObject<string>;
   backgroundProcessing: boolean;
-  streamingIdRef: MutableRefObject<string | null>;
-  streamingContentRef: MutableRefObject<string>;
-  responseCompleteRef: MutableRefObject<boolean>;
-  completionFinalizedRef: MutableRefObject<boolean>;
-  messageIndexRef: MutableRefObject<number>;
-  setMessages: Dispatch<React.SetStateAction<Message[]>>;
-  setStreaming: (streaming: boolean) => void;
-  setBackgroundProcessing: (processing: boolean) => void;
-  setThinking: (thinking: string) => void;
+  streamDispatch: Dispatch<StreamAction>;
   setCurrentTool: (tool: ToolEvent | null) => void;
   setPendingQuestion: (question: PendingQuestion | null) => void;
   setPromptSuggestions: (suggestions: string[]) => void;
@@ -32,15 +25,7 @@ export function useSessionActions({
   connected,
   currentSessionIdRef,
   backgroundProcessing,
-  streamingIdRef,
-  streamingContentRef,
-  responseCompleteRef,
-  completionFinalizedRef,
-  messageIndexRef,
-  setMessages,
-  setStreaming,
-  setBackgroundProcessing,
-  setThinking,
+  streamDispatch,
   setCurrentTool,
   setPendingQuestion,
   setPromptSuggestions,
@@ -58,25 +43,12 @@ export function useSessionActions({
 
       if (backgroundProcessing) {
         socket.emit('cancel', { session_id: currentSessionIdRef.current });
-        setBackgroundProcessing(false);
+        streamDispatch({ type: 'SET_BACKGROUND_PROCESSING', value: false });
         dispatchTree({ type: 'MARK_ALL_STOPPED' });
       }
 
-      const currentStreamingId = streamingIdRef.current;
-      if (currentStreamingId) {
-        const finalContent = streamingContentRef.current;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === currentStreamingId ? { ...m, content: finalContent, streaming: false } : m
-          )
-        );
-        streamingContentRef.current = '';
-        streamingIdRef.current = null;
-        responseCompleteRef.current = false;
-        completionFinalizedRef.current = false;
-        messageIndexRef.current = 0;
-        setThinking('');
-      }
+      // Cancel any existing query and finalize streaming
+      streamDispatch({ type: 'CANCEL_QUERY' });
 
       const userMessage: Message = {
         id: `user_${Date.now()}`,
@@ -85,14 +57,13 @@ export function useSessionActions({
         timestamp: Date.now(),
         images: images || [],
       };
-      setMessages((prev) => [...prev, userMessage]);
-      setStreaming(true);
+      streamDispatch({ type: 'SEND_MESSAGE', message: userMessage });
       toolLogRef.current = [];
       setToolLog([]);
       setSignals({ status: null });
       socket.emit('message', { content, workspace, model, image_ids: imageIds, session_id: currentSessionIdRef.current });
     },
-    [socket, connected, backgroundProcessing, currentSessionIdRef, streamingIdRef, streamingContentRef, responseCompleteRef, completionFinalizedRef, messageIndexRef, setMessages, setStreaming, setBackgroundProcessing, setThinking, toolLogRef, setToolLog, setSignals, dispatchTree, setPromptSuggestions]
+    [socket, connected, backgroundProcessing, currentSessionIdRef, streamDispatch, toolLogRef, setToolLog, setSignals, dispatchTree, setPromptSuggestions]
   );
 
   const cancelQuery = useCallback(() => {
@@ -100,21 +71,8 @@ export function useSessionActions({
     socket.emit('cancel', { session_id: currentSessionIdRef.current });
 
     dispatchTree({ type: 'MARK_ALL_STOPPED' });
+    streamDispatch({ type: 'CANCEL_QUERY' });
 
-    const msgId = streamingIdRef.current;
-    if (msgId) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId ? { ...m, streaming: false } : m
-        )
-      );
-    }
-    streamingContentRef.current = '';
-    streamingIdRef.current = null;
-    responseCompleteRef.current = false;
-    completionFinalizedRef.current = false;
-    setStreaming(false);
-    setBackgroundProcessing(false);
     if (clearToolTimerRef.current) {
       clearTimeout(clearToolTimerRef.current);
       clearToolTimerRef.current = null;
@@ -122,7 +80,7 @@ export function useSessionActions({
     setCurrentTool(null);
     setPendingQuestion(null);
     setSignals({ status: null });
-  }, [socket, connected, currentSessionIdRef, streamingIdRef, streamingContentRef, responseCompleteRef, completionFinalizedRef, setMessages, setStreaming, setBackgroundProcessing, clearToolTimerRef, setCurrentTool, setPendingQuestion, setSignals, dispatchTree]);
+  }, [socket, connected, currentSessionIdRef, streamDispatch, clearToolTimerRef, setCurrentTool, setPendingQuestion, setSignals, dispatchTree]);
 
   const respondToQuestion = useCallback(
     (response: Record<string, string>) => {

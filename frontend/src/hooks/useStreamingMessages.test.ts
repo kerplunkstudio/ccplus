@@ -105,7 +105,6 @@ describe('useStreamingMessages', () => {
     toolLogRef: { current: [] as ToolEvent[] } as MutableRefObject<ToolEvent[]>,
     activityTreeRef: { current: [] as ActivityNode[] } as MutableRefObject<ActivityNode[]>,
     hasRunningAgents: jest.fn().mockReturnValue(false),
-    isRestoringSessionRef: { current: false } as MutableRefObject<boolean>,
     currentSessionIdRef: { current: 'test-session' } as MutableRefObject<string>,
   });
 
@@ -225,7 +224,7 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        streamActiveHandler?.({ session_id: 'test-session' });
+        streamActiveHandler?.({ session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.streaming).toBe(true);
@@ -255,91 +254,6 @@ describe('useStreamingMessages', () => {
     });
   });
 
-  describe('Socket event: stream_content_sync', () => {
-    it('should create new message on stream_content_sync if no streaming message exists', async () => {
-      const mockSocket = createMockSocket();
-      const mockRefs = createMockRefs();
-
-      const { result } = renderHook(() =>
-        useStreamingMessages({
-          socket: mockSocket,
-          sessionId: 'test-session',
-          ...mockRefs,
-        })
-      );
-
-      const syncHandler = (mockSocket.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'stream_content_sync'
-      )?.[1];
-
-      await act(async () => {
-        syncHandler?.({ content: 'Synced content', session_id: 'test-session' });
-      });
-
-      expect(result.current.messages.length).toBe(1);
-      expect(result.current.messages[0].content).toBe('Synced content');
-      expect(result.current.messages[0].streaming).toBe(true);
-      expect(result.current.streaming).toBe(true);
-    });
-
-    it('should update existing streaming message on stream_content_sync', async () => {
-      const mockSocket = createMockSocket();
-      const mockRefs = createMockRefs();
-
-      const { result } = renderHook(() =>
-        useStreamingMessages({
-          socket: mockSocket,
-          sessionId: 'test-session',
-          ...mockRefs,
-        })
-      );
-
-      const textDeltaHandler = (mockSocket.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'text_delta'
-      )?.[1];
-      const syncHandler = (mockSocket.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'stream_content_sync'
-      )?.[1];
-
-      // Create initial streaming message
-      await act(async () => {
-        textDeltaHandler?.({ text: 'Initial', session_id: 'test-session' });
-      });
-
-      expect(result.current.messages.length).toBe(1);
-
-      // Sync with new content
-      await act(async () => {
-        syncHandler?.({ content: 'Synced full content', session_id: 'test-session' });
-      });
-
-      expect(result.current.messages.length).toBe(1);
-      expect(result.current.messages[0].content).toBe('Synced full content');
-    });
-
-    it('should ignore stream_content_sync from different session', async () => {
-      const mockSocket = createMockSocket();
-      const mockRefs = createMockRefs();
-
-      const { result } = renderHook(() =>
-        useStreamingMessages({
-          socket: mockSocket,
-          sessionId: 'test-session',
-          ...mockRefs,
-        })
-      );
-
-      const syncHandler = (mockSocket.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'stream_content_sync'
-      )?.[1];
-
-      await act(async () => {
-        syncHandler?.({ content: 'Synced content', session_id: 'different-session' });
-      });
-
-      expect(result.current.messages.length).toBe(0);
-    });
-  });
 
   describe('Socket event: thinking_delta', () => {
     it('should accumulate thinking text on thinking_delta', async () => {
@@ -390,7 +304,7 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.messages.length).toBe(1);
@@ -418,18 +332,18 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session', seq: 1 });
       });
 
       await act(async () => {
-        textDeltaHandler?.({ text: ' world', session_id: 'test-session' });
+        textDeltaHandler?.({ text: ' world', session_id: 'test-session', seq: 2 });
       });
 
       expect(result.current.messages.length).toBe(1);
       expect(result.current.messages[0].content).toBe('Hello world');
     });
 
-    it('should clear thinking state on first text_delta', async () => {
+    it('should not clear thinking state on text_delta', async () => {
       const mockSocket = createMockSocket();
       const mockRefs = createMockRefs();
 
@@ -455,10 +369,11 @@ describe('useStreamingMessages', () => {
       expect(result.current.thinking).toBe('Thinking...');
 
       await act(async () => {
-        textDeltaHandler?.({ text: 'Response', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Response', session_id: 'test-session', seq: 1 });
       });
 
-      expect(result.current.thinking).toBe('');
+      // Thinking is NOT cleared on text_delta in the new reducer-based implementation
+      expect(result.current.thinking).toBe('Thinking...');
     });
 
     it('should ignore text_delta from different session', async () => {
@@ -502,7 +417,7 @@ describe('useStreamingMessages', () => {
 
       // First message (index 0)
       await act(async () => {
-        textDeltaHandler?.({ text: 'First', message_index: 0, session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'First', message_index: 0, session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.messages.length).toBe(1);
@@ -510,7 +425,7 @@ describe('useStreamingMessages', () => {
 
       // Second message (index 1) - should finalize first and create new
       await act(async () => {
-        textDeltaHandler?.({ text: 'Second', message_index: 1, session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Second', message_index: 1, session_id: 'test-session', seq: 2 });
       });
 
       expect(result.current.messages.length).toBe(2);
@@ -542,7 +457,7 @@ describe('useStreamingMessages', () => {
 
       // Start streaming
       await act(async () => {
-        textDeltaHandler?.({ text: 'Complete message', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Complete message', session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.messages[0].streaming).toBe(true);
@@ -556,6 +471,7 @@ describe('useStreamingMessages', () => {
           output_tokens: 50,
           cost: 0.01,
           duration_ms: 1000,
+          seq: 2,
         });
       });
 
@@ -755,7 +671,7 @@ describe('useStreamingMessages', () => {
 
       // Start streaming in test-session
       await act(async () => {
-        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Hello', session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.messages[0].streaming).toBe(true);
@@ -765,6 +681,7 @@ describe('useStreamingMessages', () => {
         responseCompleteHandler?.({
           session_id: 'different-session',
           sdk_session_id: 'final',
+          seq: 2,
         });
       });
 
@@ -802,7 +719,7 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       act(() => {
-        textDeltaHandler?.({ text: 'Response', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Response', session_id: 'test-session', seq: 1 });
       });
 
       await waitFor(() => {
@@ -815,6 +732,7 @@ describe('useStreamingMessages', () => {
         responseCompleteHandler?.({
           session_id: 'test-session',
           sdk_session_id: null,
+          seq: 2,
         });
       });
 
@@ -847,7 +765,7 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        errorHandler?.({ message: 'Something went wrong' });
+        errorHandler?.({ message: 'Something went wrong', seq: 1 });
       });
 
       expect(result.current.messages.length).toBe(1);
@@ -878,14 +796,14 @@ describe('useStreamingMessages', () => {
 
       // Start streaming
       await act(async () => {
-        textDeltaHandler?.({ text: 'Starting...', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Starting...', session_id: 'test-session', seq: 1 });
       });
 
       expect(result.current.streaming).toBe(true);
 
       // Trigger error
       await act(async () => {
-        errorHandler?.({ message: 'Error occurred' });
+        errorHandler?.({ message: 'Error occurred', seq: 2 });
       });
 
       expect(result.current.streaming).toBe(false);
@@ -911,7 +829,7 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        compactHandler?.();
+        compactHandler?.({ seq: 1 });
       });
 
       expect(result.current.messages.length).toBe(1);
@@ -937,11 +855,11 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        compactHandler?.();
+        compactHandler?.({ seq: 1 });
       });
 
       await act(async () => {
-        compactHandler?.();
+        compactHandler?.({ seq: 2 });
       });
 
       expect(result.current.messages.length).toBe(2);
@@ -965,9 +883,9 @@ describe('useStreamingMessages', () => {
         })
       );
 
-      // Manually set backgroundProcessing
+      // Manually set backgroundProcessing using dispatch
       await act(async () => {
-        result.current.setBackgroundProcessing(true);
+        result.current.streamDispatch({ type: 'SET_BACKGROUND_PROCESSING', value: true });
       });
 
       expect(result.current.backgroundProcessing).toBe(true);
@@ -996,9 +914,9 @@ describe('useStreamingMessages', () => {
         })
       );
 
-      // Manually set backgroundProcessing
+      // Manually set backgroundProcessing using dispatch
       await act(async () => {
-        result.current.setBackgroundProcessing(true);
+        result.current.streamDispatch({ type: 'SET_BACKGROUND_PROCESSING', value: true });
       });
 
       expect(result.current.backgroundProcessing).toBe(true);
@@ -1027,10 +945,10 @@ describe('useStreamingMessages', () => {
         })
       );
 
-      // Set both streaming and backgroundProcessing
+      // Set both streaming and backgroundProcessing using dispatch
       await act(async () => {
-        result.current.setStreaming(true);
-        result.current.setBackgroundProcessing(true);
+        result.current.streamDispatch({ type: 'SET_STREAMING', value: true });
+        result.current.streamDispatch({ type: 'SET_BACKGROUND_PROCESSING', value: true });
       });
 
       expect(result.current.backgroundProcessing).toBe(true);
@@ -1064,7 +982,6 @@ describe('useStreamingMessages', () => {
 
       expect(mockSocket.off).toHaveBeenCalledWith('message_received');
       expect(mockSocket.off).toHaveBeenCalledWith('stream_active');
-      expect(mockSocket.off).toHaveBeenCalledWith('stream_content_sync');
       expect(mockSocket.off).toHaveBeenCalledWith('thinking_delta');
       expect(mockSocket.off).toHaveBeenCalledWith('text_delta');
       expect(mockSocket.off).toHaveBeenCalledWith('response_complete');
@@ -1073,8 +990,8 @@ describe('useStreamingMessages', () => {
     });
   });
 
-  describe('Exported refs', () => {
-    it('should expose all internal refs for external use', () => {
+  describe('Reducer-based API', () => {
+    it('should expose streamDispatch for external control', () => {
       const mockSocket = createMockSocket();
       const mockRefs = createMockRefs();
 
@@ -1086,21 +1003,28 @@ describe('useStreamingMessages', () => {
         })
       );
 
-      expect(result.current.streamingContentRef).toBeDefined();
-      expect(result.current.streamingIdRef).toBeDefined();
-      expect(result.current.responseCompleteRef).toBeDefined();
-      expect(result.current.messageIndexRef).toBeDefined();
-      expect(result.current.completionFinalizedRef).toBeDefined();
-      expect(result.current.syncInProgressRef).toBeDefined();
-      expect(result.current.streamActiveRef).toBeDefined();
-      expect(result.current.awaitingDeltaAfterRestore).toBeDefined();
-      expect(result.current.streamingRef).toBeDefined();
-      expect(result.current.backgroundProcessingRef).toBeDefined();
-      expect(result.current.thinkingRef).toBeDefined();
-      expect(result.current.messagesRef).toBeDefined();
+      expect(result.current.streamDispatch).toBeDefined();
+      expect(typeof result.current.streamDispatch).toBe('function');
     });
 
-    it('should sync state refs with state values', async () => {
+    it('should expose lastSeq for event deduplication', () => {
+      const mockSocket = createMockSocket();
+      const mockRefs = createMockRefs();
+
+      const { result } = renderHook(() =>
+        useStreamingMessages({
+          socket: mockSocket,
+          sessionId: 'test-session',
+          ...mockRefs,
+        })
+      );
+
+      expect(result.current.lastSeq).toBeDefined();
+      expect(typeof result.current.lastSeq).toBe('number');
+      expect(result.current.lastSeq).toBe(0);
+    });
+
+    it('should update lastSeq on text_delta events', async () => {
       const mockSocket = createMockSocket();
       const mockRefs = createMockRefs();
 
@@ -1117,14 +1041,10 @@ describe('useStreamingMessages', () => {
       )?.[1];
 
       await act(async () => {
-        textDeltaHandler?.({ text: 'Test', session_id: 'test-session' });
+        textDeltaHandler?.({ text: 'Test', session_id: 'test-session', seq: 5 });
       });
 
-      // Verify refs are synced
-      await waitFor(() => {
-        expect(result.current.streamingRef.current).toBe(result.current.streaming);
-        expect(result.current.messagesRef.current).toEqual(result.current.messages);
-      });
+      expect(result.current.lastSeq).toBe(5);
     });
   });
 

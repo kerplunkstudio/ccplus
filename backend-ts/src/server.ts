@@ -211,9 +211,11 @@ app.get("/api/history/:sessionId", (req: Request, res: Response) => {
   try {
     const messages = database.getConversationHistory(req.params.sessionId);
     const context = database.getSessionContext(req.params.sessionId);
+    const isStreaming = sdkSession.isActive(req.params.sessionId);
     res.json({
       messages,
-      streaming: sdkSession.isActive(req.params.sessionId),
+      streaming: isStreaming,
+      streamingContent: isStreaming ? sdkSession.getStreamingContent(req.params.sessionId) : null,
       context_tokens: context?.input_tokens ?? null,
       model: context?.model ?? null,
     });
@@ -1052,18 +1054,9 @@ app.post("/api/workflow/:sessionId/transition", (req: Request, res: Response) =>
 
 // Helper: Join a session room and sync state
 function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string, lastSeq = 0): void {
-  log.info('joinSession called', { sessionId, lastSeq, socketId: socket.id });
-
-  // Before replay
-  const totalEvents = eventLog.getEventCount(sessionId);
-  const oldestSeq = eventLog.getOldestSeq(sessionId);
-  const newestSeq = eventLog.getLastSeq(sessionId);
-  log.info('Event log state', { sessionId, totalEvents, oldestSeq, newestSeq, lastSeq });
-
   // Replay missed events if client provides lastSeq
   if (lastSeq > 0) {
     const missedEvents = eventLog.getEventsSince(sessionId, lastSeq);
-    log.info('Replaying events', { sessionId, count: missedEvents.length, lastSeq });
     for (const event of missedEvents) {
       socket.emit(event.type, { ...event.data, seq: event.seq, replay: true });
     }
@@ -1370,15 +1363,10 @@ io.on("connection", (socket) => {
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
 function buildSocketCallbacks(sessionId: string) {
-  let firstTextDelta = true;
   return {
     onText: (text: string, messageIndex: number) => {
       const payload = { session_id: sessionId, text, message_index: messageIndex };
       const event = eventLog.append(sessionId, 'text_delta', payload);
-      if (firstTextDelta) {
-        log.info('First text_delta logged', { sessionId, seq: event.seq, eventCount: eventLog.getEventCount(sessionId) });
-        firstTextDelta = false;
-      }
       io.to(sessionId).emit("text_delta", { ...payload, seq: event.seq });
     },
     onToolEvent: (event: Record<string, unknown>) => {

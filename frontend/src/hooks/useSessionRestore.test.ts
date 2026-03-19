@@ -1,7 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSessionRestore } from './useSessionRestore';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent } from '../types';
+import '../types';
 
 // Mock socket.io-client
 let mockSocket: any;
@@ -27,42 +27,25 @@ describe('useSessionRestore', () => {
       emit: jest.fn(),
     };
 
-    // Create mock refs
+    // Create mock refs (REMOVED: session cache, streaming refs, isRestoringSessionRef, etc.)
     mockRefs = {
       currentSessionIdRef: { current: 'session-1' },
       prevSessionIdRef: { current: 'session-1' },
-      sessionCacheRef: { current: new Map() },
-      messagesRef: { current: [] },
-      streamingRef: { current: false },
-      backgroundProcessingRef: { current: false },
-      thinkingRef: { current: '' },
-      streamingContentRef: { current: '' },
-      streamingIdRef: { current: null },
       toolLogRef: { current: [] },
       activityTreeRef: { current: [] },
       sequenceRef: { current: 0 },
       seenToolUseIds: { current: new Set() },
-      streamActiveRef: { current: false },
-      awaitingDeltaAfterRestore: { current: false },
-      responseCompleteRef: { current: false },
-      completionFinalizedRef: { current: false },
-      messageIndexRef: { current: 0 },
       clearToolTimerRef: { current: null },
       pendingWorkerRestartErrorRef: { current: null },
       workerRestartGraceTimerRef: { current: null },
-      isRestoringSessionRef: { current: true },
     };
 
-    // Create mock setters
+    // Create mock setters (REMOVED: individual streaming setters, setPendingRestore)
     mockSetters = {
-      setMessages: jest.fn(),
-      setStreaming: jest.fn(),
-      setBackgroundProcessing: jest.fn(),
-      setThinking: jest.fn(),
+      streamDispatch: jest.fn(),
       setToolLog: jest.fn(),
       setCurrentTool: jest.fn(),
       setPendingQuestion: jest.fn(),
-      setPendingRestore: jest.fn(),
       setSignals: jest.fn(),
       setContextTokens: jest.fn(),
       setUsageStats: jest.fn(),
@@ -73,7 +56,7 @@ describe('useSessionRestore', () => {
   const createHookProps = (overrides?: Partial<any>) => ({
     sessionId: 'session-1',
     socket: mockSocket,
-    contextTokens: null,
+    lastSeq: 0,
     ...mockRefs,
     ...mockSetters,
     ...overrides,
@@ -105,125 +88,8 @@ describe('useSessionRestore', () => {
     });
   });
 
-  describe('Tab switch: cache save/restore', () => {
-    it('should save current session to cache on tab switch', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ messages: [], streaming: false }),
-      });
-
-      const messages: Message[] = [
-        { id: '1', content: 'Hello', role: 'user', timestamp: Date.now() },
-      ];
-      mockRefs.messagesRef.current = messages;
-      mockRefs.streamingContentRef.current = 'Thinking...';
-      mockRefs.streamingIdRef.current = 'msg-123';
-
-      const { rerender } = renderHook(
-        ({ sessionId }) => useSessionRestore(createHookProps({ sessionId })),
-        { initialProps: { sessionId: 'session-1' } }
-      );
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
-      });
-
-      // Switch to a new session
-      mockRefs.prevSessionIdRef.current = 'session-1';
-      rerender({ sessionId: 'session-2' });
-
-      // Check that previous session was cached
-      const cached = mockRefs.sessionCacheRef.current.get('session-1');
-      expect(cached).toBeDefined();
-      expect(cached.messages).toEqual(messages);
-      expect(cached.streamingContent).toBe('Thinking...');
-      expect(cached.streamingId).toBe('msg-123');
-    });
-
-    it('should not save to cache if messages array is empty', async () => {
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ messages: [], streaming: false }),
-      });
-
-      mockRefs.messagesRef.current = [];
-
-      const { rerender } = renderHook(
-        ({ sessionId }) => useSessionRestore(createHookProps({ sessionId })),
-        { initialProps: { sessionId: 'session-1' } }
-      );
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
-      });
-
-      // Switch to a new session
-      mockRefs.prevSessionIdRef.current = 'session-1';
-      rerender({ sessionId: 'session-2' });
-
-      // Cache should be empty
-      const cached = mockRefs.sessionCacheRef.current.get('session-1');
-      expect(cached).toBeUndefined();
-    });
-
-    it('should restore from cache on tab switch', async () => {
-      const cachedMessages: Message[] = [
-        { id: '1', content: 'Cached message', role: 'assistant', timestamp: Date.now() },
-      ];
-      const cachedToolLog: ToolEvent[] = [
-        {
-          type: 'tool_start',
-          tool_name: 'Bash',
-          tool_use_id: 'tool-1',
-          parent_agent_id: null,
-          timestamp: new Date().toISOString(),
-        } as ToolEvent,
-      ];
-
-      mockRefs.sessionCacheRef.current.set('session-2', {
-        messages: cachedMessages,
-        streamingContent: 'Test content',
-        streamingId: 'msg-456',
-        toolLog: cachedToolLog,
-        activityTree: [],
-        sequenceCounter: 5,
-        seenIds: new Set(['tool-1']),
-        streaming: true,
-        backgroundProcessing: false,
-        thinking: 'Test thinking',
-        contextTokens: 1000,
-      });
-
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ events: [] }),
-      });
-
-      const { rerender } = renderHook(
-        ({ sessionId }) => useSessionRestore(createHookProps({ sessionId })),
-        { initialProps: { sessionId: 'session-1' } }
-      );
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalled();
-      });
-
-      mockRefs.prevSessionIdRef.current = 'session-1';
-      rerender({ sessionId: 'session-2' });
-
-      await waitFor(() => {
-        expect(mockSetters.setMessages).toHaveBeenCalledWith(cachedMessages);
-        expect(mockSetters.setStreaming).toHaveBeenCalledWith(true);
-        expect(mockSetters.setThinking).toHaveBeenCalledWith('Test thinking');
-        expect(mockSetters.setContextTokens).toHaveBeenCalledWith(1000);
-      });
-
-      expect(mockRefs.streamingContentRef.current).toBe('Test content');
-      expect(mockRefs.streamingIdRef.current).toBe('msg-456');
-      expect(mockRefs.sequenceRef.current).toBe(5);
-    });
-
-    it('should reset all state on tab switch', async () => {
+  describe('Tab switch', () => {
+    it('should clear all state on tab switch', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: async () => ({ messages: [], streaming: false, events: [] }),
@@ -247,23 +113,19 @@ describe('useSessionRestore', () => {
       rerender({ sessionId: 'session-2' });
 
       await waitFor(() => {
-        expect(mockSetters.setMessages).toHaveBeenCalledWith([]);
+        // Should clear stream state via reducer
+        expect(mockSetters.streamDispatch).toHaveBeenCalledWith({ type: 'CLEAR' });
+        // Should clear activity tree
         expect(mockSetters.dispatchTree).toHaveBeenCalledWith({ type: 'CLEAR' });
-        expect(mockSetters.setStreaming).toHaveBeenCalledWith(false);
-        expect(mockSetters.setBackgroundProcessing).toHaveBeenCalledWith(false);
-        expect(mockSetters.setThinking).toHaveBeenCalledWith('');
+        // Should reset tool/activity state
         expect(mockSetters.setCurrentTool).toHaveBeenCalledWith(null);
         expect(mockSetters.setPendingQuestion).toHaveBeenCalledWith(null);
-        expect(mockSetters.setPendingRestore).toHaveBeenCalledWith(false);
         expect(mockSetters.setSignals).toHaveBeenCalledWith({ status: null });
         expect(mockSetters.setContextTokens).toHaveBeenCalledWith(null);
       });
 
+      // Should clear refs
       expect(mockRefs.toolLogRef.current).toEqual([]);
-      expect(mockRefs.streamingContentRef.current).toBe('');
-      expect(mockRefs.streamingIdRef.current).toBeNull();
-      expect(mockRefs.responseCompleteRef.current).toBe(false);
-      expect(mockRefs.streamActiveRef.current).toBe(false);
       expect(mockRefs.sequenceRef.current).toBe(0);
       expect(mockRefs.seenToolUseIds.current.size).toBe(0);
     });
@@ -293,13 +155,46 @@ describe('useSessionRestore', () => {
       mockRefs.prevSessionIdRef.current = 'session-1';
       rerender({ sessionId: 'session-2' });
 
+      // leave_session is immediate
       expect(connectedSocket.emit).toHaveBeenCalledWith('leave_session', { session_id: 'session-1' });
-      expect(connectedSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-2' });
+
+      // join_session now happens AFTER DB history loads to prevent race condition
+      await waitFor(() => {
+        expect(connectedSocket.emit).toHaveBeenCalledWith('join_session', { session_id: 'session-2', last_seq: 0 });
+      });
+    });
+
+    it('should clear timers on tab switch', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ messages: [], streaming: false, events: [] }),
+      });
+
+      const clearToolTimer = jest.fn();
+      mockRefs.clearToolTimerRef.current = setTimeout(clearToolTimer, 1000);
+      const workerGraceTimer = jest.fn();
+      mockRefs.workerRestartGraceTimerRef.current = setTimeout(workerGraceTimer, 1000);
+
+      const { rerender } = renderHook(
+        ({ sessionId }) => useSessionRestore(createHookProps({ sessionId })),
+        { initialProps: { sessionId: 'session-1' } }
+      );
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      mockRefs.prevSessionIdRef.current = 'session-1';
+      rerender({ sessionId: 'session-2' });
+
+      expect(mockRefs.clearToolTimerRef.current).toBeNull();
+      expect(mockRefs.pendingWorkerRestartErrorRef.current).toBeNull();
+      expect(mockRefs.workerRestartGraceTimerRef.current).toBeNull();
     });
   });
 
   describe('Database restoration', () => {
-    it('should restore messages from API when no cache exists', async () => {
+    it('should restore messages from API via streamDispatch', async () => {
       const dbMessages = [
         { id: 1, content: 'User message', role: 'user', timestamp: '2025-01-15T10:00:00Z' },
         { id: 2, content: 'Assistant message', role: 'assistant', timestamp: '2025-01-15T10:00:01Z' },
@@ -318,13 +213,18 @@ describe('useSessionRestore', () => {
       const { result } = renderHook(() => useSessionRestore(createHookProps()));
 
       await waitFor(() => {
-        expect(mockSetters.setMessages).toHaveBeenCalled();
+        expect(mockSetters.streamDispatch).toHaveBeenCalled();
       });
 
-      const setMessagesCall = mockSetters.setMessages.mock.calls[0][0];
-      expect(setMessagesCall).toHaveLength(2);
-      expect(setMessagesCall[0].content).toBe('User message');
-      expect(setMessagesCall[1].content).toBe('Assistant message');
+      // Should dispatch LOAD_HISTORY action
+      expect(mockSetters.streamDispatch).toHaveBeenCalledWith({
+        type: 'LOAD_HISTORY',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ content: 'User message', role: 'user' }),
+          expect.objectContaining({ content: 'Assistant message', role: 'assistant' }),
+        ]),
+        isActive: false,
+      });
       expect(result.current.isRestoringSession).toBe(false);
     });
 
@@ -431,8 +331,6 @@ describe('useSessionRestore', () => {
     });
 
     it('should handle API fetch errors gracefully', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
-
       (global.fetch as jest.Mock).mockRejectedValue(new Error('Network error'));
 
       const { result } = renderHook(() => useSessionRestore(createHookProps()));
@@ -441,22 +339,14 @@ describe('useSessionRestore', () => {
         expect(result.current.isRestoringSession).toBe(false);
       });
 
-      expect(consoleError).toHaveBeenCalledWith(
-        expect.stringContaining('[useSessionRestore] Failed to restore session:'),
-        expect.any(Error)
-      );
-
-      consoleError.mockRestore();
+      // Should not throw, just fail silently
+      expect(result.current.isRestoringSession).toBe(false);
     });
 
     it('should handle history fetch failure without crashing', async () => {
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           ok: false,
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ events: [] }),
         });
 
       const { result } = renderHook(() => useSessionRestore(createHookProps()));
@@ -465,8 +355,8 @@ describe('useSessionRestore', () => {
         expect(result.current.isRestoringSession).toBe(false);
       });
 
-      // Should still try to fetch activity
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      // Should return early if history fetch fails, not try to fetch activity
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it('should handle activity fetch failure without crashing', async () => {
@@ -509,25 +399,22 @@ describe('useSessionRestore', () => {
       renderHook(() => useSessionRestore(createHookProps()));
 
       await waitFor(() => {
-        expect(mockSetters.setStreaming).toHaveBeenCalledWith(true);
-        expect(mockSetters.setPendingRestore).toHaveBeenCalledWith(true);
+        expect(mockSetters.streamDispatch).toHaveBeenCalled();
       });
 
-      expect(mockRefs.awaitingDeltaAfterRestore.current).toBe(true);
-      expect(mockRefs.streamingIdRef.current).toBe('db_2');
-      expect(mockRefs.streamingContentRef.current).toBe('Partial assistant');
+      // Should dispatch LOAD_HISTORY with isActive: true
+      expect(mockSetters.streamDispatch).toHaveBeenCalledWith({
+        type: 'LOAD_HISTORY',
+        messages: expect.any(Array),
+        isActive: true,
+      });
     });
 
-    it('should mark last assistant message as streaming when restoring active session', async () => {
-      const dbMessages = [
-        { id: 1, content: 'User message', role: 'user', timestamp: '2025-01-15T10:00:00Z' },
-        { id: 2, content: 'Assistant reply', role: 'assistant', timestamp: '2025-01-15T10:00:01Z' },
-      ];
-
+    it('should set streaming if session is active but no messages', async () => {
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ messages: dbMessages, streaming: true }),
+          json: async () => ({ messages: [], streaming: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -537,12 +424,14 @@ describe('useSessionRestore', () => {
       renderHook(() => useSessionRestore(createHookProps()));
 
       await waitFor(() => {
-        expect(mockSetters.setMessages).toHaveBeenCalled();
+        expect(mockSetters.streamDispatch).toHaveBeenCalled();
       });
 
-      const setMessagesCall = mockSetters.setMessages.mock.calls[0][0];
-      const lastMessage = setMessagesCall[setMessagesCall.length - 1];
-      expect(lastMessage.streaming).toBe(true);
+      // Should dispatch SET_STREAMING if no messages but session is active
+      expect(mockSetters.streamDispatch).toHaveBeenCalledWith({
+        type: 'SET_STREAMING',
+        value: true,
+      });
     });
 
     it('should restore last running tool when session is active', async () => {
@@ -627,11 +516,7 @@ describe('useSessionRestore', () => {
   });
 
   describe('Reconnect recovery', () => {
-    it('should restore session on socket reconnect', async () => {
-      const dbMessages = [
-        { id: 1, content: 'Message after reconnect', role: 'user', timestamp: '2025-01-15T10:00:00Z' },
-      ];
-
+    it('should rejoin session on socket reconnect with last_seq', async () => {
       const testSocket = {
         connected: true,
         io: {
@@ -649,17 +534,9 @@ describe('useSessionRestore', () => {
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ events: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ messages: dbMessages, streaming: false }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ events: [] }),
         });
 
-      renderHook(() => useSessionRestore(createHookProps({ socket: testSocket as any })));
+      renderHook(() => useSessionRestore(createHookProps({ socket: testSocket as any, lastSeq: 42 })));
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -679,70 +556,12 @@ describe('useSessionRestore', () => {
         await reconnectHandler();
       });
 
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/history/session-1')
-        );
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/activity/session-1')
-        );
+      // Should rejoin with last_seq, NOT fetch from DB
+      expect(testSocket.emit).toHaveBeenCalledWith('join_session', {
+        session_id: 'session-1',
+        last_seq: 42,
       });
-    });
-
-    it('should restore streaming state on reconnect if session is active', async () => {
-      const dbMessages = [
-        { id: 1, content: 'User query', role: 'user', timestamp: '2025-01-15T10:00:00Z' },
-        { id: 2, content: 'Incomplete response', role: 'assistant', timestamp: '2025-01-15T10:00:01Z' },
-      ];
-
-      const testSocket = {
-        connected: true,
-        io: {
-          on: jest.fn(),
-          off: jest.fn(),
-        },
-        emit: jest.fn(),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ messages: [], streaming: false }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ events: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ messages: dbMessages, streaming: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ events: [] }),
-        });
-
-      renderHook(() => useSessionRestore(createHookProps({ socket: testSocket as any })));
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(2);
-      });
-
-      const reconnectCall = (testSocket.io.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'reconnect'
-      );
-      const reconnectHandler = reconnectCall[1];
-
-      jest.clearAllMocks();
-
-      await act(async () => {
-        await reconnectHandler();
-      });
-
-      await waitFor(() => {
-        expect(mockSetters.setStreaming).toHaveBeenCalledWith(true);
-        expect(mockSetters.setPendingRestore).toHaveBeenCalledWith(true);
-      });
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should cleanup reconnect listener on unmount', async () => {
@@ -771,7 +590,7 @@ describe('useSessionRestore', () => {
       expect(testSocket.io.off).toHaveBeenCalledWith('reconnect', expect.any(Function));
     });
 
-    it('should handle reconnect when currentSessionIdRef is null', async () => {
+    it('should handle reconnect when currentSessionIdRef is empty', async () => {
       const testSocket = {
         connected: true,
         io: {
@@ -805,58 +624,8 @@ describe('useSessionRestore', () => {
         await reconnectHandler();
       });
 
-      // Should not fetch if currentSessionIdRef is empty
-      expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('should handle fetch errors during reconnect gracefully', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
-
-      const testSocket = {
-        connected: true,
-        io: {
-          on: jest.fn(),
-          off: jest.fn(),
-        },
-        emit: jest.fn(),
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ messages: [], streaming: false }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ events: [] }),
-        })
-        .mockRejectedValueOnce(new Error('Reconnect fetch failed'));
-
-      renderHook(() => useSessionRestore(createHookProps({ socket: testSocket as any })));
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledTimes(2);
-      });
-
-      const reconnectCall = (testSocket.io.on as jest.Mock).mock.calls.find(
-        (call) => call[0] === 'reconnect'
-      );
-      const reconnectHandler = reconnectCall[1];
-
-      jest.clearAllMocks();
-
-      await act(async () => {
-        await reconnectHandler();
-      });
-
-      await waitFor(() => {
-        expect(consoleError).toHaveBeenCalledWith(
-          expect.stringContaining('[useSessionRestore] Failed to restore after reconnect:'),
-          expect.any(Error)
-        );
-      });
-
-      consoleError.mockRestore();
+      // Should not emit join_session if currentSessionIdRef is empty
+      expect(testSocket.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -907,37 +676,6 @@ describe('useSessionRestore', () => {
 
       // Should not call setMessages after unmount
       // (This is a bit tricky to test, but the hook should handle it)
-    });
-  });
-
-  describe('Session cache deletion', () => {
-    it('should delete session from cache after restoring', async () => {
-      mockRefs.sessionCacheRef.current.set('session-1', {
-        messages: [{ id: '1', content: 'Cached', role: 'user', timestamp: Date.now() }],
-        streamingContent: '',
-        streamingId: null,
-        toolLog: [],
-        activityTree: [],
-        sequenceCounter: 0,
-        seenIds: new Set(),
-        streaming: false,
-        backgroundProcessing: false,
-        thinking: '',
-        contextTokens: null,
-      });
-
-      (global.fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        json: async () => ({ events: [] }),
-      });
-
-      renderHook(() => useSessionRestore(createHookProps()));
-
-      expect(mockRefs.sessionCacheRef.current.has('session-1')).toBe(true);
-
-      await waitFor(() => {
-        expect(mockRefs.sessionCacheRef.current.has('session-1')).toBe(false);
-      });
     });
   });
 

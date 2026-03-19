@@ -286,7 +286,7 @@ export function getConversationHistory(sessionId: string, limit: number = 50): R
   const rows = d.prepare(`
     SELECT * FROM conversations
     WHERE session_id = ?
-    ORDER BY timestamp ASC
+    ORDER BY timestamp ASC, id ASC
     LIMIT ?
   `).all(sessionId, limit) as Record<string, unknown>[];
 
