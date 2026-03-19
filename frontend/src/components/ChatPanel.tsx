@@ -4,7 +4,6 @@ import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, Im
 import { ChatPanelHeader } from './ChatPanelHeader';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
-import { PluginModal } from './PluginModal';
 import './ChatPanel.css';
 
 export interface ScheduledTask {
@@ -103,7 +102,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onPauseScheduledTask,
   onResumeScheduledTask,
 }) => {
-  const [pluginModalOpen, setPluginModalOpen] = useState(false);
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
 
   // Fetch past sessions when empty state is shown
@@ -121,7 +119,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <>
-      <PluginModal isOpen={pluginModalOpen} onClose={() => setPluginModalOpen(false)} />
       <div className="chat-panel">
         <ChatPanelHeader
           connected={connected}
@@ -129,7 +126,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onSelectModel={onSelectModel}
           onToggleSessions={onToggleSessions}
           onToggleActivity={onToggleActivity}
-          onOpenPluginModal={() => setPluginModalOpen(true)}
         />
 
         <MessageList
