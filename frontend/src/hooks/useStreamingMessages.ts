@@ -273,7 +273,6 @@ export function useStreamingMessages({
       if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
 
       const msgId = streamingIdRef.current;
-      const alreadyFinalized = completionFinalizedRef.current;
       const isFinalCompletion = data.sdk_session_id !== null && data.sdk_session_id !== undefined;
 
       if (msgId) {
@@ -356,32 +355,6 @@ export function useStreamingMessages({
             }, 1000);
           }
         }, 100);
-      }
-
-      if (!msgId && data.content && !alreadyFinalized && !isRestoringSessionRef.current) {
-        const recoveryId = `recovery_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-        setMessages((prev) => {
-          const lastMsg = prev.length > 0 ? prev[prev.length - 1] : null;
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === data.content) {
-            return prev;
-          }
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
-            return prev.map((m) =>
-              m.id === lastMsg.id ? { ...m, content: data.content, streaming: false } : m
-            );
-          }
-          return [
-            ...prev,
-            {
-              id: recoveryId,
-              content: data.content,
-              role: 'assistant' as const,
-              timestamp: Date.now(),
-              streaming: false,
-            },
-          ];
-        });
-        completionFinalizedRef.current = true;
       }
     });
 

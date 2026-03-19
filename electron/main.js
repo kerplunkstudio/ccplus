@@ -218,6 +218,26 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Recover from renderer crashes (e.g., Chromium network service crash)
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    if (details.reason === 'crashed' || details.reason === 'oom' || details.reason === 'killed') {
+      console.warn(`[App] Renderer process gone: ${details.reason}. Reloading...`);
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.loadURL(SERVER_URL);
+        }
+      }, 1000);
+    }
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('[App] Window unresponsive, waiting for recovery...');
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    console.log('[App] Window responsive again');
+  });
+
   // Suppress noisy webview load errors (e.g., when a browser tab URL is unreachable)
   mainWindow.webContents.on('did-attach-webview', (event, webContents) => {
     webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
