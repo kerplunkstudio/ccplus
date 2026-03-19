@@ -9,7 +9,7 @@ import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 import { log } from "./logger.js";
-import { searchMemories } from './memory-client.js';
+import { searchMemories, storeMemory } from './memory-client.js';
 import { distillSession } from './memory-distiller.js';
 
 // ---- Skills discovery (cached) ----
@@ -668,6 +668,36 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       const toolUseIdForAgent = pendingAgentToolUseIds.pop()!;
       agentIdToToolUseId.set(agentId, toolUseIdForAgent);
     }
+
+    // Inject relevant memories into subagent context
+    if (config.MEMORY_ENABLED) {
+      try {
+        const toolInput = input.tool_input as Record<string, unknown> | undefined;
+        const description = (toolInput?.description as string) ?? '';
+        const prompt = (toolInput?.prompt as string) ?? '';
+        const searchQuery = (description + ' ' + prompt.slice(0, 200)).trim();
+
+        if (searchQuery.length > 10) {
+          const memories = await searchMemories(searchQuery, 3);
+          if (memories.length > 0) {
+            const memoryContext = memories
+              .map(m => m.content.replace(/\n/g, ' ').slice(0, 300))
+              .join('\n- ');
+            const injection = `\n\n## Prior Knowledge (auto-injected)\nRelevant context from previous sessions:\n- ${memoryContext}`;
+
+            return {
+              hookSpecificOutput: {
+                hookEventName: 'SubagentStart' as const,
+                additionalContext: injection,
+              },
+            };
+          }
+        }
+      } catch (error) {
+        log.warn('Memory injection into subagent failed', { error: String(error) });
+      }
+    }
+
     return {};
   };
 
@@ -683,6 +713,47 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         });
       }
     }
+
+    // Auto-distill subagent findings to memory
+    if (config.MEMORY_ENABLED) {
+      try {
+        const lastMessage = input.last_assistant_message as string | undefined;
+        const toolInput = input.tool_input as Record<string, unknown> | undefined;
+        const description = (toolInput?.description as string) ?? '';
+        const agentType = (toolInput?.subagent_type as string) ?? input.agent_type as string ?? 'agent';
+        const prompt = (toolInput?.prompt as string) ?? '';
+
+        // Only store if there's meaningful output (>100 chars)
+        if (lastMessage && lastMessage.length > 100) {
+          const session = sessions.get(sessionId);
+          const workspace = session?.workspace ?? '';
+          const projectName = workspace ? path.basename(workspace) : 'unknown';
+
+          // Extract goal from first line of prompt
+          const goal = prompt.split('\n')[0].slice(0, 150);
+
+          const content = [
+            `Subagent (${agentType}): ${description || goal}`,
+            `Outcome: ${lastMessage.slice(0, 500)}`,
+          ].join('\n');
+
+          const tags = [
+            `project:${projectName}`,
+            `agent:${agentType}`,
+            'auto-distill',
+            'subagent',
+          ].join(',');
+
+          // Fire and forget
+          storeMemory(content, tags).catch(err => {
+            log.warn('Subagent memory storage failed', { error: String(err) });
+          });
+        }
+      } catch (error) {
+        log.warn('Subagent memory distillation failed', { error: String(error) });
+      }
+    }
+
     return {};
   };
 
