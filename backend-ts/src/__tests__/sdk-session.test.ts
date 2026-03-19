@@ -1370,16 +1370,16 @@ describe("SDK Session", () => {
         close: vi.fn(),
         [Symbol.asyncIterator]: async function* () {
           yield {
-            type: "stream",
-            event_type: "content_block_delta",
-            data: {
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
               delta: { type: "text_delta", text: "Some " },
             },
           } as any;
           yield {
-            type: "stream",
-            event_type: "content_block_delta",
-            data: {
+            type: "stream_event",
+            event: {
+              type: "content_block_delta",
               delta: { type: "text_delta", text: "content" },
             },
           } as any;
