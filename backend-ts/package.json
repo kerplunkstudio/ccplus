@@ -16,6 +16,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",
     "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",
+    "croner": "^10.0.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
     "helmet": "^8.1.0",

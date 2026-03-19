@@ -1,12 +1,12 @@
 import { randomBytes } from "crypto";
+import { Cron } from "croner";
 import { log } from "./logger.js";
 
 export interface ScheduledTask {
   id: string;
   sessionId: string;
   prompt: string;
-  intervalMs: number;
-  recurring: boolean;
+  cronExpression: string;
   createdAt: number;
   lastRunAt: number | null;
   nextRunAt: number;
@@ -14,7 +14,7 @@ export interface ScheduledTask {
 }
 
 export interface Scheduler {
-  addTask(sessionId: string, prompt: string, intervalMs: number, recurring: boolean): ScheduledTask;
+  addTask(sessionId: string, prompt: string, cronExpression: string): ScheduledTask;
   removeTask(id: string): boolean;
   pauseTask(id: string): boolean;
   resumeTask(id: string): boolean;
@@ -43,7 +43,14 @@ class SchedulerImpl implements Scheduler {
     return randomBytes(4).toString("hex");
   }
 
-  addTask(sessionId: string, prompt: string, intervalMs: number, recurring: boolean): ScheduledTask {
+  private getNextRun(cronExpression: string): number {
+    const job = new Cron(cronExpression, { paused: true });
+    const next = job.nextRun();
+    if (!next) throw new Error(`No next run for cron expression: ${cronExpression}`);
+    return next.getTime();
+  }
+
+  addTask(sessionId: string, prompt: string, cronExpression: string): ScheduledTask {
     // Check session limit
     const sessionTasks = Array.from(this.tasks.values()).filter(t => t.sessionId === sessionId);
     if (sessionTasks.length >= this.maxTasksPerSession) {
@@ -51,20 +58,21 @@ class SchedulerImpl implements Scheduler {
     }
 
     const now = Date.now();
+    const nextRunAt = this.getNextRun(cronExpression);
+
     const task: ScheduledTask = {
       id: this.generateTaskId(),
       sessionId,
       prompt,
-      intervalMs,
-      recurring,
+      cronExpression,
       createdAt: now,
       lastRunAt: null,
-      nextRunAt: now + intervalMs,
+      nextRunAt,
       paused: false,
     };
 
     this.tasks.set(task.id, task);
-    log.info(`Scheduled task ${task.id}: "${prompt}" every ${intervalMs}ms for session ${sessionId}`);
+    log.info(`Scheduled task ${task.id}: "${prompt}" with cron "${cronExpression}" for session ${sessionId}`);
     return task;
   }
 
@@ -94,12 +102,12 @@ class SchedulerImpl implements Scheduler {
     const task = this.tasks.get(id);
     if (!task) return false;
 
-    // Recalculate nextRunAt based on current time
-    const now = Date.now();
+    // Recalculate nextRunAt from cron expression
+    const nextRunAt = this.getNextRun(task.cronExpression);
     const updated = {
       ...task,
       paused: false,
-      nextRunAt: now + task.intervalMs,
+      nextRunAt,
     };
     this.tasks.set(id, updated);
     log.info(`Resumed scheduled task ${id}`);
@@ -127,21 +135,16 @@ class SchedulerImpl implements Scheduler {
     if (!task) return;
 
     const now = Date.now();
+    const nextRunAt = this.getNextRun(task.cronExpression);
 
-    if (task.recurring) {
-      // Update for next run
-      const updated = {
-        ...task,
-        lastRunAt: now,
-        nextRunAt: now + task.intervalMs,
-      };
-      this.tasks.set(id, updated);
-      log.info(`Fired recurring task ${id}, next run at ${new Date(updated.nextRunAt).toISOString()}`);
-    } else {
-      // Remove one-time task
-      this.tasks.delete(id);
-      log.info(`Fired one-time task ${id}, removed from schedule`);
-    }
+    // Update for next run (cron tasks are always recurring)
+    const updated = {
+      ...task,
+      lastRunAt: now,
+      nextRunAt,
+    };
+    this.tasks.set(id, updated);
+    log.info(`Fired task ${id}, next run at ${new Date(updated.nextRunAt).toISOString()}`);
   }
 
   start(): void {
@@ -182,22 +185,11 @@ const scheduler = new SchedulerImpl();
 
 export { scheduler };
 
-// Interval parsing utility
-export function parseInterval(intervalStr: string): number {
-  const match = intervalStr.match(/^(\d+)(s|m|h|d)$/);
-  if (!match) {
-    throw new Error(`Invalid interval format: ${intervalStr}. Use format like "30s", "5m", "2h", "1d"`);
+// Cron expression validation utility
+export function validateCronExpression(expr: string): void {
+  try {
+    new Cron(expr, { paused: true });
+  } catch (err) {
+    throw new Error(`Invalid cron expression: ${expr}. ${err}`);
   }
-
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-
-  const multipliers: Record<string, number> = {
-    s: 1000,
-    m: 60 * 1000,
-    h: 60 * 60 * 1000,
-    d: 24 * 60 * 60 * 1000,
-  };
-
-  return value * multipliers[unit];
 }
