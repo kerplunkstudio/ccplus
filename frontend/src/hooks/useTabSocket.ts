@@ -80,6 +80,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     setCurrentTool: toolEvents.setCurrentTool,
     setPendingQuestion: toolEvents.setPendingQuestion,
     setSignals: toolEvents.setSignals,
+    setTodos: toolEvents.setTodos,
     setContextTokens: streamingHook.setContextTokens,
     setUsageStats: streamingHook.setUsageStats,
     dispatchTree,
