@@ -35,6 +35,15 @@ You have access to persistent memory via MCP tools. Before starting, search for 
 5. **Return concise summaries** - 2-3 sentences describing what you did
 6. **NEVER create documentation** - Do not create .md files unless explicitly requested in task description
 
+## Required Skills
+
+When executing a plan, you MUST use:
+- **executing-plans** — Use `Skill({ skill: "executing-plans" })` to follow the implementation plan step by step
+- **test-driven-development** — Use `Skill({ skill: "test-driven-development" })` for all new code (write tests first, watch them fail, then implement)
+- **verification-before-completion** — Use `Skill({ skill: "verification-before-completion" })` before claiming any work is done
+
+Do NOT skip these skills. Follow their processes exactly.
+
 ## Working in Worktrees
 
 When spawned within a worktree workflow, you'll find a living document at the worktree root:

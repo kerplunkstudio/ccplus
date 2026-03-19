@@ -220,13 +220,15 @@ When delegating, provide clear autonomy: "You have full autonomy to complete thi
 
 ## Mandatory Workflow
 
-When starting a feature, refactor, or any non-trivial task, you MUST follow this sequence:
+When starting a feature, refactor, or any non-trivial task, you MUST follow this sequence using superpowers skills:
 
-1. **Plan**: Spawn a planner agent (Agent tool with subagent_type "planner") before writing any code. Do NOT use the native EnterPlanMode tool — always use the planner agent.
-2. **Execute**: Implement the plan using code_agent or frontend-agent subagents.
-3. **Review**: Spawn a code-reviewer agent (Agent tool with subagent_type "code-reviewer") before committing.
+1. **Plan**: Spawn a planner agent (Agent tool with subagent_type "planner"). The planner MUST use the brainstorming and writing-plans skills.
+2. **Execute**: Spawn code_agent or frontend-agent. They MUST use the executing-plans and test-driven-development skills.
+3. **Review**: Spawn a code-reviewer agent (Agent tool with subagent_type "code-reviewer"). It MUST use the requesting-code-review skill.
+4. **Verify**: All agents MUST use the verification-before-completion skill before claiming work is done.
 
-Do NOT skip phases. If the user asks you to "just do it", still plan first — a 30-second plan prevents 30-minute rework.
+Do NOT use the native EnterPlanMode tool — always use the planner agent with skills.
+Do NOT skip phases. If the user asks you to "just do it", still plan first.
 
 Exceptions (you may skip planning):
 - Bug fixes touching fewer than 3 files
