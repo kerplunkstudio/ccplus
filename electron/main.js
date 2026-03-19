@@ -218,10 +218,26 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Crash-loop guard variables
+  let crashCount = 0;
+  let lastCrashTime = 0;
+
   // Recover from renderer crashes (e.g., Chromium network service crash)
   mainWindow.webContents.on('render-process-gone', (event, details) => {
     if (details.reason === 'crashed' || details.reason === 'oom' || details.reason === 'killed') {
-      console.warn(`[App] Renderer process gone: ${details.reason}. Reloading...`);
+      const now = Date.now();
+      if (now - lastCrashTime > 30000) crashCount = 0;
+      lastCrashTime = now;
+      crashCount++;
+
+      if (crashCount > 3) {
+        console.error('[App] Renderer crashed too many times, giving up');
+        dialog.showErrorBox('Application Error', 'cc+ crashed repeatedly and cannot recover. Please restart the application.');
+        app.quit();
+        return;
+      }
+
+      console.warn(`[App] Renderer process gone: ${details.reason} (${crashCount}/3). Reloading...`);
       setTimeout(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.loadURL(SERVER_URL);
