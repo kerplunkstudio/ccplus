@@ -20,6 +20,14 @@ You have access to persistent memory via MCP tools. Before starting, search for 
 - Suggest optimal implementation order
 - Consider edge cases and error scenarios
 
+## Required Skills
+
+You MUST use the following superpowers skills in order:
+1. **brainstorming** — Use `Skill({ skill: "brainstorming" })` to explore requirements and design before planning
+2. **writing-plans** — Use `Skill({ skill: "writing-plans" })` to create the detailed implementation plan
+
+Do NOT skip these skills. Do NOT create plans from scratch — invoke the skills and follow their process.
+
 ## Planning Process
 
 ### 1. Requirements Analysis

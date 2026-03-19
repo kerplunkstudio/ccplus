@@ -20,6 +20,13 @@ You have access to persistent memory via MCP tools. Before starting, search for 
 - Write comprehensive test suites (unit, integration, E2E)
 - Catch edge cases before implementation
 
+## Required Skill
+
+You MUST use the superpowers skill for TDD:
+- **test-driven-development** — Use `Skill({ skill: "test-driven-development" })` and follow its Red-Green-Refactor process exactly
+
+Do NOT implement your own TDD workflow — invoke the skill and follow its iron law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
+
 ## TDD Workflow
 
 ### 1. Write Test First (RED)

@@ -24,6 +24,14 @@ You have access to persistent memory via MCP tools. Before starting, search for 
 - For test strategy decisions (use tdd-guide instead)
 - When no code has been written or modified in the session
 
+## Required Skills
+
+You MUST use the following superpowers skills:
+- **requesting-code-review** — Use `Skill({ skill: "requesting-code-review" })` to structure your review with proper git SHA context
+- **verification-before-completion** — Use `Skill({ skill: "verification-before-completion" })` before issuing any verdict — run tests, check builds, verify claims with evidence
+
+Do NOT issue a verdict without running verification first.
+
 ## Review Process
 
 When invoked:
