@@ -199,16 +199,8 @@ describe('memory-client', () => {
   });
 
   describe('searchMemories', () => {
-    it('returns parsed results from MCP response', async () => {
-      const searchResults = [
-        {
-          content: 'Test memory 1',
-          tags: ['tag1', 'tag2'],
-          score: 0.95,
-          created_at: '2024-01-01T00:00:00Z',
-          content_hash: 'hash1',
-        },
-      ];
+    it('returns raw text from MCP response', async () => {
+      const responseText = 'Found 1 memories:\n\n1. Test memory 1 (score: 0.95)\n   Tags: tag1, tag2\n   Created: 2024-01-01T00:00:00Z';
 
       const searchPromise = searchMemories('test query', 5);
       await new Promise((r) => setImmediate(r));
@@ -242,7 +234,7 @@ describe('memory-client', () => {
               content: [
                 {
                   type: 'text',
-                  text: JSON.stringify(searchResults),
+                  text: responseText,
                 },
               ],
               isError: false,
@@ -253,11 +245,10 @@ describe('memory-client', () => {
 
       const result = await searchPromise;
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(searchResults[0]);
+      expect(result).toBe(responseText);
     });
 
-    it('returns empty array on timeout', async () => {
+    it('returns empty string on timeout', async () => {
       vi.useFakeTimers();
 
       const searchPromise = searchMemories('test query');
@@ -284,18 +275,18 @@ describe('memory-client', () => {
       await vi.advanceTimersByTimeAsync(1100);
 
       const result = await searchPromise;
-      expect(result).toEqual([]);
+      expect(result).toBe('');
     });
 
-    it('returns empty array when not configured', async () => {
+    it('returns empty string when not configured', async () => {
       shutdownMemoryClient();
       mockGetUserMcpServers.mockReturnValue([]); // No memory server
 
       const result = await searchMemories('test query');
-      expect(result).toEqual([]);
+      expect(result).toBe('');
     });
 
-    it('handles malformed response gracefully', async () => {
+    it('returns text as-is even if not JSON', async () => {
       const searchPromise = searchMemories('test query');
       await new Promise((r) => setImmediate(r));
 
@@ -316,8 +307,9 @@ describe('memory-client', () => {
 
       await new Promise((r) => setImmediate(r));
 
-      // Malformed JSON in text field using dynamic ID
+      // Plain text response (not JSON) using dynamic ID
       const opId = getLastRequestId(proc);
+      const plainText = 'No memories found for this query.';
       proc.stdout.emit(
         'data',
         Buffer.from(
@@ -325,14 +317,14 @@ describe('memory-client', () => {
             jsonrpc: '2.0',
             id: opId,
             result: {
-              content: [{ type: 'text', text: 'not valid JSON' }],
+              content: [{ type: 'text', text: plainText }],
             },
           }) + '\n'
         )
       );
 
       const result = await searchPromise;
-      expect(result).toEqual([]);
+      expect(result).toBe(plainText);
     });
   });
 
@@ -483,14 +475,14 @@ describe('memory-client', () => {
       // Shutdown before search completes
       shutdownMemoryClient();
 
-      // searchMemories catches all errors and returns []
+      // searchMemories catches all errors and returns ''
       const result = await searchPromise;
-      expect(result).toEqual([]);
+      expect(result).toBe('');
     });
   });
 
   describe('process error handling', () => {
-    it('returns empty on process crash', async () => {
+    it('returns empty string on process crash', async () => {
       const searchPromise = searchMemories('test query');
       await new Promise((r) => setImmediate(r));
 
@@ -514,9 +506,9 @@ describe('memory-client', () => {
       // Process crashes
       proc.emit('error', new Error('Process crashed'));
 
-      // searchMemories catches all errors and returns []
+      // searchMemories catches all errors and returns ''
       const result = await searchPromise;
-      expect(result).toEqual([]);
+      expect(result).toBe('');
 
       expect(mockLog.error).toHaveBeenCalledWith(
         'Memory server process error',
@@ -524,7 +516,7 @@ describe('memory-client', () => {
       );
     });
 
-    it('returns empty on process exit', async () => {
+    it('returns empty string on process exit', async () => {
       const searchPromise = searchMemories('test query');
       await new Promise((r) => setImmediate(r));
 
@@ -548,9 +540,9 @@ describe('memory-client', () => {
       // Process exits
       proc.emit('exit', 1, null);
 
-      // searchMemories catches all errors and returns []
+      // searchMemories catches all errors and returns ''
       const result = await searchPromise;
-      expect(result).toEqual([]);
+      expect(result).toBe('');
 
       expect(mockLog.info).toHaveBeenCalledWith('Memory server process exited', {
         code: 1,

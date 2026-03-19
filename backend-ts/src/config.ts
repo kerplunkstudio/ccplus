@@ -83,6 +83,7 @@ export const MEMORY_MAX_RESULTS = 5;
 export const MEMORY_DISTILL_MODEL = 'claude-haiku-4-5-20251001';
 export const MEMORY_DISTILL_MIN_MESSAGES = 3;
 export const MEMORY_SEARCH_TIMEOUT_MS = 5000;
+export const MEMORY_INIT_TIMEOUT_MS = 30000;
 export const MEMORY_HOOK_TIMEOUT_MS = 2000;
 export const MEMORY_DISTILL_DEBOUNCE_MS = 60000;
 
