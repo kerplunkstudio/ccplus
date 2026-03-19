@@ -320,7 +320,7 @@ async function initialize(): Promise<boolean> {
  * Search memories using vector similarity
  * Returns the raw text from the MCP response (human-readable format)
  */
-export async function searchMemories(query: string, limit?: number): Promise<string> {
+export async function searchMemories(query: string, limit?: number, tags?: string): Promise<string> {
   if (isCircuitOpen()) {
     log.debug('Memory circuit breaker is open, skipping search');
     return '';
@@ -342,12 +342,17 @@ export async function searchMemories(query: string, limit?: number): Promise<str
       }
     }
 
+    const args: Record<string, unknown> = {
+      query,
+      limit: limit || 5,
+    };
+    if (tags) {
+      args.tags = tags;
+    }
+
     const response = await sendRequest('tools/call', {
       name: 'memory_search',
-      arguments: {
-        query,
-        limit: limit || 5,
-      },
+      arguments: args,
     });
 
     // MCP tools/call response format: { content: [...], isError: false }

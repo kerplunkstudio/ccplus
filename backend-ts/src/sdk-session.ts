@@ -232,8 +232,9 @@ async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sess
   if (config.MEMORY_ENABLED && userPrompt) {
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';
-      const searchQuery = projectName ? `${projectName} ${userPrompt.slice(0, 200)}` : userPrompt.slice(0, 200);
-      const memoryText = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS);
+      const searchQuery = userPrompt.slice(0, 200);
+      const projectTag = projectName ? `project:${projectName}` : undefined;
+      const memoryText = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS, projectTag);
 
       if (memoryText) {
         // Truncate to max inject size to prevent context bloat
@@ -666,17 +667,21 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
     // Inject relevant memories into subagent context
     if (config.MEMORY_ENABLED) {
       try {
+        const session = sessions.get(sessionId);
         const toolInput = input.tool_input as Record<string, unknown> | undefined;
         const description = (toolInput?.description as string) ?? '';
         const prompt = (toolInput?.prompt as string) ?? '';
         const searchQuery = (description + ' ' + prompt.slice(0, 200)).trim();
 
         if (searchQuery.length > 10) {
+          const projectName = session?.workspace ? path.basename(session.workspace) : '';
+          const projectTag = projectName ? `project:${projectName}` : undefined;
+
           const timeoutPromise = new Promise<string>(resolve =>
             setTimeout(() => resolve(''), config.MEMORY_HOOK_TIMEOUT_MS)
           );
           const memoryText = await Promise.race([
-            searchMemories(searchQuery, 3),
+            searchMemories(searchQuery, 3, projectTag),
             timeoutPromise,
           ]);
           if (memoryText) {
