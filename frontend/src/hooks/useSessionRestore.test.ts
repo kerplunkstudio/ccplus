@@ -47,6 +47,7 @@ describe('useSessionRestore', () => {
       setCurrentTool: jest.fn(),
       setPendingQuestion: jest.fn(),
       setSignals: jest.fn(),
+      setTodos: jest.fn(),
       setContextTokens: jest.fn(),
       setUsageStats: jest.fn(),
       dispatchTree: jest.fn(),
@@ -121,6 +122,7 @@ describe('useSessionRestore', () => {
         expect(mockSetters.setCurrentTool).toHaveBeenCalledWith(null);
         expect(mockSetters.setPendingQuestion).toHaveBeenCalledWith(null);
         expect(mockSetters.setSignals).toHaveBeenCalledWith({ status: null });
+        expect(mockSetters.setTodos).toHaveBeenCalledWith([]);
         expect(mockSetters.setContextTokens).toHaveBeenCalledWith(null);
       });
 
@@ -512,6 +514,91 @@ describe('useSessionRestore', () => {
         (call: any) => call[0] !== null
       );
       expect(currentToolCalls).toHaveLength(0);
+    });
+
+    it('should restore todos from last TodoWrite event', async () => {
+      const dbEvents = [
+        {
+          tool_name: 'Bash',
+          tool_use_id: 'tool-1',
+          parent_agent_id: null,
+          timestamp: '2025-01-15T10:00:00Z',
+          success: true,
+          duration_ms: 100,
+          parameters: { command: 'ls' },
+        },
+        {
+          tool_name: 'TodoWrite',
+          tool_use_id: 'tool-2',
+          parent_agent_id: null,
+          timestamp: '2025-01-15T10:00:01Z',
+          success: true,
+          duration_ms: 50,
+          parameters: {
+            todos: [
+              { id: '1', text: 'Fix bug', completed: false },
+              { id: '2', text: 'Write tests', completed: true },
+            ],
+          },
+        },
+      ];
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ messages: [], streaming: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ events: dbEvents }),
+        });
+
+      renderHook(() => useSessionRestore(createHookProps()));
+
+      await waitFor(() => {
+        expect(mockSetters.setTodos).toHaveBeenCalledWith([
+          { id: '1', text: 'Fix bug', completed: false },
+          { id: '2', text: 'Write tests', completed: true },
+        ]);
+      });
+    });
+
+    it('should not restore todos if no TodoWrite events exist', async () => {
+      const dbEvents = [
+        {
+          tool_name: 'Bash',
+          tool_use_id: 'tool-1',
+          parent_agent_id: null,
+          timestamp: '2025-01-15T10:00:00Z',
+          success: true,
+          duration_ms: 100,
+        },
+      ];
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ messages: [], streaming: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ events: dbEvents }),
+        });
+
+      renderHook(() => useSessionRestore(createHookProps()));
+
+      await waitFor(() => {
+        expect(mockSetters.dispatchTree).toHaveBeenCalledWith({
+          type: 'LOAD_HISTORY',
+          events: expect.any(Array),
+        });
+      });
+
+      // setTodos should not be called since there's no TodoWrite event
+      const todosCalls = mockSetters.setTodos.mock.calls.filter(
+        (call: any) => call[0].length > 0
+      );
+      expect(todosCalls).toHaveLength(0);
     });
   });
 

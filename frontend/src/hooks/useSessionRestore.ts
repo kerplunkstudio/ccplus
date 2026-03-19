@@ -1,6 +1,6 @@
 import { useState, useEffect, MutableRefObject, Dispatch } from 'react';
 import { Socket } from 'socket.io-client';
-import { ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMessage } from '../types';
+import { ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMessage, TodoItem } from '../types';
 import { TreeAction } from './useActivityTree';
 import { StreamAction } from './streamReducer';
 import { MODEL_CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW } from './useStreamingMessages';
@@ -23,6 +23,7 @@ interface UseSessionRestoreProps {
   setCurrentTool: (tool: ToolEvent | null) => void;
   setPendingQuestion: (question: PendingQuestion | null) => void;
   setSignals: (signals: SignalState) => void;
+  setTodos: (todos: TodoItem[]) => void;
   setContextTokens: (tokens: number | null) => void;
   setUsageStats: Dispatch<React.SetStateAction<UsageStats>>;
   dispatchTree: Dispatch<TreeAction>;
@@ -46,6 +47,7 @@ export function useSessionRestore({
   setCurrentTool,
   setPendingQuestion,
   setSignals,
+  setTodos,
   setContextTokens,
   setUsageStats,
   dispatchTree,
@@ -76,6 +78,7 @@ export function useSessionRestore({
       setCurrentTool(null);
       setPendingQuestion(null);
       setSignals({ status: null });
+      setTodos([]);
       setContextTokens(null);
 
       // Clear timers
@@ -96,7 +99,7 @@ export function useSessionRestore({
       // NOTE: join_session now happens AFTER DB history loads in restoreSession
       // to prevent stream_content_sync from being overwritten by LOAD_HISTORY
     }
-  }, [sessionId, prevSessionIdRef, currentSessionIdRef, streamDispatch, toolLogRef, sequenceRef, seenToolUseIds, setToolLog, dispatchTree, setCurrentTool, setPendingQuestion, setSignals, setContextTokens, clearToolTimerRef, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, socket]);
+  }, [sessionId, prevSessionIdRef, currentSessionIdRef, streamDispatch, toolLogRef, sequenceRef, seenToolUseIds, setToolLog, dispatchTree, setCurrentTool, setPendingQuestion, setSignals, setTodos, setContextTokens, clearToolTimerRef, pendingWorkerRestartErrorRef, workerRestartGraceTimerRef, socket]);
 
   // Session restore effect
   useEffect(() => {
@@ -198,6 +201,14 @@ export function useSessionRestore({
               setCurrentTool(lastRunning);
             }
           }
+
+          // Restore todos from last TodoWrite event
+          const lastTodoEvent = [...events].reverse().find(
+            (e: any) => e.tool_name === 'TodoWrite' && e.parameters?.todos
+          );
+          if (lastTodoEvent) {
+            setTodos(lastTodoEvent.parameters.todos as TodoItem[]);
+          }
         }
 
         // NOW join the session room — this triggers stream_content_sync from the server
@@ -217,7 +228,7 @@ export function useSessionRestore({
 
     restoreSession();
     return () => { isMounted = false; };
-  }, [sessionId, socket, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool]);
+  }, [sessionId, socket, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool, setTodos]);
 
   // Reconnect effect
   useEffect(() => {
