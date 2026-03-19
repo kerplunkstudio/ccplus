@@ -88,9 +88,10 @@ describe('workflow-state', () => {
       expect(state).toBeNull();
     });
 
-    it('fails for invalid transition: idle -> execute (must go through plan first)', () => {
-      const state = transitionPhase('session-2a', 'execute', 'invalid');
-      expect(state).toBeNull();
+    it('succeeds for valid transition: idle -> execute (small fixes skip planning)', () => {
+      const state = transitionPhase('session-2a', 'execute', 'agent:code_agent');
+      expect(state).not.toBeNull();
+      expect(state?.phase).toBe('execute');
     });
 
     it('succeeds for valid transition: execute -> test', () => {
