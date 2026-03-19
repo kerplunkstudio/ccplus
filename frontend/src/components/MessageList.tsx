@@ -126,7 +126,23 @@ export const MessageList: React.FC<MessageListProps> = ({
       }
     }
     setLastMessageCount(messages.length);
-  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, currentTool, toolLog, activityTree, signals]);
+  }, [messages, scrollToBottom, lastMessageCount, streaming, pendingQuestion, currentTool, toolLog]);
+
+  // ResizeObserver for ThinkingIndicator height changes (e.g., new agent nodes, status text updates)
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(() => {
+      // Only autoscroll if user hasn't scrolled up and content is streaming
+      if (!userScrolledUpRef.current && streaming) {
+        scrollToBottom(true);
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [streaming, scrollToBottom]);
 
   return (
     <div className="messages-container" ref={messagesContainerRef} role="log" aria-label="Chat messages" aria-live="polite">
