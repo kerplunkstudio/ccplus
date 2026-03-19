@@ -9,7 +9,7 @@ import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 import { log } from "./logger.js";
-import { searchMemories, storeMemory } from './memory-client.js';
+import { searchMemories, type MemorySearchResult } from './memory-client.js';
 import { distillSession } from './memory-distiller.js';
 
 // ---- Skills discovery (cached) ----
@@ -216,7 +216,7 @@ Direct work often works better for:
 When delegating, provide clear autonomy: "You have full autonomy to complete this task. Explore the codebase, implement changes, test, and commit when done."
 `.trim();
 
-async function buildSystemPrompt(projectPath?: string, userPrompt?: string): Promise<string> {
+async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sessionId?: string): Promise<string> {
   const skills = discoverSkills(projectPath);
   let prompt = CCPLUS_SYSTEM_PROMPT_BASE;
 
@@ -233,7 +233,7 @@ async function buildSystemPrompt(projectPath?: string, userPrompt?: string): Pro
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';
       const searchQuery = projectName ? `${projectName} ${userPrompt.slice(0, 200)}` : userPrompt.slice(0, 200);
-      const memories = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS);
+      const memories = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS, sessionId);
 
       if (memories.length > 0) {
         const memoryLines = memories.map(m => {
@@ -678,7 +678,13 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         const searchQuery = (description + ' ' + prompt.slice(0, 200)).trim();
 
         if (searchQuery.length > 10) {
-          const memories = await searchMemories(searchQuery, 3);
+          const timeoutPromise = new Promise<MemorySearchResult[]>(resolve =>
+            setTimeout(() => resolve([]), config.MEMORY_HOOK_TIMEOUT_MS)
+          );
+          const memories = await Promise.race([
+            searchMemories(searchQuery, 3, sessionId),
+            timeoutPromise,
+          ]);
           if (memories.length > 0) {
             const memoryContext = memories
               .map(m => m.content.replace(/\n/g, ' ').slice(0, 300))
@@ -714,45 +720,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       }
     }
 
-    // Auto-distill subagent findings to memory
-    if (config.MEMORY_ENABLED) {
-      try {
-        const lastMessage = input.last_assistant_message as string | undefined;
-        const toolInput = input.tool_input as Record<string, unknown> | undefined;
-        const description = (toolInput?.description as string) ?? '';
-        const agentType = (toolInput?.subagent_type as string) ?? input.agent_type as string ?? 'agent';
-        const prompt = (toolInput?.prompt as string) ?? '';
-
-        // Only store if there's meaningful output (>100 chars)
-        if (lastMessage && lastMessage.length > 100) {
-          const session = sessions.get(sessionId);
-          const workspace = session?.workspace ?? '';
-          const projectName = workspace ? path.basename(workspace) : 'unknown';
-
-          // Extract goal from first line of prompt
-          const goal = prompt.split('\n')[0].slice(0, 150);
-
-          const content = [
-            `Subagent (${agentType}): ${description || goal}`,
-            `Outcome: ${lastMessage.slice(0, 500)}`,
-          ].join('\n');
-
-          const tags = [
-            `project:${projectName}`,
-            `agent:${agentType}`,
-            'auto-distill',
-            'subagent',
-          ].join(',');
-
-          // Fire and forget
-          storeMemory(content, tags).catch(err => {
-            log.warn('Subagent memory storage failed', { error: String(err) });
-          });
-        }
-      } catch (error) {
-        log.warn('Subagent memory distillation failed', { error: String(error) });
-      }
-    }
 
     return {};
   };
@@ -1138,7 +1105,7 @@ async function streamQuery(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: await buildSystemPrompt(workspace, prompt),
+          append: await buildSystemPrompt(workspace, prompt, sessionId),
         } as any,
         canUseTool: canUseTool as any,
         maxTurns: 50,

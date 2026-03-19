@@ -55,6 +55,37 @@ let requestId = 0;
 let pendingRequests = new Map<number, PendingRequest>();
 let buffer = '';
 
+// Circuit breaker state
+let consecutiveFailures = 0;
+let circuitOpenUntil = 0;
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_COOLDOWN_MS = 60000;
+
+function isCircuitOpen(): boolean {
+  if (consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) return false;
+  if (Date.now() > circuitOpenUntil) {
+    // Allow one retry after cooldown
+    consecutiveFailures = 0;
+    return false;
+  }
+  return true;
+}
+
+function recordSuccess(): void {
+  consecutiveFailures = 0;
+}
+
+function recordFailure(): void {
+  consecutiveFailures++;
+  if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+    log.warn('Memory circuit breaker opened', {
+      failures: consecutiveFailures,
+      cooldownMs: CIRCUIT_BREAKER_COOLDOWN_MS,
+    });
+  }
+}
+
 /**
  * Load memory server config from ~/.claude.json
  */
@@ -295,7 +326,12 @@ async function initialize(): Promise<boolean> {
 /**
  * Search memories using vector similarity
  */
-export async function searchMemories(query: string, limit?: number): Promise<MemorySearchResult[]> {
+export async function searchMemories(query: string, limit?: number, excludeSessionId?: string): Promise<MemorySearchResult[]> {
+  if (isCircuitOpen()) {
+    log.debug('Memory circuit breaker is open, skipping search');
+    return [];
+  }
+
   if (!available && !memoryConfig) {
     memoryConfig = loadMemoryConfig();
     if (!memoryConfig) {
@@ -329,21 +365,34 @@ export async function searchMemories(query: string, limit?: number): Promise<Mem
           const parsed = JSON.parse(text);
 
           if (Array.isArray(parsed)) {
-            return parsed.map((item) => ({
+            let results = parsed.map((item) => ({
               content: item.content || '',
               tags: item.tags || [],
               score: item.score || 0,
               created_at: item.created_at || '',
               content_hash: item.content_hash || '',
             }));
+
+            // Exclude memories from the same session
+            if (excludeSessionId) {
+              results = results.filter((m) => {
+                const tags = Array.isArray(m.tags) ? m.tags : [];
+                return !tags.some((t) => t.includes(`session:${excludeSessionId}`));
+              });
+            }
+
+            recordSuccess();
+            return results;
           }
         }
       }
     }
 
+    recordSuccess();
     return [];
   } catch (error) {
     log.error('Memory search failed', { error: String(error), query });
+    recordFailure();
     return [];
   }
 }
@@ -356,6 +405,11 @@ export async function storeMemory(
   tags: string,
   metadata?: Record<string, string>
 ): Promise<string | null> {
+  if (isCircuitOpen()) {
+    log.debug('Memory circuit breaker is open, skipping store');
+    return null;
+  }
+
   if (!available && !memoryConfig) {
     memoryConfig = loadMemoryConfig();
     if (!memoryConfig) {
@@ -390,14 +444,17 @@ export async function storeMemory(
       if (Array.isArray(contentArray) && contentArray.length > 0) {
         const firstItem = contentArray[0];
         if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
+          recordSuccess();
           return (firstItem as { text: string }).text;
         }
       }
     }
 
+    recordSuccess();
     return null;
   } catch (error) {
     log.error('Memory store failed', { error: String(error) });
+    recordFailure();
     return null;
   }
 }
@@ -420,6 +477,10 @@ export function shutdownMemoryClient(): void {
   memoryConfig = null;
   initPromise = null;
   buffer = '';
+
+  // Reset circuit breaker
+  consecutiveFailures = 0;
+  circuitOpenUntil = 0;
 
   // Clear all pending requests
   for (const [id, pending] of pendingRequests.entries()) {
