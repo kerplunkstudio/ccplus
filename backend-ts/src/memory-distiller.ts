@@ -2,6 +2,7 @@ import path from "path";
 import * as database from "./database.js";
 import * as config from "./config.js";
 import { log } from "./logger.js";
+import { storeMemory } from './memory-client.js';
 
 // Debounce tracking: sessionId -> lastDistilledAt timestamp
 const distillationTimestamps = new Map<string, number>();
@@ -223,7 +224,6 @@ export async function distillSession(
     }
 
     // Store via memory client
-    const { storeMemory } = await import("./memory-client.js");
     await storeMemory(
       content,
       tags.join(","),
