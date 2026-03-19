@@ -291,7 +291,11 @@ export function evaluatePreToolUse(
           !filePath.includes('doc') &&
           !filePath.includes('README') &&
           !filePath.includes('.env') &&
-          !filePath.includes('config');
+          !filePath.includes('config') &&
+          !filePath.includes('memory') &&
+          !filePath.includes('.claude/') &&
+          !filePath.includes('.gitignore') &&
+          !filePath.includes('SKILL');
         if (isSourceFile) {
           return {
             action: 'block',
