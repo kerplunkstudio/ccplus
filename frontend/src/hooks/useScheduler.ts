@@ -4,8 +4,7 @@ import { Socket } from 'socket.io-client';
 export interface ScheduledTask {
   id: string;
   prompt: string;
-  intervalMs: number;
-  recurring: boolean;
+  cronExpression: string;
   createdAt: number;
   lastRunAt: number | null;
   nextRunAt: number;
