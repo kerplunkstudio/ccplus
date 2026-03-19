@@ -21,3 +21,10 @@ Object.defineProperty(navigator, 'clipboard', {
   writable: true,
   configurable: true,
 });
+
+// Mock ResizeObserver for tests (not available in jsdom)
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
