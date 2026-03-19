@@ -1039,21 +1039,6 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
         tool_use_id: pq.tool_use_id ?? "",
       });
     }
-  } else {
-    const missedResponse = sdkSession.getLastCompletedResponse(sessionId);
-    if (missedResponse) {
-      socket.emit("response_complete", {
-        cost: missedResponse.cost,
-        duration_ms: missedResponse.duration_ms,
-        input_tokens: missedResponse.input_tokens,
-        output_tokens: missedResponse.output_tokens,
-        context_window_size: missedResponse.context_window_size,
-        model: missedResponse.model,
-        sdk_session_id: missedResponse.sdk_session_id,
-        content: missedResponse.text,
-        session_id: sessionId,
-      });
-    }
   }
 
   socket.emit("connected", { session_id: sessionId });

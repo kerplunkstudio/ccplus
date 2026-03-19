@@ -1364,19 +1364,26 @@ describe("SDK Session", () => {
   });
 
   describe("Streaming Content Buffer", () => {
-    it("should track streaming content", async () => {
+    it("should track streaming content during text deltas", async () => {
       const mockQuery: Partial<Query> = {
         interrupt: vi.fn().mockResolvedValue(undefined),
         close: vi.fn(),
         [Symbol.asyncIterator]: async function* () {
           yield {
-            type: "assistant",
-            message: {
-              role: "assistant",
-              content: [{ type: "text", text: "Some content" }],
+            type: "stream",
+            event_type: "content_block_delta",
+            data: {
+              delta: { type: "text_delta", text: "Some " },
             },
           } as any;
-          // Don't yield result yet - keep the query active
+          yield {
+            type: "stream",
+            event_type: "content_block_delta",
+            data: {
+              delta: { type: "text_delta", text: "content" },
+            },
+          } as any;
+          // Keep query active
           await new Promise((r) => setTimeout(r, 5000));
         },
       };
@@ -1402,12 +1409,13 @@ describe("SDK Session", () => {
 
       // Wait for content to be streamed (poll until onText is called)
       for (let i = 0; i < 20; i++) {
-        if (callbacks.onText.mock.calls.length > 0) break;
+        if (callbacks.onText.mock.calls.length >= 2) break;
         await new Promise((r) => setTimeout(r, 50));
       }
 
-      // Verify onText was called with the expected content
-      expect(callbacks.onText).toHaveBeenCalledWith("Some content", expect.any(Number));
+      // Verify onText was called with the expected deltas
+      expect(callbacks.onText).toHaveBeenCalledWith("Some ", expect.any(Number));
+      expect(callbacks.onText).toHaveBeenCalledWith("content", expect.any(Number));
 
       // Streaming content should be available while query is still active
       const content = sdkSession.getStreamingContent("buffer-test");
@@ -1470,128 +1478,6 @@ describe("SDK Session", () => {
       // After completion, buffer should be cleared
       const content = sdkSession.getStreamingContent("clear-test");
       expect(content).toBe("");
-    });
-  });
-
-  describe("Last Completed Response", () => {
-    it("should store last completed response", async () => {
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "assistant",
-            message: {
-              role: "assistant",
-              content: [{ type: "text", text: "Response" }],
-            },
-          } as any;
-          yield {
-            type: "result",
-            session_id: "sdk-123",
-            total_cost_usd: 0.003,
-            duration_ms: 200,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 10, output_tokens: 20 },
-          } as any;
-        },
-      };
-
-      const queryMock = vi.mocked(
-        await import("@anthropic-ai/claude-agent-sdk"),
-      ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
-
-      const callbacks = {
-        onText: vi.fn(),
-        onToolEvent: vi.fn(),
-        onComplete: vi.fn(),
-        onError: vi.fn(),
-      };
-
-      sdkSession.submitQuery(
-        "last-response-test",
-        "Query",
-        "/tmp/workspace",
-        callbacks,
-        "sonnet",
-      );
-
-      await new Promise((r) => setTimeout(r, 150));
-
-      const lastResponse = sdkSession.getLastCompletedResponse("last-response-test");
-      expect(lastResponse).toMatchObject({
-        text: "Response",
-        sdk_session_id: "sdk-123",
-        cost: 0.003,
-        duration_ms: 200,
-        is_error: false,
-        num_turns: 1,
-        input_tokens: 10,
-        output_tokens: 20,
-        model: "sonnet",
-      });
-    });
-
-    it("should return null for non-existent session", () => {
-      const lastResponse = sdkSession.getLastCompletedResponse("non-existent");
-      expect(lastResponse).toBeNull();
-    });
-
-    it("should clear last response when starting new query", async () => {
-      vi.mocked(database.getLastSdkSessionId).mockReturnValue(null);
-
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
-      const queryMock = vi.mocked(
-        await import("@anthropic-ai/claude-agent-sdk"),
-      ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
-
-      const callbacks = {
-        onText: vi.fn(),
-        onToolEvent: vi.fn(),
-        onComplete: vi.fn(),
-        onError: vi.fn(),
-      };
-
-      // First query
-      sdkSession.submitQuery(
-        "clear-last-test",
-        "Query 1",
-        "/tmp/workspace",
-        callbacks,
-      );
-
-      await new Promise((r) => setTimeout(r, 150));
-
-      // Second query should clear last response
-      sdkSession.submitQuery(
-        "clear-last-test",
-        "Query 2",
-        "/tmp/workspace",
-        callbacks,
-      );
-
-      // Should be null immediately after submitting new query
-      await new Promise((r) => setTimeout(r, 10));
-      const lastResponse = sdkSession.getLastCompletedResponse("clear-last-test");
-      // Will be null or the old one briefly, but eventually gets updated
     });
   });
 
@@ -3209,11 +3095,6 @@ description: Project command
     it("should return empty string for nonexistent session streaming content", () => {
       const content = sdkSession.getStreamingContent("nonexistent-session");
       expect(content).toBe("");
-    });
-
-    it("should return null for nonexistent session last completed response", () => {
-      const response = sdkSession.getLastCompletedResponse("nonexistent-session");
-      expect(response).toBeNull();
     });
   });
 });

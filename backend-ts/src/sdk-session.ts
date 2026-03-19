@@ -258,7 +258,6 @@ interface ActiveSession {
   } | null;
   questionTimeout: NodeJS.Timeout | null;
   streamingContent: string;
-  lastCompletedResponse: Record<string, unknown> | null;
 }
 
 // ---- Session Manager ----
@@ -300,7 +299,6 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     pendingQuestion: null,
     questionTimeout: null,
     streamingContent: '',
-    lastCompletedResponse: null,
   };
   sessions.set(sessionId, session);
   return session;
@@ -693,9 +691,6 @@ export function submitQuery(
     session.cancelRequested = false;
   }
 
-  // Clear last completed response when starting a new query
-  session.lastCompletedResponse = null;
-
   session.callbacks = callbacks;
   session.cancelRequested = false;
 
@@ -776,12 +771,6 @@ export function getPendingQuestion(sessionId: string): Record<string, unknown> |
 export function getStreamingContent(sessionId: string): string {
   const session = sessions.get(sessionId);
   return session?.streamingContent ?? '';
-}
-
-export function getLastCompletedResponse(sessionId: string): Record<string, unknown> | null {
-  const session = sessions.get(sessionId);
-  if (!session) return null;
-  return session.lastCompletedResponse;
 }
 
 // ---- MCP Signal Server ----
@@ -1290,12 +1279,6 @@ async function streamQuery(
     if (session.activeQuery) {
       try { session.activeQuery.close(); } catch { /* already closed */ }
     }
-
-    // Store last completed response for tab-switch recovery
-    session.lastCompletedResponse = {
-      text: resultText.join(""),
-      ...lastCompletionData,
-    };
 
     session.activeQuery = null;
     session.streamingContent = '';
