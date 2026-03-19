@@ -1126,7 +1126,8 @@ async function streamQuery(
             model: session.model,
             message_index: messageIndex,
           });
-          // Keep streamingContent until query ends (cleared at line 1300)
+          // Reset streaming buffer so stream_content_sync only sends current message content
+          session.streamingContent = '';
         }
       } else if (message.type === "result") {
         gotResult = true;
