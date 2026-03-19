@@ -148,6 +148,25 @@ function discoverSkills(projectPath?: string): SkillInfo[] {
     }
   }
 
+  // 5. Project-level skills
+  if (projectPath) {
+    const projSkillsDir = path.join(projectPath, ".claude", "skills");
+    if (existsSync(projSkillsDir)) {
+      try {
+        for (const dir of readdirSync(projSkillsDir)) {
+          const dirPath = path.join(projSkillsDir, dir);
+          if (!statSync(dirPath).isDirectory()) continue;
+          if (skills.some(s => s.name === dir)) continue;
+          const skillFile = path.join(dirPath, "SKILL.md");
+          const desc = existsSync(skillFile) ? parseDescription(skillFile) : null;
+          skills.push({ name: dir, plugin: "project", description: desc || "" });
+        }
+      } catch (err) {
+        console.error('Failed to discover project skills:', err);
+      }
+    }
+  }
+
   if (!projectPath) cachedSkills = skills;
   return skills;
 }
@@ -1179,7 +1198,10 @@ async function streamQuery(
         allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
         env: cleanEnv,
         hooks: hooks as any,
-        plugins: installedPlugins.length > 0 ? installedPlugins as any : undefined,
+        plugins: [
+          { type: 'local' as const, path: config.PROJECT_ROOT },
+          ...installedPlugins,
+        ] as any,
         mcpServers: {
           "ccplus-signals": signalServer,
           ...userMcpServers,
