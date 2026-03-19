@@ -9,6 +9,8 @@ import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 import { log } from "./logger.js";
+import { searchMemories } from './memory-client.js';
+import { distillSession } from './memory-distiller.js';
 
 // ---- Skills discovery (cached) ----
 
@@ -214,16 +216,44 @@ Direct work often works better for:
 When delegating, provide clear autonomy: "You have full autonomy to complete this task. Explore the codebase, implement changes, test, and commit when done."
 `.trim();
 
-function buildSystemPrompt(projectPath?: string): string {
+async function buildSystemPrompt(projectPath?: string, userPrompt?: string): Promise<string> {
   const skills = discoverSkills(projectPath);
-  if (skills.length === 0) return CCPLUS_SYSTEM_PROMPT_BASE;
+  let prompt = CCPLUS_SYSTEM_PROMPT_BASE;
 
-  const skillLines = skills.map(s => {
-    const desc = s.description ? ` - ${s.description}` : "";
-    return `- /${s.name} (${s.plugin})${desc}`;
-  });
+  if (skills.length > 0) {
+    const skillLines = skills.map(s => {
+      const desc = s.description ? ` - ${s.description}` : "";
+      return `- /${s.name} (${s.plugin})${desc}`;
+    });
+    prompt += `\n\n## Available Skills\nThe following slash commands are available. Use the Skill tool to execute them:\n${skillLines.join("\n")}`;
+  }
 
-  return `${CCPLUS_SYSTEM_PROMPT_BASE}\n\n## Available Skills\nThe following slash commands are available. Use the Skill tool to execute them:\n${skillLines.join("\n")}`;
+  // Inject relevant memories from knowledge base
+  if (config.MEMORY_ENABLED && userPrompt) {
+    try {
+      const projectName = projectPath ? path.basename(projectPath) : '';
+      const searchQuery = projectName ? `${projectName} ${userPrompt.slice(0, 200)}` : userPrompt.slice(0, 200);
+      const memories = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS);
+
+      if (memories.length > 0) {
+        const memoryLines = memories.map(m => {
+          // Strip newlines and limit per-item length to prevent prompt injection
+          const sanitized = m.content.replace(/\n/g, ' ').slice(0, 500);
+          return `- ${sanitized}`;
+        });
+        const memorySection = memoryLines.join('\n');
+        // Cap at MEMORY_MAX_INJECT_TOKENS characters
+        const truncated = memorySection.length > config.MEMORY_MAX_INJECT_TOKENS
+          ? memorySection.slice(0, config.MEMORY_MAX_INJECT_TOKENS) + '\n...(truncated)'
+          : memorySection;
+        prompt += `\n\n## Prior Knowledge\nRelevant context from previous sessions:\n${truncated}`;
+      }
+    } catch (error) {
+      log.warn('Failed to inject memories into system prompt', { error: String(error) });
+    }
+  }
+
+  return prompt;
 }
 
 // ---- Types ----
@@ -1037,7 +1067,7 @@ async function streamQuery(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: buildSystemPrompt(workspace),
+          append: await buildSystemPrompt(workspace, prompt),
         } as any,
         canUseTool: canUseTool as any,
         maxTurns: 50,
@@ -1235,6 +1265,12 @@ async function streamQuery(
       }
       // Context compaction boundary
       else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
+        // Flush knowledge to memory before compaction
+        if (config.MEMORY_ENABLED) {
+          distillSession(sessionId, workspace, { preCompaction: true }).catch(err => {
+            log.warn('Pre-compaction memory flush failed', { sessionId, error: String(err) });
+          });
+        }
         callbacks.onCompactBoundary?.();
       }
       // API errors (overloaded, server errors, etc.)
@@ -1295,6 +1331,13 @@ async function streamQuery(
         input_tokens: null,
         output_tokens: null,
         model: session.model,
+      });
+    }
+
+    // Fire-and-forget memory distillation
+    if (config.MEMORY_ENABLED && gotResult && !session.cancelRequested && resultText.length > 0) {
+      distillSession(sessionId, workspace).catch(err => {
+        log.warn('Memory distillation failed', { sessionId, error: String(err) });
       });
     }
   }
