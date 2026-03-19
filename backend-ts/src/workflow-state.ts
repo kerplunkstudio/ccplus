@@ -29,7 +29,7 @@ export interface PhaseEnforcementResult {
 // ---- Constants ----
 
 const VALID_TRANSITIONS: Record<WorkflowPhase, WorkflowPhase[]> = {
-  idle: ['design', 'plan'],
+  idle: ['design', 'plan', 'execute'],
   design: ['plan', 'execute'],
   plan: ['execute'],
   execute: ['test', 'review'],
