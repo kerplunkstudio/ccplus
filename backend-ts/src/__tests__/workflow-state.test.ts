@@ -74,8 +74,22 @@ describe('workflow-state', () => {
       expect(state!.transitions[0].trigger).toBe('user_request');
     });
 
+    it('succeeds for valid transition: idle -> plan', () => {
+      const state = transitionPhase('session-1a', 'plan', 'user_request');
+      expect(state).not.toBeNull();
+      expect(state!.phase).toBe('plan');
+      expect(state!.transitions.length).toBe(1);
+      expect(state!.transitions[0].from).toBe('idle');
+      expect(state!.transitions[0].to).toBe('plan');
+    });
+
     it('fails for invalid transition: idle -> review', () => {
       const state = transitionPhase('session-2', 'review', 'invalid');
+      expect(state).toBeNull();
+    });
+
+    it('fails for invalid transition: idle -> execute (must go through plan first)', () => {
+      const state = transitionPhase('session-2a', 'execute', 'invalid');
       expect(state).toBeNull();
     });
 
@@ -170,6 +184,32 @@ describe('workflow-state', () => {
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Plan phase');
     });
+
+    it('blocks editing source files in idle phase', () => {
+      const result = evaluatePreToolUse('idle', 'Edit', { file_path: 'src/app.ts' });
+      expect(result.action).toBe('block');
+      expect(result.message).toContain('Idle phase');
+      expect(result.message).toContain('planner agent');
+    });
+
+    it('allows editing plan/doc files in idle phase', () => {
+      const result1 = evaluatePreToolUse('idle', 'Write', { file_path: 'docs/plan.md' });
+      expect(result1.action).toBe('allow');
+
+      const result2 = evaluatePreToolUse('idle', 'Write', { file_path: 'README.md' });
+      expect(result2.action).toBe('allow');
+
+      const result3 = evaluatePreToolUse('idle', 'Edit', { file_path: '.env' });
+      expect(result3.action).toBe('allow');
+
+      const result4 = evaluatePreToolUse('idle', 'Edit', { file_path: 'config.json' });
+      expect(result4.action).toBe('allow');
+    });
+
+    it('allows Read tool in idle phase', () => {
+      const result = evaluatePreToolUse('idle', 'Read', { file_path: 'src/app.ts' });
+      expect(result.action).toBe('allow');
+    });
   });
 
   describe('getPhaseContext', () => {
@@ -177,6 +217,7 @@ describe('workflow-state', () => {
       const context = getPhaseContext('design');
       expect(context).toBeDefined();
       expect(context).toContain('WORKFLOW PHASE: DESIGN');
+      expect(context).toContain('Do NOT write implementation code');
     });
 
     it('returns null for idle phase', () => {
