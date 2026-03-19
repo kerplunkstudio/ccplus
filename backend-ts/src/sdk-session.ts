@@ -217,6 +217,26 @@ Direct work often works better for:
 - Work that requires tight feedback loops with the user
 
 When delegating, provide clear autonomy: "You have full autonomy to complete this task. Explore the codebase, implement changes, test, and commit when done."
+
+## Mandatory Workflow
+
+When starting a feature, refactor, or any non-trivial task, you MUST follow this sequence:
+
+1. **Plan**: Spawn a planner agent (Agent tool with subagent_type "planner") before writing any code. Do NOT use the native EnterPlanMode tool — always use the planner agent.
+2. **Execute**: Implement the plan using code_agent or frontend-agent subagents.
+3. **Review**: Spawn a code-reviewer agent (Agent tool with subagent_type "code-reviewer") before committing.
+
+Do NOT skip phases. If the user asks you to "just do it", still plan first — a 30-second plan prevents 30-minute rework.
+
+Exceptions (you may skip planning):
+- Bug fixes touching fewer than 3 files
+- Config-only changes (.env, settings)
+- Documentation-only changes
+
+Exceptions (you may skip review):
+- Config-only changes
+- Documentation-only changes
+- Test-only changes
 `.trim();
 
 async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sessionId?: string): Promise<string> {
@@ -693,8 +713,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     // Auto-transition workflow phase based on agent type
     if (WORKFLOW_ENABLED) {
-      const agentType = ((input.tool_input as Record<string, unknown>)?.subagent_type as string) ?? '';
+      const agentType = (input as { agent_type?: string }).agent_type ?? '';
       const inferredPhase = inferPhaseFromAgent(agentType);
+      log.info('Workflow: SubagentStart', { sessionId, agentType, inferredPhase: inferredPhase ?? 'none' });
       if (inferredPhase) {
         const currentState = getWorkflowState(sessionId);
         if (currentState.phase !== inferredPhase) {
