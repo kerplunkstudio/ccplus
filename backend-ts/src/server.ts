@@ -17,7 +17,7 @@ import * as sdkSession from "./sdk-session.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { log } from "./logger.js";
-import { scheduler, parseInterval } from "./scheduler.js";
+import { scheduler, validateCronExpression } from "./scheduler.js";
 import { eventLog } from "./event-log.js";
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
@@ -1255,8 +1255,8 @@ io.on("connection", (socket) => {
     }
 
     try {
-      const intervalMs = parseInterval(interval);
-      const task = scheduler.addTask(sid, prompt, intervalMs, true);
+      validateCronExpression(interval);
+      const task = scheduler.addTask(sid, prompt, interval);
       callback?.({ success: true, task });
       socket.emit("schedule_created", { task });
     } catch (err) {
