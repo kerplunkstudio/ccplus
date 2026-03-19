@@ -778,23 +778,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ))}
         </div>
       )}
-      {queuedMessage && (
-        <div className="queued-message-indicator">
-          <svg className="queued-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-          <span className="queued-text">
-            Queued: {queuedMessage.content.length > 60 ? queuedMessage.content.slice(0, 60) + '...' : queuedMessage.content}
-          </span>
-          <button className="queued-dismiss" onClick={() => setQueuedMessage(null)} aria-label="Cancel queued message">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      )}
       <div className="input-row">
         <div className="input-wrapper">
           <textarea
@@ -844,11 +827,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onClick={handleSubmit}
                 disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
                 aria-label="Queue message"
-                title="Queue message for after response"
+                title="Queue for after response"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M22 2L11 13" />
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
                 </svg>
               </button>
             </>
@@ -867,6 +850,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
       </div>
+      {queuedMessage && (
+        <div className="queued-message-indicator">
+          <span className="queued-accent-bar" />
+          <span className="queued-text">
+            {queuedMessage.content.length > 80 ? queuedMessage.content.slice(0, 80) + '...' : queuedMessage.content}
+          </span>
+          <button className="queued-dismiss" onClick={() => setQueuedMessage(null)} aria-label="Cancel queued message">
+            cancel
+          </button>
+        </div>
+      )}
       {backgroundProcessing && !streaming && (
         <div className="background-processing-indicator">
           <span className="processing-dot"></span>
