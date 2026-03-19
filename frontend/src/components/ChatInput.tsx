@@ -82,6 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
   const currentSlashCommandRef = useRef<{ start: number; command: string } | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<{content: string, imageIds?: string[], images?: ImageAttachment[]} | null>(null);
 
   // Handle pending input from "Send to new session"
   useEffect(() => {
@@ -174,6 +175,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, [messages.length, streaming, connected, sessionId]);
 
+  // Auto-send queued message when streaming ends
+  useEffect(() => {
+    if (!streaming && queuedMessage) {
+      onSendMessage(queuedMessage.content, undefined, undefined, queuedMessage.imageIds, queuedMessage.images);
+      setQueuedMessage(null);
+    }
+  }, [streaming, queuedMessage, onSendMessage]);
+
   const handleSubmit = () => {
     const trimmed = input.trim();
     if ((!trimmed && uploadedImages.length === 0) || !connected) return;
@@ -219,6 +228,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    // If streaming and not background processing, queue the message instead of sending
+    if (streaming && !backgroundProcessing) {
+      const imageIds = uploadedImages.map(img => img.id);
+      const images = uploadedImages.map(img => ({
+        id: img.id,
+        filename: img.filename,
+        mime_type: 'image/png',
+        size: 0,
+        url: img.url,
+      }));
+
+      setQueuedMessage({
+        content: trimmed || '[Image]',
+        imageIds: imageIds.length > 0 ? imageIds : undefined,
+        images: images.length > 0 ? images : undefined,
+      });
+
+      // Clear input and images to show user it was "sent"
+      setInput('');
+      setUploadedImages([]);
+      setShowAutocomplete(false);
+      historyIndexRef.current = -1;
+      savedDraftRef.current = '';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      if (sessionId) {
+        inputDraftsRef.current = {
+          ...inputDraftsRef.current,
+          [sessionId]: '',
+        };
+      }
+      return;
+    }
+
+    // Normal send flow (not streaming, or background processing)
     const imageIds = uploadedImages.map(img => img.id);
     const images = uploadedImages.map(img => ({
       id: img.id,
@@ -601,10 +646,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
 
-    // Normal message sending (allow during background processing, block during active streaming)
+    // Normal message sending (allow during background processing, queue during active streaming)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (streaming && !backgroundProcessing) return;
       handleSubmit();
     }
   };
@@ -734,6 +778,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ))}
         </div>
       )}
+      {queuedMessage && (
+        <div className="queued-message-indicator">
+          <svg className="queued-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span className="queued-text">
+            Queued: {queuedMessage.content.length > 60 ? queuedMessage.content.slice(0, 60) + '...' : queuedMessage.content}
+          </span>
+          <button className="queued-dismiss" onClick={() => setQueuedMessage(null)} aria-label="Cancel queued message">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="input-row">
         <div className="input-wrapper">
           <textarea
@@ -742,8 +803,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={connected ? 'Send a message or type / for commands...' : 'Reconnecting — hang tight...'}
-            disabled={!connected || (streaming && !backgroundProcessing)}
+            placeholder={connected ? (streaming && !backgroundProcessing ? 'Type a message to queue...' : 'Send a message or type / for commands...') : 'Reconnecting — hang tight...'}
+            disabled={!connected}
             rows={1}
           />
         </div>
@@ -772,11 +833,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             )}
           </button>
           {streaming && !backgroundProcessing ? (
-            <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-              </svg>
-            </button>
+            <>
+              <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+                </svg>
+              </button>
+              <button
+                className="queue-send-btn"
+                onClick={handleSubmit}
+                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
+                aria-label="Queue message"
+                title="Queue message for after response"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </button>
+            </>
           ) : (
             <button
               className="send-btn"

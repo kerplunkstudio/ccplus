@@ -169,11 +169,11 @@ describe('ChatInput', () => {
     expect(textarea).toBeDisabled();
   });
 
-  it('disables input during streaming (when not background processing)', () => {
+  it('keeps input enabled during streaming to allow queueing', () => {
     renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
-    const textarea = screen.getByPlaceholderText(/Send a message/i);
+    const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
 
-    expect(textarea).toBeDisabled();
+    expect(textarea).not.toBeDisabled();
   });
 
   it('does not disable input during background processing', () => {
@@ -462,5 +462,160 @@ describe('ChatInput', () => {
     fireEvent.keyDown(textarea, { key: 'ArrowUp' });
 
     // No assertions needed - testing that it doesn't crash
+  });
+
+  // Message Queueing Tests
+  describe('Message Queueing', () => {
+    it('queues message when sent during active streaming', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i) as HTMLTextAreaElement;
+
+      await userEvent.type(textarea, 'Queued message');
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      // Message should not be sent immediately
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+
+      // Queued indicator should appear
+      await waitFor(() => {
+        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
+        expect(screen.getByText(/Queued message/i)).toBeInTheDocument();
+      });
+
+      // Input should be cleared
+      expect(textarea.value).toBe('');
+    });
+
+    it('shows both cancel and queue buttons during streaming', () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+
+      expect(screen.getByLabelText(/Cancel streaming/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Queue message/i)).toBeInTheDocument();
+    });
+
+    it('auto-sends queued message when streaming ends', async () => {
+      const { rerender } = renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+      // Queue a message
+      await userEvent.type(textarea, 'Queued message');
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
+      });
+
+      // End streaming
+      rerender(
+        <ToastProvider>
+          <ChatInput {...defaultProps} streaming={false} />
+        </ToastProvider>
+      );
+
+      // Message should be sent automatically
+      await waitFor(() => {
+        expect(mockOnSendMessage).toHaveBeenCalledWith('Queued message', undefined, undefined, undefined, undefined);
+      });
+
+      // Queued indicator should disappear
+      expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+    });
+
+    it('allows dismissing queued message', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+      // Queue a message
+      await userEvent.type(textarea, 'Queued message');
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Queued:/i)).toBeInTheDocument();
+      });
+
+      // Click dismiss button
+      const dismissBtn = screen.getByLabelText(/Cancel queued message/i);
+      fireEvent.click(dismissBtn);
+
+      // Queued indicator should disappear
+      await waitFor(() => {
+        expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+      });
+
+      // Message should not be sent
+      expect(mockOnSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('replaces queued message when queueing another', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+      // Queue first message
+      await userEvent.type(textarea, 'First message');
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      await waitFor(() => {
+        expect(screen.getByText(/First message/i)).toBeInTheDocument();
+      });
+
+      // Queue second message
+      await userEvent.type(textarea, 'Second message');
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      // Should show second message only
+      await waitFor(() => {
+        expect(screen.getByText(/Second message/i)).toBeInTheDocument();
+        expect(screen.queryByText(/First message/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('clears textarea when queueing message', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i) as HTMLTextAreaElement;
+
+      // Type and queue a message
+      await userEvent.type(textarea, 'Test message');
+      expect(textarea.value).toBe('Test message');
+
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      // Input should be cleared immediately after queueing
+      await waitFor(() => {
+        expect(textarea.value).toBe('');
+      });
+
+      // Queued indicator should show the message
+      expect(screen.getByText(/Test message/i)).toBeInTheDocument();
+    });
+
+    it('does not queue during background processing', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} backgroundProcessing={true} />);
+      const textarea = screen.getByPlaceholderText(/Send a message/i);
+
+      await userEvent.type(textarea, 'Not queued{Enter}');
+
+      // Should send immediately during background processing
+      await waitFor(() => {
+        expect(mockOnSendMessage).toHaveBeenCalledWith('Not queued', undefined, undefined, undefined, undefined);
+      });
+
+      // No queued indicator should appear
+      expect(screen.queryByText(/Queued:/i)).not.toBeInTheDocument();
+    });
+
+    it('truncates long queued messages in indicator', async () => {
+      renderWithToast(<ChatInput {...defaultProps} streaming={true} />);
+      const textarea = screen.getByPlaceholderText(/Type a message to queue/i) as HTMLTextAreaElement;
+
+      const longMessage = 'A'.repeat(100);
+      await userEvent.type(textarea, longMessage);
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      await waitFor(() => {
+        const indicator = screen.getByText(/Queued:/i);
+        expect(indicator.textContent).toContain('...');
+        expect(indicator.textContent?.length).toBeLessThan(longMessage.length + 10);
+      });
+    });
   });
 });
