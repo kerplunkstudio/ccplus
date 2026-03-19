@@ -708,7 +708,7 @@ describe('useStreamingMessages', () => {
       });
     });
 
-    it('should create recovery message if no streaming message exists on response_complete', async () => {
+    it('should not create messages when response_complete fires without prior streaming', async () => {
       const mockSocket = createMockSocket();
       const mockRefs = createMockRefs();
 
@@ -731,9 +731,7 @@ describe('useStreamingMessages', () => {
         });
       });
 
-      expect(result.current.messages.length).toBe(1);
-      expect(result.current.messages[0].content).toBe('Recovery content');
-      expect(result.current.messages[0].streaming).toBe(false);
+      expect(result.current.messages.length).toBe(0);
     });
 
     it('should ignore response_complete from different session', async () => {
