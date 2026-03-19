@@ -18,6 +18,9 @@ import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { log } from "./logger.js";
 import { scheduler, parseInterval } from "./scheduler.js";
+import { eventLog } from "./event-log.js";
+import { getWorkflowState, skipToPhase, type WorkflowPhase } from './workflow-state.js';
+import { WORKFLOW_ENABLED } from './config.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -1008,12 +1011,64 @@ app.delete("/api/mcp/servers/:name", (req: Request, res: Response) => {
   }
 });
 
+// -- Workflow state --
+
+app.get("/api/workflow/:sessionId", (req: Request, res: Response) => {
+  if (!WORKFLOW_ENABLED) {
+    res.json({ enabled: false });
+    return;
+  }
+  const state = getWorkflowState(req.params.sessionId);
+  res.json({ enabled: true, ...state });
+});
+
+app.post("/api/workflow/:sessionId/transition", (req: Request, res: Response) => {
+  if (!WORKFLOW_ENABLED) {
+    res.status(400).json({ error: 'Workflow not enabled' });
+    return;
+  }
+  const { phase } = req.body as { phase?: string };
+  const validPhases: WorkflowPhase[] = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];
+  if (!phase || !validPhases.includes(phase as WorkflowPhase)) {
+    res.status(400).json({ error: 'Invalid phase' });
+    return;
+  }
+  const state = skipToPhase(req.params.sessionId, phase as WorkflowPhase);
+  if (!state) {
+    res.status(500).json({ error: 'Failed to update workflow state' });
+    return;
+  }
+  io.to(req.params.sessionId).emit('workflow_phase', {
+    phase: state.phase,
+    previous: state.transitions.at(-1)?.from ?? 'idle',
+    sessionId: req.params.sessionId,
+  });
+  res.json(state);
+});
+
 // =========================================================================
 // WebSocket Events
 // =========================================================================
 
 // Helper: Join a session room and sync state
-function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string): void {
+function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string, lastSeq = 0): void {
+  log.info('joinSession called', { sessionId, lastSeq, socketId: socket.id });
+
+  // Before replay
+  const totalEvents = eventLog.getEventCount(sessionId);
+  const oldestSeq = eventLog.getOldestSeq(sessionId);
+  const newestSeq = eventLog.getLastSeq(sessionId);
+  log.info('Event log state', { sessionId, totalEvents, oldestSeq, newestSeq, lastSeq });
+
+  // Replay missed events if client provides lastSeq
+  if (lastSeq > 0) {
+    const missedEvents = eventLog.getEventsSince(sessionId, lastSeq);
+    log.info('Replaying events', { sessionId, count: missedEvents.length, lastSeq });
+    for (const event of missedEvents) {
+      socket.emit(event.type, { ...event.data, seq: event.seq, replay: true });
+    }
+  }
+
   socket.join(sessionId);
 
   const client = connectedClients.get(socket.id);
@@ -1025,7 +1080,10 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
     sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId));
-    socket.emit("stream_active", { session_id: sessionId });
+
+    const payload = { session_id: sessionId };
+    const event = eventLog.append(sessionId, 'stream_active', payload);
+    socket.emit("stream_active", { ...payload, seq: event.seq });
 
     const bufferedContent = sdkSession.getStreamingContent(sessionId);
     if (bufferedContent) {
@@ -1154,7 +1212,7 @@ io.on("connection", (socket) => {
 
   // -- Join session (room-based multiplexing) --
 
-  socket.on("join_session", (data: { session_id: string }, callback?: (response: { status: string }) => void) => {
+  socket.on("join_session", (data: { session_id: string; last_seq?: number; lastSeq?: number }, callback?: (response: { status: string }) => void) => {
     const client = connectedClients.get(socket.id);
     if (!client) {
       callback?.({ status: "error" });
@@ -1167,7 +1225,8 @@ io.on("connection", (socket) => {
       return;
     }
 
-    joinSession(socket, newSessionId, "local");
+    const lastSeq = (data?.last_seq ?? data?.lastSeq ?? 0) as number;
+    joinSession(socket, newSessionId, "local", lastSeq);
     callback?.({ status: "ok" });
   });
 
@@ -1311,12 +1370,21 @@ io.on("connection", (socket) => {
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
 function buildSocketCallbacks(sessionId: string) {
+  let firstTextDelta = true;
   return {
     onText: (text: string, messageIndex: number) => {
-      io.to(sessionId).emit("text_delta", { text, message_index: messageIndex, session_id: sessionId });
+      const payload = { session_id: sessionId, text, message_index: messageIndex };
+      const event = eventLog.append(sessionId, 'text_delta', payload);
+      if (firstTextDelta) {
+        log.info('First text_delta logged', { sessionId, seq: event.seq, eventCount: eventLog.getEventCount(sessionId) });
+        firstTextDelta = false;
+      }
+      io.to(sessionId).emit("text_delta", { ...payload, seq: event.seq });
     },
     onToolEvent: (event: Record<string, unknown>) => {
-      io.to(sessionId).emit("tool_event", { ...event, session_id: sessionId });
+      const payload = { ...event, session_id: sessionId };
+      const logEvent = eventLog.append(sessionId, 'tool_event', payload);
+      io.to(sessionId).emit("tool_event", { ...payload, seq: logEvent.seq });
       // Count lines of code
       if (event.type === "tool_complete" && (event.tool_name === "Write" || event.tool_name === "Edit")) {
         const params = event.parameters as Record<string, unknown> | undefined;
@@ -1357,7 +1425,7 @@ function buildSocketCallbacks(sessionId: string) {
         log.error("Failed to update session context", { sessionId, error: String(e) });
       }
 
-      io.to(sessionId).emit("response_complete", {
+      const payload = {
         cost: result.cost,
         duration_ms: result.duration_ms,
         input_tokens: result.input_tokens,
@@ -1368,25 +1436,36 @@ function buildSocketCallbacks(sessionId: string) {
         content: result.text,
         message_index: result.message_index,
         session_id: sessionId,
-      });
+      };
+      const event = eventLog.append(sessionId, 'response_complete', payload);
+      io.to(sessionId).emit("response_complete", { ...payload, seq: event.seq });
     },
     onError: (message: string) => {
-      io.to(sessionId).emit("error", { message });
+      const payload = { message, session_id: sessionId };
+      const event = eventLog.append(sessionId, 'error', payload);
+      io.to(sessionId).emit("error", { ...payload, seq: event.seq });
     },
     onUserQuestion: (data: Record<string, unknown>) => {
-      io.to(sessionId).emit("user_question", {
+      const payload = {
         questions: data.questions ?? [],
         tool_use_id: data.tool_use_id ?? "",
-      });
+        session_id: sessionId,
+      };
+      const event = eventLog.append(sessionId, 'user_question', payload);
+      io.to(sessionId).emit("user_question", { ...payload, seq: event.seq });
     },
     onSignal: (signal: { type: string; data: Record<string, unknown> }) => {
       io.to(sessionId).emit("signal", signal);
     },
     onToolProgress: (data: { tool_use_id: string; elapsed_seconds: number }) => {
-      io.to(sessionId).emit("tool_progress", data);
+      const payload = { ...data, session_id: sessionId };
+      const event = eventLog.append(sessionId, 'tool_progress', payload);
+      io.to(sessionId).emit("tool_progress", { ...payload, seq: event.seq });
     },
     onRateLimit: (data: { retryAfterMs: number; rateLimitedAt: string }) => {
-      io.to(sessionId).emit("rate_limit", data);
+      const payload = { ...data, session_id: sessionId };
+      const event = eventLog.append(sessionId, 'rate_limit', payload);
+      io.to(sessionId).emit("rate_limit", { ...payload, seq: event.seq });
     },
     onPromptSuggestion: (suggestions: string[]) => {
       io.to(sessionId).emit("prompt_suggestions", { suggestions });
