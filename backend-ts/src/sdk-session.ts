@@ -9,7 +9,7 @@ import * as database from "./database.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, buildSdkMcpServers } from "./mcp-config.js";
 import { log } from "./logger.js";
-import { searchMemories, type MemorySearchResult } from './memory-client.js';
+import { searchMemories } from './memory-client.js';
 import { distillSession } from './memory-distiller.js';
 
 // ---- Skills discovery (cached) ----
@@ -233,20 +233,14 @@ async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sess
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';
       const searchQuery = projectName ? `${projectName} ${userPrompt.slice(0, 200)}` : userPrompt.slice(0, 200);
-      const memories = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS, sessionId);
+      const memoryText = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS);
 
-      if (memories.length > 0) {
-        const memoryLines = memories.map(m => {
-          // Strip newlines and limit per-item length to prevent prompt injection
-          const sanitized = m.content.replace(/\n/g, ' ').slice(0, 500);
-          return `- ${sanitized}`;
-        });
-        const memorySection = memoryLines.join('\n');
-        // Cap at MEMORY_MAX_INJECT_TOKENS characters
-        const truncated = memorySection.length > config.MEMORY_MAX_INJECT_TOKENS
-          ? memorySection.slice(0, config.MEMORY_MAX_INJECT_TOKENS) + '\n...(truncated)'
-          : memorySection;
-        prompt += `\n\n## Prior Knowledge\nRelevant context from previous sessions:\n${truncated}`;
+      if (memoryText) {
+        // Truncate to max inject size to prevent context bloat
+        const truncated = memoryText.length > config.MEMORY_MAX_INJECT_TOKENS * 4
+          ? memoryText.slice(0, config.MEMORY_MAX_INJECT_TOKENS * 4) + '\n...(truncated)'
+          : memoryText;
+        prompt += `\n\n## Prior Knowledge\n${truncated}`;
       }
     } catch (error) {
       log.warn('Failed to inject memories into system prompt', { error: String(error) });
@@ -678,23 +672,18 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         const searchQuery = (description + ' ' + prompt.slice(0, 200)).trim();
 
         if (searchQuery.length > 10) {
-          const timeoutPromise = new Promise<MemorySearchResult[]>(resolve =>
-            setTimeout(() => resolve([]), config.MEMORY_HOOK_TIMEOUT_MS)
+          const timeoutPromise = new Promise<string>(resolve =>
+            setTimeout(() => resolve(''), config.MEMORY_HOOK_TIMEOUT_MS)
           );
-          const memories = await Promise.race([
-            searchMemories(searchQuery, 3, sessionId),
+          const memoryText = await Promise.race([
+            searchMemories(searchQuery, 3),
             timeoutPromise,
           ]);
-          if (memories.length > 0) {
-            const memoryContext = memories
-              .map(m => m.content.replace(/\n/g, ' ').slice(0, 300))
-              .join('\n- ');
-            const injection = `\n\n## Prior Knowledge (auto-injected)\nRelevant context from previous sessions:\n- ${memoryContext}`;
-
+          if (memoryText) {
             return {
               hookSpecificOutput: {
                 hookEventName: 'SubagentStart' as const,
-                additionalContext: injection,
+                additionalContext: `## Prior Knowledge\n${memoryText}`,
               },
             };
           }

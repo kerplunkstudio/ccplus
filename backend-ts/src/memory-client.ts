@@ -5,15 +5,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
 import { log } from './logger.js';
 import { getUserMcpServers } from './mcp-config.js';
-import { MEMORY_SEARCH_TIMEOUT_MS } from './config.js';
-
-export interface MemorySearchResult {
-  content: string;
-  tags: string[];
-  score: number;
-  created_at: string;
-  content_hash: string;
-}
+import { MEMORY_SEARCH_TIMEOUT_MS, MEMORY_INIT_TIMEOUT_MS } from './config.js';
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -244,7 +236,7 @@ function spawnMemoryProcess(): boolean {
 /**
  * Send JSON-RPC request to memory server
  */
-async function sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
+async function sendRequest(method: string, params?: Record<string, unknown>, timeoutMs?: number): Promise<unknown> {
   if (!memoryProcess || !memoryProcess.stdin) {
     throw new Error('Memory server process not running');
   }
@@ -258,10 +250,11 @@ async function sendRequest(method: string, params?: Record<string, unknown>): Pr
   };
 
   return new Promise((resolve, reject) => {
+    const effectiveTimeout = timeoutMs ?? MEMORY_SEARCH_TIMEOUT_MS;
     const timer = setTimeout(() => {
       pendingRequests.delete(id);
-      reject(new Error(`Memory server request timeout after ${MEMORY_SEARCH_TIMEOUT_MS}ms`));
-    }, MEMORY_SEARCH_TIMEOUT_MS);
+      reject(new Error(`Memory server request timeout after ${effectiveTimeout}ms`));
+    }, effectiveTimeout);
 
     pendingRequests.set(id, { resolve, reject, timer });
 
@@ -293,7 +286,7 @@ async function doInitialize(): Promise<boolean> {
         name: 'ccplus',
         version: '1.0.0',
       },
-    });
+    }, MEMORY_INIT_TIMEOUT_MS);
 
     initialized = true;
     initPromise = null;
@@ -325,17 +318,18 @@ async function initialize(): Promise<boolean> {
 
 /**
  * Search memories using vector similarity
+ * Returns the raw text from the MCP response (human-readable format)
  */
-export async function searchMemories(query: string, limit?: number, excludeSessionId?: string): Promise<MemorySearchResult[]> {
+export async function searchMemories(query: string, limit?: number): Promise<string> {
   if (isCircuitOpen()) {
     log.debug('Memory circuit breaker is open, skipping search');
-    return [];
+    return '';
   }
 
   if (!available && !memoryConfig) {
     memoryConfig = loadMemoryConfig();
     if (!memoryConfig) {
-      return [];
+      return '';
     }
   }
 
@@ -343,7 +337,8 @@ export async function searchMemories(query: string, limit?: number, excludeSessi
     if (!initialized) {
       const success = await initialize();
       if (!success) {
-        return [];
+        recordFailure();
+        return '';
       }
     }
 
@@ -361,39 +356,18 @@ export async function searchMemories(query: string, limit?: number, excludeSessi
       if (Array.isArray(content) && content.length > 0) {
         const firstItem = content[0];
         if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
-          const text = (firstItem as { text: string }).text;
-          const parsed = JSON.parse(text);
-
-          if (Array.isArray(parsed)) {
-            let results = parsed.map((item) => ({
-              content: item.content || '',
-              tags: item.tags || [],
-              score: item.score || 0,
-              created_at: item.created_at || '',
-              content_hash: item.content_hash || '',
-            }));
-
-            // Exclude memories from the same session
-            if (excludeSessionId) {
-              results = results.filter((m) => {
-                const tags = Array.isArray(m.tags) ? m.tags : [];
-                return !tags.some((t) => t.includes(`session:${excludeSessionId}`));
-              });
-            }
-
-            recordSuccess();
-            return results;
-          }
+          recordSuccess();
+          return (firstItem as { text: string }).text;
         }
       }
     }
 
     recordSuccess();
-    return [];
+    return '';
   } catch (error) {
     log.error('Memory search failed', { error: String(error), query });
     recordFailure();
-    return [];
+    return '';
   }
 }
 
