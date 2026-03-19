@@ -19,7 +19,6 @@ import { ThemeProvider } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
-import { DevServerToast } from './components/DevServerToast';
 import { WindowWithElectron, ImageAttachment } from './types';
 import { ensureMruOrder } from './utils/tabs';
 import './App.css';
@@ -43,8 +42,6 @@ function AppContent() {
   const { activeProject, activeTab } = workspace;
   const profile = useProfile();
 
-  const [devServerToast, setDevServerToast] = useState<{ url: string } | null>(null);
-
   // Store the screenshot capture function from BrowserTab
   const screenshotCaptureFnRef = useRef<(() => Promise<{ image: string | null; url: string; error?: string }>) | null>(null);
 
@@ -57,9 +54,6 @@ function AppContent() {
 
     // Open browser tab
     workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
-
-    // Show toast
-    setDevServerToast({ url });
   }, [activeProject, workspace]);
 
   const socketData = useTabSocket(activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
@@ -526,13 +520,14 @@ function AppContent() {
   }, [activeProject, workspace]);
 
   const handleOpenBrowserTab = useCallback((url: string, label: string) => {
-    if (!activeProject) return;
-
-    // Truncate label if too long
-    const truncatedLabel = label.length > 30 ? label.substring(0, 30) + '...' : label;
-
-    workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
-  }, [activeProject, workspace]);
+    // Open URL in system browser (Electron) or new tab (web mode)
+    const windowWithElectron = window as WindowWithElectron;
+    if (windowWithElectron.electronAPI?.openExternal) {
+      windowWithElectron.electronAPI.openExternal(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }, []);
 
   const handleDuplicateTab = useCallback((sessionId: string) => {
     if (!activeProject) return;
@@ -601,23 +596,6 @@ function AppContent() {
         onNavigate={handleNavigate}
         onToggleActivityPanel={handleToggleActivityPanel}
       />
-      {devServerToast && (
-        <DevServerToast
-          url={devServerToast.url}
-          onDismiss={() => setDevServerToast(null)}
-          onFocusTab={() => {
-            // Find the browser tab with this URL and focus it
-            if (activeProject) {
-              const browserTab = activeProject.tabs.find(
-                (tab) => tab.type === 'browser' && tab.url === devServerToast.url
-              );
-              if (browserTab) {
-                workspace.selectTab(activeProject.path, browserTab.sessionId);
-              }
-            }
-          }}
-        />
-      )}
       <div
         className="app-layout"
         style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
