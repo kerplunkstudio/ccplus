@@ -407,12 +407,17 @@ app.whenReady().then(async () => {
 
 // Quit when all windows are closed
 app.on('window-all-closed', () => {
-  stopBackend();
-  app.quit();
+  if (process.platform !== 'darwin') {
+    stopBackend();
+    app.quit();
+  }
 });
 
-app.on('activate', () => {
+app.on('activate', async () => {
   if (BrowserWindow.getAllWindows().length === 0) {
+    if (!serverProcess) {
+      await startBackend();
+    }
     createWindow();
   }
 });
