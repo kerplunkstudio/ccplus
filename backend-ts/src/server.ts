@@ -1072,6 +1072,91 @@ app.post("/api/workflow/:sessionId/transition", (req: Request, res: Response) =>
   res.json(state);
 });
 
+// -- Session Start API --
+
+app.post("/api/sessions/start", (req: Request, res: Response) => {
+  try {
+    const { prompt, workspace, model, session_id } = req.body;
+
+    // Validate required fields
+    if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+      res.status(400).json({ success: false, error: 'prompt is required and must be a non-empty string' });
+      return;
+    }
+
+    if (!workspace || typeof workspace !== 'string') {
+      res.status(400).json({ success: false, error: 'workspace is required and must be a string' });
+      return;
+    }
+
+    // Validate workspace path exists
+    if (!existsSync(workspace) || !statSync(workspace).isDirectory()) {
+      res.status(400).json({ success: false, error: 'workspace path does not exist or is not a directory' });
+      return;
+    }
+
+    // Generate or validate session_id
+    const sessionId = session_id && typeof session_id === 'string' ? session_id : uuidv4();
+
+    // Check if session already has an active query
+    if (sdkSession.isActive(sessionId)) {
+      res.status(409).json({ success: false, error: 'Session already has an active query running' });
+      return;
+    }
+
+    const uid = 'local';
+    const trimmedPrompt = prompt.trim();
+
+    // Record user message in database
+    try {
+      database.recordMessage(
+        sessionId,
+        uid,
+        'user',
+        trimmedPrompt,
+        undefined,
+        workspace,
+        undefined
+      );
+
+      const existing = database.getConversationHistory(sessionId, 1);
+      if (existing.length <= 1) {
+        try {
+          database.incrementUserStats(uid, 1);
+        } catch (e) {
+          log.error('Failed to increment session count', { sessionId, error: String(e) });
+        }
+      }
+    } catch (err) {
+      log.error('Failed to record user message', { sessionId, error: String(err) });
+      res.status(500).json({ success: false, error: 'Failed to record message in database' });
+      return;
+    }
+
+    // Store workspace for this session
+    sessionWorkspaces.set(sessionId, workspace);
+
+    // Submit query to SDK (fire-and-forget, same as socket handler)
+    sdkSession.submitQuery(
+      sessionId,
+      trimmedPrompt,
+      workspace,
+      buildSocketCallbacks(sessionId, workspace),
+      model && typeof model === 'string' ? model : undefined,
+      undefined
+    );
+
+    res.json({
+      success: true,
+      session_id: sessionId,
+      message: 'Session started'
+    });
+  } catch (err) {
+    log.error('Failed to start session', { error: String(err) });
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // =========================================================================
 // WebSocket Events
 // =========================================================================

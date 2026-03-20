@@ -821,6 +821,162 @@ describe("Server Configuration", () => {
   });
 });
 
+describe("POST /api/sessions/start", () => {
+  const serverUrl = `http://${config.HOST}:${config.PORT}`;
+
+  it("rejects missing prompt", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspace: "/tmp",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("prompt");
+  });
+
+  it("rejects empty prompt", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "   ",
+        workspace: "/tmp",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+  });
+
+  it("rejects missing workspace", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("workspace");
+  });
+
+  it("rejects non-existent workspace path", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello",
+        workspace: "/nonexistent/path/12345",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("workspace path does not exist");
+  });
+
+  it("rejects file path as workspace", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello",
+        workspace: "/etc/hosts",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+  });
+
+  it("starts session with valid prompt and workspace", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello, test query",
+        workspace: "/tmp",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data).toHaveProperty("session_id");
+    expect(typeof data.session_id).toBe("string");
+    expect(data.session_id).toMatch(/^[0-9a-f-]{36}$/); // UUID format
+    expect(data.message).toBe("Session started");
+  });
+
+  it("uses provided session_id if given", async () => {
+    const customSessionId = `test-session-${Date.now()}`;
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Hello with custom ID",
+        workspace: "/tmp",
+        session_id: customSessionId,
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.session_id).toBe(customSessionId);
+  });
+
+  it("accepts optional model parameter", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Test with model",
+        workspace: "/tmp",
+        model: "claude-3-5-sonnet-20241022",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+  });
+
+  it("records message in database", async () => {
+    const customSessionId = `test-db-session-${Date.now()}`;
+    await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Database test message",
+        workspace: "/tmp",
+        session_id: customSessionId,
+      }),
+    });
+
+    // Verify message was recorded
+    const historyResponse = await fetch(`${serverUrl}/api/history/${customSessionId}`);
+    const historyData = await historyResponse.json();
+
+    expect(historyData.messages).toBeDefined();
+    expect(historyData.messages.length).toBeGreaterThan(0);
+    const userMessage = historyData.messages.find((m: { role: string }) => m.role === "user");
+    expect(userMessage).toBeDefined();
+    expect(userMessage.content).toBe("Database test message");
+  });
+});
+
 describe("WebSocket Connection and Authentication", () => {
   const serverUrl = `http://${config.HOST}:${config.PORT}`;
   let clientSocket: ClientSocket;
