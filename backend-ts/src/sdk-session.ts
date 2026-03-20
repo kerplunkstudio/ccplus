@@ -327,6 +327,7 @@ interface ActiveSession {
   } | null;
   questionTimeout: NodeJS.Timeout | null;
   streamingContent: string;
+  latestTodos: Array<{ content: string; status: string; priority?: string }> | null;
 }
 
 // ---- Session Manager ----
@@ -368,6 +369,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     pendingQuestion: null,
     questionTimeout: null,
     streamingContent: '',
+    latestTodos: null,
   };
   sessions.set(sessionId, session);
   return session;
@@ -461,6 +463,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       if (toolName === 'TodoWrite') {
         const todos = toolParams.todos as Array<{ content: string; status: string; activeForm: string }> | undefined;
         if (todos) {
+          // Store latest todos in session state
+          session.latestTodos = todos;
+
           session.callbacks.onToolEvent({
             type: 'todo_update',
             tool_name: 'TodoWrite',
@@ -941,6 +946,11 @@ export function getPendingQuestion(sessionId: string): Record<string, unknown> |
 export function getStreamingContent(sessionId: string): string {
   const session = sessions.get(sessionId);
   return session?.streamingContent ?? '';
+}
+
+export function getSessionTodos(sessionId: string): Array<{ content: string; status: string; priority?: string }> | null {
+  const session = sessions.get(sessionId);
+  return session?.latestTodos ?? null;
 }
 
 // ---- MCP Signal Server ----

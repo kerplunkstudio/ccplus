@@ -171,6 +171,11 @@ export function useToolEvents({
       }
     });
 
+    socket.on('todo_sync', (data: { todos: TodoItem[]; session_id: string }) => {
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
+      setTodos(data.todos);
+    });
+
     return () => {
       socket.off('tool_event');
       socket.off('user_question');
@@ -179,6 +184,7 @@ export function useToolEvents({
       socket.off('rate_limit');
       socket.off('prompt_suggestions');
       socket.off('dev_server_detected');
+      socket.off('todo_sync');
       if (clearToolTimerRef.current) {
         clearTimeout(clearToolTimerRef.current);
         clearToolTimerRef.current = null;

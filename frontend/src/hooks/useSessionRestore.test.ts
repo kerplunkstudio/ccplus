@@ -24,6 +24,8 @@ describe('useSessionRestore', () => {
         on: jest.fn(),
         off: jest.fn(),
       },
+      on: jest.fn(),
+      off: jest.fn(),
       emit: jest.fn(),
     };
 
@@ -610,6 +612,8 @@ describe('useSessionRestore', () => {
           on: jest.fn(),
           off: jest.fn(),
         },
+        on: jest.fn(),
+        off: jest.fn(),
         emit: jest.fn(),
       };
 
@@ -651,6 +655,100 @@ describe('useSessionRestore', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
+    it('should use latest lastSeq value on reconnect (not stale closure)', async () => {
+      const testSocket = {
+        connected: true,
+        io: {
+          on: jest.fn(),
+          off: jest.fn(),
+        },
+        on: jest.fn(),
+        off: jest.fn(),
+        emit: jest.fn(),
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ messages: [], streaming: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ events: [] }),
+        });
+
+      // Start with lastSeq = 10
+      const { rerender } = renderHook(
+        ({ lastSeq }) => useSessionRestore(createHookProps({ socket: testSocket as any, lastSeq })),
+        { initialProps: { lastSeq: 10 } }
+      );
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+      });
+
+      // Get the reconnect handler
+      const reconnectCall = (testSocket.io.on as jest.Mock).mock.calls.find(
+        (call) => call[0] === 'reconnect'
+      );
+      expect(reconnectCall).toBeDefined();
+      const reconnectHandler = reconnectCall[1];
+
+      // Update lastSeq to 100 (simulating new events received)
+      rerender({ lastSeq: 100 });
+
+      jest.clearAllMocks();
+
+      // Trigger reconnect - should use latest value (100), not initial value (10)
+      await act(async () => {
+        await reconnectHandler();
+      });
+
+      expect(testSocket.emit).toHaveBeenCalledWith('join_session', {
+        session_id: 'session-1',
+        last_seq: 100,
+      });
+    });
+
+    it('should not re-register reconnect handler when lastSeq changes', async () => {
+      const testSocket = {
+        connected: true,
+        io: {
+          on: jest.fn(),
+          off: jest.fn(),
+        },
+        on: jest.fn(),
+        off: jest.fn(),
+        emit: jest.fn(),
+      };
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ messages: [], streaming: false, events: [] }),
+      });
+
+      const { rerender } = renderHook(
+        ({ lastSeq }) => useSessionRestore(createHookProps({ socket: testSocket as any, lastSeq })),
+        { initialProps: { lastSeq: 10 } }
+      );
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalled();
+      });
+
+      const initialOnCallCount = testSocket.io.on.mock.calls.length;
+      const initialOffCallCount = testSocket.io.off.mock.calls.length;
+
+      // Change lastSeq multiple times
+      rerender({ lastSeq: 20 });
+      rerender({ lastSeq: 30 });
+      rerender({ lastSeq: 40 });
+
+      // Should NOT trigger cleanup/re-registration of reconnect handler
+      expect(testSocket.io.on.mock.calls.length).toBe(initialOnCallCount);
+      expect(testSocket.io.off.mock.calls.length).toBe(initialOffCallCount);
+    });
+
     it('should cleanup reconnect listener on unmount', async () => {
       const testSocket = {
         connected: true,
@@ -658,6 +756,8 @@ describe('useSessionRestore', () => {
           on: jest.fn(),
           off: jest.fn(),
         },
+        on: jest.fn(),
+        off: jest.fn(),
         emit: jest.fn(),
       };
 
@@ -684,6 +784,8 @@ describe('useSessionRestore', () => {
           on: jest.fn(),
           off: jest.fn(),
         },
+        on: jest.fn(),
+        off: jest.fn(),
         emit: jest.fn(),
       };
 
