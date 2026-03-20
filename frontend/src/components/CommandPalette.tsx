@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ProjectEntry } from '../types/workspace';
 import './CommandPalette.css';
 
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
@@ -13,16 +15,30 @@ interface CommandPaletteProps {
   onCloseTab: (sessionId: string) => void;
   onNavigate: (page: string) => void;
   onToggleActivityPanel?: () => void;
+  onNewTerminalTab?: () => void;
+  onOpenSession: (projectPath: string, sessionId: string, label: string) => void;
 }
 
 interface CommandItem {
   id: string;
-  type: 'session' | 'project' | 'action';
-  icon: string;
+  type: 'session' | 'project' | 'action' | 'history';
+  iconType?: 'session-chat' | 'session-browser' | 'project' | 'action';
   name: string;
   subtitle?: string;
   shortcut?: string;
   action: () => void;
+}
+
+interface SearchMatch {
+  content: string;
+  role: string;
+  timestamp: string;
+}
+
+interface SearchResult {
+  session_id: string;
+  session_label: string;
+  matches: SearchMatch[];
 }
 
 function fuzzyMatch(query: string, text: string): { match: boolean; score: number; matchedIndices: number[] } {
@@ -91,11 +107,60 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onCloseTab,
   onNavigate,
   onToggleActivityPanel,
+  onNewTerminalTab,
+  onOpenSession,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Perform search for session history
+  const performSearch = useCallback(async (searchQuery: string) => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({ q: searchQuery });
+      if (activeProjectPath) {
+        params.append('project', activeProjectPath);
+      }
+      const response = await fetch(`${SOCKET_URL}/api/search?${params}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.results || []);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      setSearchResults([]);
+    }
+  }, [activeProjectPath]);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (query.trim().length >= 2) {
+      searchTimeoutRef.current = setTimeout(() => {
+        performSearch(query);
+      }, 300);
+    } else {
+      setSearchResults([]);
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [query, performSearch]);
 
   // Build command items
   const buildItems = useCallback((): CommandItem[] => {
@@ -107,7 +172,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         items.push({
           id: `session-${project.path}-${tab.sessionId}`,
           type: 'session',
-          icon: tab.type === 'browser' ? '🌐' : '💬',
+          iconType: tab.type === 'browser' ? 'session-browser' : 'session-chat',
           name: tab.label,
           subtitle: project.name,
           action: () => {
@@ -123,7 +188,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       items.push({
         id: `project-${project.path}`,
         type: 'project',
-        icon: '📁',
+        iconType: 'project',
         name: project.name,
         subtitle: project.path,
         action: () => {
@@ -138,7 +203,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-new-session',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'New Session',
         shortcut: '⌘T',
         action: () => {
@@ -147,9 +212,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         },
       },
       {
+        id: 'action-new-terminal',
+        type: 'action',
+        iconType: 'action',
+        name: 'New Terminal',
+        action: () => {
+          if (onNewTerminalTab) {
+            onNewTerminalTab();
+          }
+          onClose();
+        },
+      },
+      {
         id: 'action-close-tab',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'Close Tab',
         shortcut: '⌘W',
         action: () => {
@@ -167,7 +244,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-toggle-activity',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'Toggle Activity Panel',
         action: () => {
           if (onToggleActivityPanel) {
@@ -179,7 +256,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-insights',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'Open Insights',
         action: () => {
           onNavigate('insights');
@@ -189,7 +266,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-settings',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'Open Settings',
         action: () => {
           onNavigate('profile');
@@ -199,7 +276,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-plugins',
         type: 'action',
-        icon: '⚡',
+        iconType: 'action',
         name: 'Open Plugins',
         action: () => {
           onNavigate('mcp');
@@ -210,8 +287,45 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
     items.push(...actions);
 
+    // Add history results
+    searchResults.forEach((result) => {
+      // Check if session is already open in tabs
+      const isAlreadyOpen = projects.some((project) =>
+        project.tabs.some((tab) => tab.sessionId === result.session_id)
+      );
+
+      items.push({
+        id: `history-${result.session_id}`,
+        type: 'history',
+        iconType: 'session-chat',
+        name: result.session_label,
+        subtitle: isAlreadyOpen
+          ? 'Already open'
+          : result.matches.length > 0
+          ? result.matches[0].content.slice(0, 80)
+          : undefined,
+        action: () => {
+          if (isAlreadyOpen) {
+            // Find the project and switch to it
+            const project = projects.find((p) =>
+              p.tabs.some((t) => t.sessionId === result.session_id)
+            );
+            if (project) {
+              onSelectTab(project.path, result.session_id);
+            }
+          } else {
+            // Open as new tab
+            if (activeProjectPath) {
+              onOpenSession(activeProjectPath, result.session_id, result.session_label);
+            }
+          }
+          onClose();
+        },
+      });
+    });
+
     return items;
-  }, [projects, activeProjectPath, onSelectTab, onSelectProject, onNewTab, onCloseTab, onNavigate, onToggleActivityPanel, onClose]);
+  }, [projects, activeProjectPath, searchResults, onSelectTab, onSelectProject, onNewTab, onCloseTab, onNavigate, onToggleActivityPanel, onNewTerminalTab, onOpenSession, onClose]);
 
   const allItems = buildItems();
 
@@ -226,8 +340,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         .sort((a, b) => {
           // Sort by score descending
           if (b.score !== a.score) return b.score - a.score;
-          // Tie-break by type priority: actions > sessions > projects
-          const typePriority = { action: 3, session: 2, project: 1 };
+          // Tie-break by type priority: actions > sessions > history > projects
+          const typePriority = { action: 4, session: 3, history: 2, project: 1 };
           const priorityDiff = typePriority[b.type] - typePriority[a.type];
           if (priorityDiff !== 0) return priorityDiff;
           // Finally by name alphabetically
@@ -298,6 +412,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const sessions = filteredItems.filter((item) => item.type === 'session');
   const projectItems = filteredItems.filter((item) => item.type === 'project');
   const actionItems = filteredItems.filter((item) => item.type === 'action');
+  const historyItems = filteredItems.filter((item) => item.type === 'history');
 
   return (
     <div className="command-palette-overlay" onClick={onClose}>
@@ -306,7 +421,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           ref={inputRef}
           type="text"
           className="command-palette-input"
-          placeholder="Search sessions, projects, and actions..."
+          placeholder="Search sessions, history, projects, and actions..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
@@ -328,7 +443,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
                         onClick={item.action}
                       >
-                        <span className="command-palette-icon">{item.icon}</span>
+                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
@@ -353,7 +468,32 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
                         onClick={item.action}
                       >
-                        <span className="command-palette-icon">{item.icon}</span>
+                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
+                        <div className="command-palette-item-content">
+                          <div className="command-palette-item-name">
+                            {highlightMatch(item.name, (item as any).matchedIndices || [])}
+                          </div>
+                          {item.subtitle && (
+                            <div className="command-palette-item-subtitle">{item.subtitle}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+              {historyItems.length > 0 && (
+                <>
+                  <div className="command-palette-category">History</div>
+                  {historyItems.map((item, index) => {
+                    const globalIndex = filteredItems.indexOf(item);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
+                        onClick={item.action}
+                      >
+                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
@@ -378,7 +518,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
                         onClick={item.action}
                       >
-                        <span className="command-palette-icon">{item.icon}</span>
+                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}

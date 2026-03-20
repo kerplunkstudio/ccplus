@@ -616,6 +616,7 @@ function AppContent() {
         onCloseTab={handleCloseTabInActiveProject}
         onNavigate={handleNavigate}
         onToggleActivityPanel={handleToggleActivityPanel}
+        onNewTerminalTab={handleNewTerminalTab}
         onOpenSession={(projectPath, sessionId, label) => {
           workspace.addTab(projectPath, sessionId, label);
           setActivePage(null);
@@ -714,7 +715,7 @@ function AppContent() {
               )}
               {/* ChatPanel - always mounted when conditions met, hidden via CSS when panel pages are active */}
               {shouldShowChatPanel && (
-                <div style={{ display: activePage ? 'none' : 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 }}>
+                <div style={{ display: activePage ? 'none' : 'flex', flexDirection: 'column' as const, height: '100%' }}>
                   <ChatPanel
                     socket={socket}
                     messages={messages}
