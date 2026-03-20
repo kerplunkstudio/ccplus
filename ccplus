@@ -458,6 +458,33 @@ run_setup() {
         exit 1
     fi
 
+    # Import historical Claude Code sessions
+    header "Importing historical sessions"
+    info "Scanning ~/.claude/projects/ for existing Claude Code sessions..."
+
+    # Run the import via Node.js (backend must be built first)
+    import_result=$(cd backend-ts && node -e "
+      import('./dist/session-import.js').then(m => {
+        const result = m.importSessions();
+        console.log(JSON.stringify(result));
+      }).catch(e => {
+        console.error('Import failed:', e.message);
+        process.exit(1);
+      });
+    " 2>&1) || true
+
+    if echo "$import_result" | grep -q '"sessionsImported"'; then
+        imported=$(echo "$import_result" | grep -o '"sessionsImported":[0-9]*' | cut -d: -f2)
+        skipped=$(echo "$import_result" | grep -o '"sessionsSkipped":[0-9]*' | cut -d: -f2)
+        if [ "${imported:-0}" -gt 0 ]; then
+            ok "Imported $imported historical sessions (${skipped:-0} already existed)"
+        else
+            ok "No new sessions to import (${skipped:-0} already imported)"
+        fi
+    else
+        warn "Session import skipped (no historical sessions found or import failed)"
+    fi
+
     ok "Setup complete!"
 }
 
@@ -1175,6 +1202,7 @@ Commands:
   desktop-parallel Launch desktop app in parallel with web server
   stop             Stop Node.js server
   setup            Force re-run setup
+  import           Import historical Claude Code sessions from ~/.claude/projects/
   help             Show this help message
 
 Building Desktop Apps:
@@ -1305,6 +1333,19 @@ case "$COMMAND" in
         ;;
     setup)
         run_setup
+        ;;
+    import)
+        header "Importing historical sessions"
+        info "Scanning ~/.claude/projects/ for existing Claude Code sessions..."
+        cd backend-ts && node -e "
+          import('./dist/session-import.js').then(m => {
+            const result = m.importSessions();
+            console.log(JSON.stringify(result, null, 2));
+          }).catch(e => {
+            console.error('Import failed:', e.message);
+            process.exit(1);
+          });
+        "
         ;;
     help|-h|--help)
         show_usage
