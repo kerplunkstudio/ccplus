@@ -236,4 +236,26 @@ export interface SessionMetadata {
   verbose?: boolean;
 }
 
+export interface DecisionStep {
+  sequence: number;
+  timestamp: string;
+  action: string;
+  tool: string;
+  agent: string | null;
+  duration_ms: number;
+  success: boolean;
+  children?: DecisionStep[];
+}
+
+export interface DecisionTrail {
+  session_id: string;
+  total_steps: number;
+  total_duration_ms: number;
+  agents_involved: string[];
+  files_touched: string[];
+  tests_run: { passed: number; failed: number };
+  narrative: string;
+  steps: DecisionStep[];
+}
+
 export * from './workspace';
