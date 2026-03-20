@@ -4,12 +4,14 @@ import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
 import { NodeDetail } from './NodeDetail';
 import { UsageStatsBar } from './UsageStatsBar';
+import { DecisionTrail } from './DecisionTrail';
 import './ActivityTree.css';
 
 interface ActivityTreeProps {
   tree: ActivityNode[];
   usageStats: UsageStats;
   contextTokens?: number | null;
+  sessionId?: string;
 }
 
 interface TreeNodeProps {
@@ -137,11 +139,11 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const userOverrideRef = useRef(false);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'tools'>('agents');
+  const [activeTab, setActiveTab] = useState<'agents' | 'tools' | 'trail'>('agents');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
@@ -206,7 +208,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setSelectedNode(null);
   };
 
-  const handleTabClick = (tab: 'agents' | 'tools') => {
+  const handleTabClick = (tab: 'agents' | 'tools' | 'trail') => {
     userOverrideRef.current = true;
     setActiveTab(tab);
   };
@@ -239,31 +241,47 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
               >
                 Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count" aria-label={`${toolNodes.length} tools`}>{toolNodes.length}</span>}
               </button>
+              <button
+                className={`activity-tab ${activeTab === 'trail' ? 'activity-tab-active' : ''}`}
+                onClick={() => handleTabClick('trail')}
+                role="tab"
+                aria-selected={activeTab === 'trail'}
+                aria-controls="activity-panel-trail"
+                id="tab-trail"
+              >
+                Trail
+              </button>
             </div>
           </div>
 
-          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-            {visibleNodes.length === 0 ? (
-              <div className="activity-empty">
-                <div className="activity-empty-pulse" />
-                <p className="activity-empty-title">Standby</p>
-                <p className="activity-empty-sub">
-                  Agents and tools appear here as Claude works
-                </p>
-              </div>
-            ) : (
-              <div className="tree-root">
-                {visibleNodes.map((node) => (
-                  <TreeNode
-                    key={node.tool_use_id}
-                    node={node}
-                    depth={0}
-                    onNodeSelect={handleNodeSelect}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          {activeTab === 'trail' ? (
+            <div className="activity-content" role="tabpanel" id="activity-panel-trail" aria-labelledby="tab-trail">
+              <DecisionTrail sessionId={sessionId || ''} />
+            </div>
+          ) : (
+            <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+              {visibleNodes.length === 0 ? (
+                <div className="activity-empty">
+                  <div className="activity-empty-pulse" />
+                  <p className="activity-empty-title">Standby</p>
+                  <p className="activity-empty-sub">
+                    Agents and tools appear here as Claude works
+                  </p>
+                </div>
+              ) : (
+                <div className="tree-root">
+                  {visibleNodes.map((node) => (
+                    <TreeNode
+                      key={node.tool_use_id}
+                      node={node}
+                      depth={0}
+                      onNodeSelect={handleNodeSelect}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       <UsageStatsBar

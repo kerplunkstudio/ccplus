@@ -22,6 +22,7 @@ import { scheduler, validateCronExpression } from "./scheduler.js";
 import { eventLog } from "./event-log.js";
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
+import { buildDecisionTrail, type ToolUsageRow } from './decision-trail.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -687,6 +688,19 @@ app.post("/api/sessions/:sessionId/archive", (req: Request, res: Response) => {
   } catch (err) {
     log.error("Failed to archive session", { sessionId: req.params.sessionId, error: String(err) });
     res.status(500).json({ error: "Failed to archive session" });
+  }
+});
+
+const MAX_DECISION_TRAIL_EVENTS = 500;
+
+app.get('/api/sessions/:sessionId/decision-trail', (req: Request, res: Response) => {
+  try {
+    const rows = database.getToolEvents(req.params.sessionId, MAX_DECISION_TRAIL_EVENTS) as unknown as ToolUsageRow[];
+    const trail = buildDecisionTrail(req.params.sessionId, rows);
+    res.json(trail);
+  } catch (err) {
+    log.error('Failed to build decision trail', { sessionId: req.params.sessionId, error: String(err) });
+    res.status(500).json({ error: 'Failed to build decision trail' });
   }
 });
 
