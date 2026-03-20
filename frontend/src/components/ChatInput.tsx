@@ -83,6 +83,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
   const currentSlashCommandRef = useRef<{ start: number; command: string } | null>(null);
   const [queuedMessage, setQueuedMessage] = useState<{content: string, imageIds?: string[], images?: ImageAttachment[]} | null>(null);
+  const queuedMessagesRef = useRef<Record<string, {content: string, imageIds?: string[], images?: ImageAttachment[]}>>({});
 
   // Handle pending input from "Send to new session"
   useEffect(() => {
@@ -186,8 +187,39 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!streaming && queuedMessage) {
       onSendMessage(queuedMessage.content, undefined, undefined, queuedMessage.imageIds, queuedMessage.images);
       setQueuedMessage(null);
+      // Also clean up from ref map
+      if (sessionId) {
+        const { [sessionId]: _, ...rest } = queuedMessagesRef.current;
+        queuedMessagesRef.current = rest;
+      }
     }
-  }, [streaming, queuedMessage, onSendMessage]);
+  }, [streaming, queuedMessage, onSendMessage, sessionId]);
+
+  // Persist queued messages per session on tab switch
+  useEffect(() => {
+    if (previousSessionIdRef.current && previousSessionIdRef.current !== sessionId) {
+      // Save current queued message under old session
+      if (queuedMessage) {
+        queuedMessagesRef.current = {
+          ...queuedMessagesRef.current,
+          [previousSessionIdRef.current]: queuedMessage,
+        };
+      } else {
+        // Clean up if no queued message
+        const { [previousSessionIdRef.current]: _, ...rest } = queuedMessagesRef.current;
+        queuedMessagesRef.current = rest;
+      }
+
+      // Restore queued message for new session (if any)
+      const restored = sessionId ? queuedMessagesRef.current[sessionId] || null : null;
+      setQueuedMessage(restored);
+      if (restored && sessionId) {
+        const { [sessionId]: _, ...rest } = queuedMessagesRef.current;
+        queuedMessagesRef.current = rest;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]); // intentionally exclude queuedMessage to avoid loops
 
   const handleSubmit = () => {
     const trimmed = input.trim();
