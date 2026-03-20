@@ -734,7 +734,7 @@ describe('streamReducer', () => {
   });
 
   describe('CLEAR', () => {
-    it('resets state but preserves lastSeq', () => {
+    it('resets all state including lastSeq', () => {
       const state: StreamState = {
         messages: [
           {
@@ -764,7 +764,7 @@ describe('streamReducer', () => {
       expect(newState.streaming).toBe(false);
       expect(newState.backgroundProcessing).toBe(false);
       expect(newState.thinking).toBe('');
-      expect(newState.lastSeq).toBe(42); // Preserved
+      expect(newState.lastSeq).toBe(0); // Reset to prevent cross-session contamination
       expect(newState.activeStreamId).toBeNull();
       expect(newState.streamingContent).toBe('');
       expect(newState.messageIndex).toBe(0);
@@ -1052,6 +1052,196 @@ describe('streamReducer', () => {
 
       expect(newState).not.toBe(state);
       expect(newState.lastSeq).toBe(6);
+    });
+  });
+
+  describe('Cross-session lastSeq contamination (regression)', () => {
+    // This suite tests the fix for the bug where switching sessions caused
+    // new session events to be silently dropped by the dedup check because
+    // lastSeq from the old session was preserved across CLEAR/LOAD_HISTORY.
+
+    it('CLEAR then STREAM_ACTIVE: events from new session are not dropped', () => {
+      // Simulate: old session had accumulated lastSeq=100
+      const oldSessionState: StreamState = {
+        ...initialStreamState,
+        messages: [
+          { id: 'old_msg', role: 'assistant', content: 'old', timestamp: Date.now(), streaming: false },
+        ],
+        lastSeq: 100,
+        streaming: false,
+      };
+
+      // Tab switch triggers CLEAR
+      const clearedState = streamReducer(oldSessionState, { type: 'CLEAR' });
+      expect(clearedState.lastSeq).toBe(0);
+
+      // New session's stream_active arrives with a low seq (new session has few events)
+      const afterStreamActive = streamReducer(clearedState, { type: 'STREAM_ACTIVE', seq: 3 });
+      expect(afterStreamActive.streaming).toBe(true);
+      expect(afterStreamActive.lastSeq).toBe(3);
+    });
+
+    it('CLEAR then TEXT_DELTA: streaming resumes in new session', () => {
+      const oldSessionState: StreamState = {
+        ...initialStreamState,
+        lastSeq: 200,
+        streaming: false,
+      };
+
+      // Tab switch
+      const clearedState = streamReducer(oldSessionState, { type: 'CLEAR' });
+
+      // New session text_delta with low seq
+      const afterDelta = streamReducer(clearedState, {
+        type: 'TEXT_DELTA',
+        text: 'Hello from new session',
+        messageIndex: 0,
+        seq: 1,
+      });
+
+      expect(afterDelta.messages).toHaveLength(1);
+      expect(afterDelta.messages[0].content).toBe('Hello from new session');
+      expect(afterDelta.streaming).toBe(true);
+      expect(afterDelta.lastSeq).toBe(1);
+    });
+
+    it('CLEAR then RESPONSE_COMPLETE: completion from new session is not dropped', () => {
+      const oldSessionState: StreamState = {
+        ...initialStreamState,
+        lastSeq: 150,
+      };
+
+      const clearedState = streamReducer(oldSessionState, { type: 'CLEAR' });
+
+      const afterComplete = streamReducer(clearedState, {
+        type: 'RESPONSE_COMPLETE',
+        data: { sdk_session_id: 'sdk_new', content: 'Done' },
+        toolLog: [],
+        seq: 5,
+      });
+
+      expect(afterComplete).not.toBe(clearedState);
+      expect(afterComplete.streaming).toBe(false);
+      expect(afterComplete.lastSeq).toBe(5);
+    });
+
+    it('LOAD_HISTORY resets lastSeq so subsequent events are accepted', () => {
+      // Start with stale lastSeq from old session
+      const staleState: StreamState = {
+        ...initialStreamState,
+        lastSeq: 500,
+      };
+
+      const messages: Message[] = [
+        { id: 'db_1', role: 'user', content: 'Hi', timestamp: Date.now() },
+        { id: 'db_2', role: 'assistant', content: 'Hello', timestamp: Date.now() },
+      ];
+
+      // LOAD_HISTORY from new session (not active)
+      const afterLoad = streamReducer(staleState, {
+        type: 'LOAD_HISTORY',
+        messages,
+        isActive: false,
+      });
+
+      expect(afterLoad.lastSeq).toBe(0);
+
+      // Now a text_delta with low seq should work
+      const afterDelta = streamReducer(afterLoad, {
+        type: 'TEXT_DELTA',
+        text: 'New content',
+        messageIndex: 0,
+        seq: 2,
+      });
+
+      expect(afterDelta.messages).toHaveLength(3);
+      expect(afterDelta.lastSeq).toBe(2);
+    });
+
+    it('LOAD_HISTORY with active streaming resets lastSeq', () => {
+      const staleState: StreamState = {
+        ...initialStreamState,
+        lastSeq: 300,
+      };
+
+      const messages: Message[] = [
+        { id: 'db_1', role: 'user', content: 'Hi', timestamp: Date.now() },
+        { id: 'db_2', role: 'assistant', content: 'Partial', timestamp: Date.now() },
+      ];
+
+      // LOAD_HISTORY with active streaming and streaming content
+      const afterLoad = streamReducer(staleState, {
+        type: 'LOAD_HISTORY',
+        messages,
+        isActive: true,
+        streamingContent: 'Buffered response...',
+      });
+
+      expect(afterLoad.lastSeq).toBe(0);
+      expect(afterLoad.streaming).toBe(true);
+
+      // stream_active from server arrives with low seq — should NOT be dropped
+      const afterActive = streamReducer(afterLoad, { type: 'STREAM_ACTIVE', seq: 5 });
+      expect(afterActive.streaming).toBe(true);
+      expect(afterActive.lastSeq).toBe(5);
+    });
+
+    it('full tab switch flow: CLEAR -> LOAD_HISTORY -> stream_active -> text_delta', () => {
+      // Simulate a complete tab switch with an actively streaming new session
+
+      // Step 1: Old session state with high lastSeq
+      const oldState: StreamState = {
+        ...initialStreamState,
+        messages: [
+          { id: 'old_1', role: 'assistant', content: 'old response', timestamp: Date.now(), streaming: false },
+        ],
+        lastSeq: 1000,
+        streaming: false,
+      };
+
+      // Step 2: CLEAR on tab switch
+      const afterClear = streamReducer(oldState, { type: 'CLEAR' });
+      expect(afterClear.lastSeq).toBe(0);
+      expect(afterClear.messages).toHaveLength(0);
+
+      // Step 3: LOAD_HISTORY from DB for new session
+      const dbMessages: Message[] = [
+        { id: 'db_user', role: 'user', content: 'What is 2+2?', timestamp: Date.now() },
+      ];
+      const afterHistory = streamReducer(afterClear, {
+        type: 'LOAD_HISTORY',
+        messages: dbMessages,
+        isActive: true,
+      });
+      expect(afterHistory.lastSeq).toBe(0);
+      expect(afterHistory.streaming).toBe(true);
+
+      // Step 4: stream_active from join_session (new session seq space)
+      const afterActive = streamReducer(afterHistory, { type: 'STREAM_ACTIVE', seq: 3 });
+      expect(afterActive.streaming).toBe(true);
+      expect(afterActive.lastSeq).toBe(3);
+
+      // Step 5: stream_content_sync (no seq from server)
+      const afterSync = streamReducer(afterActive, {
+        type: 'STREAM_CONTENT_SYNC',
+        content: 'The answer is ',
+        seq: 0,
+      });
+      expect(afterSync.messages.length).toBeGreaterThanOrEqual(2);
+      const lastMsg = afterSync.messages[afterSync.messages.length - 1];
+      expect(lastMsg.content).toBe('The answer is ');
+      expect(lastMsg.streaming).toBe(true);
+
+      // Step 6: text_delta arrives (seq=4, continuing from stream_active seq=3)
+      const afterDelta = streamReducer(afterSync, {
+        type: 'TEXT_DELTA',
+        text: '4.',
+        messageIndex: 0,
+        seq: 4,
+      });
+      const finalMsg = afterDelta.messages[afterDelta.messages.length - 1];
+      expect(finalMsg.content).toBe('The answer is 4.');
+      expect(afterDelta.lastSeq).toBe(4);
     });
   });
 });
