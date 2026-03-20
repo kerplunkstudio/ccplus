@@ -123,6 +123,12 @@
   margin-bottom: 0;
 }
 
+/* Fade mask on last element during streaming for materialization effect */
+.message-bubble.streaming .message-markdown > *:last-child {
+  -webkit-mask-image: linear-gradient(to right, black 0%, black 85%, rgba(0,0,0,0.3) 100%);
+  mask-image: linear-gradient(to right, black 0%, black 85%, rgba(0,0,0,0.3) 100%);
+}
+
 .message-markdown ul,
 .message-markdown ol {
   margin: 2px 0 4px 16px;
@@ -340,37 +346,6 @@
   }
 }
 
-/* Simple streaming cursor */
-.streaming-cursor {
-  display: inline-block;
-  width: 1.5px;
-  height: 1.2em;
-  background: var(--accent);
-  margin-left: 1px;
-  border-radius: 0.5px;
-  vertical-align: text-bottom;
-  animation: cursorPulse 1.5s ease-in-out infinite;
-}
-
-.streaming-cursor.visible {
-  opacity: 1;
-}
-
-.streaming-cursor.hidden {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-@keyframes cursorPulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
-
 /* Simple thinking indicator entrance */
 .thinking-indicator {
   animation: thinkingFadeIn 0.3s ease-out;
@@ -411,9 +386,9 @@
     opacity: 1;
   }
 
-  .streaming-cursor {
-    animation: none !important;
-    opacity: 0.7;
+  .message-bubble.streaming .message-markdown > *:last-child {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
   }
 
   .thinking-indicator,

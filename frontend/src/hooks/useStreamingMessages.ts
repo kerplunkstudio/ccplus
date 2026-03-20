@@ -92,6 +92,26 @@ export function useStreamingMessages({
   useEffect(() => {
     if (!socket) return;
 
+    // rAF batching state for text_delta
+    const rafBufferRef = { current: '' };
+    const rafPendingRef = { current: false };
+    const rafHandleRef = { current: 0 };
+    const rafLatestMessageIndexRef = { current: 0 };
+    const rafLatestSeqRef = { current: 0 };
+
+    const flushTextDeltas = () => {
+      if (rafBufferRef.current) {
+        dispatch({
+          type: 'TEXT_DELTA',
+          text: rafBufferRef.current,
+          messageIndex: rafLatestMessageIndexRef.current,
+          seq: rafLatestSeqRef.current
+        });
+        rafBufferRef.current = '';
+      }
+      rafPendingRef.current = false;
+    };
+
     socket.on('message_received', () => {
       window.dispatchEvent(new CustomEvent('ccplus_message_received'));
     });
@@ -106,13 +126,19 @@ export function useStreamingMessages({
     });
 
     socket.on('text_delta', (data: { text: string; message_id?: string; message_index?: number; session_id?: string; seq?: number; replay?: boolean }) => {
+      // Filter before buffering
       if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
-      dispatch({
-        type: 'TEXT_DELTA',
-        text: data.text,
-        messageIndex: data.message_index ?? 0,
-        seq: data.seq ?? 0
-      });
+
+      // Accumulate text in buffer
+      rafBufferRef.current += data.text;
+      rafLatestMessageIndexRef.current = data.message_index ?? 0;
+      rafLatestSeqRef.current = data.seq ?? 0;
+
+      // Schedule rAF flush if not already pending
+      if (!rafPendingRef.current) {
+        rafPendingRef.current = true;
+        rafHandleRef.current = requestAnimationFrame(flushTextDeltas);
+      }
     });
 
     socket.on('response_complete', (data: {
@@ -197,6 +223,12 @@ export function useStreamingMessages({
     });
 
     return () => {
+      // Cancel pending rAF and flush remaining buffer
+      if (rafHandleRef.current) {
+        cancelAnimationFrame(rafHandleRef.current);
+      }
+      flushTextDeltas();
+
       socket.off('message_received');
       socket.off('stream_active');
       socket.off('thinking_delta');
