@@ -1,5 +1,5 @@
 import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool, type ModelUsage } from "@anthropic-ai/claude-agent-sdk";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream, copyFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { homedir } from "os";
 import path from "path";
@@ -1059,6 +1059,56 @@ function buildSignalServer(sessionId: string, callbacks: SessionCallbacks) {
 
 // ---- Internal streaming logic ----
 
+/**
+ * Copy conversation file from worktree project dir to main project dir.
+ * This allows SDK sessions created in worktrees to be resumed from the main workspace.
+ */
+function copyWorktreeConversation(sdkSessionId: string, workspace: string): void {
+  if (!config.WORKTREE_ENABLED) return;
+
+  try {
+    // Compute main project dir path
+    const mainProjectDirName = workspace.replace(/\//g, '-');
+    const mainProjectDir = path.join(homedir(), '.claude', 'projects', mainProjectDirName);
+    const targetPath = path.join(mainProjectDir, `${sdkSessionId}.jsonl`);
+
+    // Check if conversation file already exists in main project dir
+    if (existsSync(targetPath)) {
+      log.debug('Conversation file already exists in main project dir', { sdkSessionId, targetPath });
+      return;
+    }
+
+    // Search for worktree project dirs matching pattern
+    const projectsDir = path.join(homedir(), '.claude', 'projects');
+    if (!existsSync(projectsDir)) {
+      log.debug('Projects directory does not exist', { projectsDir });
+      return;
+    }
+
+    const worktreePattern = `${mainProjectDirName}--claude-worktrees-`;
+    const projectDirs = readdirSync(projectsDir);
+
+    for (const dirName of projectDirs) {
+      if (!dirName.startsWith(worktreePattern)) continue;
+
+      const worktreeConvPath = path.join(projectsDir, dirName, `${sdkSessionId}.jsonl`);
+      if (existsSync(worktreeConvPath)) {
+        copyFileSync(worktreeConvPath, targetPath);
+        log.info('Copied worktree conversation to main project dir', {
+          sdkSessionId,
+          from: worktreeConvPath,
+          to: targetPath,
+        });
+        return;
+      }
+    }
+
+    log.debug('No worktree conversation file found for session', { sdkSessionId, pattern: worktreePattern });
+  } catch (error) {
+    log.error('Failed to copy worktree conversation', { sdkSessionId, error: String(error) });
+  }
+}
+
 async function streamQuery(
   session: ActiveSession,
   prompt: string,
@@ -1333,6 +1383,8 @@ async function streamQuery(
         if (assistantMsgId !== null && result.session_id) {
           try {
             database.updateMessage(assistantMsgId, resultText.join(""), result.session_id);
+            // Copy conversation file from worktree to main project dir for resume support
+            copyWorktreeConversation(result.session_id, workspace);
           } catch (e) {
             log.error("Failed to update SDK session ID", { sessionId, error: String(e) });
           }
