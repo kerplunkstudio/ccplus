@@ -110,6 +110,11 @@ describe('useStreamingMessages', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock rAF to execute synchronously (text_delta handler uses rAF batching)
+    jest.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(Date.now());
+      return 0;
+    });
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -122,6 +127,10 @@ describe('useStreamingMessages', () => {
         total_sessions: 0,
       }),
     });
+  });
+
+  afterEach(() => {
+    (window.requestAnimationFrame as jest.Mock).mockRestore();
   });
 
   it('should initialize with default state', async () => {
