@@ -363,6 +363,8 @@ export function recordToolEvent(
   inputTokens?: number | null,
   outputTokens?: number | null,
   description?: string | null,
+  cacheReadInputTokens?: number | null,
+  cacheCreationInputTokens?: number | null,
 ): Record<string, unknown> {
   const d = getDb();
   const paramsJson = parameters !== null && parameters !== undefined
@@ -371,8 +373,9 @@ export function recordToolEvent(
   const stmt = d.prepare(`
     INSERT INTO tool_usage
       (session_id, tool_name, tool_use_id, parent_agent_id, agent_type,
-       success, error, duration_ms, parameters, input_tokens, output_tokens, description)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       success, error, duration_ms, parameters, input_tokens, output_tokens, description,
+       cache_read_input_tokens, cache_creation_input_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(
     sessionId, toolName, toolUseId,
@@ -381,6 +384,7 @@ export function recordToolEvent(
     error ?? null, durationMs ?? null,
     paramsJson, inputTokens ?? null, outputTokens ?? null,
     description ?? null,
+    cacheReadInputTokens ?? null, cacheCreationInputTokens ?? null,
   );
   const row = d.prepare("SELECT * FROM tool_usage WHERE id = ?").get(info.lastInsertRowid) as Record<string, unknown>;
   return row;
@@ -589,6 +593,24 @@ export function incrementUserStats(
       total_lines_of_code = total_lines_of_code + excluded.total_lines_of_code,
       updated_at = datetime('now', 'localtime')
   `).run(userId, sessions, queries, durationMs, cost, inputTokens, outputTokens, linesOfCode);
+}
+
+export function recordRateLimitEvent(sessionId: string, retryAfterMs: number): void {
+  const d = getDb();
+  d.prepare(`
+    INSERT INTO rate_limit_events (session_id, retry_after_ms)
+    VALUES (?, ?)
+  `).run(sessionId, retryAfterMs);
+}
+
+export function getRateLimitEvents(days: number): Record<string, unknown>[] {
+  const d = getDb();
+  return d.prepare(`
+    SELECT * FROM rate_limit_events
+    WHERE timestamp >= datetime('now', '-' || ? || ' days')
+    ORDER BY timestamp DESC
+    LIMIT 100
+  `).all(days) as Record<string, unknown>[];
 }
 
 export function recordQueryUsage(params: {

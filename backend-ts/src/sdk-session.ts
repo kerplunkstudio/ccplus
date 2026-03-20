@@ -489,8 +489,6 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         null,
         null,
         agentDescription,
-        null,
-        null,
       );
     } catch (e) {
       log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
