@@ -91,6 +91,9 @@ export const MEMORY_DISTILL_DEBOUNCE_MS = 60000;
 // Workflow state machine configuration
 export const WORKFLOW_ENABLED = process.env.CCPLUS_WORKFLOW_ENABLED === 'true';
 
+// Worktree configuration
+export const WORKTREE_ENABLED = process.env.CCPLUS_WORKTREES !== 'false';
+
 /**
  * Reload hot-reloadable config values from environment
  * Called by ConfigWatcher when .env changes
