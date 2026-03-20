@@ -2,6 +2,20 @@ import { Theme } from './themeTypes'
 
 export const THEMES: Theme[] = [
   {
+    name: 'Parchment',
+    presetId: 'parchment',
+    colors: {
+      background: '#F7F3ED',
+      accent: '#8B6D4F',
+      text: '#3D3429',
+      border: '#E4DDD3',
+      hover: '#EDE8E0',
+      success: '#5E9E5E',
+      warning: '#C47F3A',
+      error: '#B85C4D',
+    },
+  },
+  {
     name: 'Electric Ember',
     presetId: 'electric-ember',
     colors: {
@@ -69,20 +83,6 @@ export const THEMES: Theme[] = [
       success: '#6BBF8A',
       warning: '#D4A94B',
       error: '#CC6B6B',
-    },
-  },
-  {
-    name: 'Parchment',
-    presetId: 'parchment',
-    colors: {
-      background: '#F7F3ED',
-      accent: '#8B6D4F',
-      text: '#3D3429',
-      border: '#E4DDD3',
-      hover: '#EDE8E0',
-      success: '#5E9E5E',
-      warning: '#C47F3A',
-      error: '#B85C4D',
     },
   },
 ]
