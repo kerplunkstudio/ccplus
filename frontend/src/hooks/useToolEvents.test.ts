@@ -724,6 +724,55 @@ describe('useToolEvents', () => {
     });
   });
 
+  describe('Todo sync handling', () => {
+    it('should update todos on todo_sync event', () => {
+      const { result } = renderHook(() => useToolEvents(mockProps));
+
+      const todoData = {
+        todos: [
+          { content: 'Task 1', status: 'pending', priority: 'high' },
+          { content: 'Task 2', status: 'completed', priority: 'low' },
+        ],
+        session_id: 'test-session-123',
+      };
+
+      const todoSyncHandler = mockOn.mock.calls.find(call => call[0] === 'todo_sync')?.[1];
+      act(() => {
+        todoSyncHandler(todoData);
+      });
+
+      expect(result.current.todos).toEqual(todoData.todos);
+    });
+
+    it('should ignore todo_sync from different session', () => {
+      const { result } = renderHook(() => useToolEvents(mockProps));
+
+      const todoData = {
+        todos: [
+          { content: 'Task 1', status: 'pending' },
+        ],
+        session_id: 'different-session',
+      };
+
+      const todoSyncHandler = mockOn.mock.calls.find(call => call[0] === 'todo_sync')?.[1];
+      act(() => {
+        todoSyncHandler(todoData);
+      });
+
+      expect(result.current.todos).toEqual([]);
+    });
+
+    it('should register and unregister todo_sync listener', () => {
+      const { unmount } = renderHook(() => useToolEvents(mockProps));
+
+      expect(mockOn).toHaveBeenCalledWith('todo_sync', expect.any(Function));
+
+      unmount();
+
+      expect(mockOff).toHaveBeenCalledWith('todo_sync');
+    });
+  });
+
   describe('Cleanup', () => {
     it('should clear debounce timer on unmount', () => {
       const { unmount } = renderHook(() => useToolEvents(mockProps));
