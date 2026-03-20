@@ -583,7 +583,7 @@ function AppContent() {
   const isBrowserTab = activeTab?.type === 'browser';
   const isTerminalTab = activeTab?.type === 'terminal';
   // Chat shows for all tabs except browser tabs (terminal floats on top of chat)
-  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab;
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !isBrowserTab;
   const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
@@ -616,6 +616,10 @@ function AppContent() {
         onCloseTab={handleCloseTabInActiveProject}
         onNavigate={handleNavigate}
         onToggleActivityPanel={handleToggleActivityPanel}
+        onOpenSession={(projectPath, sessionId, label) => {
+          workspace.addTab(projectPath, sessionId, label);
+          setActivePage(null);
+        }}
       />
       <div
         className="app-layout"
@@ -702,7 +706,15 @@ function AppContent() {
                       screenshotCaptureFnRef.current = fn;
                     }}
                   />
-                ) : shouldShowChatPanel ? (
+                ) : null
+              ) : (
+                <div className="no-project-state">
+                  <p>Open a project from the sidebar to get started</p>
+                </div>
+              )}
+              {/* ChatPanel - always mounted when conditions met, hidden via CSS when panel pages are active */}
+              {shouldShowChatPanel && (
+                <div style={{ display: activePage ? 'none' : 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 }}>
                   <ChatPanel
                     socket={socket}
                     messages={messages}
@@ -740,15 +752,11 @@ function AppContent() {
                     onPauseScheduledTask={pauseScheduledTask}
                     onResumeScheduledTask={resumeScheduledTask}
                   />
-                ) : null
-              ) : (
-                <div className="no-project-state">
-                  <p>Open a project from the sidebar to get started</p>
                 </div>
               )}
             </div>
           </div>
-          {shouldShowChatPanel && (
+          {shouldShowChatPanel && !activePage && (
             <div key={activeTab?.sessionId} className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
               <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} />
             </div>
