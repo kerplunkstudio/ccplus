@@ -290,34 +290,34 @@ const TabBar: React.FC<TabBarProps> = ({
             </div>
           );
         })}
-        <div style={{ position: 'relative' }}>
-          <button
-            className="tab-new-btn"
-            onClick={() => setNewTabDropdownVisible(!newTabDropdownVisible)}
-            aria-label="New tab"
+      </div>
+
+      <div ref={newTabMenuRef} className="tab-new-wrapper">
+        <button
+          className="tab-new-btn"
+          onClick={() => setNewTabDropdownVisible(!newTabDropdownVisible)}
+          aria-label="New tab"
+        >
+          +
+        </button>
+        {newTabDropdownVisible && (
+          <div
+            className="tab-new-dropdown"
           >
-            +
-          </button>
-          {newTabDropdownVisible && (
-            <div
-              ref={newTabMenuRef}
-              className="tab-new-dropdown"
+            <button
+              className="tab-context-menu-item"
+              onClick={() => handleNewTabMenuClick('session')}
             >
-              <button
-                className="tab-context-menu-item"
-                onClick={() => handleNewTabMenuClick('session')}
-              >
-                New Session
-              </button>
-              <button
-                className="tab-context-menu-item"
-                onClick={() => handleNewTabMenuClick('terminal')}
-              >
-                New Terminal
-              </button>
-            </div>
-          )}
-        </div>
+              New Session
+            </button>
+            <button
+              className="tab-context-menu-item"
+              onClick={() => handleNewTabMenuClick('terminal')}
+            >
+              New Terminal
+            </button>
+          </div>
+        )}
       </div>
 
       {contextMenu.visible && (
