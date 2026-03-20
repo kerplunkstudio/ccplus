@@ -10,6 +10,7 @@ import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { MCPPanel } from './components/MCPPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
+import { TerminalTab } from './components/TerminalTab';
 import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
@@ -250,6 +251,12 @@ function AppContent() {
   const handleNewTab = useCallback(() => {
     if (!activeProject) return;
     workspace.addTab(activeProject.path);
+    setShowDashboard(false);
+  }, [workspace, activeProject]);
+
+  const handleNewTerminalTab = useCallback(() => {
+    if (!activeProject) return;
+    workspace.addTerminalTab(activeProject.path);
     setShowDashboard(false);
   }, [workspace, activeProject]);
 
@@ -561,8 +568,10 @@ function AppContent() {
   const hasTabs = activeProject && activeProject.tabs.length > 0;
   const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
   const isBrowserTab = activeTab?.type === 'browser';
-  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab;
+  const isTerminalTab = activeTab?.type === 'terminal';
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab && !isTerminalTab;
   const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
+  const shouldShowTerminalTab = activeProject && hasTabs && !showDashboard && !activePage && isTerminalTab;
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
@@ -573,6 +582,7 @@ function AppContent() {
     : shouldShowMcp ? 'mcp'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
+    : shouldShowTerminalTab ? 'terminal'
     : shouldShowChatPanel ? 'chat'
     : 'no-project';
 
@@ -642,6 +652,7 @@ function AppContent() {
             activeTabId={activeProject.activeTabId}
             onSelectTab={handleSelectTabInActiveProject}
             onNewTab={handleNewTab}
+            onNewTerminalTab={handleNewTerminalTab}
             onCloseTab={handleCloseTabInActiveProject}
             onReopenTab={workspace.reopenTab}
             onCloseOtherTabs={(sessionId) => workspace.closeOtherTabs(activeProject.path, sessionId)}
@@ -652,7 +663,7 @@ function AppContent() {
         )}
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
-            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
+            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' && contentMode !== 'terminal' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
                   onSelectPrompt={handleWelcomePrompt}
@@ -678,6 +689,12 @@ function AppContent() {
                     onRegisterCapture={(fn) => {
                       screenshotCaptureFnRef.current = fn;
                     }}
+                  />
+                ) : shouldShowTerminalTab && activeTab?.sessionId ? (
+                  <TerminalTab
+                    terminalId={activeTab.sessionId}
+                    cwd={activeTab.projectPath || activeProject.path}
+                    socket={socket}
                   />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel

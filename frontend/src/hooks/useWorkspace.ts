@@ -137,6 +137,27 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
       });
     }
 
+    case 'ADD_TERMINAL_TAB': {
+      return updateProject(state, action.projectPath, (project) => {
+        const newTab: TabState = {
+          sessionId: action.sessionId,
+          label: action.label,
+          isStreaming: false,
+          hasRunningAgent: false,
+          createdAt: Date.now(),
+          type: 'terminal',
+          projectPath: action.projectPath,
+        };
+        const updatedMru = [newTab.sessionId, ...ensureMruOrder(project.tabs, project.tabMruOrder)];
+        return {
+          ...project,
+          tabs: [...project.tabs, newTab],
+          activeTabId: newTab.sessionId,
+          tabMruOrder: updatedMru,
+        };
+      });
+    }
+
     case 'CLOSE_TAB': {
       return updateProject(state, action.projectPath, (project) => {
         const filtered = project.tabs.filter((t) => t.sessionId !== action.sessionId);
@@ -451,6 +472,11 @@ export function useWorkspace() {
     dispatch({ type: 'ADD_BROWSER_TAB', projectPath, sessionId: newSessionId, url, label });
   }, []);
 
+  const addTerminalTab = useCallback((projectPath: string) => {
+    const newSessionId = generateSessionId();
+    dispatch({ type: 'ADD_TERMINAL_TAB', projectPath, sessionId: newSessionId, label: 'Terminal' });
+  }, []);
+
   const closeOtherTabs = useCallback((projectPath: string, sessionId: string) => {
     // Find the project and all tabs to be closed
     const project = state.projects.find((p) => p.path === projectPath);
@@ -509,6 +535,7 @@ export function useWorkspace() {
     selectProject,
     addTab,
     addBrowserTab,
+    addTerminalTab,
     closeTab,
     closeOtherTabs,
     reopenTab,
