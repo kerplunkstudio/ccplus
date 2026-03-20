@@ -3,7 +3,9 @@ import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Message } from '../types';
+import { useTheme } from '../theme/ThemeContext';
 import './MessageBubble.css';
 
 interface MessageBubbleProps {
@@ -11,14 +13,15 @@ interface MessageBubbleProps {
   onLinkClick?: (url: string, text: string) => void;
 }
 
-const codeBlockStyle = {
+const getCodeBlockStyle = (isLight: boolean) => ({
   margin: 0,
   borderRadius: '0 0 8px 8px',
-  background: 'rgba(0, 0, 0, 0.3)',
+  background: isLight ? 'rgba(0, 0, 0, 0.03)' : 'rgba(0, 0, 0, 0.3)',
   fontSize: '13px',
-};
+});
 
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, onLinkClick }) => {
+  const { isLight } = useTheme();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [previewMarkdown, setPreviewMarkdown] = useState<Record<string, boolean>>({});
 
@@ -99,8 +102,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
           ) : (
             <SyntaxHighlighter
               language={language || 'text'}
-              style={vscDarkPlus}
-              customStyle={codeBlockStyle}
+              style={isLight ? vs : vscDarkPlus}
+              customStyle={getCodeBlockStyle(isLight)}
             >
               {codeString}
             </SyntaxHighlighter>
@@ -108,7 +111,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         </div>
       );
     },
-  }), [copiedId, copyToClipboard, previewMarkdown]);
+  }), [copiedId, copyToClipboard, previewMarkdown, isLight]);
 
   // Intercept link clicks via event delegation (more reliable than react-markdown component override)
   const handleContentClick = useCallback((e: React.MouseEvent) => {

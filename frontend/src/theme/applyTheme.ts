@@ -65,7 +65,7 @@ export function applyTheme(theme: Theme): void {
   }
 }
 
-function isLightTheme(bgHex: string): boolean {
+export function isLightTheme(bgHex: string): boolean {
   const { r, g, b } = hexToRgb(bgHex)
   const brightness = (r * 299 + g * 587 + b * 114) / 1000
   return brightness > 128
