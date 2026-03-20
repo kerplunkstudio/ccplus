@@ -3,18 +3,19 @@ import { Theme } from './themeTypes'
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement
   const c = theme.colors
+  const isLight = isLightTheme(c.background)
 
   // Base palette
   root.style.setProperty('--bg-primary', c.background)
   root.style.setProperty('--bg-secondary', c.hover)
-  root.style.setProperty('--bg-tertiary', adjustBrightness(c.background, 10))
+  root.style.setProperty('--bg-tertiary', adjustBrightness(c.background, isLight ? -10 : 10))
   root.style.setProperty('--text-primary', c.text)
-  root.style.setProperty('--text-secondary', adjustBrightness(c.text, -40))
+  root.style.setProperty('--text-secondary', adjustBrightness(c.text, isLight ? 40 : -40))
   root.style.setProperty('--accent', c.accent)
   const accentRgb = hexToRgb(c.accent)
   root.style.setProperty('--accent-rgb', `${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}`)
-  root.style.setProperty('--accent-dim', adjustBrightness(c.accent, -40))
-  root.style.setProperty('--accent-light', adjustBrightness(c.accent, 40))
+  root.style.setProperty('--accent-dim', adjustBrightness(c.accent, isLight ? 40 : -40))
+  root.style.setProperty('--accent-light', adjustBrightness(c.accent, isLight ? -40 : 40))
   root.style.setProperty('--border', c.border)
   root.style.setProperty('--success', c.success)
   root.style.setProperty('--warning', c.warning)
@@ -26,7 +27,7 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--accent-shadow', withAlpha(c.accent, 0.4))
   root.style.setProperty('--accent-shadow-fade', withAlpha(c.accent, 0))
   root.style.setProperty('--accent-bg-active', withAlpha(c.accent, 0.15))
-  root.style.setProperty('--accent-hover', adjustBrightness(c.accent, 20))
+  root.style.setProperty('--accent-hover', adjustBrightness(c.accent, isLight ? -20 : 20))
 
   // Derived: semantic
   root.style.setProperty('--success-bg', withAlpha(c.success, 0.15))
@@ -47,13 +48,27 @@ export function applyTheme(theme: Theme): void {
   root.style.setProperty('--hover-border', withAlpha(c.text, 0.08))
   root.style.setProperty('--hover-bg-secondary', withAlpha(c.hover, 0.8))
 
-  // Derived: surfaces
+  // Derived: surfaces (light/dark aware)
   root.style.setProperty('--icon-bg', withAlpha(c.text, 0.07))
-  root.style.setProperty('--code-bg', 'rgba(0, 0, 0, 0.3)')
-  root.style.setProperty('--code-header-bg', 'rgba(0, 0, 0, 0.5)')
-  root.style.setProperty('--overlay-bg', 'rgba(0, 0, 0, 0.7)')
-  root.style.setProperty('--dropdown-shadow', `0 8px 24px rgba(0, 0, 0, 0.4)`)
-  root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.2)')
+  if (isLight) {
+    root.style.setProperty('--code-bg', 'rgba(0, 0, 0, 0.04)')
+    root.style.setProperty('--code-header-bg', 'rgba(0, 0, 0, 0.06)')
+    root.style.setProperty('--overlay-bg', 'rgba(255, 255, 255, 0.85)')
+    root.style.setProperty('--dropdown-shadow', `0 8px 24px rgba(0, 0, 0, 0.12)`)
+    root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.08)')
+  } else {
+    root.style.setProperty('--code-bg', 'rgba(0, 0, 0, 0.3)')
+    root.style.setProperty('--code-header-bg', 'rgba(0, 0, 0, 0.5)')
+    root.style.setProperty('--overlay-bg', 'rgba(0, 0, 0, 0.7)')
+    root.style.setProperty('--dropdown-shadow', `0 8px 24px rgba(0, 0, 0, 0.4)`)
+    root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.2)')
+  }
+}
+
+function isLightTheme(bgHex: string): boolean {
+  const { r, g, b } = hexToRgb(bgHex)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000
+  return brightness > 128
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './ProfilePanel.css';
+import { THEMES } from '../theme/themePresets';
+import { applyTheme } from '../theme/applyTheme';
 
 export interface ProfileSettings {
   name: string;
   kindOfWork: string;
   chatFont: string;
+  theme: string;
 }
 
 const PROFILE_STORAGE_KEY = 'ccplus_profile_settings';
@@ -50,6 +53,7 @@ const DEFAULT_PROFILE: ProfileSettings = {
   name: '',
   kindOfWork: 'Software Engineer',
   chatFont: 'system',
+  theme: 'electric-ember',
 };
 
 const loadProfile = (): ProfileSettings => {
@@ -109,6 +113,17 @@ export const ProfilePanel: React.FC = () => {
       ...prev,
       chatFont: font,
     }));
+  };
+
+  const handleThemeSelect = (themeId: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      theme: themeId,
+    }));
+    const theme = THEMES.find((t) => t.presetId === themeId);
+    if (theme) {
+      applyTheme(theme);
+    }
   };
 
   // Extract first letter for avatar
@@ -201,6 +216,47 @@ export const ProfilePanel: React.FC = () => {
                 >
                   {option.preview}
                 </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Section 04: Theme */}
+        <section className="profile-section" style={{ animationDelay: '0.4s' }}>
+          <div className="profile-section-header">
+            <span className="profile-section-number" aria-hidden="true">04</span>
+            <div className="profile-label">THEME</div>
+          </div>
+          <div
+            className="profile-theme-grid"
+            role="radiogroup"
+            aria-label="Select theme"
+          >
+            {THEMES.map((theme) => (
+              <button
+                key={theme.presetId}
+                type="button"
+                role="radio"
+                aria-checked={profile.theme === theme.presetId}
+                className={`profile-theme-swatch ${profile.theme === theme.presetId ? 'profile-theme-swatch-selected' : ''}`}
+                onClick={() => handleThemeSelect(theme.presetId)}
+                aria-label={`Select ${theme.name} theme`}
+              >
+                <div
+                  className="profile-theme-swatch-preview"
+                  style={{ backgroundColor: theme.colors.background }}
+                >
+                  <div
+                    className="profile-theme-swatch-accent"
+                    style={{ backgroundColor: theme.colors.accent }}
+                  />
+                  <div className="profile-theme-swatch-lines">
+                    <span style={{ backgroundColor: theme.colors.text }} />
+                    <span style={{ backgroundColor: theme.colors.text }} />
+                    <span style={{ backgroundColor: theme.colors.text }} />
+                  </div>
+                </div>
+                <div className="profile-theme-name">{theme.name}</div>
               </button>
             ))}
           </div>

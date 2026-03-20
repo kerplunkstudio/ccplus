@@ -396,6 +396,15 @@
   .profile-font-card-preview {
     font-size: var(--text-sm);
   }
+
+  .profile-theme-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm);
+  }
+
+  .profile-theme-swatch-preview {
+    height: 100px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -410,6 +419,154 @@
   }
 }
 
+/* Theme Selection */
+
+.profile-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+
+.profile-theme-swatch {
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  transition: all 0.25s var(--ease-out);
+}
+
+.profile-theme-swatch:focus-visible {
+  outline: 2px solid var(--profile-accent);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+}
+
+.profile-theme-swatch-preview {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  transition: all 0.25s var(--ease-out);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.profile-theme-swatch:hover .profile-theme-swatch-preview {
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+  border-color: rgba(166, 124, 82, 0.3);
+}
+
+.profile-theme-swatch:active .profile-theme-swatch-preview {
+  transform: translateY(-1px);
+}
+
+.profile-theme-swatch-accent {
+  width: 50%;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.profile-theme-swatch-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-xs);
+}
+
+.profile-theme-swatch-lines span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  opacity: 0.5;
+}
+
+.profile-theme-swatch-lines span:nth-child(1) {
+  width: 90%;
+}
+
+.profile-theme-swatch-lines span:nth-child(2) {
+  width: 75%;
+}
+
+.profile-theme-swatch-lines span:nth-child(3) {
+  width: 60%;
+}
+
+.profile-theme-swatch-selected .profile-theme-swatch-preview {
+  border-color: var(--profile-accent);
+  box-shadow:
+    0 0 0 1px var(--profile-accent),
+    0 4px 12px rgba(166, 124, 82, 0.15);
+}
+
+.profile-theme-swatch-selected:hover .profile-theme-swatch-preview {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px var(--profile-accent),
+    0 6px 16px rgba(166, 124, 82, 0.2);
+}
+
+.profile-theme-swatch-selected .profile-theme-swatch-preview::before {
+  content: '';
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  width: 20px;
+  height: 20px;
+  background: var(--profile-accent);
+  border-radius: 50%;
+  z-index: 1;
+  box-shadow: 0 2px 4px var(--profile-accent-shadow);
+}
+
+.profile-theme-swatch-selected .profile-theme-swatch-preview::after {
+  content: '\2713';
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #faf8f6;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.profile-theme-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  transition: color 0.2s var(--ease-out);
+}
+
+.profile-theme-swatch:hover .profile-theme-name {
+  color: var(--text-primary);
+}
+
+.profile-theme-swatch-selected .profile-theme-name {
+  color: var(--profile-accent);
+  font-weight: 600;
+}
+
 /* Reduced Motion Support */
 
 @media (prefers-reduced-motion: reduce) {
@@ -422,13 +579,16 @@
   .profile-avatar,
   .profile-pill,
   .profile-font-card,
-  .profile-input {
+  .profile-input,
+  .profile-theme-swatch,
+  .profile-theme-swatch-preview {
     transition: none;
   }
 
   .profile-avatar-letter,
   .profile-pill:hover,
-  .profile-font-card:hover {
+  .profile-font-card:hover,
+  .profile-theme-swatch:hover .profile-theme-swatch-preview {
     transform: none;
   }
 }
