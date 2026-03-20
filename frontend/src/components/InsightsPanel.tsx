@@ -72,6 +72,10 @@ interface InsightsData {
     avg_tokens_per_query?: number;
     avg_queries_per_session?: number;
     total_errors?: number;
+    total_rate_limits?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    cache_hit_rate?: number;
   };
   daily: DailyData[];
   by_project: ProjectData[];
@@ -79,6 +83,8 @@ interface InsightsData {
   by_error_category?: ErrorCategoryData[];
   by_agent_type?: AgentTypeData[];
   hourly_activity?: HourlyData[];
+  rate_limit_events?: Array<{ timestamp: string; session_id: string; retry_after_ms: number }>;
+  by_session?: Array<{ session_id: string; input_tokens: number; output_tokens: number; cache_read_tokens: number; tool_count: number; label: string }>;
 }
 
 interface CachedData {
