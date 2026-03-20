@@ -1394,10 +1394,14 @@ export function insertImportedConversation(params: {
   projectPath: string;
 }): void {
   const database = getDb();
+  // Convert ISO UTC timestamp to local time format matching schema default
+  const localTimestamp = params.timestamp.includes('T')
+    ? new Date(params.timestamp).toLocaleString('sv-SE', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }).replace('T', ' ')
+    : params.timestamp;
   database.prepare(`
     INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path, source)
     VALUES (?, 'imported', ?, ?, ?, ?, 'imported')
-  `).run(params.sessionId, params.role, params.content, params.timestamp, params.projectPath);
+  `).run(params.sessionId, params.role, params.content, localTimestamp, params.projectPath);
 }
 
 export function insertImportedQueryUsage(params: {
