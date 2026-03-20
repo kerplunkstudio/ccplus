@@ -431,7 +431,7 @@ export function updateToolEvent(
   );
 }
 
-export function getToolEvents(sessionId: string, limit: number = 200): Record<string, unknown>[] {
+export function getToolEvents(sessionId: string, limit: number = config.MAX_ACTIVITY_EVENTS_DEFAULT): Record<string, unknown>[] {
   const d = getDb();
   const rows = d.prepare(`
     SELECT * FROM tool_usage
