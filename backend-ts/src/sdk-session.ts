@@ -1285,7 +1285,7 @@ async function streamQuery(
         maxTurns: 50,
         includePartialMessages: true,
         promptSuggestions: true,
-        ...(config.WORKTREE_ENABLED && {
+        ...(config.WORKTREE_ENABLED && !resumeId && {
           extraArgs: { worktree: null },
           settings: {
             worktree: {
