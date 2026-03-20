@@ -70,6 +70,7 @@ const mockInsightsData = {
       success_rate: 0.87,
     },
   ],
+  by_model: [],
   rate_limit_events: [
     {
       timestamp: '2026-03-17T10:30:00Z',
@@ -108,6 +109,14 @@ describe('InsightsPanel', () => {
     localStorage.clear();
   });
 
+  // Helper to mock the import/status call that fires on mount before insights fetch.
+  const mockImportStatus = () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ hasImports: false, count: 0 }),
+    });
+  };
+
   it('renders loading state initially', () => {
     (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {}));
 
@@ -117,6 +126,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders insights data successfully', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -134,6 +144,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders summary stats correctly', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -151,6 +162,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders project list when available', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -167,6 +179,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders tool list when available', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -190,6 +203,7 @@ describe('InsightsPanel', () => {
       by_project: [],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => emptyData,
@@ -208,6 +222,7 @@ describe('InsightsPanel', () => {
       by_tool: [],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => emptyData,
@@ -221,6 +236,7 @@ describe('InsightsPanel', () => {
   });
 
   it('handles network error and shows error message', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network failed'));
 
     render(<InsightsPanel />);
@@ -231,6 +247,7 @@ describe('InsightsPanel', () => {
   });
 
   it('handles HTTP error and shows error message', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -245,6 +262,7 @@ describe('InsightsPanel', () => {
   });
 
   it('changes time period when selecting different option', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => mockInsightsData,
@@ -260,13 +278,17 @@ describe('InsightsPanel', () => {
     fireEvent.change(select, { target: { value: '7' } });
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('days=7')
+      // Check that fetch was called with days=7 (in insights call, not import/status)
+      const insightsCalls = (global.fetch as jest.Mock).mock.calls.filter(
+        call => call[0] && call[0].includes('/api/insights')
       );
+      const days7Calls = insightsCalls.filter(call => call[0].includes('days=7'));
+      expect(days7Calls.length).toBeGreaterThan(0);
     });
   });
 
   it('includes projectPath in API call when provided', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -275,13 +297,17 @@ describe('InsightsPanel', () => {
     render(<InsightsPanel projectPath="/Users/test/myproject" />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('project=%2FUsers%2Ftest%2Fmyproject')
+      // Check that fetch was called with the project parameter (insights call, not import/status)
+      const insightsCalls = (global.fetch as jest.Mock).mock.calls.filter(
+        call => call[0] && call[0].includes('/api/insights')
       );
+      expect(insightsCalls.length).toBeGreaterThan(0);
+      expect(insightsCalls[0][0]).toContain('project=%2FUsers%2Ftest%2Fmyproject');
     });
   });
 
   it('saves insights to cache after successful fetch', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -324,6 +350,7 @@ describe('InsightsPanel', () => {
     };
     localStorage.setItem('ccplus_insights_global_30', JSON.stringify(freshCacheData));
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -337,6 +364,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders daily chart bars', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -359,12 +387,15 @@ describe('InsightsPanel', () => {
     };
     localStorage.setItem('ccplus_insights_global_30', JSON.stringify(oldCacheData));
 
+    // import/status fires 1st (consumed by first Once), background insights never resolves,
+    // retry click gets the second Once (resolves with data).
+    mockImportStatus();
     (global.fetch as jest.Mock)
-      .mockImplementation(() => new Promise(() => {})) // First load never resolves
+      .mockImplementation(() => new Promise(() => {})) // background insights never resolves
       .mockResolvedValueOnce({
         ok: true,
         json: async () => mockInsightsData,
-      });
+      }); // retry click gets this
 
     render(<InsightsPanel />);
 
@@ -392,6 +423,7 @@ describe('InsightsPanel', () => {
       ],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => dataWithVariedRates,
@@ -424,6 +456,7 @@ describe('InsightsPanel', () => {
       },
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => largeNumbersData,
@@ -442,6 +475,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders chart with correct y-axis labels', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -458,6 +492,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders daily token consumption chart', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -477,6 +512,7 @@ describe('InsightsPanel', () => {
   });
 
   it('displays rate limit events when available', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -504,6 +540,7 @@ describe('InsightsPanel', () => {
       },
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => noRateLimitsData,
@@ -519,6 +556,7 @@ describe('InsightsPanel', () => {
   });
 
   it('displays cache efficiency when data exists', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -544,6 +582,7 @@ describe('InsightsPanel', () => {
       },
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => noCacheData,
@@ -568,6 +607,7 @@ describe('InsightsPanel', () => {
       },
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => undefinedCacheData,
@@ -583,6 +623,7 @@ describe('InsightsPanel', () => {
   });
 
   it('displays top sessions by token usage', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -609,6 +650,7 @@ describe('InsightsPanel', () => {
       by_session: [],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => noSessionsData,
@@ -638,6 +680,7 @@ describe('InsightsPanel', () => {
       ],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => longLabelData,
@@ -668,6 +711,7 @@ describe('InsightsPanel', () => {
       })),
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => manyEventsData,
@@ -696,6 +740,7 @@ describe('InsightsPanel', () => {
       })),
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => manySessionsData,
@@ -712,6 +757,7 @@ describe('InsightsPanel', () => {
   });
 
   it('renders stacked token bars with input and output', async () => {
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => mockInsightsData,
@@ -742,6 +788,7 @@ describe('InsightsPanel', () => {
       ],
     };
 
+    mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => eventWithLongRetry,
