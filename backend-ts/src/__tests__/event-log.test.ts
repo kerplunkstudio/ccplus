@@ -363,8 +363,24 @@ describe("EventLog", () => {
       expect(log.fullResetRequired("session-1", 0)).toBe(false);
     });
 
-    it("should return false for unknown session", () => {
-      expect(eventLog.fullResetRequired("nonexistent-session", 10)).toBe(false);
+    it("should return true for unknown session with non-zero lastSeq", () => {
+      expect(eventLog.fullResetRequired("nonexistent-session", 10)).toBe(true);
+    });
+
+    it("should return true when session existed but was cleared (server restart scenario)", () => {
+      eventLog.append("session-1", "a", {});
+      eventLog.append("session-1", "b", {});
+      eventLog.append("session-1", "c", {});
+
+      // Client had lastSeq=3
+      const clientLastSeq = 3;
+
+      // Server restarts - session cleared
+      eventLog.clear("session-1");
+
+      // Now the session doesn't exist in the buffer, but client thinks it has seq=3
+      // This should require full reset
+      expect(eventLog.fullResetRequired("session-1", clientLastSeq)).toBe(true);
     });
   });
 

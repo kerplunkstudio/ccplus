@@ -65,6 +65,10 @@ class EventLog {
       return false;
     }
     const oldestSeq = this.getOldestSeq(sessionId);
+    if (oldestSeq === 0) {
+      // Session not in buffer — server restart or eviction. Full reset required.
+      return true;
+    }
     return clientLastSeq < oldestSeq;
   }
 }
