@@ -129,9 +129,20 @@ export function useStreamingMessages({
       // Filter before buffering
       if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
 
+      const incomingIndex = data.message_index ?? 0;
+
+      // Flush buffer if message_index changed (new message boundary)
+      if (rafBufferRef.current && incomingIndex !== rafLatestMessageIndexRef.current) {
+        if (rafHandleRef.current) {
+          cancelAnimationFrame(rafHandleRef.current);
+          rafHandleRef.current = 0;
+        }
+        flushTextDeltas();
+      }
+
       // Accumulate text in buffer
       rafBufferRef.current += data.text;
-      rafLatestMessageIndexRef.current = data.message_index ?? 0;
+      rafLatestMessageIndexRef.current = incomingIndex;
       rafLatestSeqRef.current = data.seq ?? 0;
 
       // Schedule rAF flush if not already pending
