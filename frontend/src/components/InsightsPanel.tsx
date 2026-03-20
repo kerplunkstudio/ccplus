@@ -54,6 +54,16 @@ interface HourlyData {
   queries: number;
 }
 
+interface ModelData {
+  model: string;
+  queries: number;
+  total_cost: number;
+  total_input: number;
+  total_output: number;
+  total_cache_read: number;
+  total_cache_creation: number;
+}
+
 interface InsightsData {
   period: {
     start: string;
@@ -80,6 +90,7 @@ interface InsightsData {
   daily: DailyData[];
   by_project: ProjectData[];
   by_tool: ToolData[];
+  by_model?: ModelData[];
   by_error_category?: ErrorCategoryData[];
   by_agent_type?: AgentTypeData[];
   hourly_activity?: HourlyData[];
@@ -111,6 +122,18 @@ const formatDate = (dateStr: string): string => {
   const date = new Date(dateStr + 'T12:00:00');
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
+
+const SectionLabel: React.FC<{ label: string; tooltip: string }> = ({ label, tooltip }) => (
+  <div className="insights-section-label">
+    {label}
+    <span className="insights-tooltip-trigger" data-tooltip={tooltip}>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="insights-tooltip-icon">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
+        <text x="8" y="12" textAnchor="middle" fill="currentColor" fontSize="10" fontWeight="600" opacity="0.5">?</text>
+      </svg>
+    </span>
+  </div>
+);
 
 const getCacheKey = (projectPath: string | undefined, days: number): string => {
   const project = projectPath || 'global';
@@ -145,6 +168,15 @@ const isCacheFresh = (cacheTimestamp: number): boolean => {
   return Date.now() - cacheTimestamp < CACHE_TTL_MS;
 };
 
+type SourceFilter = 'all' | 'native' | 'imported';
+
+interface ImportStatus {
+  hasImports: boolean;
+  count: number;
+}
+
+export { SectionLabel };
+
 export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClose }) => {
   const [insights, setInsights] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,6 +184,27 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   const [selectedDays, setSelectedDays] = useState<number>(30);
   const [showingStaleData, setShowingStaleData] = useState(false);
   const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(null);
+  const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
+  const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  // Fetch import status on mount
+  useEffect(() => {
+    const fetchImportStatus = async () => {
+      try {
+        const response = await fetch(`${SOCKET_URL}/api/import/status`);
+        if (response.ok) {
+          const data = await response.json();
+          setImportStatus(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch import status:', err);
+      }
+    };
+
+    fetchImportStatus();
+  }, []);
 
   useEffect(() => {
     const fetchInsights = async (isBackgroundRefresh: boolean = false) => {
@@ -165,6 +218,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         const params = new URLSearchParams({ days: String(selectedDays) });
         if (projectPath) {
           params.append('project', projectPath);
+        }
+        if (selectedSource !== 'all') {
+          params.append('source', selectedSource);
         }
 
         const url = `${SOCKET_URL}/api/insights?${params}`;
@@ -237,7 +293,54 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
     } else {
       fetchInsights(false);
     }
-  }, [projectPath, selectedDays]);
+  }, [projectPath, selectedDays, selectedSource]);
+
+  const handleImport = async () => {
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/import/sessions`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setImportResult(`Imported ${data.count || 0} sessions`);
+
+        // Refresh import status
+        const statusResponse = await fetch(`${SOCKET_URL}/api/import/status`);
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          setImportStatus(statusData);
+        }
+
+        // Refresh insights data
+        const params = new URLSearchParams({ days: String(selectedDays) });
+        if (projectPath) {
+          params.append('project', projectPath);
+        }
+        if (selectedSource !== 'all') {
+          params.append('source', selectedSource);
+        }
+
+        const insightsResponse = await fetch(`${SOCKET_URL}/api/insights?${params}`);
+        if (insightsResponse.ok) {
+          const insightsData = await insightsResponse.json();
+          setInsights(insightsData);
+          saveToCache(projectPath, selectedDays, insightsData);
+        }
+      } else {
+        const errorText = await response.text();
+        setImportResult(`Import failed: ${errorText}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setImportResult(`Import error: ${message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleRetry = () => {
     setLoading(true);
@@ -249,6 +352,9 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         const params = new URLSearchParams({ days: String(selectedDays) });
         if (projectPath) {
           params.append('project', projectPath);
+        }
+        if (selectedSource !== 'all') {
+          params.append('source', selectedSource);
         }
 
         const url = `${SOCKET_URL}/api/insights?${params}`;
@@ -346,17 +452,56 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         {/* 1. HEADER */}
         <div className="insights-header">
           <h1 className="insights-title">Insights</h1>
-          <select
-            className="insights-period-selector"
-            value={selectedDays}
-            onChange={(e) => setSelectedDays(Number(e.target.value))}
-          >
-            <option value={7}>Last 7 days</option>
-            <option value={14}>Last 14 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
-          </select>
+          <div className="insights-header-controls">
+            <div className="insights-source-filter">
+              <button
+                className={`insights-source-pill ${selectedSource === 'all' ? 'active' : ''}`}
+                onClick={() => setSelectedSource('all')}
+              >
+                All
+              </button>
+              <button
+                className={`insights-source-pill ${selectedSource === 'native' ? 'active' : ''}`}
+                onClick={() => setSelectedSource('native')}
+              >
+                cc+
+              </button>
+              <button
+                className={`insights-source-pill ${selectedSource === 'imported' ? 'active' : ''}`}
+                onClick={() => setSelectedSource('imported')}
+              >
+                Historical
+                {importStatus && importStatus.hasImports && (
+                  <span className="insights-import-badge">{importStatus.count}</span>
+                )}
+              </button>
+            </div>
+            <button
+              className="insights-import-button"
+              onClick={handleImport}
+              disabled={importing}
+            >
+              {importing ? 'Importing...' : 'Import Historical'}
+            </button>
+            <select
+              className="insights-period-selector"
+              value={selectedDays}
+              onChange={(e) => setSelectedDays(Number(e.target.value))}
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={14}>Last 14 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+            </select>
+          </div>
         </div>
+
+        {/* Import result */}
+        {importResult && (
+          <div className="insights-import-result">
+            {importResult}
+          </div>
+        )}
 
         {/* 2. HERO METRICS */}
         <div className="insights-hero">
@@ -387,15 +532,15 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         {/* 3. EFFICIENCY ROW */}
         <div className="insights-efficiency">
           <div className="insights-efficiency-item">
-            <div className="insights-efficiency-label">Avg cost per query</div>
+            <div className="insights-efficiency-label" title="Total estimated cost divided by total queries. Lower means more efficient prompts.">Avg cost per query</div>
             <div className="insights-efficiency-value">{formatCost(avgCostPerQuery)}</div>
           </div>
           <div className="insights-efficiency-item">
-            <div className="insights-efficiency-label">Avg tokens per query</div>
+            <div className="insights-efficiency-label" title="Average input + output tokens per query. Includes both new and cached tokens.">Avg tokens per query</div>
             <div className="insights-efficiency-value">{formatNumber(avgTokensPerQuery)}</div>
           </div>
           <div className="insights-efficiency-item">
-            <div className="insights-efficiency-label">Avg queries per session</div>
+            <div className="insights-efficiency-label" title="How many back-and-forth exchanges happen per session on average.">Avg queries per session</div>
             <div className="insights-efficiency-value">{avgQueriesPerSession.toFixed(1)}</div>
           </div>
         </div>
@@ -404,7 +549,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
 
         {/* 4. DAILY ACTIVITY CHART */}
         <div className="insights-section">
-          <div className="insights-section-label">DAILY ACTIVITY</div>
+          <SectionLabel label="DAILY ACTIVITY" tooltip="Number of queries and tool calls per day. Queries are user-initiated prompts; tool calls are actions the agent takes (file reads, edits, searches, etc.)" />
           <div className="insights-chart-legend">
             <span className="insights-legend-item">
               <span className="insights-legend-dot insights-legend-queries" />
@@ -458,8 +603,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         <div className="insights-cost-token-grid">
           {/* Left: Cost trend */}
           <div className="insights-section">
-            <div className="insights-section-label">DAILY COST TREND</div>
-            <div className="insights-cost-total">{formatCost(insights.summary.total_cost)}</div>
+            <SectionLabel label="DAILY COST TREND" tooltip="Estimated API cost per day based on token usage and model pricing. Cost = (input × rate) + (output × rate) + (cache × rate) per million tokens. The period total is the sum of all daily costs shown." />
             <div className="insights-cost-chart">
               {insights.daily.map((day) => {
                 const height = Math.max((day.cost / maxDailyCost) * 100, 2);
@@ -477,7 +621,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
 
           {/* Right: Token mix */}
           <div className="insights-section">
-            <div className="insights-section-label">TOKEN MIX</div>
+            <SectionLabel label="TOKEN MIX" tooltip="Ratio of input tokens (context sent to the model) vs output tokens (model responses). High input ratio is normal — the full conversation history is sent each turn." />
             <div className="insights-token-total">{formatNumber(totalTokens)} tokens</div>
             <div className="insights-token-bar">
               <div className="insights-token-input" style={{ width: `${inputPct}%` }}>
@@ -508,38 +652,73 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
 
         {/* 6. TOOL PERFORMANCE TABLE */}
         <div className="insights-section">
-          <div className="insights-section-label">TOOL PERFORMANCE</div>
-          {insights.by_tool.length > 0 ? (
-            <div className="insights-table">
-              <div className="insights-table-header">
-                <div className="insights-table-cell insights-table-cell-tool">Tool</div>
-                <div className="insights-table-cell insights-table-cell-invocations">Invocations</div>
-                <div className="insights-table-cell insights-table-cell-success">Success Rate</div>
-                <div className="insights-table-cell insights-table-cell-duration">Avg Duration</div>
-                <div className="insights-table-cell insights-table-cell-errors">Errors</div>
-              </div>
-              {insights.by_tool.map((tool) => (
-                <div key={tool.tool} className="insights-table-row">
-                  <div className="insights-table-cell insights-table-cell-tool">{tool.tool}</div>
-                  <div className="insights-table-cell insights-table-cell-invocations">{formatNumber(tool.count)}</div>
-                  <div className="insights-table-cell insights-table-cell-success">
-                    <div className="insights-success-bar-wrapper">
-                      <div className="insights-success-bar" style={{ width: `${tool.success_rate * 100}%` }} />
-                      <span className="insights-success-pct">{(tool.success_rate * 100).toFixed(0)}%</span>
+          <SectionLabel label="TOOL PERFORMANCE" tooltip="Invocation count, success rate, and average duration for each tool. MCP tools are grouped by server name." />
+          {insights.by_tool.length > 0 ? (() => {
+            // Group tools by prefix: mcp__chrome-devtools__*, Task*, etc.
+            const grouped = insights.by_tool.reduce<Record<string, ToolData>>((acc, tool) => {
+              let groupName = tool.tool;
+
+              // Group MCP tools by server name (mcp__{server}__command → mcp:{server})
+              const mcpMatch = tool.tool.match(/^mcp__([^_]+(?:-[^_]+)*)__/);
+              if (mcpMatch) {
+                groupName = `mcp:${mcpMatch[1]}`;
+              }
+
+              const existing = acc[groupName];
+              if (existing) {
+                const totalCount = existing.count + tool.count;
+                const existingSuccesses = existing.success_rate * existing.count;
+                const newSuccesses = tool.success_rate * tool.count;
+                return {
+                  ...acc,
+                  [groupName]: {
+                    tool: groupName,
+                    count: totalCount,
+                    success_rate: totalCount > 0 ? (existingSuccesses + newSuccesses) / totalCount : 0,
+                    avg_duration_ms: existing.avg_duration_ms && tool.avg_duration_ms
+                      ? (existing.avg_duration_ms * existing.count + tool.avg_duration_ms * tool.count) / totalCount
+                      : existing.avg_duration_ms || tool.avg_duration_ms,
+                    error_count: (existing.error_count || 0) + (tool.error_count || 0),
+                  },
+                };
+              }
+              return { ...acc, [groupName]: { ...tool, tool: groupName } };
+            }, {});
+
+            const groupedTools = Object.values(grouped).sort((a, b) => b.count - a.count);
+
+            return (
+              <div className="insights-table">
+                <div className="insights-table-header">
+                  <div className="insights-table-cell insights-table-cell-tool">Tool</div>
+                  <div className="insights-table-cell insights-table-cell-invocations">Invocations</div>
+                  <div className="insights-table-cell insights-table-cell-success">Success Rate</div>
+                  <div className="insights-table-cell insights-table-cell-duration">Avg Duration</div>
+                  <div className="insights-table-cell insights-table-cell-errors">Errors</div>
+                </div>
+                {groupedTools.map((tool) => (
+                  <div key={tool.tool} className="insights-table-row">
+                    <div className="insights-table-cell insights-table-cell-tool">{tool.tool}</div>
+                    <div className="insights-table-cell insights-table-cell-invocations">{formatNumber(tool.count)}</div>
+                    <div className="insights-table-cell insights-table-cell-success">
+                      <div className="insights-success-bar-wrapper">
+                        <div className="insights-success-bar" style={{ width: `${tool.success_rate * 100}%` }} />
+                        <span className="insights-success-pct">{(tool.success_rate * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                    <div className="insights-table-cell insights-table-cell-duration">
+                      {tool.avg_duration_ms ? formatDuration(tool.avg_duration_ms) : '—'}
+                    </div>
+                    <div className="insights-table-cell insights-table-cell-errors">
+                      {tool.error_count ? (
+                        <span className="insights-error-count">{tool.error_count}</span>
+                      ) : '—'}
                     </div>
                   </div>
-                  <div className="insights-table-cell insights-table-cell-duration">
-                    {tool.avg_duration_ms ? formatDuration(tool.avg_duration_ms) : '—'}
-                  </div>
-                  <div className="insights-table-cell insights-table-cell-errors">
-                    {tool.error_count ? (
-                      <span className="insights-error-count">{tool.error_count}</span>
-                    ) : '—'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
+                ))}
+              </div>
+            );
+          })() : (
             <div className="insights-empty">No tool data</div>
           )}
         </div>
@@ -548,7 +727,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
 
         {/* 7. PROJECTS */}
         <div className="insights-section">
-          <div className="insights-section-label">PROJECTS</div>
+          <SectionLabel label="PROJECTS" tooltip="Query count and estimated cost broken down by project directory." />
           {insights.by_project.length > 0 ? (
             <div className="insights-projects-list">
               {insights.by_project.map((proj) => (
@@ -570,7 +749,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
           <>
             <div className="insights-divider" />
             <div className="insights-section">
-              <div className="insights-section-label">HOURLY ACTIVITY</div>
+              <SectionLabel label="HOURLY ACTIVITY" tooltip="Distribution of queries across hours of the day. Brighter cells indicate more activity." />
               <div className="insights-heatmap">
                 {Array.from({ length: 24 }).map((_, hour) => {
                   const data = insights.hourly_activity!.find(h => h.hour === hour);
@@ -597,7 +776,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
           <>
             <div className="insights-divider" />
             <div className="insights-section">
-              <div className="insights-section-label">AGENT TYPES</div>
+              <SectionLabel label="AGENT TYPES" tooltip="Breakdown of subagent invocations by type (code_agent, planner, reviewer, etc.) with success rate and duration." />
               <div className="insights-agent-list">
                 {insights.by_agent_type.map((agent) => (
                   <div key={agent.agent_type} className="insights-agent-row">
@@ -620,7 +799,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
           <>
             <div className="insights-divider" />
             <div className="insights-section">
-              <div className="insights-section-label">ERROR ANALYSIS</div>
+              <SectionLabel label="ERROR ANALYSIS" tooltip="Most common error categories from failed tool calls." />
               <div className="insights-error-list">
                 {insights.by_error_category
                   .sort((a, b) => b.count - a.count)
@@ -642,7 +821,57 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
           </>
         )}
 
-        {/* 11. FOOTER */}
+        {/* 11. MODEL USAGE */}
+        {insights.by_model && insights.by_model.length > 0 && (
+          <>
+            <div className="insights-divider" />
+            <div className="insights-section">
+              <SectionLabel label="MODEL USAGE" tooltip="Which AI models were used, how many queries each handled, and their estimated cost and token consumption." />
+              <div className="insights-model-list">
+                {insights.by_model
+                  .sort((a, b) => b.queries - a.queries)
+                  .map((model) => {
+                    const maxQueries = Math.max(...insights.by_model!.map(m => m.queries));
+                    const barWidth = (model.queries / maxQueries) * 100;
+                    const modelShortName = model.model.replace(/-\d{8}$/, '');
+
+                    return (
+                      <div key={model.model} className="insights-model-row">
+                        <div className="insights-model-header">
+                          <span className="insights-model-name" title={model.model}>{modelShortName}</span>
+                          <span className="insights-model-leader" />
+                          <span className="insights-model-queries">{formatNumber(model.queries)}</span>
+                          <span className="insights-model-cost">{formatCost(model.total_cost)}</span>
+                        </div>
+                        <div className="insights-model-bar-wrapper">
+                          <div className="insights-model-bar" style={{ width: `${barWidth}%` }} />
+                        </div>
+                        <div className="insights-model-tokens">
+                          <span className="insights-model-token-label">
+                            {formatNumber(model.total_input)} in
+                          </span>
+                          <span className="insights-model-token-sep">•</span>
+                          <span className="insights-model-token-label">
+                            {formatNumber(model.total_output)} out
+                          </span>
+                          {(model.total_cache_read > 0 || model.total_cache_creation > 0) && (
+                            <>
+                              <span className="insights-model-token-sep">•</span>
+                              <span className="insights-model-token-label insights-model-cache">
+                                {formatNumber(model.total_cache_read)} cache read
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* 12. FOOTER */}
         <div className="insights-footer">
           {formatDate(insights.period.start)} – {formatDate(insights.period.end)}
         </div>

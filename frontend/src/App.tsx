@@ -675,7 +675,7 @@ function AppContent() {
         )}
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
-            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
+            <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
                   onSelectPrompt={handleWelcomePrompt}

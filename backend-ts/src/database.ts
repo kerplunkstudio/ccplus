@@ -200,6 +200,28 @@ CREATE INDEX IF NOT EXISTS idx_query_usage_timestamp ON query_usage(timestamp);
 CREATE INDEX IF NOT EXISTS idx_query_usage_session ON query_usage(session_id);
 `,
   },
+  {
+    version: 8,
+    sql: `
+-- Migration v8: Session import support
+ALTER TABLE conversations ADD COLUMN source TEXT NOT NULL DEFAULT 'native';
+ALTER TABLE query_usage ADD COLUMN source TEXT NOT NULL DEFAULT 'native';
+ALTER TABLE tool_usage ADD COLUMN source TEXT NOT NULL DEFAULT 'native';
+
+CREATE TABLE IF NOT EXISTS imported_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  jsonl_session_id TEXT NOT NULL UNIQUE,
+  project_path TEXT,
+  imported_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  message_count INTEGER NOT NULL DEFAULT 0,
+  query_count INTEGER NOT NULL DEFAULT 0,
+  tool_count INTEGER NOT NULL DEFAULT 0,
+  first_timestamp TEXT,
+  last_timestamp TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_imported_sessions_id ON imported_sessions(jsonl_session_id);
+`,
+  },
 ];
 
 function getCurrentSchemaVersion(database: Database.Database): number {
@@ -881,7 +903,7 @@ export function semanticSearchConversations(query: string, limit: number = 20): 
 
 // --- Insights (analytics) ---
 
-export function getInsights(days: number = 30, projectPath?: string): Record<string, unknown> {
+export function getInsights(days: number = 30, projectPath?: string, source?: string): Record<string, unknown> {
   const d = getDb();
 
   const endDate = (d.prepare("SELECT date('now', 'localtime') as d").get() as { d: string }).d;
@@ -889,16 +911,37 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
   const prevStart = (d.prepare("SELECT date('now', 'localtime', ?) as d").get(`-${days * 2} days`) as { d: string }).d;
   const prevEnd = (d.prepare("SELECT date('now', 'localtime', ?) as d").get(`-${days + 1} days`) as { d: string }).d;
 
-  // Build project filters
+  // Build project and source filters
+  const convSourceFilter = (source && source !== 'all') ? "AND source = ?" : "";
+  const convSourceParams = (source && source !== 'all') ? [source] : [];
   const convProjectFilter = projectPath ? "AND project_path = ?" : "";
   const convProjectParams = projectPath ? [projectPath] : [];
+  const convFilters = `${convProjectFilter} ${convSourceFilter}`;
+  const convParams = [...convProjectParams, ...convSourceParams];
+
   const toolProjectFilter = projectPath
     ? `AND session_id IN (
         SELECT DISTINCT session_id FROM conversations
-        WHERE project_path = ? AND (archived = 0 OR archived IS NULL)
+        WHERE project_path = ? AND (archived = 0 OR archived IS NULL) ${convSourceFilter}
       )`
     : "";
-  const toolProjectParams = projectPath ? [projectPath] : [];
+  const toolProjectParams = projectPath ? [projectPath, ...convSourceParams] : [];
+  const toolSourceFilter = (source && source !== 'all' && !projectPath)
+    ? `AND session_id IN (
+        SELECT DISTINCT session_id FROM conversations
+        WHERE source = ? AND (archived = 0 OR archived IS NULL)
+      )`
+    : "";
+  const toolSourceParams = (source && source !== 'all' && !projectPath) ? [source] : [];
+  const toolFilters = `${toolProjectFilter}${toolSourceFilter}`;
+  const toolParams = [...toolProjectParams, ...toolSourceParams];
+
+  const querySourceFilter = (source && source !== 'all') ? "AND source = ?" : "";
+  const querySourceParams = (source && source !== 'all') ? [source] : [];
+  const queryProjectFilter = projectPath ? "AND project_path = ?" : "";
+  const queryProjectParams = projectPath ? [projectPath] : [];
+  const queryFilters = `${queryProjectFilter} ${querySourceFilter}`;
+  const queryParams = [...queryProjectParams, ...querySourceParams];
 
   // Conversation summary
   const convSummary = d.prepare(`
@@ -908,8 +951,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM conversations
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND (archived = 0 OR archived IS NULL)
-    ${convProjectFilter}
-  `).get(startDate, endDate, ...convProjectParams) as { total_sessions: number; total_queries: number };
+    ${convFilters}
+  `).get(startDate, endDate, ...convParams) as { total_sessions: number; total_queries: number };
 
   // Tool summary
   const toolSummary = d.prepare(`
@@ -917,8 +960,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       COUNT(*) as total_tool_calls
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    ${toolProjectFilter}
-  `).get(startDate, endDate, ...toolProjectParams) as { total_tool_calls: number };
+    ${toolFilters}
+  `).get(startDate, endDate, ...toolParams) as { total_tool_calls: number };
 
   // Token summary from query_usage
   const tokenSummary = d.prepare(`
@@ -930,8 +973,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       COALESCE(SUM(cost_usd), 0) as total_cost
     FROM query_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    ${projectPath ? "AND project_path = ?" : ""}
-  `).get(startDate, endDate, ...(projectPath ? [projectPath] : [])) as {
+    ${queryFilters}
+  `).get(startDate, endDate, ...queryParams) as {
     total_input_tokens: number;
     total_output_tokens: number;
     total_cache_read: number;
@@ -945,8 +988,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM conversations
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND (archived = 0 OR archived IS NULL)
-    ${convProjectFilter}
-  `).get(prevStart, prevEnd, ...convProjectParams) as { prev_queries: number };
+    ${convFilters}
+  `).get(prevStart, prevEnd, ...convParams) as { prev_queries: number };
 
   const inputTokens = tokenSummary.total_input_tokens || 0;
   const outputTokens = tokenSummary.total_output_tokens || 0;
@@ -967,10 +1010,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM conversations
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND (archived = 0 OR archived IS NULL)
-    ${convProjectFilter}
+    ${convFilters}
     GROUP BY date(timestamp)
     ORDER BY date(timestamp) ASC
-  `).all(startDate, endDate, ...convProjectParams) as { date: string; queries: number; sessions: number }[];
+  `).all(startDate, endDate, ...convParams) as { date: string; queries: number; sessions: number }[];
 
   // Daily breakdown - tools
   const dailyToolRows = d.prepare(`
@@ -979,10 +1022,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       COUNT(*) as tool_calls
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    ${toolProjectFilter}
+    ${toolFilters}
     GROUP BY date(timestamp)
     ORDER BY date(timestamp) ASC
-  `).all(startDate, endDate, ...toolProjectParams) as { date: string; tool_calls: number }[];
+  `).all(startDate, endDate, ...toolParams) as { date: string; tool_calls: number }[];
 
   // Daily breakdown - token usage from query_usage
   const dailyTokenRows = d.prepare(`
@@ -993,10 +1036,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       COALESCE(SUM(cost_usd), 0) as cost_usd
     FROM query_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-    ${projectPath ? "AND project_path = ?" : ""}
+    ${queryFilters}
     GROUP BY date(timestamp)
     ORDER BY date(timestamp) ASC
-  `).all(startDate, endDate, ...(projectPath ? [projectPath] : [])) as { date: string; input_tokens: number; output_tokens: number; cost_usd: number }[];
+  `).all(startDate, endDate, ...queryParams) as { date: string; input_tokens: number; output_tokens: number; cost_usd: number }[];
 
   // Merge daily data
   const convByDate = new Map(dailyConvRows.map((r) => [r.date, r]));
@@ -1032,10 +1075,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND (archived = 0 OR archived IS NULL)
     AND project_path IS NOT NULL
-    ${convProjectFilter}
+    ${convFilters}
     GROUP BY project_path
     ORDER BY queries DESC
-  `).all(startDate, endDate, ...convProjectParams) as { project_path: string; queries: number; sessions: number }[];
+  `).all(startDate, endDate, ...convParams) as { project_path: string; queries: number; sessions: number }[];
 
   const byProject = byProjectRows.map((row) => {
     const projectName = row.project_path ? path.basename(row.project_path) : "Unknown";
@@ -1047,7 +1090,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       FROM query_usage
       WHERE date(timestamp) >= ? AND date(timestamp) <= ?
       AND project_path = ?
-    `).get(startDate, endDate, row.project_path) as { input_tokens: number; output_tokens: number; cost_usd: number };
+      ${querySourceFilter}
+    `).get(startDate, endDate, row.project_path, ...querySourceParams) as { input_tokens: number; output_tokens: number; cost_usd: number };
 
     const projCost = projTokens.cost_usd || 0;
 
@@ -1072,10 +1116,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND tool_name NOT LIKE 'toolu_%'
-    ${toolProjectFilter}
+    ${toolFilters}
     GROUP BY tool_name
     ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as {
+  `).all(startDate, endDate, ...toolParams) as {
     tool_name: string;
     count: number;
     success_count: number;
@@ -1108,10 +1152,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND error_category IS NOT NULL
-    ${toolProjectFilter}
+    ${toolFilters}
     GROUP BY error_category
     ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as { error_category: string; count: number }[];
+  `).all(startDate, endDate, ...toolParams) as { error_category: string; count: number }[];
 
   const byErrorCategory = byErrorCategoryRows.map((row) => ({
     category: row.error_category,
@@ -1128,10 +1172,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND agent_type IS NOT NULL
-    ${toolProjectFilter}
+    ${toolFilters}
     GROUP BY agent_type
     ORDER BY count DESC
-  `).all(startDate, endDate, ...toolProjectParams) as {
+  `).all(startDate, endDate, ...toolParams) as {
     agent_type: string;
     count: number;
     success_count: number;
@@ -1141,7 +1185,7 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
   const byAgentType = byAgentTypeRows.map((row) => ({
     agent_type: row.agent_type,
     count: row.count,
-    success_count: row.success_count,
+    success_rate: row.count > 0 ? row.success_count / row.count : 0,
     avg_duration_ms: Math.round((row.avg_duration_ms || 0) * 100) / 100,
   }));
 
@@ -1153,10 +1197,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM conversations
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND (archived = 0 OR archived IS NULL)
-    ${convProjectFilter}
+    ${convFilters}
     GROUP BY hour
     ORDER BY hour ASC
-  `).all(startDate, endDate, ...convProjectParams) as { hour: number; queries: number }[];
+  `).all(startDate, endDate, ...convParams) as { hour: number; queries: number }[];
 
   const hourlyActivityMap = new Map(hourlyActivityRows.map((r) => [r.hour, r.queries]));
   const hourlyActivity = Array.from({ length: 24 }, (_, i) => ({
@@ -1170,8 +1214,8 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     AND success = 0
-    ${toolProjectFilter}
-  `).get(startDate, endDate, ...toolProjectParams) as { count: number };
+    ${toolFilters}
+  `).get(startDate, endDate, ...toolParams) as { count: number };
 
   const avgCostPerQuery = currentQueries > 0 ? Math.round((totalCost / currentQueries) * 100) / 100 : 0;
   const avgTokensPerQuery = currentQueries > 0
@@ -1197,10 +1241,13 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
   `).get(startDate, endDate) as { total: number };
 
   // Cache efficiency (use tokenSummary values already fetched)
+  // cache_read = tokens served from cache, cache_creation = tokens written to cache (miss),
+  // input_tokens = new non-cached input. Hit rate = reads / total context tokens.
   const totalCacheRead = tokenSummary.total_cache_read || 0;
   const totalCacheCreation = tokenSummary.total_cache_creation || 0;
-  const cacheHitRate = (totalCacheRead + inputTokens) > 0
-    ? Math.round((totalCacheRead / (totalCacheRead + inputTokens)) * 10000) / 100
+  const totalContextTokens = totalCacheRead + totalCacheCreation + inputTokens;
+  const cacheHitRate = totalContextTokens > 0
+    ? Math.round((totalCacheRead / totalContextTokens) * 10000) / 100
     : 0;
 
   // Per-session token breakdown
@@ -1215,11 +1262,11 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
        ORDER BY c2.timestamp ASC LIMIT 1) as label
     FROM query_usage q
     WHERE date(q.timestamp) >= ? AND date(q.timestamp) <= ?
-    ${projectPath ? "AND q.project_path = ?" : ""}
+    ${queryFilters}
     GROUP BY q.session_id
     ORDER BY (SUM(q.input_tokens) + SUM(q.output_tokens)) DESC
     LIMIT 20
-  `).all(startDate, endDate, ...(projectPath ? [projectPath] : [])) as Array<{
+  `).all(startDate, endDate, ...queryParams) as Array<{
     session_id: string;
     input_tokens: number;
     output_tokens: number;
@@ -1248,6 +1295,42 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     };
   });
 
+  // By model
+  const byModelRows = d.prepare(`
+    SELECT
+      model,
+      COUNT(*) as queries,
+      SUM(cost_usd) as total_cost,
+      SUM(input_tokens) as total_input,
+      SUM(output_tokens) as total_output,
+      SUM(cache_read_input_tokens) as total_cache_read,
+      SUM(cache_creation_input_tokens) as total_cache_creation
+    FROM query_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    AND model IS NOT NULL AND model != '' AND model != 'unknown' AND model NOT LIKE '<%>'
+    ${queryFilters}
+    GROUP BY model
+    ORDER BY total_cost DESC
+  `).all(startDate, endDate, ...queryParams) as Array<{
+    model: string;
+    queries: number;
+    total_cost: number;
+    total_input: number;
+    total_output: number;
+    total_cache_read: number;
+    total_cache_creation: number;
+  }>;
+
+  const byModel = byModelRows.map((row) => ({
+    model: row.model,
+    queries: row.queries || 0,
+    total_cost: Math.round((row.total_cost || 0) * 100) / 100,
+    total_input: row.total_input || 0,
+    total_output: row.total_output || 0,
+    total_cache_read: row.total_cache_read || 0,
+    total_cache_creation: row.total_cache_creation || 0,
+  }));
+
   return {
     period: { start: startDate, end: endDate, days },
     summary: {
@@ -1275,5 +1358,89 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     hourly_activity: hourlyActivity,
     rate_limit_events: rateLimitRows,
     by_session: bySession,
+    by_model: byModel,
+  };
+}
+
+// --- Session Import Helpers ---
+
+export function isSessionImported(jsonlSessionId: string): boolean {
+  const database = getDb();
+  const row = database.prepare('SELECT 1 FROM imported_sessions WHERE jsonl_session_id = ?').get(jsonlSessionId);
+  return !!row;
+}
+
+export function recordImportedSession(params: {
+  jsonlSessionId: string;
+  projectPath: string;
+  messageCount: number;
+  queryCount: number;
+  toolCount: number;
+  firstTimestamp: string;
+  lastTimestamp: string;
+}): void {
+  const database = getDb();
+  database.prepare(`
+    INSERT INTO imported_sessions (jsonl_session_id, project_path, message_count, query_count, tool_count, first_timestamp, last_timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(params.jsonlSessionId, params.projectPath, params.messageCount, params.queryCount, params.toolCount, params.firstTimestamp, params.lastTimestamp);
+}
+
+export function insertImportedConversation(params: {
+  sessionId: string;
+  role: string;
+  content: string;
+  timestamp: string;
+  projectPath: string;
+}): void {
+  const database = getDb();
+  database.prepare(`
+    INSERT INTO conversations (session_id, user_id, role, content, timestamp, project_path, source)
+    VALUES (?, 'imported', ?, ?, ?, ?, 'imported')
+  `).run(params.sessionId, params.role, params.content, params.timestamp, params.projectPath);
+}
+
+export function insertImportedQueryUsage(params: {
+  sessionId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  costUsd: number;
+  durationMs: number;
+  model: string;
+  projectPath: string;
+  timestamp: string;
+}): void {
+  const database = getDb();
+  database.prepare(`
+    INSERT INTO query_usage (session_id, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, cost_usd, duration_ms, model, project_path, timestamp, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'imported')
+  `).run(params.sessionId, params.inputTokens, params.outputTokens, params.cacheReadInputTokens, params.cacheCreationInputTokens, params.costUsd, params.durationMs, params.model, params.projectPath, params.timestamp);
+}
+
+export function insertImportedToolUsage(params: {
+  sessionId: string;
+  toolName: string;
+  timestamp: string;
+  success: boolean;
+  parameters?: string;
+}): void {
+  const database = getDb();
+  database.prepare(`
+    INSERT INTO tool_usage (session_id, tool_name, timestamp, success, parameters, source)
+    VALUES (?, ?, ?, ?, ?, 'imported')
+  `).run(params.sessionId, params.toolName, params.timestamp, params.success ? 1 : 0, params.parameters || null);
+}
+
+export function getImportStatus(): { totalImported: number; totalNative: number; lastImportedAt: string | null } {
+  const database = getDb();
+  const imported = database.prepare('SELECT COUNT(*) as count FROM imported_sessions').get() as { count: number };
+  const native = database.prepare("SELECT COUNT(DISTINCT session_id) as count FROM conversations WHERE source = 'native'").get() as { count: number };
+  const lastImport = database.prepare('SELECT MAX(imported_at) as last_at FROM imported_sessions').get() as { last_at: string | null };
+  return {
+    totalImported: imported.count,
+    totalNative: native.count,
+    lastImportedAt: lastImport.last_at,
   };
 }

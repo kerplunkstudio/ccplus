@@ -1354,7 +1354,7 @@ async function streamQuery(
           duration_ms: result.duration_ms,
           is_error: result.is_error ?? (result.subtype !== "success"),
           num_turns: result.num_turns,
-          input_tokens: currentInputTokens,
+          input_tokens: usageObj.input_tokens || 0,
           output_tokens: result.usage?.output_tokens,
           cache_read_input_tokens: result.usage?.cache_read_input_tokens,
           cache_creation_input_tokens: result.usage?.cache_creation_input_tokens,
