@@ -330,6 +330,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
               streaming: true,
               activeStreamId: lastMessage.id,
               streamingContent: action.streamingContent || '',
+              lastSeq: 0,
             };
           } else {
             // Last message is NOT an assistant message (e.g., it's a user message)
@@ -347,6 +348,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
               streaming: true,
               activeStreamId: newMessage.id,
               streamingContent: action.streamingContent || '',
+              lastSeq: 0,
             };
           }
         } else {
@@ -362,6 +364,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
               streaming: true,
               activeStreamId: lastMessage.id,
               streamingContent: '',
+              lastSeq: 0,
             };
           } else {
             // No assistant message at the end, just set streaming state
@@ -370,6 +373,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
               messages: action.messages,
               streaming: true,
               streamingContent: '',
+              lastSeq: 0,
             };
           }
         }
@@ -378,14 +382,12 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: action.messages,
+        lastSeq: 0,
       };
     }
 
     case 'CLEAR': {
-      return {
-        ...initialStreamState,
-        lastSeq: state.lastSeq, // Preserve lastSeq for reconnection
-      };
+      return initialStreamState;
     }
 
     case 'SET_STREAMING': {
