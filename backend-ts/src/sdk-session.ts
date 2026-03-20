@@ -328,6 +328,7 @@ interface ActiveSession {
   questionTimeout: NodeJS.Timeout | null;
   streamingContent: string;
   latestTodos: Array<{ content: string; status: string; priority?: string }> | null;
+  hadToolSinceLastText: boolean;
 }
 
 // ---- Session Manager ----
@@ -370,6 +371,7 @@ function getOrCreateSession(sessionId: string, workspace: string, model?: string
     questionTimeout: null,
     streamingContent: '',
     latestTodos: null,
+    hadToolSinceLastText: false,
   };
   sessions.set(sessionId, session);
   return session;
@@ -416,6 +418,16 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
   const pendingAgentToolUseIds: string[] = [];
   const detectedDevServerUrls = new Set<string>();
 
+  // Helper to emit tool events and set flag for message splitting
+  const emitToolEvent = (event: any) => {
+    const session = sessions.get(sessionId);
+    if (session?.callbacks) {
+      session.callbacks.onToolEvent(event);
+      // Mark that a tool event occurred so subsequent text gets a new message bubble
+      session.hadToolSinceLastText = true;
+    }
+  };
+
   const preToolUse: HookCallback = async (hookInput, toolUseId) => {
     const input = hookInput as Record<string, unknown>;
     const toolName = (input.tool_name as string) ?? "unknown";
@@ -436,7 +448,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     if (isAgent) {
       pendingAgentToolUseIds.push(actualToolUseId);
-      const event = {
+      emitToolEvent({
         type: "agent_start",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
@@ -445,10 +457,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         description: agentDescription,
         timestamp: new Date().toISOString(),
         session_id: sessionId,
-      };
-      session.callbacks.onToolEvent(event);
+      });
     } else {
-      const event = {
+      emitToolEvent({
         type: "tool_start",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
@@ -456,8 +467,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         parameters: safeParams(toolParams),
         timestamp: new Date().toISOString(),
         session_id: sessionId,
-      };
-      session.callbacks.onToolEvent(event);
+      });
 
       // Emit dedicated todo_update for TodoWrite tools
       if (toolName === 'TodoWrite') {
@@ -466,7 +476,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
           // Store latest todos in session state
           session.latestTodos = todos;
 
-          session.callbacks.onToolEvent({
+          emitToolEvent({
             type: 'todo_update',
             tool_name: 'TodoWrite',
             tool_use_id: actualToolUseId,
@@ -544,7 +554,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     if (isAgent) {
       const stopData = agentStopData.get(actualToolUseId);
-      const event: Record<string, unknown> = {
+      emitToolEvent({
         type: "agent_stop",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
@@ -554,8 +564,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         session_id: sessionId,
         transcript_path: stopData?.transcriptPath ?? null,
         summary: stopData?.lastMessage ?? null,
-      };
-      session.callbacks.onToolEvent(event);
+      });
 
       // Clean up agent_id mapping and stop data
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
@@ -592,7 +601,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         if (Object.keys(locParams).length > 0) event.parameters = locParams;
       }
 
-      session.callbacks.onToolEvent(event);
+      emitToolEvent(event);
 
       // Update database (tools only, agents updated above)
       try {
@@ -677,7 +686,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
 
     if (isAgent) {
       const stopData = agentStopData.get(actualToolUseId);
-      session.callbacks.onToolEvent({
+      emitToolEvent({
         type: "agent_stop",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
@@ -706,7 +715,7 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         log.error("Database write failed (postToolUseFailure agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
-      session.callbacks.onToolEvent({
+      emitToolEvent({
         type: "tool_complete",
         tool_name: toolName,
         tool_use_id: actualToolUseId,
@@ -1253,6 +1262,12 @@ async function streamQuery(
         for (const block of (msg.message?.content ?? [])) {
           if (block.type === "text") {
             if (!streamEventsActive) {
+              // If a tool event occurred since the last text, increment messageIndex
+              // to create a new message bubble instead of concatenating
+              if (session.hadToolSinceLastText) {
+                messageIndex++;
+                session.hadToolSinceLastText = false;
+              }
               resultText.push(block.text);
               session.streamingContent += block.text;
               if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
@@ -1381,6 +1396,12 @@ async function streamQuery(
           const delta = eventData.delta ?? {};
           if (delta.type === "text_delta" && delta.text) {
             streamEventsActive = true;
+            // If a tool event occurred since the last text, increment messageIndex
+            // to create a new message bubble instead of concatenating
+            if (session.hadToolSinceLastText) {
+              messageIndex++;
+              session.hadToolSinceLastText = false;
+            }
             resultText.push(delta.text);
             session.streamingContent += delta.text;
             if (session.streamingContent.length > MAX_STREAMING_BUFFER) {
