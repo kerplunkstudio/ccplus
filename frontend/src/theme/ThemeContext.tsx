@@ -1,8 +1,18 @@
-import React, { useEffect, useState } from 'react'
-import { applyTheme } from './applyTheme'
+import React, { useEffect, useState, createContext, useContext, useMemo } from 'react'
+import { applyTheme, isLightTheme } from './applyTheme'
 import { THEME, getThemeById } from './themePresets'
 
 const PROFILE_STORAGE_KEY = 'ccplus_profile_settings'
+
+interface ThemeContextValue {
+  isLight: boolean
+}
+
+const ThemeContext = createContext<ThemeContextValue>({ isLight: false })
+
+export function useTheme() {
+  return useContext(ThemeContext)
+}
 
 function loadSavedTheme(): string {
   try {
@@ -17,6 +27,13 @@ function loadSavedTheme(): string {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [currentThemeId, setCurrentThemeId] = useState<string>(loadSavedTheme)
+
+  const contextValue = useMemo(() => {
+    const theme = getThemeById(currentThemeId)
+    return {
+      isLight: isLightTheme(theme.colors.background)
+    }
+  }, [currentThemeId])
 
   useEffect(() => {
     const theme = getThemeById(currentThemeId)
@@ -36,5 +53,5 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  return <>{children}</>
+  return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>
 }
