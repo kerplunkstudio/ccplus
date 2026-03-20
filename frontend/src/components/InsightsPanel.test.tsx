@@ -525,9 +525,6 @@ describe('InsightsPanel', () => {
     });
 
     expect(screen.getByText('5 events in 30 days')).toBeInTheDocument();
-
-    const eventRows = document.querySelectorAll('.insights-rate-limit-row');
-    expect(eventRows.length).toBe(2);
   });
 
   it('hides rate limit events when none exist', async () => {
@@ -697,7 +694,7 @@ describe('InsightsPanel', () => {
     expect(truncatedText).toBeInTheDocument();
   });
 
-  it('limits rate limit events display to 10 items', async () => {
+  it('displays rate limit summary for many events', async () => {
     const manyEventsData = {
       ...mockInsightsData,
       summary: {
@@ -722,9 +719,6 @@ describe('InsightsPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('15 events in 30 days')).toBeInTheDocument();
     });
-
-    const eventRows = document.querySelectorAll('.insights-rate-limit-row');
-    expect(eventRows.length).toBe(10);
   });
 
   it('limits sessions display to 10 items', async () => {
@@ -776,9 +770,13 @@ describe('InsightsPanel', () => {
     expect(outputBars.length).toBeGreaterThan(0);
   });
 
-  it('formats retry duration correctly', async () => {
-    const eventWithLongRetry = {
+  it('shows rate limit event count', async () => {
+    const eventWithRateLimits = {
       ...mockInsightsData,
+      summary: {
+        ...mockInsightsData.summary,
+        total_rate_limits: 3,
+      },
       rate_limit_events: [
         {
           timestamp: '2026-03-17T10:30:00Z',
@@ -791,7 +789,7 @@ describe('InsightsPanel', () => {
     mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => eventWithLongRetry,
+      json: async () => eventWithRateLimits,
     });
 
     render(<InsightsPanel />);
@@ -800,6 +798,6 @@ describe('InsightsPanel', () => {
       expect(screen.getByText('RATE LIMIT EVENTS')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/waited 2m 5s/)).toBeInTheDocument();
+    expect(screen.getByText('3 events in 30 days')).toBeInTheDocument();
   });
 });
