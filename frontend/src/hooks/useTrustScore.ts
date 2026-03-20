@@ -19,7 +19,9 @@ export function useTrustScore(sessionId: string | undefined) {
     try {
       const response = await fetch(`${SOCKET_URL}/api/sessions/${id}/trust-score`);
       const json = await response.json();
-      if (!response.ok || !json.success) {
+      if (response.status === 404) {
+        setTrustScore(null);
+      } else if (!response.ok || !json.success) {
         setError(json.error || 'Failed to load trust score');
         setTrustScore(null);
       } else {

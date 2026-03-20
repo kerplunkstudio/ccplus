@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
-import { useTrustScore } from '../hooks/useTrustScore';
+import React, { useState, useMemo } from 'react';
+import { TrustMetrics, TrustFlag } from '../types';
 import './TrustScore.css';
 
 interface TrustScoreProps {
   sessionId: string;
-  onClose: () => void;
+  trustMetrics: TrustMetrics | null;
+  loading: boolean;
+  error: string | null;
 }
 
-export const TrustScore: React.FC<TrustScoreProps> = ({ sessionId, onClose }) => {
-  const { trustScore, loading, error } = useTrustScore(sessionId);
+export const TrustScore: React.FC<TrustScoreProps> = ({
+  sessionId,
+  trustMetrics,
+  loading,
+  error
+}) => {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const toggleSection = (section: string) => {
@@ -38,37 +44,36 @@ export const TrustScore: React.FC<TrustScoreProps> = ({ sessionId, onClose }) =>
   };
 
   const getScoreColor = (score: number): string => {
-    if (score > 80) return '#22C55E';
-    if (score >= 50) return '#EAB308';
-    return '#EF4444';
+    if (score > 80) return 'var(--success)';
+    if (score >= 50) return 'var(--warning)';
+    return 'var(--error)';
   };
 
-  const getSeverityIcon = (severity: 'info' | 'warning' | 'critical'): string => {
-    switch (severity) {
-      case 'critical': return '⚠';
-      case 'warning': return '!';
-      case 'info': return 'i';
-    }
+  const isFile = (filePath: string): boolean => {
+    const name = filePath.substring(filePath.lastIndexOf('/') + 1);
+    return name.includes('.');
   };
 
-  const getSeverityColor = (severity: 'info' | 'warning' | 'critical'): string => {
-    switch (severity) {
-      case 'critical': return '#EF4444';
-      case 'warning': return '#EAB308';
-      case 'info': return '#0066cc';
-    }
+  const shortenPath = (filePath: string): string => {
+    const lastSlash = filePath.lastIndexOf('/');
+    if (lastSlash === -1) return filePath;
+    return filePath.substring(lastSlash + 1);
   };
+
+  const dimensionLabels: Record<string, string> = useMemo(() => ({
+    test_coverage: 'Tests',
+    scope_discipline: 'Scope',
+    error_rate: 'Errors',
+    cost_efficiency: 'Cost',
+    security: 'Security'
+  }), []);
 
   if (loading) {
     return (
       <div className="trust-score-panel">
-        <div className="trust-score-header">
-          <h2 className="trust-score-title">Trust Score</h2>
-          <button className="trust-score-close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-        <div className="trust-score-loading">
-          <div className="spinner" />
-          <p>Loading trust metrics...</p>
+        <div className="trust-loading">
+          <div className="trust-loading-spinner" />
+          <p>Analyzing session...</p>
         </div>
       </div>
     );
@@ -77,67 +82,46 @@ export const TrustScore: React.FC<TrustScoreProps> = ({ sessionId, onClose }) =>
   if (error) {
     return (
       <div className="trust-score-panel">
-        <div className="trust-score-header">
-          <h2 className="trust-score-title">Trust Score</h2>
-          <button className="trust-score-close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-        <div className="trust-score-error">
+        <div className="trust-error">
           <p>{error}</p>
         </div>
       </div>
     );
   }
 
-  if (!trustScore) {
-    return null;
+  if (!trustMetrics) {
+    return (
+      <div className="trust-score-panel">
+        <div className="trust-empty">
+          <p className="trust-empty-title">No trust metrics available</p>
+          <p>Trust score will appear after the session completes</p>
+        </div>
+      </div>
+    );
   }
 
-  const scoreColor = getScoreColor(trustScore.overall_score);
-  const { dimensions, summary, flags } = trustScore;
+  const { overall_score, dimensions, summary, flags } = trustMetrics;
+  const scoreColor = getScoreColor(overall_score);
+  const filesTouched = summary.files_touched.filter((f: string) => isFile(f));
+  const filesCreated = summary.files_created.filter((f: string) => isFile(f));
+  const filesDeleted = summary.files_deleted.filter((f: string) => isFile(f));
 
   return (
     <div className="trust-score-panel">
-      <div className="trust-score-header">
-        <h2 className="trust-score-title">Trust Score</h2>
-        <button className="trust-score-close" onClick={onClose} aria-label="Close">×</button>
-      </div>
-
       <div className="trust-score-content">
-        {/* Overall Score Gauge */}
-        <div className="trust-score-gauge">
-          <svg className="trust-gauge-ring" viewBox="0 0 120 120">
-            <circle
-              cx="60"
-              cy="60"
-              r="54"
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth="8"
-            />
-            <circle
-              cx="60"
-              cy="60"
-              r="54"
-              fill="none"
-              stroke={scoreColor}
-              strokeWidth="8"
-              strokeDasharray={`${(trustScore.overall_score / 100) * 339.292} 339.292`}
-              strokeLinecap="round"
-              transform="rotate(-90 60 60)"
-            />
-          </svg>
-          <div className="trust-gauge-number" style={{ color: scoreColor }}>
-            {trustScore.overall_score}
+        {/* Score header */}
+        <div className="trust-score-header">
+          <div className="trust-overall-score" style={{ color: scoreColor }}>
+            {overall_score}
           </div>
-          <div className="trust-gauge-label">Overall Trust</div>
+          <div className="trust-overall-label">trust</div>
         </div>
 
-        {/* Dimensions */}
+        {/* Dimension bars */}
         <div className="trust-dimensions">
-          <h3 className="trust-section-title">Dimensions</h3>
           {Object.entries(dimensions).map(([key, value]) => {
             const color = getScoreColor(value);
-            const label = key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const label = dimensionLabels[key] || key;
             return (
               <div key={key} className="trust-dimension-row">
                 <span className="trust-dimension-label">{label}</span>
@@ -153,113 +137,113 @@ export const TrustScore: React.FC<TrustScoreProps> = ({ sessionId, onClose }) =>
           })}
         </div>
 
-        {/* Summary Stats */}
+        {/* Session facts */}
         <div className="trust-summary">
-          <h3 className="trust-section-title">Summary</h3>
-          <div className="trust-summary-grid">
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{formatNumber(summary.total_tool_calls)}</div>
-              <div className="trust-summary-label">Tool Calls</div>
-            </div>
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{formatNumber(summary.total_tokens)}</div>
-              <div className="trust-summary-label">Tokens</div>
-            </div>
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{formatCost(summary.total_cost_usd)}</div>
-              <div className="trust-summary-label">Cost</div>
-            </div>
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{formatDuration(summary.duration_ms)}</div>
-              <div className="trust-summary-label">Duration</div>
-            </div>
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{summary.tests_passed} / {summary.tests_run}</div>
-              <div className="trust-summary-label">Tests Passed</div>
-            </div>
-            <div className="trust-summary-card">
-              <div className="trust-summary-value">{summary.agents_spawned}</div>
-              <div className="trust-summary-label">Agents</div>
-            </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Tool Calls</span>
+            <span className="trust-summary-value">{formatNumber(summary.total_tool_calls)}</span>
+          </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Tokens</span>
+            <span className="trust-summary-value">{formatNumber(summary.total_tokens)}</span>
+          </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Cost</span>
+            <span className="trust-summary-value">{formatCost(summary.total_cost_usd)}</span>
+          </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Duration</span>
+            <span className="trust-summary-value">{formatDuration(summary.duration_ms)}</span>
+          </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Tests</span>
+            <span className="trust-summary-value">
+              {summary.tests_passed} / {summary.tests_run}
+            </span>
+          </div>
+          <div className="trust-summary-row">
+            <span className="trust-summary-label">Agents</span>
+            <span className="trust-summary-value">{summary.agents_spawned}</span>
           </div>
         </div>
 
-        {/* Flags */}
+        {/* Flags section */}
         {flags.length > 0 && (
           <div className="trust-flags">
-            <h3 className="trust-section-title">Flags ({flags.length})</h3>
-            <div className="trust-flag-list">
-              {flags.map((flag, idx) => (
-                <div key={idx} className="trust-flag-item">
-                  <span
-                    className="trust-flag-icon"
-                    style={{ color: getSeverityColor(flag.severity) }}
-                  >
-                    {getSeverityIcon(flag.severity)}
-                  </span>
-                  <div className="trust-flag-content">
-                    <div className="trust-flag-message">{flag.message}</div>
-                    {flag.detail && <div className="trust-flag-detail">{flag.detail}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {flags.map((flag: TrustFlag, idx: number) => (
+              <div
+                key={idx}
+                className="trust-flag-row"
+                data-severity={flag.severity}
+              >
+                <div className="trust-flag-message">{flag.message}</div>
+                {flag.detail && (
+                  <div className="trust-flag-detail">{flag.detail}</div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
-        {/* File Lists */}
-        <div className="trust-file-lists">
-          {summary.files_touched.length > 0 && (
+        {/* File sections */}
+        <div className="trust-files">
+          {filesTouched.length > 0 && (
             <div className="trust-file-section">
               <button
-                className="trust-file-section-header"
+                className="trust-file-toggle"
                 onClick={() => toggleSection('touched')}
               >
-                <span>Files Touched ({summary.files_touched.length})</span>
-                <span className="trust-file-toggle">{expandedSection === 'touched' ? '−' : '+'}</span>
+                <span className="trust-file-toggle-icon">
+                  {expandedSection === 'touched' ? '−' : '+'}
+                </span>
+                <span>Files Touched ({filesTouched.length})</span>
               </button>
               {expandedSection === 'touched' && (
                 <div className="trust-file-list">
-                  {summary.files_touched.map((file, idx) => (
-                    <div key={idx} className="trust-file-item">{file}</div>
+                  {filesTouched.map((file, idx) => (
+                    <div key={idx} className="trust-file-item" title={file}>{shortenPath(file)}</div>
                   ))}
                 </div>
               )}
             </div>
           )}
 
-          {summary.files_created.length > 0 && (
+          {filesCreated.length > 0 && (
             <div className="trust-file-section">
               <button
-                className="trust-file-section-header"
+                className="trust-file-toggle"
                 onClick={() => toggleSection('created')}
               >
-                <span>Files Created ({summary.files_created.length})</span>
-                <span className="trust-file-toggle">{expandedSection === 'created' ? '−' : '+'}</span>
+                <span className="trust-file-toggle-icon">
+                  {expandedSection === 'created' ? '−' : '+'}
+                </span>
+                <span>Files Created ({filesCreated.length})</span>
               </button>
               {expandedSection === 'created' && (
                 <div className="trust-file-list">
-                  {summary.files_created.map((file, idx) => (
-                    <div key={idx} className="trust-file-item">{file}</div>
+                  {filesCreated.map((file, idx) => (
+                    <div key={idx} className="trust-file-item" title={file}>{shortenPath(file)}</div>
                   ))}
                 </div>
               )}
             </div>
           )}
 
-          {summary.files_deleted.length > 0 && (
+          {filesDeleted.length > 0 && (
             <div className="trust-file-section">
               <button
-                className="trust-file-section-header"
+                className="trust-file-toggle"
                 onClick={() => toggleSection('deleted')}
               >
-                <span>Files Deleted ({summary.files_deleted.length})</span>
-                <span className="trust-file-toggle">{expandedSection === 'deleted' ? '−' : '+'}</span>
+                <span className="trust-file-toggle-icon">
+                  {expandedSection === 'deleted' ? '−' : '+'}
+                </span>
+                <span>Files Deleted ({filesDeleted.length})</span>
               </button>
               {expandedSection === 'deleted' && (
                 <div className="trust-file-list">
-                  {summary.files_deleted.map((file, idx) => (
-                    <div key={idx} className="trust-file-item">{file}</div>
+                  {filesDeleted.map((file, idx) => (
+                    <div key={idx} className="trust-file-item" title={file}>{shortenPath(file)}</div>
                   ))}
                 </div>
               )}

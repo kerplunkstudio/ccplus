@@ -4,12 +4,15 @@ import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
 import { NodeDetail } from './NodeDetail';
 import { UsageStatsBar } from './UsageStatsBar';
+import { TrustScore } from './TrustScore';
+import { useTrustScore } from '../hooks/useTrustScore';
 import './ActivityTree.css';
 
 interface ActivityTreeProps {
   tree: ActivityNode[];
   usageStats: UsageStats;
   contextTokens?: number | null;
+  sessionId?: string;
 }
 
 interface TreeNodeProps {
@@ -137,12 +140,13 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const userOverrideRef = useRef(false);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'tools'>('agents');
+  const [activeTab, setActiveTab] = useState<'agents' | 'tools' | 'trust'>('agents');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const { trustScore, loading: trustLoading, error: trustError } = useTrustScore(sessionId);
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
@@ -206,7 +210,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setSelectedNode(null);
   };
 
-  const handleTabClick = (tab: 'agents' | 'tools') => {
+  const handleTabClick = (tab: 'agents' | 'tools' | 'trust') => {
     userOverrideRef.current = true;
     setActiveTab(tab);
   };
@@ -227,7 +231,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                 aria-controls="activity-panel-agents"
                 id="tab-agents"
               >
-                Agents{agentNodes.length > 0 && <span className="activity-tab-count" aria-label={`${agentNodes.length} agents`}>{agentNodes.length}</span>}
+                Agents
               </button>
               <button
                 className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
@@ -237,18 +241,47 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                 aria-controls="activity-panel-tools"
                 id="tab-tools"
               >
-                Tool Logs{toolNodes.length > 0 && <span className="activity-tab-count" aria-label={`${toolNodes.length} tools`}>{toolNodes.length}</span>}
+                Tools
               </button>
+              {sessionId && (
+                <button
+                  className={`activity-tab ${activeTab === 'trust' ? 'activity-tab-active' : ''}`}
+                  onClick={() => handleTabClick('trust')}
+                  role="tab"
+                  aria-selected={activeTab === 'trust'}
+                  aria-controls="activity-panel-trust"
+                  id="tab-trust"
+                >
+                  Trust
+                </button>
+              )}
             </div>
           </div>
 
           <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-            {visibleNodes.length === 0 ? (
+            {activeTab === 'trust' ? (
+              trustLoading || trustError || !trustScore ? (
+                <div className="activity-empty">
+                  <div className="activity-empty-pulse" />
+                  <p className="activity-empty-title">Standby</p>
+                  <p className="activity-empty-sub">
+                    Activity appears here as Claude works
+                  </p>
+                </div>
+              ) : (
+                <TrustScore
+                  sessionId={sessionId || ''}
+                  trustMetrics={trustScore}
+                  loading={false}
+                  error={null}
+                />
+              )
+            ) : visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-pulse" />
                 <p className="activity-empty-title">Standby</p>
                 <p className="activity-empty-sub">
-                  Agents and tools appear here as Claude works
+                  Activity appears here as Claude works
                 </p>
               </div>
             ) : (
