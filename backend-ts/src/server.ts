@@ -1172,14 +1172,6 @@ app.post("/api/sessions/start", (req: Request, res: Response) => {
       undefined
     );
 
-    // Emit socket event for frontend discovery
-    io.emit('session_created', {
-      session_id: sessionId,
-      workspace: resolvedWorkspace,
-      prompt: trimmedPrompt,
-      model: model && typeof model === 'string' ? model : undefined
-    });
-
     res.json({
       success: true,
       session_id: sessionId,
