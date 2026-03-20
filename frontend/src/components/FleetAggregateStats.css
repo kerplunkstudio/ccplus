@@ -1,0 +1,53 @@
+.fleet-aggregate-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.fleet-aggregate-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.fleet-aggregate-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.fleet-aggregate-value {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.fleet-aggregate-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+@media (max-width: 768px) {
+  .fleet-aggregate-stats {
+    gap: var(--space-md);
+  }
+
+  .fleet-aggregate-stat {
+    gap: 2px;
+  }
+
+  .fleet-aggregate-label {
+    font-size: 10px;
+  }
+
+  .fleet-aggregate-value {
+    font-size: var(--text-xs);
+  }
+}

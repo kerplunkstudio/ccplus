@@ -14,6 +14,7 @@ import { distillSession } from './memory-distiller.js';
 import { eventLog } from './event-log.js';
 import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
+import * as fleetMonitor from './fleet-monitor.js';
 
 // ---- Skills discovery (cached) ----
 
@@ -509,6 +510,12 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
       log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
     }
 
+    // Update fleet monitor
+    fleetMonitor.incrementToolCount(sessionId);
+    if (isAgent) {
+      fleetMonitor.incrementAgentCount(sessionId);
+    }
+
     // Workflow phase enforcement
     if (WORKFLOW_ENABLED) {
       const wfState = getWorkflowState(sessionId);
@@ -566,6 +573,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         summary: stopData?.lastMessage ?? null,
       });
 
+      // Decrement fleet monitor agent count
+      fleetMonitor.decrementAgentCount(sessionId);
+
       // Clean up agent_id mapping and stop data
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
         if (tuId === actualToolUseId) {
@@ -599,6 +609,12 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         if ("content" in toolParams) locParams.content = toolParams.content;
         if ("new_string" in toolParams) locParams.new_string = toolParams.new_string;
         if (Object.keys(locParams).length > 0) event.parameters = locParams;
+
+        // Track file modifications in fleet monitor
+        const filePath = toolParams.file_path as string | undefined;
+        if (filePath) {
+          fleetMonitor.addFileTouched(sessionId, filePath);
+        }
       }
 
       emitToolEvent(event);
@@ -698,6 +714,9 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         transcript_path: stopData?.transcriptPath ?? null,
         summary: stopData?.lastMessage ?? null,
       });
+
+      // Decrement fleet monitor agent count
+      fleetMonitor.decrementAgentCount(sessionId);
 
       // Clean up agent_id mapping and stop data
       for (const [agentId, tuId] of agentIdToToolUseId.entries()) {
@@ -859,6 +878,10 @@ export function submitQuery(
   imageIds?: string[],
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
+
+  // Register session and mark as running
+  fleetMonitor.registerSession(sessionId, workspace);
+  fleetMonitor.updateSessionStatus(sessionId, 'running');
 
   // Force-close stale query if one is lingering
   if (session.activeQuery !== null) {
@@ -1409,6 +1432,9 @@ async function streamQuery(
         const currentInputTokens = (usageObj.input_tokens || 0)
           + (usageObj.cache_read_input_tokens || 0)
           + (usageObj.cache_creation_input_tokens || 0);
+
+        // Update fleet monitor with token counts
+        fleetMonitor.updateTokens(sessionId, currentInputTokens, usageObj.output_tokens || 0);
         // SDK contextWindow is the agent's working limit (200k), not the model's actual capacity
         const MODEL_CONTEXT_LIMITS: Record<string, number> = {
           'claude-sonnet-4-6': 1_000_000,
@@ -1529,6 +1555,7 @@ async function streamQuery(
     // Emit final completion
     if (gotResult && Object.keys(lastCompletionData).length > 0) {
       callbacks.onComplete(lastCompletionData);
+      fleetMonitor.updateSessionStatus(sessionId, 'completed');
     }
   } catch (err) {
     const errorStr = String(err);
@@ -1542,6 +1569,7 @@ async function streamQuery(
       log.error("SDK query error", { sessionId, error: errorStr });
     }
 
+    fleetMonitor.updateSessionStatus(sessionId, 'failed');
     callbacks.onError(userMessage);
     sessions.delete(sessionId);
   } finally {

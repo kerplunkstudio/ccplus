@@ -11,6 +11,7 @@ import { MCPPanel } from './components/MCPPanel';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
 import { TerminalTab } from './components/TerminalTab';
+import { CaptainDashboard } from './components/CaptainDashboard';
 import UpdateBanner from './components/UpdateBanner';
 import ProjectSidebar from './components/ProjectSidebar';
 import TabBar from './components/TabBar';
@@ -284,6 +285,27 @@ function AppContent() {
     workspace.addTab(activeProject.path, sessionId);
     setShowDashboard(false);
   }, [activeProject, workspace]);
+
+  const handleFleetSessionClick = useCallback((sessionId: string, workspacePath: string) => {
+    if (!workspacePath) return;
+
+    // Extract project name from path
+    const projectName = workspacePath.split('/').pop() || workspacePath;
+
+    // Ensure project exists
+    const existingProject = workspace.state.projects.find(p => p.path === workspacePath);
+    if (!existingProject) {
+      workspace.addProject(workspacePath, projectName);
+    }
+
+    // Select the project and add tab
+    workspace.selectProject(workspacePath);
+    workspace.addTab(workspacePath, sessionId, sessionId);
+
+    // Navigate away from Captain view
+    setActivePage(null);
+    setShowDashboard(false);
+  }, [workspace]);
 
   const handleCloseTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
@@ -590,11 +612,13 @@ function AppContent() {
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
+  const shouldShowCaptain = activePage === 'captain';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
     : shouldShowProfile ? 'profile'
     : shouldShowMcp ? 'mcp'
+    : shouldShowCaptain ? 'captain'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
@@ -681,7 +705,7 @@ function AppContent() {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowCaptain || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -694,6 +718,8 @@ function AppContent() {
                 <ProfilePanel />
               ) : shouldShowMcp ? (
                 <MCPPanel projectPath={activeProject?.path} />
+              ) : shouldShowCaptain ? (
+                <CaptainDashboard socket={socket} onSessionClick={handleFleetSessionClick} />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard

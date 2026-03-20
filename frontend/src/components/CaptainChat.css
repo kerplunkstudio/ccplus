@@ -1,0 +1,305 @@
+.captain-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.captain-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.captain-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.captain-icon {
+  font-size: 20px;
+}
+
+.captain-status {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-xl);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.captain-status.streaming {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.captain-status.idle {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+.captain-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.captain-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.captain-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.captain-messages::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.captain-messages::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+.captain-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: var(--space-xl);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.captain-welcome h2 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.captain-welcome p {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-lg);
+}
+
+.captain-examples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.captain-examples-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-align: left;
+  margin-bottom: var(--space-xs);
+}
+
+.captain-example {
+  padding: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+  text-align: left;
+}
+
+.captain-example:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  transform: translateX(4px);
+}
+
+.captain-input-wrapper {
+  flex-shrink: 0;
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+}
+
+/* Header actions layout */
+.captain-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* History toggle button */
+.captain-history-toggle {
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.captain-history-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-tertiary);
+}
+
+.captain-history-toggle.active {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+/* History panel */
+.captain-history {
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.captain-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px var(--space-md);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.captain-history-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.captain-history-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s ease;
+}
+
+.captain-history-clear:hover {
+  color: var(--danger);
+}
+
+/* History list */
+.captain-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.captain-history-item {
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.captain-history-item:last-child {
+  border-bottom: none;
+}
+
+.captain-history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px var(--space-md);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.captain-history-entry:hover {
+  background: var(--bg-tertiary);
+}
+
+.captain-history-entry.expanded {
+  background: var(--bg-tertiary);
+}
+
+.captain-history-preview {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.captain-history-meta {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+/* Expanded conversation messages */
+.captain-history-messages {
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-primary);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.captain-history-messages .message-bubble-inner {
+  font-size: var(--text-xs);
+}
+
+/* Resume hint on welcome screen */
+.captain-resume-hint {
+  margin-top: var(--space-lg);
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: var(--space-xs) 0;
+  text-decoration: underline;
+  text-decoration-color: var(--border-primary);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.captain-resume-hint:hover {
+  color: var(--text-secondary);
+}
+
+/* History scrollbar */
+.captain-history::-webkit-scrollbar {
+  width: 4px;
+}
+
+.captain-history::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.captain-history::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: 2px;
+}

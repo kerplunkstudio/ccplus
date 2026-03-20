@@ -236,6 +236,33 @@ export interface SessionMetadata {
   verbose?: boolean;
 }
 
+export interface FleetSession {
+  sessionId: string;
+  status: 'running' | 'idle' | 'completed' | 'failed';
+  workspace: string;
+  toolCount: number;
+  activeAgents: number;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  startedAt: string;
+  lastActivity: string;
+  label: string;
+  filesTouched: string[];
+}
+
+export interface FleetAggregateStats {
+  totalSessions: number;
+  activeSessions: number;
+  totalToolCalls: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+}
+
+export interface FleetState {
+  sessions: FleetSession[];
+  aggregate: FleetAggregateStats;
+}
 export interface TrustDimensions {
   test_coverage: number;
   scope_discipline: number;
@@ -259,7 +286,6 @@ export interface TrustSummary {
   agents_spawned: number;
   security_flags: string[];
 }
-
 export interface TrustFlag {
   severity: 'info' | 'warning' | 'critical';
   message: string;

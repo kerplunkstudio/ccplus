@@ -94,6 +94,22 @@ export const WORKFLOW_ENABLED = process.env.CCPLUS_WORKFLOW_ENABLED === 'true';
 // Worktree configuration
 export const WORKTREE_ENABLED = process.env.CCPLUS_WORKTREES !== 'false';
 
+// Captain configuration
+export const CAPTAIN_AUTO_START = process.env.CCPLUS_CAPTAIN_AUTO_START !== 'false';
+export const CAPTAIN_MODEL = process.env.CCPLUS_CAPTAIN_MODEL ?? SDK_MODEL;
+export const CAPTAIN_MAX_TURNS = parseInt(process.env.CCPLUS_CAPTAIN_MAX_TURNS ?? '1000', 10);
+export const CAPTAIN_WORKSPACE = process.env.CCPLUS_CAPTAIN_WORKSPACE ?? WORKSPACE_PATH;
+
+// Telegram bridge
+export const TELEGRAM_BOT_TOKEN = process.env.CCPLUS_TELEGRAM_BOT_TOKEN ?? '';
+export const TELEGRAM_ALLOWLIST: readonly string[] = (process.env.CCPLUS_TELEGRAM_ALLOWLIST ?? '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+// Discord bridge
+export const DISCORD_BOT_TOKEN = process.env.CCPLUS_DISCORD_BOT_TOKEN ?? '';
+export const DISCORD_ALLOWLIST: readonly string[] = (process.env.CCPLUS_DISCORD_ALLOWLIST ?? '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 /**
  * Reload hot-reloadable config values from environment
  * Called by ConfigWatcher when .env changes

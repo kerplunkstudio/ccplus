@@ -23,6 +23,11 @@ import { eventLog } from "./event-log.js";
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
 import { computeTrustScore } from './trust-score.js';
+import { startSession as startSessionApi } from './session-api.js';
+import * as captain from './captain.js';
+import type { MessageSource } from './captain.js';
+import { createCaptainRouter } from './captain-router.js';
+import * as fleetMonitor from './fleet-monitor.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -64,6 +69,9 @@ const io = new SocketIOServer(httpServer, {
   pingTimeout: 60000,
   pingInterval: 25000,
 });
+
+// Wire fleet monitor to Socket.IO
+fleetMonitor.setIOInstance(io);
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1097,110 +1105,61 @@ app.post("/api/sessions/start", (req: Request, res: Response) => {
   try {
     const { prompt, workspace, model, session_id } = req.body;
 
-    // Validate required fields
-    if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
-      res.status(400).json({ success: false, error: 'prompt is required and must be a non-empty string' });
-      return;
-    }
-
-    if (!workspace || typeof workspace !== 'string') {
-      res.status(400).json({ success: false, error: 'workspace is required and must be a string' });
-      return;
-    }
-
-    // Validate model parameter if provided
-    if (model !== undefined && (typeof model !== 'string' || model.trim() === '')) {
-      res.status(400).json({ success: false, error: 'model must be a non-empty string if provided' });
-      return;
-    }
-
-    // Normalize and validate workspace path
-    const resolvedWorkspace = path.resolve(workspace.trim());
-    const homeDir = path.resolve(homedir());
-
-    // Enforce home directory constraint
-    if (!resolvedWorkspace.startsWith(homeDir)) {
-      res.status(403).json({ success: false, error: 'Workspace must be within home directory' });
-      return;
-    }
-
-    // Validate workspace path exists
-    if (!existsSync(resolvedWorkspace) || !statSync(resolvedWorkspace).isDirectory()) {
-      res.status(400).json({ success: false, error: 'workspace path does not exist or is not a directory' });
-      return;
-    }
-
-    // Generate or validate session_id
-    let sessionId: string;
-    if (session_id && typeof session_id === 'string') {
-      // Validate session_id format: alphanumeric, dots, dashes, underscores, max 128 chars
-      if (!/^[a-zA-Z0-9_.-]{1,128}$/.test(session_id)) {
-        res.status(400).json({ success: false, error: 'session_id must be alphanumeric with dots, dashes, or underscores (max 128 characters)' });
-        return;
-      }
-      sessionId = session_id;
-    } else {
-      sessionId = uuidv4();
-    }
-
-    // Check if session already has an active query
-    if (sdkSession.isActive(sessionId)) {
-      res.status(409).json({ success: false, error: 'Session already has an active query running' });
-      return;
-    }
-
-    const uid = 'local';
-    const trimmedPrompt = prompt.trim();
-
-    // Record user message in database
-    try {
-      database.recordMessage(
-        sessionId,
-        uid,
-        'user',
-        trimmedPrompt,
-        undefined,
-        resolvedWorkspace,
-        undefined
-      );
-
-      const existing = database.getConversationHistory(sessionId, 1);
-      if (existing.length <= 1) {
-        try {
-          database.incrementUserStats(uid, 1);
-        } catch (e) {
-          log.error('Failed to increment session count', { sessionId, error: String(e) });
-        }
-      }
-    } catch (err) {
-      log.error('Failed to record user message', { sessionId, error: String(err) });
-      res.status(500).json({ success: false, error: 'Failed to record message in database' });
-      return;
-    }
-
-    // Store workspace for this session
-    sessionWorkspaces.set(sessionId, resolvedWorkspace);
-
-    // Submit query to SDK (fire-and-forget, same as socket handler)
-    sdkSession.submitQuery(
-      sessionId,
-      trimmedPrompt,
-      resolvedWorkspace,
-      buildSocketCallbacks(sessionId, resolvedWorkspace),
-      model && typeof model === 'string' ? model : undefined,
-      undefined
+    const result = startSessionApi(
+      { prompt, workspace, model, sessionId: session_id },
+      { database, sdkSession, sessionWorkspaces, io, buildSocketCallbacks, log }
     );
 
-    res.json({
-      success: true,
-      session_id: sessionId,
-      message: 'Session started'
-    });
+    if (result.success) {
+      res.json({
+        success: true,
+        session_id: result.sessionId,
+        message: 'Session started'
+      });
+    } else {
+      const statusCode = result.error?.includes('within home directory') ? 403
+        : result.error?.includes('already has an active query') ? 409
+        : result.error?.includes('does not exist') ? 400
+        : 400;
+      res.status(statusCode).json({ success: false, error: result.error });
+    }
   } catch (err) {
     log.error('Failed to start session', { error: String(err) });
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
+
+// -- Fleet State Endpoint --
+
+app.get('/api/fleet/state', (_req: Request, res: Response) => {
+  const state = fleetMonitor.getFleetState();
+  res.json(state);
+});
+
+// -- Captain Routes --
+
+// Dependencies object for Captain
+const captainDeps = {
+  database,
+  sdkSession,
+  sessionWorkspaces,
+  io,
+  buildSocketCallbacks,
+  log,
+};
+
+// Captain router
+const captainRouter = createCaptainRouter({
+  getCaptainSessionId: captain.getCaptainSessionId,
+  isCaptainAlive: captain.isCaptainAlive,
+  getCaptainStatus: captain.getCaptainStatus,
+  sendCaptainMessage: (content: string, source: string, sourceId: string) => {
+    captain.sendCaptainMessage(content, source as MessageSource, sourceId);
+  },
+  startCaptainSession: (workspace) => captain.startCaptainSession(workspace, captainDeps),
+  workspace: config.WORKSPACE_PATH ?? process.cwd(),
+});
+app.use('/api/captain', captainRouter);
 
 // =========================================================================
 // WebSocket Events
@@ -1572,6 +1531,59 @@ io.on("connection", (socket) => {
     socketTerminals.delete(terminalId);
   });
 
+  // -- Room handlers (for fleet monitor) --
+
+  socket.on('join_room', (data: { room: string }) => {
+    if (data.room) {
+      socket.join(data.room);
+    }
+  });
+
+  socket.on('leave_room', (data: { room: string }) => {
+    if (data.room) {
+      socket.leave(data.room);
+    }
+  });
+
+  // -- Captain handlers --
+
+  socket.on('join_captain', () => {
+    const captainSessionId = captain.getCaptainSessionId();
+    if (!captainSessionId) return;
+    socket.join(`captain:${captainSessionId}`);
+
+    captain.registerResponseCallback(`socket:${socket.id}`, {
+      onText: (text: string, messageIndex: number) => {
+        socket.emit('captain_text', { text, message_index: messageIndex });
+      },
+      onThinking: (thinking: string) => {
+        socket.emit('captain_thinking', { thinking });
+      },
+      onComplete: () => {
+        socket.emit('captain_complete', {});
+      },
+      onError: (message: string) => {
+        socket.emit('captain_error', { message });
+      },
+    });
+  });
+
+  socket.on('captain_message', (data: { content: string }) => {
+    if (!captain.isCaptainAlive()) {
+      socket.emit('captain_error', { message: 'Captain is not active' });
+      return;
+    }
+    try {
+      captain.sendCaptainMessage(data.content, 'web', socket.id);
+    } catch (error) {
+      socket.emit('captain_error', { message: String(error) });
+    }
+  });
+
+  socket.on('leave_captain', () => {
+    captain.unregisterResponseCallback(`socket:${socket.id}`);
+  });
+
   // -- Disconnect --
 
   socket.on("disconnect", () => {
@@ -1586,6 +1598,9 @@ io.on("connection", (socket) => {
       ptyService.killTerminal(terminalId);
     }
     socketTerminals.clear();
+
+    // Cleanup Captain callback for this socket
+    captain.unregisterResponseCallback(`socket:${socket.id}`);
   });
 });
 
@@ -1880,4 +1895,11 @@ setInterval(() => {
 httpServer.listen(config.PORT, config.HOST, () => {
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
   scheduler.start();
+
+  // Auto-start Captain if enabled
+  if (config.CAPTAIN_AUTO_START) {
+    captain.startCaptainSession(config.CAPTAIN_WORKSPACE ?? process.cwd(), captainDeps)
+      .then(({ sessionId }) => log.info('Captain auto-started', { sessionId }))
+      .catch((err) => log.error('Captain auto-start failed', { error: String(err) }));
+  }
 });

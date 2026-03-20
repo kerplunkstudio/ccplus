@@ -1,0 +1,46 @@
+.captain-dashboard {
+  display: flex;
+  height: 100%;
+  background: var(--bg-secondary);
+  position: relative;
+}
+
+.captain-panel {
+  height: 100%;
+  overflow: hidden;
+  min-width: 300px;
+}
+
+.captain-divider {
+  width: 4px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.15s ease-out;
+}
+
+.captain-divider:hover {
+  background: var(--accent);
+}
+
+.captain-divider:active {
+  background: var(--accent);
+}
+
+@media (max-width: 1024px) {
+  .captain-dashboard {
+    flex-direction: column;
+  }
+
+  .captain-panel {
+    width: 100% !important;
+    height: 50%;
+    min-width: unset;
+  }
+
+  .captain-divider {
+    width: 100%;
+    height: 4px;
+    cursor: row-resize;
+  }
+}
