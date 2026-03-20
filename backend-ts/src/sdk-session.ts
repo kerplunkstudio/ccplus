@@ -1235,6 +1235,14 @@ async function streamQuery(
         maxTurns: 50,
         includePartialMessages: true,
         promptSuggestions: true,
+        ...(config.WORKTREE_ENABLED && {
+          extraArgs: { worktree: null },
+          settings: {
+            worktree: {
+              symlinkDirectories: ['node_modules'],
+            },
+          },
+        }),
       },
     });
 
