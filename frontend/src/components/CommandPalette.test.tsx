@@ -54,6 +54,7 @@ describe('CommandPalette', () => {
   const mockOnCloseTab = jest.fn();
   const mockOnNavigate = jest.fn();
   const mockOnToggleActivityPanel = jest.fn();
+  const mockOnOpenSession = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -72,6 +73,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
     expect(container.firstChild).toBeNull();
@@ -90,9 +92,10 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
-    expect(screen.getByPlaceholderText(/Search sessions, projects, and actions/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Search/i)).toBeInTheDocument();
   });
 
   it('focuses input when opened', async () => {
@@ -108,6 +111,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -123,11 +127,12 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Search sessions, projects, and actions/i)).toHaveFocus();
+      expect(screen.getByPlaceholderText(/Search/i)).toHaveFocus();
     });
   });
 
@@ -144,6 +149,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -165,6 +171,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -185,6 +192,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -206,10 +214,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'navigation' } });
 
     // Use getByText with function matcher to handle text split by <mark> elements
@@ -235,10 +244,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'ipat' } });
 
     // Use getByText with function matcher to handle text split by <mark> elements
@@ -247,7 +257,7 @@ describe('CommandPalette', () => {
     })).toBeInTheDocument();
   });
 
-  it('shows "No results found" when no items match', () => {
+  it('shows "Nothing matched" when no items match', () => {
     render(
       <CommandPalette
         isOpen={true}
@@ -260,13 +270,14 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'zzzzzzzzz' } });
 
-    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.getByText('Nothing matched')).toBeInTheDocument();
   });
 
   it('closes palette when clicking overlay', () => {
@@ -282,10 +293,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const overlay = screen.getByPlaceholderText(/Search sessions, projects, and actions/i).closest('.command-palette-overlay');
+    const overlay = screen.getByPlaceholderText(/Search/i).closest('.command-palette-overlay');
     fireEvent.click(overlay!);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
@@ -304,10 +316,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const palette = screen.getByPlaceholderText(/Search sessions, projects, and actions/i).closest('.command-palette');
+    const palette = screen.getByPlaceholderText(/Search/i).closest('.command-palette');
     fireEvent.click(palette!);
 
     expect(mockOnClose).not.toHaveBeenCalled();
@@ -326,6 +339,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -357,11 +371,12 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
     // Filter to a specific action
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'New Session' } });
 
     fireEvent.keyDown(window, { key: 'Enter' });
@@ -383,6 +398,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -404,6 +420,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -427,14 +444,15 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    // Find the project item by looking for the item with the folder icon and project name
+    // Find the project item by looking for the item with data-type="project"
     const projectItems = screen.getAllByText('Project One');
     const projectItem = projectItems.find(el => {
       const parent = el.closest('.command-palette-item');
-      return parent?.querySelector('.command-palette-icon')?.textContent === '📁';
+      return parent?.getAttribute('data-type') === 'project';
     });
 
     fireEvent.click(projectItem!.closest('.command-palette-item')!);
@@ -473,6 +491,7 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
@@ -494,10 +513,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'navigation' } });
 
     // Check that matched characters are wrapped in <mark>
@@ -518,10 +538,11 @@ describe('CommandPalette', () => {
         onCloseTab={mockOnCloseTab}
         onNavigate={mockOnNavigate}
         onToggleActivityPanel={mockOnToggleActivityPanel}
+        onOpenSession={mockOnOpenSession}
       />
     );
 
-    const input = screen.getByPlaceholderText(/Search sessions, projects, and actions/i);
+    const input = screen.getByPlaceholderText(/Search/i);
     fireEvent.change(input, { target: { value: 'New Session' } });
 
     expect(screen.getByText('⌘T')).toBeInTheDocument();

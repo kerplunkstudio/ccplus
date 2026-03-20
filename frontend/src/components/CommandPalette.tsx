@@ -22,7 +22,6 @@ interface CommandPaletteProps {
 interface CommandItem {
   id: string;
   type: 'session' | 'project' | 'action' | 'history';
-  iconType?: 'session-chat' | 'session-browser' | 'project' | 'action';
   name: string;
   subtitle?: string;
   shortcut?: string;
@@ -172,7 +171,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         items.push({
           id: `session-${project.path}-${tab.sessionId}`,
           type: 'session',
-          iconType: tab.type === 'browser' ? 'session-browser' : 'session-chat',
           name: tab.label,
           subtitle: project.name,
           action: () => {
@@ -188,7 +186,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       items.push({
         id: `project-${project.path}`,
         type: 'project',
-        iconType: 'project',
         name: project.name,
         subtitle: project.path,
         action: () => {
@@ -203,7 +200,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-new-session',
         type: 'action',
-        iconType: 'action',
         name: 'New Session',
         shortcut: '⌘T',
         action: () => {
@@ -214,7 +210,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-new-terminal',
         type: 'action',
-        iconType: 'action',
         name: 'New Terminal',
         action: () => {
           if (onNewTerminalTab) {
@@ -226,7 +221,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-close-tab',
         type: 'action',
-        iconType: 'action',
         name: 'Close Tab',
         shortcut: '⌘W',
         action: () => {
@@ -244,7 +238,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-toggle-activity',
         type: 'action',
-        iconType: 'action',
         name: 'Toggle Activity Panel',
         action: () => {
           if (onToggleActivityPanel) {
@@ -256,7 +249,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-insights',
         type: 'action',
-        iconType: 'action',
         name: 'Open Insights',
         action: () => {
           onNavigate('insights');
@@ -266,7 +258,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-settings',
         type: 'action',
-        iconType: 'action',
         name: 'Open Settings',
         action: () => {
           onNavigate('profile');
@@ -276,7 +267,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       {
         id: 'action-plugins',
         type: 'action',
-        iconType: 'action',
         name: 'Open Plugins',
         action: () => {
           onNavigate('mcp');
@@ -297,12 +287,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       items.push({
         id: `history-${result.session_id}`,
         type: 'history',
-        iconType: 'session-chat',
         name: result.session_label,
         subtitle: isAlreadyOpen
           ? 'Already open'
           : result.matches.length > 0
-          ? result.matches[0].content.slice(0, 80)
+          ? result.matches[0].content.slice(0, 60) + '…'
           : undefined,
         action: () => {
           if (isAlreadyOpen) {
@@ -421,7 +410,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           ref={inputRef}
           type="text"
           className="command-palette-input"
-          placeholder="Search sessions, history, projects, and actions..."
+          placeholder="Search..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
@@ -429,7 +418,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         />
         <div className="command-palette-results" ref={resultsRef}>
           {filteredItems.length === 0 ? (
-            <div className="command-palette-empty">No results found</div>
+            <div className="command-palette-empty">Nothing matched</div>
           ) : (
             <>
               {sessions.length > 0 && (
@@ -441,9 +430,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div
                         key={item.id}
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
+                        data-type={item.type}
                         onClick={item.action}
                       >
-                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
@@ -466,9 +455,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div
                         key={item.id}
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
+                        data-type={item.type}
                         onClick={item.action}
                       >
-                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
@@ -491,9 +480,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div
                         key={item.id}
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
+                        data-type={item.type}
                         onClick={item.action}
                       >
-                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
@@ -516,9 +505,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       <div
                         key={item.id}
                         className={`command-palette-item ${globalIndex === selectedIndex ? 'selected' : ''}`}
+                        data-type={item.type}
                         onClick={item.action}
                       >
-                        <span className={`command-palette-icon icon-${item.iconType}`}></span>
                         <div className="command-palette-item-content">
                           <div className="command-palette-item-name">
                             {highlightMatch(item.name, (item as any).matchedIndices || [])}
