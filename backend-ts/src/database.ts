@@ -469,7 +469,7 @@ export function getSessionsList(limit: number = 50, projectPath?: string, includ
         MAX(timestamp) as last_activity,
         (SELECT content FROM conversations c2
          WHERE c2.session_id = c1.session_id AND c2.role = 'user'
-         ORDER BY c2.timestamp DESC LIMIT 1) as last_user_message,
+         ORDER BY c2.timestamp ASC LIMIT 1) as last_user_message,
         (SELECT project_path FROM conversations c3
          WHERE c3.session_id = c1.session_id AND c3.role = 'user'
          AND c3.project_path IS NOT NULL
