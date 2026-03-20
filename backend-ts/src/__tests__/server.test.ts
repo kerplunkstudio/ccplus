@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll, afterEach } from "vitest";
 import path from "path";
+import { homedir } from "os";
 import * as config from "../config.js";
 import { io as ioClient, Socket as ClientSocket } from "socket.io-client";
 import * as database from "../database.js";
@@ -9,6 +10,7 @@ import "../server.js";
 
 // Test helpers
 let testSessionId: string;
+const testWorkspace = path.resolve(homedir(), "Workspace");
 
 /**
  * Server Integration Tests
@@ -829,7 +831,7 @@ describe("POST /api/sessions/start", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        workspace: "/tmp",
+        workspace: testWorkspace,
       }),
     });
     const data = await response.json();
@@ -845,7 +847,7 @@ describe("POST /api/sessions/start", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "   ",
-        workspace: "/tmp",
+        workspace: testWorkspace,
       }),
     });
     const data = await response.json();
@@ -869,7 +871,7 @@ describe("POST /api/sessions/start", () => {
     expect(data.error).toContain("workspace");
   });
 
-  it("rejects non-existent workspace path", async () => {
+  it("rejects non-existent workspace path outside home dir", async () => {
     const response = await fetch(`${serverUrl}/api/sessions/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -880,12 +882,12 @@ describe("POST /api/sessions/start", () => {
     });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(data.success).toBe(false);
-    expect(data.error).toContain("workspace path does not exist");
+    expect(data.error).toContain("home directory");
   });
 
-  it("rejects file path as workspace", async () => {
+  it("rejects file path outside home dir", async () => {
     const response = await fetch(`${serverUrl}/api/sessions/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -896,8 +898,9 @@ describe("POST /api/sessions/start", () => {
     });
     const data = await response.json();
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(data.success).toBe(false);
+    expect(data.error).toContain("home directory");
   });
 
   it("starts session with valid prompt and workspace", async () => {
@@ -906,7 +909,7 @@ describe("POST /api/sessions/start", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "Hello, test query",
-        workspace: "/tmp",
+        workspace: testWorkspace,
       }),
     });
     const data = await response.json();
@@ -926,7 +929,7 @@ describe("POST /api/sessions/start", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "Hello with custom ID",
-        workspace: "/tmp",
+        workspace: testWorkspace,
         session_id: customSessionId,
       }),
     });
@@ -943,7 +946,7 @@ describe("POST /api/sessions/start", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "Test with model",
-        workspace: "/tmp",
+        workspace: testWorkspace,
         model: "claude-3-5-sonnet-20241022",
       }),
     });
@@ -953,6 +956,73 @@ describe("POST /api/sessions/start", () => {
     expect(data.success).toBe(true);
   });
 
+  it("rejects invalid model type", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Test with invalid model",
+        workspace: testWorkspace,
+        model: 123,
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("model");
+  });
+
+  it("rejects session_id that is too long", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Test with long session_id",
+        workspace: testWorkspace,
+        session_id: "a".repeat(200),
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("session_id");
+  });
+
+  it("rejects session_id with spaces", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Test with invalid session_id",
+        workspace: testWorkspace,
+        session_id: "has spaces",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("session_id");
+  });
+
+  it("rejects workspace outside home directory", async () => {
+    const response = await fetch(`${serverUrl}/api/sessions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Test with root workspace",
+        workspace: "/",
+      }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.success).toBe(false);
+    expect(data.error).toContain("home directory");
+  });
+
   it("records message in database", async () => {
     const customSessionId = `test-db-session-${Date.now()}`;
     await fetch(`${serverUrl}/api/sessions/start`, {
@@ -960,7 +1030,7 @@ describe("POST /api/sessions/start", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "Database test message",
-        workspace: "/tmp",
+        workspace: testWorkspace,
         session_id: customSessionId,
       }),
     });
