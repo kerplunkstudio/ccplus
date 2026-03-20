@@ -489,6 +489,8 @@ function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
         null,
         null,
         agentDescription,
+        null,
+        null,
       );
     } catch (e) {
       log.error("Database write failed (preToolUse)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
@@ -1356,6 +1358,8 @@ async function streamQuery(
           num_turns: result.num_turns,
           input_tokens: currentInputTokens,
           output_tokens: result.usage?.output_tokens,
+          cache_read_input_tokens: result.usage?.cache_read_input_tokens,
+          cache_creation_input_tokens: result.usage?.cache_creation_input_tokens,
           context_window_size: contextWindowSize,
           model: session.model,
           message_index: messageIndex,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './InsightsPanel.css';
+import { InsightsTokenSections } from './InsightsTokenSections';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -485,6 +486,17 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
             </div>
           </div>
         </div>
+
+        <InsightsTokenSections
+          daily={insights.daily}
+          selectedDays={selectedDays}
+          rateLimitEvents={insights.rate_limit_events}
+          totalRateLimits={insights.summary.total_rate_limits}
+          cacheReadTokens={insights.summary.cache_read_input_tokens}
+          cacheCreationTokens={insights.summary.cache_creation_input_tokens}
+          cacheHitRate={insights.summary.cache_hit_rate}
+          sessionData={insights.by_session}
+        />
 
         <div className="insights-divider" />
 

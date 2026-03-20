@@ -158,6 +158,48 @@ INSERT INTO conversations_fts(rowid, content, session_id, role, timestamp)
 SELECT id, content, session_id, role, timestamp FROM conversations;
 `,
   },
+  {
+    version: 5,
+    sql: `
+-- Rate limit events tracking
+CREATE TABLE IF NOT EXISTS rate_limit_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  retry_after_ms INTEGER NOT NULL,
+  timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_events_timestamp ON rate_limit_events(timestamp);
+`,
+  },
+  {
+    version: 6,
+    sql: `
+-- Add cache token columns to tool_usage
+ALTER TABLE tool_usage ADD COLUMN cache_read_input_tokens INTEGER;
+ALTER TABLE tool_usage ADD COLUMN cache_creation_input_tokens INTEGER;
+`,
+  },
+  {
+    version: 7,
+    sql: `
+-- Create query_usage table for per-query token tracking
+CREATE TABLE IF NOT EXISTS query_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_input_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_creation_input_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  model TEXT,
+  project_path TEXT,
+  timestamp TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_query_usage_timestamp ON query_usage(timestamp);
+CREATE INDEX IF NOT EXISTS idx_query_usage_session ON query_usage(session_id);
+`,
+  },
 ];
 
 function getCurrentSchemaVersion(database: Database.Database): number {
@@ -549,6 +591,36 @@ export function incrementUserStats(
   `).run(userId, sessions, queries, durationMs, cost, inputTokens, outputTokens, linesOfCode);
 }
 
+export function recordQueryUsage(params: {
+  sessionId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  costUsd: number;
+  durationMs: number;
+  model: string | null;
+  projectPath: string | null;
+}): void {
+  const d = getDb();
+  d.prepare(`
+    INSERT INTO query_usage
+      (session_id, input_tokens, output_tokens, cache_read_input_tokens,
+       cache_creation_input_tokens, cost_usd, duration_ms, model, project_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    params.sessionId,
+    params.inputTokens,
+    params.outputTokens,
+    params.cacheReadInputTokens,
+    params.cacheCreationInputTokens,
+    params.costUsd,
+    params.durationMs,
+    params.model,
+    params.projectPath,
+  );
+}
+
 // --- Workspace state ---
 
 export function getWorkspaceState(userId: string): Record<string, unknown> | null {
@@ -820,13 +892,30 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
   // Tool summary
   const toolSummary = d.prepare(`
     SELECT
-      COUNT(*) as total_tool_calls,
-      COALESCE(SUM(input_tokens), 0) as total_input_tokens,
-      COALESCE(SUM(output_tokens), 0) as total_output_tokens
+      COUNT(*) as total_tool_calls
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     ${toolProjectFilter}
-  `).get(startDate, endDate, ...toolProjectParams) as { total_tool_calls: number; total_input_tokens: number; total_output_tokens: number };
+  `).get(startDate, endDate, ...toolProjectParams) as { total_tool_calls: number };
+
+  // Token summary from query_usage
+  const tokenSummary = d.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+      COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+      COALESCE(SUM(cache_read_input_tokens), 0) as total_cache_read,
+      COALESCE(SUM(cache_creation_input_tokens), 0) as total_cache_creation,
+      COALESCE(SUM(cost_usd), 0) as total_cost
+    FROM query_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    ${projectPath ? "AND project_path = ?" : ""}
+  `).get(startDate, endDate, ...(projectPath ? [projectPath] : [])) as {
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cache_read: number;
+    total_cache_creation: number;
+    total_cost: number;
+  };
 
   // Previous period
   const prevSummary = d.prepare(`
@@ -837,9 +926,9 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     ${convProjectFilter}
   `).get(prevStart, prevEnd, ...convProjectParams) as { prev_queries: number };
 
-  const inputTokens = toolSummary.total_input_tokens || 0;
-  const outputTokens = toolSummary.total_output_tokens || 0;
-  const totalCost = (inputTokens / 1_000_000 * 3.0) + (outputTokens / 1_000_000 * 15.0);
+  const inputTokens = tokenSummary.total_input_tokens || 0;
+  const outputTokens = tokenSummary.total_output_tokens || 0;
+  const totalCost = tokenSummary.total_cost || 0;
 
   const currentQueries = convSummary.total_queries || 0;
   const prevQueries = prevSummary.prev_queries || 0;
@@ -865,27 +954,41 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
   const dailyToolRows = d.prepare(`
     SELECT
       date(timestamp) as date,
-      COUNT(*) as tool_calls,
-      COALESCE(SUM(input_tokens), 0) as input_tokens,
-      COALESCE(SUM(output_tokens), 0) as output_tokens
+      COUNT(*) as tool_calls
     FROM tool_usage
     WHERE date(timestamp) >= ? AND date(timestamp) <= ?
     ${toolProjectFilter}
     GROUP BY date(timestamp)
     ORDER BY date(timestamp) ASC
-  `).all(startDate, endDate, ...toolProjectParams) as { date: string; tool_calls: number; input_tokens: number; output_tokens: number }[];
+  `).all(startDate, endDate, ...toolProjectParams) as { date: string; tool_calls: number }[];
+
+  // Daily breakdown - token usage from query_usage
+  const dailyTokenRows = d.prepare(`
+    SELECT
+      date(timestamp) as date,
+      COALESCE(SUM(input_tokens), 0) as input_tokens,
+      COALESCE(SUM(output_tokens), 0) as output_tokens,
+      COALESCE(SUM(cost_usd), 0) as cost_usd
+    FROM query_usage
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    ${projectPath ? "AND project_path = ?" : ""}
+    GROUP BY date(timestamp)
+    ORDER BY date(timestamp) ASC
+  `).all(startDate, endDate, ...(projectPath ? [projectPath] : [])) as { date: string; input_tokens: number; output_tokens: number; cost_usd: number }[];
 
   // Merge daily data
   const convByDate = new Map(dailyConvRows.map((r) => [r.date, r]));
   const toolByDate = new Map(dailyToolRows.map((r) => [r.date, r]));
-  const allDates = [...new Set([...convByDate.keys(), ...toolByDate.keys()])].sort();
+  const tokenByDate = new Map(dailyTokenRows.map((r) => [r.date, r]));
+  const allDates = [...new Set([...convByDate.keys(), ...toolByDate.keys(), ...tokenByDate.keys()])].sort();
 
   const daily = allDates.map((date) => {
     const c = convByDate.get(date);
     const t = toolByDate.get(date);
-    const dayInput = t?.input_tokens || 0;
-    const dayOutput = t?.output_tokens || 0;
-    const dayCost = (dayInput / 1_000_000 * 3.0) + (dayOutput / 1_000_000 * 15.0);
+    const tk = tokenByDate.get(date);
+    const dayInput = tk?.input_tokens || 0;
+    const dayOutput = tk?.output_tokens || 0;
+    const dayCost = tk?.cost_usd || 0;
     return {
       date,
       queries: c?.queries || 0,
@@ -917,18 +1020,14 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     const projTokens = d.prepare(`
       SELECT
         COALESCE(SUM(input_tokens), 0) as input_tokens,
-        COALESCE(SUM(output_tokens), 0) as output_tokens
-      FROM tool_usage
+        COALESCE(SUM(output_tokens), 0) as output_tokens,
+        COALESCE(SUM(cost_usd), 0) as cost_usd
+      FROM query_usage
       WHERE date(timestamp) >= ? AND date(timestamp) <= ?
-      AND session_id IN (
-        SELECT DISTINCT session_id FROM conversations
-        WHERE project_path = ? AND (archived = 0 OR archived IS NULL)
-      )
-    `).get(startDate, endDate, row.project_path) as { input_tokens: number; output_tokens: number };
+      AND project_path = ?
+    `).get(startDate, endDate, row.project_path) as { input_tokens: number; output_tokens: number; cost_usd: number };
 
-    const projInput = projTokens.input_tokens || 0;
-    const projOutput = projTokens.output_tokens || 0;
-    const projCost = (projInput / 1_000_000 * 3.0) + (projOutput / 1_000_000 * 15.0);
+    const projCost = projTokens.cost_usd || 0;
 
     return {
       project: projectName,
@@ -1060,6 +1159,73 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     ? Math.round((currentQueries / convSummary.total_sessions) * 100) / 100
     : 0;
 
+  // Rate limit events
+  const rateLimitRows = d.prepare(`
+    SELECT timestamp, session_id, retry_after_ms
+    FROM rate_limit_events
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+    ORDER BY timestamp DESC
+    LIMIT 50
+  `).all(startDate, endDate) as Array<{ timestamp: string; session_id: string; retry_after_ms: number }>;
+
+  const rateLimitCount = d.prepare(`
+    SELECT COUNT(*) as total
+    FROM rate_limit_events
+    WHERE date(timestamp) >= ? AND date(timestamp) <= ?
+  `).get(startDate, endDate) as { total: number };
+
+  // Cache efficiency (use tokenSummary values already fetched)
+  const totalCacheRead = tokenSummary.total_cache_read || 0;
+  const totalCacheCreation = tokenSummary.total_cache_creation || 0;
+  const cacheHitRate = (totalCacheRead + inputTokens) > 0
+    ? Math.round((totalCacheRead / (totalCacheRead + inputTokens)) * 10000) / 100
+    : 0;
+
+  // Per-session token breakdown
+  const bySessionRows = d.prepare(`
+    SELECT
+      q.session_id,
+      COALESCE(SUM(q.input_tokens), 0) as input_tokens,
+      COALESCE(SUM(q.output_tokens), 0) as output_tokens,
+      COALESCE(SUM(q.cache_read_input_tokens), 0) as cache_read_tokens,
+      (SELECT content FROM conversations c2
+       WHERE c2.session_id = q.session_id AND c2.role = 'user'
+       ORDER BY c2.timestamp ASC LIMIT 1) as label
+    FROM query_usage q
+    WHERE date(q.timestamp) >= ? AND date(q.timestamp) <= ?
+    ${projectPath ? "AND q.project_path = ?" : ""}
+    GROUP BY q.session_id
+    ORDER BY (SUM(q.input_tokens) + SUM(q.output_tokens)) DESC
+    LIMIT 20
+  `).all(startDate, endDate, ...(projectPath ? [projectPath] : [])) as Array<{
+    session_id: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    label: string | null;
+  }>;
+
+  const bySession = bySessionRows.map((row) => {
+    const sessionLabel = row.label
+      ? (row.label.length > 50 ? row.label.slice(0, 50) + "..." : row.label)
+      : "Untitled session";
+    // Get tool count for this session
+    const toolCountRow = d.prepare(`
+      SELECT COUNT(DISTINCT tool_name) as tool_count
+      FROM tool_usage
+      WHERE session_id = ?
+      AND date(timestamp) >= ? AND date(timestamp) <= ?
+    `).get(row.session_id, startDate, endDate) as { tool_count: number };
+    return {
+      session_id: row.session_id,
+      label: sessionLabel,
+      input_tokens: row.input_tokens || 0,
+      output_tokens: row.output_tokens || 0,
+      cache_read_tokens: row.cache_read_tokens || 0,
+      tool_count: toolCountRow.tool_count || 0,
+    };
+  });
+
   return {
     period: { start: startDate, end: endDate, days },
     summary: {
@@ -1074,6 +1240,10 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
       avg_tokens_per_query: avgTokensPerQuery,
       avg_queries_per_session: avgQueriesPerSession,
       total_errors: totalErrors.count || 0,
+      total_rate_limits: rateLimitCount.total || 0,
+      cache_read_input_tokens: totalCacheRead,
+      cache_creation_input_tokens: totalCacheCreation,
+      cache_hit_rate: cacheHitRate,
     },
     daily,
     by_project: byProject,
@@ -1081,5 +1251,7 @@ export function getInsights(days: number = 30, projectPath?: string): Record<str
     by_error_category: byErrorCategory,
     by_agent_type: byAgentType,
     hourly_activity: hourlyActivity,
+    rate_limit_events: rateLimitRows,
+    by_session: bySession,
   };
 }
