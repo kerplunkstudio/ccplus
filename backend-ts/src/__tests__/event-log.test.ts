@@ -321,6 +321,95 @@ describe("EventLog", () => {
     });
   });
 
+  describe("fullResetRequired", () => {
+    it("should return true when clientLastSeq < oldestSeq", () => {
+      const log = new EventLog(3);
+
+      log.append("session-1", "a", {});
+      log.append("session-1", "b", {});
+      log.append("session-1", "c", {});
+      log.append("session-1", "d", {});
+      log.append("session-1", "e", {});
+
+      // maxEvents=3 means events 3,4,5 are kept; oldest is seq 3
+      // Client's last seq was 2, which fell off the buffer
+      expect(log.fullResetRequired("session-1", 2)).toBe(true);
+    });
+
+    it("should return false when clientLastSeq >= oldestSeq", () => {
+      const log = new EventLog(3);
+
+      log.append("session-1", "a", {});
+      log.append("session-1", "b", {});
+      log.append("session-1", "c", {});
+      log.append("session-1", "d", {});
+      log.append("session-1", "e", {});
+
+      // Client's last seq was 3 or higher, still in buffer
+      expect(log.fullResetRequired("session-1", 3)).toBe(false);
+      expect(log.fullResetRequired("session-1", 4)).toBe(false);
+      expect(log.fullResetRequired("session-1", 5)).toBe(false);
+    });
+
+    it("should return false when clientLastSeq is 0", () => {
+      const log = new EventLog(3);
+
+      log.append("session-1", "a", {});
+      log.append("session-1", "b", {});
+      log.append("session-1", "c", {});
+      log.append("session-1", "d", {});
+
+      // clientLastSeq=0 means fresh connection, no reset needed
+      expect(log.fullResetRequired("session-1", 0)).toBe(false);
+    });
+
+    it("should return false for unknown session", () => {
+      expect(eventLog.fullResetRequired("nonexistent-session", 10)).toBe(false);
+    });
+  });
+
+  describe("buffer size requirements", () => {
+    it("should support EventLog with maxEvents=2000", () => {
+      const log = new EventLog(2000);
+
+      for (let i = 0; i < 2001; i++) {
+        log.append("session-1", "event", { i });
+      }
+
+      // Should trim to exactly 2000 events
+      expect(log.getEventCount("session-1")).toBe(2000);
+      // Oldest should be seq 2 (trimmed seq 1)
+      expect(log.getOldestSeq("session-1")).toBe(2);
+    });
+
+    it("should not trigger trimming with 600 events when maxEvents=2000", () => {
+      const log = new EventLog(2000);
+
+      for (let i = 0; i < 600; i++) {
+        log.append("session-1", "event", { i });
+      }
+
+      // No trimming should occur
+      expect(log.getEventCount("session-1")).toBe(600);
+      expect(log.getOldestSeq("session-1")).toBe(1);
+    });
+
+    it("should support catch-up after brief disconnect", () => {
+      const log = new EventLog(2000);
+
+      // Append 10 events
+      for (let i = 0; i < 10; i++) {
+        log.append("session-1", "event", { i });
+      }
+
+      // Client missed the last 5 events (has lastSeq=5)
+      const catchUpEvents = log.getEventsSince("session-1", 5);
+
+      expect(catchUpEvents).toHaveLength(5);
+      expect(catchUpEvents.map(e => e.seq)).toEqual([6, 7, 8, 9, 10]);
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty string as session id", () => {
       const event = eventLog.append("", "a", {});

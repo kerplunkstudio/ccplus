@@ -229,7 +229,7 @@ app.get("/api/history/:sessionId", (req: Request, res: Response) => {
 
 app.get("/api/activity/:sessionId", (req: Request, res: Response) => {
   try {
-    const events = database.getToolEvents(req.params.sessionId);
+    const events = database.getToolEvents(req.params.sessionId, config.getMaxActivityEvents());
     res.json({ events });
   } catch (err) {
     log.error("Failed to fetch activity", { sessionId: req.params.sessionId, error: String(err) });
@@ -1078,6 +1078,12 @@ app.post("/api/workflow/:sessionId/transition", (req: Request, res: Response) =>
 
 // Helper: Join a session room and sync state
 function joinSession(socket: import("socket.io").Socket, sessionId: string, userId: string, lastSeq = 0): void {
+  // Check if full reset is required (client is too far behind)
+  if (lastSeq > 0 && eventLog.fullResetRequired(sessionId, lastSeq)) {
+    socket.emit("full_reset_required", { session_id: sessionId });
+    return;
+  }
+
   // Replay missed events if client provides lastSeq
   if (lastSeq > 0) {
     const missedEvents = eventLog.getEventsSince(sessionId, lastSeq);
@@ -1114,6 +1120,25 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
         questions: pq.questions ?? [],
         tool_use_id: pq.tool_use_id ?? "",
       });
+    }
+
+    // Sync todos from active session
+    const todos = sdkSession.getSessionTodos(sessionId);
+    if (todos) {
+      socket.emit("todo_sync", { todos, session_id: sessionId });
+    }
+  } else {
+    // Session not active - query database for last TodoWrite event
+    try {
+      const events = database.getToolEvents(sessionId);
+      const lastTodoEvent = [...events].reverse().find(
+        (e) => e.tool_name === 'TodoWrite' && typeof e.parameters === 'object' && e.parameters !== null && 'todos' in e.parameters
+      );
+      if (lastTodoEvent && typeof lastTodoEvent.parameters === 'object' && lastTodoEvent.parameters !== null && 'todos' in lastTodoEvent.parameters) {
+        socket.emit("todo_sync", { todos: (lastTodoEvent.parameters as { todos: unknown }).todos, session_id: sessionId });
+      }
+    } catch (err) {
+      // Failed to query todos - safe to ignore
     }
   }
 
@@ -1435,6 +1460,9 @@ io.on("connection", (socket) => {
 });
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
+// CRITICAL: All emissions MUST use io.to(sessionId).emit() (room-based, not socket-based)
+// This ensures events continue to flow even after socket disconnects/reconnects
+// The session room persists across socket instances for the same browser tab
 
 function buildSocketCallbacks(sessionId: string, projectPath?: string) {
   return {

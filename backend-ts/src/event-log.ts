@@ -59,7 +59,15 @@ class EventLog {
   getEventCount(sessionId: string): number {
     return this.logs.get(sessionId)?.length ?? 0;
   }
+
+  fullResetRequired(sessionId: string, clientLastSeq: number): boolean {
+    if (clientLastSeq === 0) {
+      return false;
+    }
+    const oldestSeq = this.getOldestSeq(sessionId);
+    return clientLastSeq < oldestSeq;
+  }
 }
 
-const eventLog = new EventLog();
+const eventLog = new EventLog(2000);
 export { EventLog, eventLog, type SessionEvent };

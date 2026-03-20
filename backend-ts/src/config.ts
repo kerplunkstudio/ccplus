@@ -43,11 +43,13 @@ let runtimeConfig = {
   SDK_MODEL: process.env.SDK_MODEL ?? "claude-sonnet-4-6",
   MAX_CONVERSATION_HISTORY: 50,
   MAX_ACTIVITY_EVENTS: 200,
+  MAX_EVENT_LOG_BUFFER: 2000,
   BYPASS_PERMISSIONS: true,
 };
 
 export const MAX_CONVERSATION_HISTORY_DEFAULT = 50;
 export const MAX_ACTIVITY_EVENTS_DEFAULT = 200;
+export const MAX_EVENT_LOG_BUFFER_DEFAULT = 2000;
 
 // Export getters for hot-reloadable values
 export function getSDKModel(): string {
@@ -64,6 +66,10 @@ export function getMaxActivityEvents(): number {
 
 export function getBypassPermissions(): boolean {
   return runtimeConfig.BYPASS_PERMISSIONS;
+}
+
+export function getMaxEventLogBuffer(): number {
+  return runtimeConfig.MAX_EVENT_LOG_BUFFER;
 }
 
 // Legacy exports for backward compatibility (deprecated, use getters)
@@ -105,6 +111,9 @@ export function reloadConfig(key: string, value: string | undefined): void {
       break;
     case "MAX_ACTIVITY_EVENTS":
       runtimeConfig.MAX_ACTIVITY_EVENTS = value ? parseInt(value, 10) : MAX_ACTIVITY_EVENTS_DEFAULT;
+      break;
+    case "MAX_EVENT_LOG_BUFFER":
+      runtimeConfig.MAX_EVENT_LOG_BUFFER = value ? parseInt(value, 10) : MAX_EVENT_LOG_BUFFER_DEFAULT;
       break;
     case "CCPLUS_BYPASS_PERMISSIONS":
       runtimeConfig.BYPASS_PERMISSIONS = value === 'true';
