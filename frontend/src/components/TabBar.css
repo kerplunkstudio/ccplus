@@ -151,6 +151,23 @@
   background: transparent;
 }
 
+/* New Tab Dropdown */
+
+.tab-new-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--dropdown-shadow);
+  padding: var(--space-sm);
+  min-width: 160px;
+  margin-top: 4px;
+  animation: contextMenuFadeIn 0.12s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
 /* Context Menu */
 
 .tab-context-menu {

@@ -4,7 +4,7 @@ export interface TabState {
   isStreaming: boolean;
   hasRunningAgent: boolean;
   createdAt: number;
-  type?: 'chat' | 'browser';
+  type?: 'chat' | 'browser' | 'terminal';
   url?: string;
   projectPath?: string;
 }
@@ -28,6 +28,7 @@ export type WorkspaceAction =
   | { type: 'SELECT_PROJECT'; path: string }
   | { type: 'ADD_TAB'; projectPath: string; sessionId: string; label?: string }
   | { type: 'ADD_BROWSER_TAB'; projectPath: string; sessionId: string; url: string; label: string }
+  | { type: 'ADD_TERMINAL_TAB'; projectPath: string; sessionId: string; label: string }
   | { type: 'CLOSE_TAB'; projectPath: string; sessionId: string }
   | { type: 'CLOSE_OTHER_TABS'; projectPath: string; sessionId: string }
   | { type: 'REOPEN_TAB'; projectPath: string; tab: TabState; position?: number }

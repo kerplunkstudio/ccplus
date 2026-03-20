@@ -14,6 +14,7 @@ import { homedir } from "os";
 import * as config from "./config.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
+import * as ptyService from "./pty-service.js";
 import { findClaudeBinary } from "./utils.js";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "./mcp-config.js";
 import { log } from "./logger.js";
@@ -260,10 +261,32 @@ app.get("/api/insights", (req: Request, res: Response) => {
     days = parseInt(req.query.days as string ?? "30", 10);
     if (isNaN(days) || days < 1 || days > 365) days = 30;
     const project = (req.query.project as string) || undefined;
-    res.json(database.getInsights(days, project));
+    const source = (req.query.source as string) || undefined;
+    res.json(database.getInsights(days, project, source));
   } catch (err) {
     log.error("Failed to fetch insights", { days, error: String(err) });
     res.status(500).json({ error: "Failed to load insights" });
+  }
+});
+
+// POST /api/import/sessions - Trigger historical session import
+app.post("/api/import/sessions", async (req: Request, res: Response) => {
+  try {
+    const { importSessions } = await import("./session-import.js");
+    const result = importSessions();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Import failed" });
+  }
+});
+
+// GET /api/import/status - Get import statistics
+app.get("/api/import/status", (req: Request, res: Response) => {
+  try {
+    const status = database.getImportStatus();
+    res.json({ success: true, data: status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Failed to get import status" });
   }
 });
 
@@ -1351,6 +1374,49 @@ io.on("connection", (socket) => {
     }
   });
 
+  // -- Terminal handlers --
+
+  const socketTerminals = new Set<string>();
+
+  socket.on("terminal_spawn", (data: { terminalId: string; cwd: string }) => {
+    const { terminalId, cwd } = data;
+
+    try {
+      ptyService.spawnTerminal(
+        terminalId,
+        cwd,
+        (output: string) => {
+          socket.emit("terminal_output", { terminalId, data: output });
+        },
+        (exitCode: number) => {
+          socket.emit("terminal_exit", { terminalId, exitCode });
+          socketTerminals.delete(terminalId);
+        }
+      );
+      socketTerminals.add(terminalId);
+      socket.emit("terminal_spawned", { terminalId });
+    } catch (error) {
+      log.error("Failed to spawn terminal", { terminalId, error: String(error) });
+      socket.emit("terminal_error", { terminalId, error: String(error) });
+    }
+  });
+
+  socket.on("terminal_input", (data: { terminalId: string; data: string }) => {
+    const { terminalId, data: input } = data;
+    ptyService.writeTerminal(terminalId, input);
+  });
+
+  socket.on("terminal_resize", (data: { terminalId: string; cols: number; rows: number }) => {
+    const { terminalId, cols, rows } = data;
+    ptyService.resizeTerminal(terminalId, cols, rows);
+  });
+
+  socket.on("terminal_kill", (data: { terminalId: string }) => {
+    const { terminalId } = data;
+    ptyService.killTerminal(terminalId);
+    socketTerminals.delete(terminalId);
+  });
+
   // -- Disconnect --
 
   socket.on("disconnect", () => {
@@ -1359,6 +1425,12 @@ io.on("connection", (socket) => {
     if (client) {
       log.debug("Client disconnected", { sessions: [...client.sessions] });
     }
+
+    // Kill all terminals owned by this socket
+    for (const terminalId of socketTerminals) {
+      ptyService.killTerminal(terminalId);
+    }
+    socketTerminals.clear();
   });
 });
 

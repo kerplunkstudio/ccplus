@@ -1,0 +1,21 @@
+.terminal-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #18181b;
+}
+
+.terminal-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.terminal-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #ef4444;
+  font-size: 14px;
+}
