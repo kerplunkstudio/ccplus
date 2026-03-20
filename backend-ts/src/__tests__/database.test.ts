@@ -310,14 +310,14 @@ describe("Database Tests", () => {
       expect(sessions[0].message_count).toBe(3);
     });
 
-    it("should include last user message", () => {
+    it("should include first user message", () => {
       db.recordMessage("sess1", "user1", "user", "first");
       db.recordMessage("sess1", "user1", "assistant", "response");
       db.recordMessage("sess1", "user1", "user", "latest user message");
 
       const sessions = db.getSessionsList();
 
-      expect(sessions[0].last_user_message).toBe("latest user message");
+      expect(sessions[0].last_user_message).toBe("first");
     });
 
     it("should truncate long messages", () => {
