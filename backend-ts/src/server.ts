@@ -22,6 +22,7 @@ import { scheduler, validateCronExpression } from "./scheduler.js";
 import { eventLog } from "./event-log.js";
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
+import { computeTrustScore } from './trust-score.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -687,6 +688,24 @@ app.post("/api/sessions/:sessionId/archive", (req: Request, res: Response) => {
   } catch (err) {
     log.error("Failed to archive session", { sessionId: req.params.sessionId, error: String(err) });
     res.status(500).json({ error: "Failed to archive session" });
+  }
+});
+
+app.get("/api/sessions/:sessionId/trust-score", (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: "Session ID required" });
+    }
+    const { tools, queries, conversations } = database.getSessionTrustData(sessionId);
+    if (tools.length === 0 && conversations.length === 0) {
+      return res.status(404).json({ success: false, error: "Session not found or has no data" });
+    }
+    const trustMetrics = computeTrustScore(sessionId, tools, queries, conversations);
+    return res.json({ success: true, data: trustMetrics });
+  } catch (err) {
+    log.error("Failed to compute trust score", { sessionId: req.params.sessionId, error: String(err) });
+    return res.status(500).json({ success: false, error: "Failed to compute trust score" });
   }
 });
 

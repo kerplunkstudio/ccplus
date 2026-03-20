@@ -32,6 +32,7 @@ interface ChatPanelProps {
   onCancel: () => void;
   onToggleSessions?: () => void;
   onToggleActivity?: () => void;
+  onToggleTrustScore?: () => void;
   projectPath?: string | null;
   onLoadSession?: (sessionId: string) => void;
   sessionId?: string;
@@ -78,6 +79,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onCancel,
   onToggleSessions,
   onToggleActivity,
+  onToggleTrustScore,
   projectPath,
   onLoadSession,
   sessionId,
@@ -124,6 +126,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onSelectModel={onSelectModel}
           onToggleSessions={onToggleSessions}
           onToggleActivity={onToggleActivity}
+          onToggleTrustScore={onToggleTrustScore}
         />
 
         <MessageList
