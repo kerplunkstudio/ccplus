@@ -190,12 +190,9 @@ export function useSessionRestore({
           });
 
           if (isStreaming) {
-            const startedIds = new Set<string>();
             const completedIds = new Set<string>();
             for (const e of toolEvents) {
-              if (e.type === 'tool_start' || e.type === 'agent_start') {
-                startedIds.add(e.tool_use_id!);
-              } else if (e.type === 'tool_complete' || e.type === 'agent_stop') {
+              if (e.type === 'tool_complete' || e.type === 'agent_stop') {
                 completedIds.add(e.tool_use_id!);
               }
             }
@@ -333,12 +330,9 @@ export function useSessionRestore({
           });
 
           if (isStreaming) {
-            const startedIds = new Set<string>();
             const completedIds = new Set<string>();
             for (const e of toolEvents) {
-              if (e.type === 'tool_start' || e.type === 'agent_start') {
-                startedIds.add(e.tool_use_id!);
-              } else if (e.type === 'tool_complete' || e.type === 'agent_stop') {
+              if (e.type === 'tool_complete' || e.type === 'agent_stop') {
                 completedIds.add(e.tool_use_id!);
               }
             }
