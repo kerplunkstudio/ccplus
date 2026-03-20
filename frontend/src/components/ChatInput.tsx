@@ -65,6 +65,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
   const previousSessionIdRef = useRef<string | undefined>(sessionId);
+  const previousQueuedSessionRef = useRef<string | undefined>(sessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
@@ -197,16 +198,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Persist queued messages per session on tab switch
   useEffect(() => {
-    if (previousSessionIdRef.current && previousSessionIdRef.current !== sessionId) {
+    const prevSession = previousQueuedSessionRef.current;
+    if (prevSession && prevSession !== sessionId) {
       // Save current queued message under old session
       if (queuedMessage) {
         queuedMessagesRef.current = {
           ...queuedMessagesRef.current,
-          [previousSessionIdRef.current]: queuedMessage,
+          [prevSession]: queuedMessage,
         };
       } else {
         // Clean up if no queued message
-        const { [previousSessionIdRef.current]: _, ...rest } = queuedMessagesRef.current;
+        const { [prevSession]: _, ...rest } = queuedMessagesRef.current;
         queuedMessagesRef.current = rest;
       }
 
@@ -218,6 +220,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         queuedMessagesRef.current = rest;
       }
     }
+    previousQueuedSessionRef.current = sessionId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]); // intentionally exclude queuedMessage to avoid loops
 

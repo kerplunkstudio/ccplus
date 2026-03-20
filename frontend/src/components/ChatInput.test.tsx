@@ -618,5 +618,293 @@ describe('ChatInput', () => {
         expect(indicator?.textContent?.length).toBeLessThan(90);
       });
     });
+
+    // Per-Session Queued Message Persistence Tests
+    describe('Per-Session Queued Message Persistence', () => {
+      it('preserves queued message when switching sessions while streaming', async () => {
+        jest.clearAllMocks();
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue a message in session A
+        await userEvent.type(textarea, 'Queued for session A');
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Queued for session A/i)).toBeInTheDocument();
+        });
+
+        // Switch to session B (still streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Queued message from session A should not appear (use getByRole instead to avoid timing issues)
+        expect(screen.queryByText(/Queued for session A/i)).not.toBeInTheDocument();
+
+        // Switch back to session A (still streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Queued message should be restored
+        await waitFor(() => {
+          expect(screen.getByText(/Queued for session A/i)).toBeInTheDocument();
+        });
+      });
+
+      it('sends queued message to correct session when streaming ends', async () => {
+        jest.clearAllMocks();
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue a message in session A
+        await userEvent.type(textarea, 'Message for A');
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Message for A/i)).toBeInTheDocument();
+        });
+
+        // Switch to session B (still streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Message should NOT be visible for session B
+        expect(screen.queryByText(/Message for A/i)).not.toBeInTheDocument();
+
+        // Stop streaming in session B
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={false} />
+          </ToastProvider>
+        );
+
+        // Message should still NOT be sent (it's for session A, not B)
+        expect(mockOnSendMessage).not.toHaveBeenCalled();
+
+        // Switch back to session A (still not streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={false} />
+          </ToastProvider>
+        );
+
+        // NOW the message should be sent to session A when restored and not streaming
+        await waitFor(() => {
+          expect(mockOnSendMessage).toHaveBeenCalledWith('Message for A', undefined, undefined, undefined, undefined);
+        });
+      });
+
+      it('does not send queued message to wrong session on tab switch', async () => {
+        jest.clearAllMocks();
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue a message in session A
+        await userEvent.type(textarea, 'Queued in A');
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Queued in A/i)).toBeInTheDocument();
+        });
+
+        // Switch to session B (still streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Queued message should not appear for session B
+        expect(screen.queryByText(/Queued in A/i)).not.toBeInTheDocument();
+
+        // Stop streaming in session B
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={false} />
+          </ToastProvider>
+        );
+
+        // Message should NOT be sent to session B (even after delay)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(mockOnSendMessage).not.toHaveBeenCalled();
+      });
+
+      it('handles multiple sessions with different queued messages', async () => {
+        jest.clearAllMocks();
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textareaA = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue message in session A
+        await userEvent.type(textareaA, 'Message A');
+        fireEvent.keyDown(textareaA, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Message A/i)).toBeInTheDocument();
+        });
+
+        // Switch to session B (also streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Message A should not appear
+        expect(screen.queryByText(/Message A/i)).not.toBeInTheDocument();
+
+        const textareaB = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue different message in session B
+        await userEvent.type(textareaB, 'Message B');
+        fireEvent.keyDown(textareaB, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Message B/i)).toBeInTheDocument();
+        });
+
+        // Switch back to session A (still streaming)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Should show session A's message, not B's
+        await waitFor(() => {
+          expect(screen.getByText(/Message A/i)).toBeInTheDocument();
+        });
+        expect(screen.queryByText(/Message B/i)).not.toBeInTheDocument();
+
+        // Stop streaming in session A
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={false} />
+          </ToastProvider>
+        );
+
+        // Message A should be sent
+        await waitFor(() => {
+          expect(mockOnSendMessage).toHaveBeenCalledWith('Message A', undefined, undefined, undefined, undefined);
+        });
+
+        mockOnSendMessage.mockClear();
+
+        // Switch to session B and stop streaming
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={false} />
+          </ToastProvider>
+        );
+
+        // Message B should be sent
+        await waitFor(() => {
+          expect(mockOnSendMessage).toHaveBeenCalledWith('Message B', undefined, undefined, undefined, undefined);
+        });
+      });
+
+      it('cleans up queued message ref when message is sent', async () => {
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue a message
+        await userEvent.type(textarea, 'Test cleanup');
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Test cleanup/i)).toBeInTheDocument();
+        });
+
+        // Stop streaming to trigger auto-send
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={false} />
+          </ToastProvider>
+        );
+
+        // Message should be sent
+        await waitFor(() => {
+          expect(mockOnSendMessage).toHaveBeenCalledWith('Test cleanup', undefined, undefined, undefined, undefined);
+        });
+
+        // Queued indicator should disappear
+        await waitFor(() => {
+          expect(screen.queryByText(/Test cleanup/i)).not.toBeInTheDocument();
+        });
+
+        // Switch to session B then back to session A (streaming again)
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Should not restore the sent message (ref was cleaned up)
+        expect(screen.queryByText(/Test cleanup/i)).not.toBeInTheDocument();
+      });
+
+      it('clears queued message when dismissed, no restoration on return', async () => {
+        const { rerender } = renderWithToast(
+          <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+        );
+        const textarea = screen.getByPlaceholderText(/Type a message to queue/i);
+
+        // Queue a message
+        await userEvent.type(textarea, 'Dismiss me');
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+        await waitFor(() => {
+          expect(screen.getByText(/Dismiss me/i)).toBeInTheDocument();
+        });
+
+        // Dismiss the queued message
+        const dismissBtn = screen.getByLabelText(/Cancel queued message/i);
+        fireEvent.click(dismissBtn);
+
+        await waitFor(() => {
+          expect(screen.queryByText(/Dismiss me/i)).not.toBeInTheDocument();
+        });
+
+        // Switch to session B then back to session A
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-B" streaming={true} />
+          </ToastProvider>
+        );
+
+        rerender(
+          <ToastProvider>
+            <ChatInput {...defaultProps} sessionId="session-A" streaming={true} />
+          </ToastProvider>
+        );
+
+        // Dismissed message should not be restored
+        expect(screen.queryByText(/Dismiss me/i)).not.toBeInTheDocument();
+      });
+    });
   });
 });
