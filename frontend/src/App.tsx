@@ -46,6 +46,19 @@ function AppContent() {
   // Store the screenshot capture function from BrowserTab
   const screenshotCaptureFnRef = useRef<(() => Promise<{ image: string | null; url: string; error?: string }>) | null>(null);
 
+  // Track the last chat tab sessionId so terminal tabs can show chat underneath
+  const lastChatSessionIdRef = useRef<string>('');
+
+  // Update last chat session when a non-terminal, non-browser tab is active
+  useEffect(() => {
+    if (activeTab && activeTab.type !== 'terminal' && activeTab.type !== 'browser') {
+      lastChatSessionIdRef.current = activeTab.sessionId;
+    }
+  }, [activeTab]);
+
+  // Use last chat session for socket when terminal is active
+  const socketSessionId = (activeTab?.type === 'terminal' ? lastChatSessionIdRef.current : activeTab?.sessionId) || '';
+
   const handleDevServerDetected = useCallback((url: string) => {
     if (!activeProject) return;
 
@@ -57,7 +70,7 @@ function AppContent() {
     workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
   }, [activeProject, workspace]);
 
-  const socketData = useTabSocket(activeTab?.sessionId || '', { onDevServerDetected: handleDevServerDetected });
+  const socketData = useTabSocket(socketSessionId, { onDevServerDetected: handleDevServerDetected });
   const {
     socket,
     connected,
@@ -569,9 +582,9 @@ function AppContent() {
   const shouldShowDashboard = activeProject && (showDashboard || !hasTabs) && !activePage;
   const isBrowserTab = activeTab?.type === 'browser';
   const isTerminalTab = activeTab?.type === 'terminal';
-  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab && !isTerminalTab;
+  // Chat shows for all tabs except browser tabs (terminal floats on top of chat)
+  const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !activePage && !isBrowserTab;
   const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
-  const shouldShowTerminalTab = activeProject && hasTabs && !showDashboard && !activePage && isTerminalTab;
   const shouldShowInsights = activePage === 'insights';
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
@@ -582,7 +595,6 @@ function AppContent() {
     : shouldShowMcp ? 'mcp'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
-    : shouldShowTerminalTab ? 'terminal'
     : shouldShowChatPanel ? 'chat'
     : 'no-project';
 
@@ -663,7 +675,7 @@ function AppContent() {
         )}
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowWelcome) ? 'full-width' : ''}`}>
-            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' && contentMode !== 'terminal' ? 'panel-chat-content--centered' : ''}`}>
+            <div key={contentMode} className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
                   onSelectPrompt={handleWelcomePrompt}
@@ -689,12 +701,6 @@ function AppContent() {
                     onRegisterCapture={(fn) => {
                       screenshotCaptureFnRef.current = fn;
                     }}
-                  />
-                ) : shouldShowTerminalTab && activeTab?.sessionId ? (
-                  <TerminalTab
-                    terminalId={activeTab.sessionId}
-                    cwd={activeTab.projectPath || activeProject.path}
-                    socket={socket}
                   />
                 ) : shouldShowChatPanel ? (
                   <ChatPanel
@@ -747,6 +753,28 @@ function AppContent() {
               <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} />
             </div>
           )}
+          {/* Floating terminal panels — always mounted, visibility toggled */}
+          {activeProject && activeProject.tabs
+            .filter(tab => tab.type === 'terminal')
+            .map(tab => (
+              <div
+                key={tab.sessionId}
+                style={{ display: isTerminalTab && activeTab?.sessionId === tab.sessionId ? 'block' : 'none' }}
+              >
+                <TerminalTab
+                  terminalId={tab.sessionId}
+                  cwd={tab.projectPath || activeProject.path}
+                  socket={socket}
+                  visible={isTerminalTab && activeTab?.sessionId === tab.sessionId}
+                  onClose={() => handleCloseTabInActiveProject(tab.sessionId)}
+                  onMinimize={() => {
+                    if (lastChatSessionIdRef.current) {
+                      handleSelectTabInActiveProject(lastChatSessionIdRef.current);
+                    }
+                  }}
+                />
+              </div>
+            ))}
         </div>
       </div>
       </div>

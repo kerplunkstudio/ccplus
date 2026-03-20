@@ -131,6 +131,12 @@
   color: var(--text-secondary);
 }
 
+.tab-new-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
 .tab-new-btn {
   display: flex;
   align-items: center;

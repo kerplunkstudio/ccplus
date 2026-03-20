@@ -140,7 +140,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Keep textarea always focused and ready for input
   useEffect(() => {
+    const isTerminalActive = () => {
+      const terminal = document.querySelector('.terminal-floating');
+      return terminal && (terminal as HTMLElement).offsetParent !== null;
+    };
+
     const focusTextarea = () => {
+      if (isTerminalActive()) return;
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
@@ -156,7 +162,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       // Don't steal focus from buttons or interactive elements outside the input
-      if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]') || target.closest('input') || target.closest('select') || target.closest('.project-picker')) {
+      if (target.closest('button') || target.closest('a') || target.closest('[contenteditable]') || target.closest('input') || target.closest('select') || target.closest('.project-picker') || target.closest('.terminal-floating')) {
         return;
       }
       // Don't steal focus if user has selected text

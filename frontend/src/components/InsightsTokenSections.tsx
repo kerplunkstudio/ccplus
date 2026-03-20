@@ -1,5 +1,6 @@
 import React from 'react';
 import './InsightsPanel.css';
+import { SectionLabel } from './InsightsPanel';
 
 interface RateLimitEventData {
   timestamp: string;
@@ -43,15 +44,6 @@ const formatNumber = (n: number): string => {
   return String(n);
 };
 
-const formatTimestamp = (timestamp: string): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-};
-
-const formatRetryDuration = (ms: number): string => {
-  if (ms >= 60000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
-  return `${Math.floor(ms / 1000)}s`;
-};
 
 export const InsightsTokenSections: React.FC<InsightsTokenSectionsProps> = ({
   daily,
@@ -72,7 +64,7 @@ export const InsightsTokenSections: React.FC<InsightsTokenSectionsProps> = ({
     <>
       {/* DAILY TOKEN CONSUMPTION */}
       <div className="insights-section">
-        <div className="insights-section-label">DAILY TOKEN CONSUMPTION</div>
+        <SectionLabel label="DAILY TOKEN CONSUMPTION" tooltip="Stacked chart showing input and output tokens consumed per day. Input tokens include only non-cached tokens (new context)." />
         <div className="insights-token-stacked-chart">
           <div className="insights-chart-y-axis">
             <span className="insights-y-label">{formatNumber(maxTokens)}</span>
@@ -124,23 +116,11 @@ export const InsightsTokenSections: React.FC<InsightsTokenSectionsProps> = ({
       </div>
 
       {/* RATE LIMIT EVENTS */}
-      {rateLimitEvents && rateLimitEvents.length > 0 && (
+      {totalRateLimits != null && totalRateLimits > 0 && (
         <div className="insights-section">
-          <div className="insights-section-label">RATE LIMIT EVENTS</div>
+          <SectionLabel label="RATE LIMIT EVENTS" tooltip="Number of times the API rate limiter was hit during the period." />
           <div className="insights-rate-limit-summary">
             {totalRateLimits} events in {selectedDays} days
-          </div>
-          <div className="insights-rate-limit-list">
-            {rateLimitEvents.slice(0, 10).map((event) => (
-              <div key={`${event.session_id}-${event.timestamp}`} className="insights-rate-limit-row">
-                <div className="insights-rate-limit-time">{formatTimestamp(event.timestamp)}</div>
-                <div className="insights-rate-limit-bar-wrapper">
-                  <div className="insights-rate-limit-bar" />
-                </div>
-                <div className="insights-rate-limit-duration">waited {formatRetryDuration(event.retry_after_ms)}</div>
-                <div className="insights-rate-limit-session">{event.session_id.substring(0, 8)}</div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -148,7 +128,7 @@ export const InsightsTokenSections: React.FC<InsightsTokenSectionsProps> = ({
       {/* CACHE EFFICIENCY */}
       {showCache && (
         <div className="insights-section">
-          <div className="insights-section-label">CACHE EFFICIENCY</div>
+          <SectionLabel label="CACHE EFFICIENCY" tooltip="Percentage of input tokens served from Anthropic's prompt cache vs sent fresh. Higher is better — cached tokens cost 90% less. Formula: cache_read / (cache_read + new_input)." />
           <div className="insights-cache-hit-rate">
             {cacheHitRate !== undefined
               ? `${cacheHitRate.toFixed(1)}%`
@@ -184,7 +164,7 @@ export const InsightsTokenSections: React.FC<InsightsTokenSectionsProps> = ({
       {/* TOP SESSIONS BY TOKEN USAGE */}
       {sessionData && sessionData.length > 0 && (
         <div className="insights-section">
-          <div className="insights-section-label">TOP SESSIONS BY TOKEN USAGE</div>
+          <SectionLabel label="TOP SESSIONS BY TOKEN USAGE" tooltip="Sessions ranked by total token consumption (input + output). Helps identify which conversations used the most resources." />
           <div className="insights-table">
             <div className="insights-table-header insights-table-header-sessions">
               <div className="insights-table-cell insights-table-cell-session">Session</div>
