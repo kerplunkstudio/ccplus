@@ -347,7 +347,7 @@ function AppContent() {
   useEffect(() => {
     prevActiveSessionRef.current = activeTab?.sessionId || null;
     setShowTrustScore(false);
-  });
+  }, [activeTab?.sessionId]);
 
   useEffect(() => {
     if (!activeProject || !activeTab) return;
