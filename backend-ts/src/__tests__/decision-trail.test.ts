@@ -150,15 +150,15 @@ describe('extractFilePath', () => {
 })
 
 describe('collectFilesTouched', () => {
-  it('collects unique file paths from Read/Edit/Write', () => {
+  it('collects unique file paths from Edit/Write (excludes Read)', () => {
     const rows = [
       makeToolRow({ tool_name: 'Read', parameters: { file_path: '/a.ts' } }),
       makeToolRow({ tool_name: 'Edit', parameters: { file_path: '/b.ts' } }),
       makeToolRow({ tool_name: 'Write', parameters: { file_path: '/c.ts' } }),
-      makeToolRow({ tool_name: 'Read', parameters: { file_path: '/a.ts' } }) // duplicate
+      makeToolRow({ tool_name: 'Edit', parameters: { file_path: '/b.ts' } }) // duplicate
     ]
     const files = collectFilesTouched(rows)
-    expect(files).toEqual(['/a.ts', '/b.ts', '/c.ts'])
+    expect(files).toEqual(['/b.ts', '/c.ts'])
   })
 
   it('ignores non-file tools', () => {
