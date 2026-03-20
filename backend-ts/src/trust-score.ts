@@ -176,10 +176,11 @@ export function computeSummary(
     }
 
     // Security flag detection
-    if (tool.parameters.includes(".env")) {
+    const paramStr = tool.parameters ?? "";
+    if (paramStr.includes(".env")) {
       securityFlags.push("env_file_detected");
     }
-    if (tool.parameters.includes("password") || tool.parameters.includes("secret") || tool.parameters.includes("token")) {
+    if (paramStr.includes("password") || paramStr.includes("secret") || paramStr.includes("token")) {
       securityFlags.push("sensitive_string_detected");
     }
   }
@@ -227,7 +228,7 @@ export function computeFlags(summary: TrustSummary, tools: SessionToolData[]): T
 
   // Scan for security issues in tool parameters
   for (const tool of tools) {
-    const params = tool.parameters;
+    const params = tool.parameters ?? "";
 
     // Critical: .env file access
     if (params.includes(".env")) {
