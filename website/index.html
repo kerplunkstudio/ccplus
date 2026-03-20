@@ -445,6 +445,7 @@
             border-right: 1px solid oklch(25% 0.01 60);
             overflow: hidden;
             min-height: 0;
+            position: relative;
         }
 
         .app-chat-panel {
@@ -657,6 +658,68 @@
             font-size: 0.625rem;
             color: var(--accent-dim);
             margin-left: auto;
+        }
+
+        /* Terminal Overlay */
+        .terminal-overlay {
+            position: absolute;
+            bottom: 0.75rem;
+            right: 0.75rem;
+            width: 220px;
+            background: oklch(12% 0.01 60);
+            border: 1px solid oklch(30% 0.01 60);
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px oklch(0% 0 0 / 0.3);
+            display: none;
+            z-index: 10;
+        }
+
+        .terminal-overlay.visible {
+            display: block;
+        }
+
+        .terminal-header {
+            background: oklch(18% 0.01 60);
+            padding: 0.4rem 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid oklch(25% 0.01 60);
+        }
+
+        .terminal-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--warm-gray-light);
+        }
+
+        .terminal-minimize {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: oklch(75% 0.12 85);
+        }
+
+        .terminal-content {
+            padding: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            line-height: 1.4;
+            color: var(--warm-gray-light);
+            height: 100px;
+        }
+
+        .terminal-line {
+            margin-bottom: 0.25rem;
+        }
+
+        .terminal-prompt {
+            color: var(--accent);
+        }
+
+        .terminal-output {
+            color: oklch(55% 0.05 145);
         }
 
         /* Browser Preview */
@@ -896,18 +959,27 @@
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .features-grid-tertiary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
             margin-bottom: clamp(2rem, 4vw, 3rem);
         }
 
         @media (max-width: 1100px) {
-            .features-grid-secondary {
+            .features-grid-secondary,
+            .features-grid-tertiary {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
         @media (max-width: 768px) {
             .features-grid,
-            .features-grid-secondary {
+            .features-grid-secondary,
+            .features-grid-tertiary {
                 grid-template-columns: 1fr;
             }
         }
@@ -1362,6 +1434,20 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Terminal Overlay (visible on tab 0) -->
+                                <div class="terminal-overlay visible" id="terminal-overlay">
+                                    <div class="terminal-header">
+                                        <span class="terminal-title">Terminal</span>
+                                        <span class="terminal-minimize"></span>
+                                    </div>
+                                    <div class="terminal-content">
+                                        <div class="terminal-line"><span class="terminal-prompt">$</span> git status</div>
+                                        <div class="terminal-line terminal-output">On branch refactor/auth</div>
+                                        <div class="terminal-line terminal-output">Changes not staged for commit:</div>
+                                        <div class="terminal-line terminal-output">  modified:   middleware/auth.ts</div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Activity Panels -->
@@ -1536,19 +1622,37 @@
             <div class="features-grid-secondary">
                 <div class="feature-card">
                     <h3>Built-in Browser</h3>
-                    <p>Browser tabs alongside chat. Dev server auto-detection opens tabs automatically.</p>
+                    <p>Open localhost right next to your chat. Dev servers detected automatically.</p>
                 </div>
                 <div class="feature-card">
-                    <h3>Analytics Dashboard</h3>
-                    <p>Cost trends, tool success rates, token usage. Per-project breakdowns.</p>
+                    <h3>Token Dashboard</h3>
+                    <p>See what you're spending. Cost per query, model breakdowns, cache hit rates. Import old sessions for the full picture.</p>
                 </div>
                 <div class="feature-card">
-                    <h3>Voice & Command Palette</h3>
-                    <p>Push-to-talk voice. Cmd+K fuzzy search across sessions and projects.</p>
+                    <h3>Command Palette</h3>
+                    <p>Cmd+K. Find any session, project, or action instantly.</p>
                 </div>
                 <div class="feature-card">
                     <h3>Open Source & Free</h3>
-                    <p>MIT license. No tracking. Plugin marketplace. MCP server management. Theming.</p>
+                    <p>MIT license. No tracking. Plugins, themes, MCP servers. 1,644 tests.</p>
+                </div>
+            </div>
+            <div class="features-grid-tertiary">
+                <div class="feature-card">
+                    <h3>Integrated Terminal</h3>
+                    <p>A real terminal, floating inside the app. Drag it around, resize it, tuck it away.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>6 Theme Presets</h3>
+                    <p>Six color palettes. Switch from your profile.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Cross-Session Memory</h3>
+                    <p>Agents remember what they learned last time.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Workflow Enforcement</h3>
+                    <p>Agents plan before they act. A state machine keeps them honest.</p>
                 </div>
             </div>
         </div>
@@ -1631,14 +1735,25 @@
             const activityColumn = document.querySelector('.app-activity');
             const inputBar = document.querySelector('.app-input-bar');
             const appContent = document.querySelector('.app-content');
+            const terminalOverlay = document.querySelector('#terminal-overlay');
+
             if (index === 2) {
                 activityColumn.style.display = 'none';
                 inputBar.style.display = 'none';
                 if (appContent) appContent.style.gridTemplateColumns = '1fr';
+                if (terminalOverlay) terminalOverlay.classList.remove('visible');
             } else {
                 activityColumn.style.display = 'block';
                 inputBar.style.display = 'block';
                 if (appContent) appContent.style.gridTemplateColumns = '1fr 400px';
+                // Show terminal only on tab 0
+                if (terminalOverlay) {
+                    if (index === 0) {
+                        terminalOverlay.classList.add('visible');
+                    } else {
+                        terminalOverlay.classList.remove('visible');
+                    }
+                }
             }
 
             // If manual click, pause cycling for 12 seconds

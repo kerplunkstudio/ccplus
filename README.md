@@ -1,21 +1,19 @@
-<div align="center">
+# cc+ — Desktop App for Claude Code
 
-# cc+
+<p align="center">
+  <img src="docs/demo.gif" alt="cc+ demo" width="800">
+</p>
 
-**A desktop app for Claude Code with multi-tab sessions, agent observability, and a built-in browser.**
+<p align="center">
+  <a href="https://github.com/kerplunkstudio/ccplus/actions"><img src="https://img.shields.io/github/actions/workflow/status/kerplunkstudio/ccplus/ci.yml?branch=main&style=for-the-badge" alt="CI"></a>
+  <a href="https://github.com/kerplunkstudio/ccplus/releases"><img src="https://img.shields.io/github/v/release/kerplunkstudio/ccplus?include_prereleases&style=for-the-badge" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge" alt="Platform"></a>
+</p>
 
-<img src="docs/demo.gif" alt="cc+ demo" width="800">
+cc+ wraps the Claude Agent SDK in a desktop app with full observability. Multi-tab sessions, real-time activity trees, usage analytics, and a built-in browser — all in one window. Free, open source, local.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]()
-
-</div>
-
----
-
-## What is cc+?
-
-cc+ wraps the Claude Agent SDK in a desktop app with full observability. Watch agents work in real time, manage multiple sessions in browser-style tabs, and get instant visual feedback without touching a single file.
+[Website](https://ccplus.run) · [GitHub](https://github.com/kerplunkstudio/ccplus) · [Install](#install) · [Highlights](#highlights) · [CLI Reference](#cli-reference) · [Development](#development) · [Contributing](#contributing)
 
 ## Install
 
@@ -23,41 +21,42 @@ cc+ wraps the Claude Agent SDK in a desktop app with full observability. Watch a
 curl -fsSL https://ccplus.run/install | sh
 ```
 
-Requires a [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) subscription. macOS and Linux only.
+Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macOS and Linux.
 
-## Features
+## Highlights
 
-| Feature | Description |
-|---------|-------------|
-| **Multi-Tab Sessions** | Browser-style tabs (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is independent. |
-| **Agent Observability** | Real-time activity trees showing every tool call, agent spawn, and decision. |
-| **Built-in Browser** | Browser tabs alongside chat. Dev server auto-detection. VerifyApp screenshots. |
-| **Command Palette** | Cmd+K for fuzzy search across sessions, projects, and actions. |
-| **Conversation Search** | Full-text search across all message history (SQLite FTS5). |
-| **Scheduled Tasks** | Recurring prompts on intervals. `/loop 5m check the deploy`. |
-| **Usage Insights** | Cost trends, tool success rates, token usage, per-project breakdowns. CSV export. |
-| **Model Selection** | Switch between Claude models on the fly. |
-| **Image Attachments** | Drag and drop images into chat. |
-| **Path Autocomplete** | Intelligent file path completion in the input. |
-| **Session Management** | Duplicate, archive, restore sessions. Persistent history across refreshes. |
-
-## Architecture
-
-User messages → WebSocket → Claude Agent SDK (in-process streaming) → Real-time callbacks → SQLite + activity tree updates.
-
-**Stack**: Node.js / TypeScript / Express + Socket.IO / React 19 / SQLite / Electron
-
-See [CLAUDE.md](CLAUDE.md) for full architecture details.
+- **Multi-Tab Sessions** — Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Each tab is its own session.
+- **Agent Observability** — Real-time activity trees. Every tool call, agent spawn, and decision.
+- **Built-in Browser** — Open localhost next to chat. Dev servers detected automatically.
+- **Integrated Terminal** — Floating terminal inside the app. Drag, resize, minimize.
+- **Command Palette** — Cmd+K. Find any session, project, or action.
+- **Usage Insights** — Cost tracking, model breakdowns, cache efficiency, tool success rates. Import historical sessions. CSV export.
+- **Conversation Search** — Full-text search across all messages (FTS5).
+- **Scheduled Tasks** — Recurring prompts on intervals. `/loop 5m check the deploy`.
+- **Cross-Session Memory** — Agents remember what they learned. Knowledge carries between sessions.
+- **Workflow Enforcement** — Agents plan before they act. State machine keeps them honest.
+- **Themes** — Six color presets. Switch from the profile.
+- **Session Import** — Pull in historical Claude Code sessions from `~/.claude/projects/`.
+- **Model Selection** — Switch Claude models per session.
+- **Image Attachments** — Drag and drop images into chat.
+- **Path Autocomplete** — File path completion in the input box.
+- **Plugin System** — Install, manage, and build plugins. MCP server support.
+- **Crash Recovery** — Auto-recovers from renderer crashes. No lost work.
 
 ## Stats
 
-- 1,575 tests (456 backend Vitest + 1,119 frontend Jest)
-- 47 React components, 26 custom hooks
-- 11 SQLite tables with FTS
-- CI on every PR (GitHub Actions)
+- 1,644 tests (524 backend Vitest + 1,120 frontend Jest)
+- 75 React components, 25 custom hooks
+- 19 SQLite tables with FTS
+- CI on every PR
 
-<details>
-<summary><strong>CLI Reference</strong></summary>
+## Architecture
+
+User messages → WebSocket → Claude Agent SDK (in-process streaming) → Real-time callbacks → SQLite + activity tree.
+
+**Stack**: Node.js / TypeScript / Express + Socket.IO / React 19 / SQLite / Electron
+
+## CLI Reference
 
 | Command | Description |
 |---------|-------------|
@@ -69,6 +68,7 @@ See [CLAUDE.md](CLAUDE.md) for full architecture details.
 | `./ccplus backend` | Build backend only |
 | `./ccplus server` | Restart server |
 | `./ccplus stop` | Stop server |
+| `./ccplus import` | Import historical Claude Code sessions |
 | `./ccplus doctor` | System diagnostics |
 | `./ccplus setup` | Re-run interactive setup |
 | `./ccplus status` | Show server status |
@@ -76,12 +76,12 @@ See [CLAUDE.md](CLAUDE.md) for full architecture details.
 | `./ccplus update` | Update to latest version |
 | `./ccplus release` | Package desktop app for distribution |
 
-</details>
+## Development
 
 <details>
-<summary><strong>Development</strong></summary>
+<summary><strong>Click to expand development guide</strong></summary>
 
-## Backend Development
+### Backend Development
 
 ```bash
 cd backend-ts
@@ -102,7 +102,7 @@ npm test
 npm run test:coverage
 ```
 
-## Frontend Development
+### Frontend Development
 
 ```bash
 cd frontend
@@ -130,7 +130,7 @@ Then hard refresh browser (Cmd+Shift+R) to clear cached assets.
 
 **Important**: Express serves from `static/chat/`, not `frontend/src/`. If you edit source files but do not deploy, the browser shows stale code.
 
-## Environment Variables
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -138,7 +138,7 @@ Then hard refresh browser (Cmd+Shift+R) to clear cached assets.
 | `SDK_MODEL` | `sonnet` | Default model for SDK queries |
 | `PORT` | `4000` | Server port |
 
-## File Tree
+### File Tree
 
 ```
 ccplus/
@@ -147,8 +147,8 @@ ccplus/
 │   └── dist/            # Compiled output (gitignored)
 ├── electron/            # Desktop app (Electron)
 ├── frontend/            # React 19 app
-│   ├── src/components/  # 47 components
-│   ├── src/hooks/       # 26 custom hooks
+│   ├── src/components/  # 75 components
+│   ├── src/hooks/       # 25 custom hooks
 │   └── build/           # Build output (gitignored)
 ├── static/chat/         # Deployed frontend (gitignored)
 ├── data/                # SQLite database (gitignored)
@@ -156,9 +156,9 @@ ccplus/
 └── ccplus               # Unified CLI launcher
 ```
 
-## Testing
+### Testing
 
-### Backend Tests
+#### Backend Tests
 
 **Run all tests**:
 ```bash
@@ -175,18 +175,18 @@ cd backend-ts && npx vitest run src/__tests__/database.test.ts
 cd backend-ts && npm run test:coverage
 ```
 
-**Test suite**: 456 tests across core modules (config, auth, database, sdk-session, server) and features (search, logger, mcp-api, mcp-config).
+**Test suite**: 524 tests across core modules (config, auth, database, sdk-session, server) and features (search, logger, mcp-api, mcp-config).
 
-### Frontend Tests
+#### Frontend Tests
 
 **Run all tests**:
 ```bash
 cd frontend && npm test
 ```
 
-**Test suite**: 1,119 tests covering components, hooks, and utilities.
+**Test suite**: 1,120 tests covering components, hooks, and utilities.
 
-### Test Policy
+#### Test Policy
 
 Tests are mandatory for all implementations:
 - **New features**: Unit tests for logic + integration tests for flows
@@ -199,11 +199,11 @@ Coverage targets: 80%+ on critical paths (sdk-session, database), 100% on utilit
 
 ## Contributing
 
-Fork, branch, test, PR. See [CLAUDE.md](CLAUDE.md) for code style and architecture details.
+Fork, branch, test, PR. See [CLAUDE.md](CLAUDE.md) for conventions.
 
 ## License
 
-MIT License. Copyright 2025-present Matias Fuentes. See [LICENSE](LICENSE) for details.
+MIT License. Copyright 2025-present Matias Fuentes. See [LICENSE](LICENSE).
 
 ---
 
