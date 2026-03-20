@@ -236,4 +236,42 @@ export interface SessionMetadata {
   verbose?: boolean;
 }
 
+export interface TrustDimensions {
+  test_coverage: number;
+  scope_discipline: number;
+  error_rate: number;
+  cost_efficiency: number;
+  security: number;
+}
+
+export interface TrustSummary {
+  files_touched: string[];
+  files_created: string[];
+  files_deleted: string[];
+  tests_run: number;
+  tests_passed: number;
+  tests_failed: number;
+  total_tool_calls: number;
+  failed_tool_calls: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  duration_ms: number;
+  agents_spawned: number;
+  security_flags: string[];
+}
+
+export interface TrustFlag {
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  detail?: string;
+}
+
+export interface TrustMetrics {
+  session_id: string;
+  overall_score: number;
+  dimensions: TrustDimensions;
+  summary: TrustSummary;
+  flags: TrustFlag[];
+}
+
 export * from './workspace';
