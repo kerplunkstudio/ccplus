@@ -1089,14 +1089,40 @@ app.post("/api/sessions/start", (req: Request, res: Response) => {
       return;
     }
 
+    // Validate model parameter if provided
+    if (model !== undefined && (typeof model !== 'string' || model.trim() === '')) {
+      res.status(400).json({ success: false, error: 'model must be a non-empty string if provided' });
+      return;
+    }
+
+    // Normalize and validate workspace path
+    const resolvedWorkspace = path.resolve(workspace.trim());
+    const homeDir = path.resolve(homedir());
+
+    // Enforce home directory constraint
+    if (!resolvedWorkspace.startsWith(homeDir)) {
+      res.status(403).json({ success: false, error: 'Workspace must be within home directory' });
+      return;
+    }
+
     // Validate workspace path exists
-    if (!existsSync(workspace) || !statSync(workspace).isDirectory()) {
+    if (!existsSync(resolvedWorkspace) || !statSync(resolvedWorkspace).isDirectory()) {
       res.status(400).json({ success: false, error: 'workspace path does not exist or is not a directory' });
       return;
     }
 
     // Generate or validate session_id
-    const sessionId = session_id && typeof session_id === 'string' ? session_id : uuidv4();
+    let sessionId: string;
+    if (session_id && typeof session_id === 'string') {
+      // Validate session_id format: alphanumeric, dots, dashes, underscores, max 128 chars
+      if (!/^[a-zA-Z0-9_.-]{1,128}$/.test(session_id)) {
+        res.status(400).json({ success: false, error: 'session_id must be alphanumeric with dots, dashes, or underscores (max 128 characters)' });
+        return;
+      }
+      sessionId = session_id;
+    } else {
+      sessionId = uuidv4();
+    }
 
     // Check if session already has an active query
     if (sdkSession.isActive(sessionId)) {
@@ -1115,7 +1141,7 @@ app.post("/api/sessions/start", (req: Request, res: Response) => {
         'user',
         trimmedPrompt,
         undefined,
-        workspace,
+        resolvedWorkspace,
         undefined
       );
 
@@ -1134,17 +1160,25 @@ app.post("/api/sessions/start", (req: Request, res: Response) => {
     }
 
     // Store workspace for this session
-    sessionWorkspaces.set(sessionId, workspace);
+    sessionWorkspaces.set(sessionId, resolvedWorkspace);
 
     // Submit query to SDK (fire-and-forget, same as socket handler)
     sdkSession.submitQuery(
       sessionId,
       trimmedPrompt,
-      workspace,
-      buildSocketCallbacks(sessionId, workspace),
+      resolvedWorkspace,
+      buildSocketCallbacks(sessionId, resolvedWorkspace),
       model && typeof model === 'string' ? model : undefined,
       undefined
     );
+
+    // Emit socket event for frontend discovery
+    io.emit('session_created', {
+      session_id: sessionId,
+      workspace: resolvedWorkspace,
+      prompt: trimmedPrompt,
+      model: model && typeof model === 'string' ? model : undefined
+    });
 
     res.json({
       success: true,
