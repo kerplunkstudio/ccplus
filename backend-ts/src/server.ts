@@ -1073,7 +1073,8 @@ function joinSession(socket: import("socket.io").Socket, sessionId: string, user
 
   // Check if session has active query — re-register callbacks
   if (sdkSession.isActive(sessionId)) {
-    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId));
+    const sessionProjectPath = getWorkspaceForSession(sessionId);
+    sdkSession.registerCallbacks(sessionId, buildSocketCallbacks(sessionId, sessionProjectPath));
 
     const payload = { session_id: sessionId };
     const event = eventLog.append(sessionId, 'stream_active', payload);
@@ -1154,7 +1155,7 @@ io.on("connection", (socket) => {
       sid,
       content || "[Image attached]",
       workspace,
-      buildSocketCallbacks(sid),
+      buildSocketCallbacks(sid, projectPathData || undefined),
       model,
       imageIdsData.length ? imageIdsData : undefined,
     );
@@ -1363,7 +1364,7 @@ io.on("connection", (socket) => {
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 
-function buildSocketCallbacks(sessionId: string) {
+function buildSocketCallbacks(sessionId: string, projectPath?: string) {
   return {
     onText: (text: string, messageIndex: number) => {
       const payload = { session_id: sessionId, text, message_index: messageIndex };
@@ -1403,6 +1404,23 @@ function buildSocketCallbacks(sessionId: string) {
         log.error("Failed to increment user stats", { sessionId, error: String(e) });
       }
 
+      // Record per-query usage for insights dashboard
+      try {
+        database.recordQueryUsage({
+          sessionId,
+          inputTokens: (result.input_tokens as number) ?? 0,
+          outputTokens: (result.output_tokens as number) ?? 0,
+          cacheReadInputTokens: (result.cache_read_input_tokens as number) ?? 0,
+          cacheCreationInputTokens: (result.cache_creation_input_tokens as number) ?? 0,
+          costUsd: (result.cost as number) ?? 0,
+          durationMs: (result.duration_ms as number) ?? 0,
+          model: (result.model as string) ?? null,
+          projectPath: projectPath ?? null,
+        });
+      } catch (e) {
+        log.error("Failed to record query usage", { sessionId, error: String(e) });
+      }
+
       // Persist session context for tab restoration
       try {
         database.updateSessionContext(
@@ -1419,6 +1437,8 @@ function buildSocketCallbacks(sessionId: string) {
         duration_ms: result.duration_ms,
         input_tokens: result.input_tokens,
         output_tokens: result.output_tokens,
+        cache_read_input_tokens: result.cache_read_input_tokens,
+        cache_creation_input_tokens: result.cache_creation_input_tokens,
         context_window_size: result.context_window_size,
         model: result.model,
         sdk_session_id: result.sdk_session_id,
@@ -1455,6 +1475,11 @@ function buildSocketCallbacks(sessionId: string) {
       const payload = { ...data, session_id: sessionId };
       const event = eventLog.append(sessionId, 'rate_limit', payload);
       io.to(sessionId).emit("rate_limit", { ...payload, seq: event.seq });
+      try {
+        database.recordRateLimitEvent(sessionId, data.retryAfterMs);
+      } catch (err) {
+        log.error('Failed to record rate limit event:', { error: String(err) });
+      }
     },
     onPromptSuggestion: (suggestions: string[]) => {
       io.to(sessionId).emit("prompt_suggestions", { suggestions });
@@ -1610,7 +1635,7 @@ setInterval(() => {
           sessionId,
           task.prompt,
           workspace,
-          buildSocketCallbacks(sessionId),
+          buildSocketCallbacks(sessionId, workspace),
           undefined,
           undefined,
         );

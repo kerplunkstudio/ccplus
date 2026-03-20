@@ -24,6 +24,8 @@ describe("Database Tests", () => {
       database.exec("DELETE FROM user_stats");
       database.exec("DELETE FROM workspace_state");
       database.exec("DELETE FROM session_context");
+      database.exec("DELETE FROM rate_limit_events");
+      database.exec("DELETE FROM query_usage");
       // FTS table is automatically cleaned when conversations are deleted (via trigger)
     } catch {
       // Tables might not exist yet, that's okay
@@ -946,16 +948,22 @@ describe("Database Tests", () => {
         VALUES (?, ?, ?, ?, date('now', '-10 days'), ?)
       `).run("recent_session", "user1", "assistant", "assistant response", "/path/to/project1");
 
-      // Insert tool events from 10 days ago
+      // Insert tool events from 10 days ago (for tool_calls count)
       database.prepare(`
-        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
-        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
-      `).run("recent_session", "Read", "t1", 1, 1000, 500);
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "Read", "t1", 1);
 
       database.prepare(`
-        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success, input_tokens, output_tokens)
-        VALUES (?, ?, ?, date('now', '-10 days'), ?, ?, ?)
-      `).run("recent_session", "Write", "t2", 1, 2000, 1000);
+        INSERT INTO tool_usage (session_id, tool_name, tool_use_id, timestamp, success)
+        VALUES (?, ?, ?, date('now', '-10 days'), ?)
+      `).run("recent_session", "Write", "t2", 1);
+
+      // Insert query usage from 10 days ago (for token data)
+      database.prepare(`
+        INSERT INTO query_usage (session_id, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, cost_usd, duration_ms, model, project_path, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, date('now', '-10 days'))
+      `).run("recent_session", 3000, 1500, 0, 0, (3000 / 1_000_000 * 3.0) + (1500 / 1_000_000 * 15.0), 1000, "claude-sonnet-4", "/path/to/project1");
 
       database.close();
     });
@@ -1090,6 +1098,7 @@ describe("Database Tests", () => {
       const database = new Database(config.DATABASE_PATH);
       database.exec("DELETE FROM conversations");
       database.exec("DELETE FROM tool_usage");
+      database.exec("DELETE FROM query_usage");
       database.close();
 
       const insights = db.getInsights();
@@ -1167,7 +1176,7 @@ describe("Database Tests", () => {
       expect(tableExists.c).toBe(1);
     });
 
-    it("should mark new database as version 4", () => {
+    it("should mark new database as version 7", () => {
       const database = new Database(config.DATABASE_PATH);
 
       const version = database.prepare(
@@ -1176,7 +1185,7 @@ describe("Database Tests", () => {
 
       database.close();
 
-      expect(version.v).toBe(4);
+      expect(version.v).toBe(7);
     });
 
     it("should have applied_at timestamp", () => {
@@ -1353,6 +1362,281 @@ describe("Database Tests", () => {
       const results = db.semanticSearchConversations("");
 
       expect(results.length).toBe(0);
+    });
+  });
+
+  describe("Rate Limit Events", () => {
+    beforeEach(() => {
+      const database = new Database(config.DATABASE_PATH);
+      try {
+        database.exec("DELETE FROM rate_limit_events");
+      } catch {
+        // Table might not exist yet
+      }
+      database.close();
+    });
+
+    it("should record rate limit event", () => {
+      db.recordRateLimitEvent("sess1", 5000);
+
+      const events = db.getRateLimitEvents(30);
+
+      expect(events.length).toBe(1);
+      expect(events[0].session_id).toBe("sess1");
+      expect(events[0].retry_after_ms).toBe(5000);
+      expect(events[0].timestamp).toBeDefined();
+    });
+
+    it("should return events within date range", () => {
+      db.recordRateLimitEvent("sess1", 5000);
+      db.recordRateLimitEvent("sess2", 10000);
+
+      const events = db.getRateLimitEvents(30);
+
+      expect(events.length).toBe(2);
+      expect(events[0].session_id).toBe("sess2"); // Ordered by timestamp DESC
+      expect(events[1].session_id).toBe("sess1");
+    });
+
+    it("should limit results to 100", () => {
+      for (let i = 0; i < 120; i++) {
+        db.recordRateLimitEvent(`sess${i}`, 1000);
+      }
+
+      const events = db.getRateLimitEvents(30);
+
+      expect(events.length).toBe(100);
+    });
+  });
+
+  describe("Cache Token Support", () => {
+    it("should accept cache token parameters in recordToolEvent", () => {
+      const result = db.recordToolEvent(
+        "sess1",
+        "Read",
+        "tool123",
+        undefined,
+        undefined,
+        true,
+        null,
+        100,
+        null,
+        1000,
+        500,
+        "Read file",
+        200,
+        50
+      );
+
+      expect(result.cache_read_input_tokens).toBe(200);
+      expect(result.cache_creation_input_tokens).toBe(50);
+    });
+
+    it("should handle null cache tokens", () => {
+      const result = db.recordToolEvent(
+        "sess1",
+        "Read",
+        "tool124",
+        undefined,
+        undefined,
+        true,
+        null,
+        100,
+        null,
+        1000,
+        500,
+        "Read file",
+        null,
+        null
+      );
+
+      expect(result.cache_read_input_tokens).toBeNull();
+      expect(result.cache_creation_input_tokens).toBeNull();
+    });
+  });
+
+  describe("recordQueryUsage", () => {
+    beforeEach(() => {
+      const database = new Database(config.DATABASE_PATH);
+      try {
+        database.exec("DELETE FROM query_usage");
+      } catch {
+        // Table might not exist yet
+      }
+      database.close();
+    });
+
+    it("should record query usage with all token metrics", () => {
+      db.recordQueryUsage({
+        sessionId: "test-session",
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 200,
+        cacheCreationInputTokens: 50,
+        costUsd: 0.05,
+        durationMs: 3000,
+        model: "claude-sonnet-4",
+        projectPath: "/path/to/project",
+      });
+
+      // Verify by querying getInsights
+      const insights = db.getInsights(30, "/path/to/project");
+      expect(insights.summary.total_input_tokens).toBe(1000);
+      expect(insights.summary.total_output_tokens).toBe(500);
+      expect(insights.summary.cache_read_input_tokens).toBe(200);
+      expect(insights.summary.cache_creation_input_tokens).toBe(50);
+      expect(insights.summary.total_cost).toBe(0.05);
+    });
+
+    it("should allow null values for optional fields", () => {
+      db.recordQueryUsage({
+        sessionId: "test-session-2",
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        costUsd: 0.01,
+        durationMs: 1000,
+        model: null,
+        projectPath: null,
+      });
+
+      const insights = db.getInsights(30);
+      expect(insights.summary.total_input_tokens).toBe(100);
+      expect(insights.summary.total_output_tokens).toBe(50);
+    });
+  });
+
+  describe("getInsights - Enhanced Metrics", () => {
+    beforeEach(() => {
+      const database = new Database(config.DATABASE_PATH);
+      try {
+        database.exec("DELETE FROM conversations");
+        database.exec("DELETE FROM tool_usage");
+        database.exec("DELETE FROM rate_limit_events");
+        database.exec("DELETE FROM query_usage");
+      } catch {
+        // Tables might not exist yet
+      }
+      database.close();
+    });
+
+    it("should include rate limit events and count in insights", () => {
+      db.recordMessage("sess1", "user1", "user", "test query");
+      db.recordRateLimitEvent("sess1", 5000);
+      db.recordRateLimitEvent("sess1", 10000);
+
+      const insights = db.getInsights(30);
+
+      expect(insights.summary.total_rate_limits).toBe(2);
+      expect(insights.rate_limit_events).toBeDefined();
+      expect(insights.rate_limit_events.length).toBe(2);
+      expect(insights.rate_limit_events[0].retry_after_ms).toBe(10000);
+    });
+
+    it("should include cache efficiency metrics in insights", () => {
+      db.recordMessage("sess1", "user1", "user", "test query");
+      db.recordQueryUsage({
+        sessionId: "sess1",
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 200,
+        cacheCreationInputTokens: 50,
+        costUsd: 0.05,
+        durationMs: 100,
+        model: "claude-sonnet-4",
+        projectPath: null,
+      });
+
+      const insights = db.getInsights(30);
+
+      expect(insights.summary.cache_read_input_tokens).toBe(200);
+      expect(insights.summary.cache_creation_input_tokens).toBe(50);
+      expect(insights.summary.cache_hit_rate).toBeGreaterThan(0);
+    });
+
+    it("should include per-session token breakdown", () => {
+      db.recordMessage("sess1", "user1", "user", "First session query");
+      db.recordMessage("sess2", "user1", "user", "Second session query");
+
+      db.recordQueryUsage({
+        sessionId: "sess1",
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 100,
+        cacheCreationInputTokens: 50,
+        costUsd: 0.05,
+        durationMs: 100,
+        model: "claude-sonnet-4",
+        projectPath: null,
+      });
+
+      db.recordQueryUsage({
+        sessionId: "sess2",
+        inputTokens: 2000,
+        outputTokens: 1000,
+        cacheReadInputTokens: 200,
+        cacheCreationInputTokens: 100,
+        costUsd: 0.10,
+        durationMs: 200,
+        model: "claude-sonnet-4",
+        projectPath: null,
+      });
+
+      const insights = db.getInsights(30);
+
+      expect(insights.by_session).toBeDefined();
+      expect(insights.by_session.length).toBeGreaterThan(0);
+
+      const sess2 = insights.by_session.find((s: any) => s.session_id === "sess2");
+      expect(sess2).toBeDefined();
+      expect(sess2.input_tokens).toBe(2000);
+      expect(sess2.output_tokens).toBe(1000);
+      expect(sess2.cache_read_tokens).toBe(200);
+      expect(sess2.label).toContain("Second session query");
+    });
+
+    it("should calculate cache hit rate correctly", () => {
+      db.recordMessage("sess1", "user1", "user", "test");
+
+      db.recordQueryUsage({
+        sessionId: "sess1",
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 250,
+        cacheCreationInputTokens: 0,
+        costUsd: 0.05,
+        durationMs: 100,
+        model: "claude-sonnet-4",
+        projectPath: null,
+      });
+
+      const insights = db.getInsights(30);
+
+      expect(insights.summary.cache_read_input_tokens).toBe(250);
+      expect(insights.summary.total_input_tokens).toBe(1000);
+      expect(insights.summary.cache_hit_rate).toBeGreaterThan(0);
+    });
+
+    it("should handle zero cache tokens gracefully", () => {
+      db.recordMessage("sess1", "user1", "user", "test");
+      db.recordQueryUsage({
+        sessionId: "sess1",
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        costUsd: 0.05,
+        durationMs: 100,
+        model: "claude-sonnet-4",
+        projectPath: null,
+      });
+
+      const insights = db.getInsights(30);
+
+      expect(insights.summary.cache_read_input_tokens).toBe(0);
+      expect(insights.summary.cache_creation_input_tokens).toBe(0);
+      expect(insights.summary.cache_hit_rate).toBe(0);
     });
   });
 });

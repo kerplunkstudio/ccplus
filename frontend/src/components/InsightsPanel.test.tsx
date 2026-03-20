@@ -19,6 +19,10 @@ const mockInsightsData = {
     total_tool_calls: 3200,
     total_sessions: 85,
     change_pct: 12.5,
+    total_rate_limits: 5,
+    cache_read_input_tokens: 50000,
+    cache_creation_input_tokens: 25000,
+    cache_hit_rate: 67.0,
   },
   daily: [
     {
@@ -64,6 +68,36 @@ const mockInsightsData = {
       tool: 'Edit',
       count: 620,
       success_rate: 0.87,
+    },
+  ],
+  rate_limit_events: [
+    {
+      timestamp: '2026-03-17T10:30:00Z',
+      session_id: 'session-abc123',
+      retry_after_ms: 45000,
+    },
+    {
+      timestamp: '2026-03-16T14:15:00Z',
+      session_id: 'session-def456',
+      retry_after_ms: 120000,
+    },
+  ],
+  by_session: [
+    {
+      session_id: 'session-xyz',
+      input_tokens: 50000,
+      output_tokens: 30000,
+      cache_read_tokens: 10000,
+      tool_count: 25,
+      label: 'Implement user authentication feature with OAuth',
+    },
+    {
+      session_id: 'session-uvw',
+      input_tokens: 30000,
+      output_tokens: 20000,
+      cache_read_tokens: 5000,
+      tool_count: 15,
+      label: 'Fix bug in payment processing module',
     },
   ],
 };
@@ -420,6 +454,305 @@ describe('InsightsPanel', () => {
     });
 
     const yLabels = document.querySelectorAll('.insights-y-label');
-    expect(yLabels.length).toBe(5); // 0, 25%, 50%, 75%, 100%
+    expect(yLabels.length).toBe(10); // 5 for daily activity + 5 for daily token consumption
+  });
+
+  it('renders daily token consumption chart', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockInsightsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('DAILY TOKEN CONSUMPTION')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Input tokens')).toBeInTheDocument();
+    expect(screen.getByText('Output tokens')).toBeInTheDocument();
+
+    const stackedBars = document.querySelectorAll('.insights-token-stacked-bar');
+    expect(stackedBars.length).toBeGreaterThan(0);
+  });
+
+  it('displays rate limit events when available', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockInsightsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('RATE LIMIT EVENTS')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('5 events in 30 days')).toBeInTheDocument();
+
+    const eventRows = document.querySelectorAll('.insights-rate-limit-row');
+    expect(eventRows.length).toBe(2);
+  });
+
+  it('hides rate limit events when none exist', async () => {
+    const noRateLimitsData = {
+      ...mockInsightsData,
+      rate_limit_events: [],
+      summary: {
+        ...mockInsightsData.summary,
+        total_rate_limits: 0,
+      },
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => noRateLimitsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Insights')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('RATE LIMIT EVENTS')).not.toBeInTheDocument();
+  });
+
+  it('displays cache efficiency when data exists', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockInsightsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CACHE EFFICIENCY')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('67.0%')).toBeInTheDocument();
+    expect(screen.getByText('cache hit rate')).toBeInTheDocument();
+  });
+
+  it('hides cache efficiency when no cache data', async () => {
+    const noCacheData = {
+      ...mockInsightsData,
+      summary: {
+        ...mockInsightsData.summary,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => noCacheData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Insights')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('CACHE EFFICIENCY')).not.toBeInTheDocument();
+  });
+
+  it('hides cache efficiency when cache fields are undefined', async () => {
+    const undefinedCacheData = {
+      ...mockInsightsData,
+      summary: {
+        ...mockInsightsData.summary,
+        cache_read_input_tokens: undefined,
+        cache_creation_input_tokens: undefined,
+      },
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => undefinedCacheData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Insights')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('CACHE EFFICIENCY')).not.toBeInTheDocument();
+  });
+
+  it('displays top sessions by token usage', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockInsightsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TOP SESSIONS BY TOKEN USAGE')).toBeInTheDocument();
+    });
+
+    // First label is 50 chars, truncated to 40 + '...'
+    expect(screen.getByText('Implement user authentication feature wi...')).toBeInTheDocument();
+    // Second label is 37 chars, not truncated
+    expect(screen.getByText('Fix bug in payment processing module')).toBeInTheDocument();
+
+    const sessionRows = document.querySelectorAll('.insights-table-row-sessions');
+    expect(sessionRows.length).toBe(2);
+  });
+
+  it('hides sessions section when no session data', async () => {
+    const noSessionsData = {
+      ...mockInsightsData,
+      by_session: [],
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => noSessionsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Insights')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('TOP SESSIONS BY TOKEN USAGE')).not.toBeInTheDocument();
+  });
+
+  it('truncates session labels longer than 40 characters', async () => {
+    const longLabelData = {
+      ...mockInsightsData,
+      by_session: [
+        {
+          session_id: 'session-long',
+          input_tokens: 10000,
+          output_tokens: 5000,
+          cache_read_tokens: 1000,
+          tool_count: 10,
+          label: 'This is a very long session label that should definitely be truncated to fit properly in the UI',
+        },
+      ],
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => longLabelData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TOP SESSIONS BY TOKEN USAGE')).toBeInTheDocument();
+    });
+
+    // 40 chars + '...'
+    const truncatedText = screen.getByText('This is a very long session label that s...');
+    expect(truncatedText).toBeInTheDocument();
+  });
+
+  it('limits rate limit events display to 10 items', async () => {
+    const manyEventsData = {
+      ...mockInsightsData,
+      summary: {
+        ...mockInsightsData.summary,
+        total_rate_limits: 15,
+      },
+      rate_limit_events: Array.from({ length: 15 }, (_, i) => ({
+        timestamp: `2026-03-${17 - i}T10:30:00Z`,
+        session_id: `session-${i}`,
+        retry_after_ms: 30000,
+      })),
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => manyEventsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('15 events in 30 days')).toBeInTheDocument();
+    });
+
+    const eventRows = document.querySelectorAll('.insights-rate-limit-row');
+    expect(eventRows.length).toBe(10);
+  });
+
+  it('limits sessions display to 10 items', async () => {
+    const manySessionsData = {
+      ...mockInsightsData,
+      by_session: Array.from({ length: 15 }, (_, i) => ({
+        session_id: `session-${i}`,
+        input_tokens: 10000,
+        output_tokens: 5000,
+        cache_read_tokens: 1000,
+        tool_count: 5,
+        label: `Session ${i}`,
+      })),
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => manySessionsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TOP SESSIONS BY TOKEN USAGE')).toBeInTheDocument();
+    });
+
+    const sessionRows = document.querySelectorAll('.insights-table-row-sessions');
+    expect(sessionRows.length).toBe(10);
+  });
+
+  it('renders stacked token bars with input and output', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockInsightsData,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('DAILY TOKEN CONSUMPTION')).toBeInTheDocument();
+    });
+
+    const inputBars = document.querySelectorAll('.insights-token-stacked-input');
+    const outputBars = document.querySelectorAll('.insights-token-stacked-output');
+
+    expect(inputBars.length).toBeGreaterThan(0);
+    expect(outputBars.length).toBeGreaterThan(0);
+  });
+
+  it('formats retry duration correctly', async () => {
+    const eventWithLongRetry = {
+      ...mockInsightsData,
+      rate_limit_events: [
+        {
+          timestamp: '2026-03-17T10:30:00Z',
+          session_id: 'session-123',
+          retry_after_ms: 125000, // 2m 5s
+        },
+      ],
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => eventWithLongRetry,
+    });
+
+    render(<InsightsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('RATE LIMIT EVENTS')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/waited 2m 5s/)).toBeInTheDocument();
   });
 });
