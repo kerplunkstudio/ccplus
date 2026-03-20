@@ -43,3 +43,37 @@ When creating PRs:
 4. **Commit & Push**
    - Detailed commit messages
    - Follow conventional commits format
+
+## PR Merge Policy
+
+### Bug Fixes
+
+All bug fix PRs MUST include:
+1. **Symptom**: What the user sees (error message, wrong behavior, crash)
+2. **Root cause**: The specific code path and why it fails (file:line reference)
+3. **Fix**: Changes that address the root cause (not a workaround)
+4. **Regression test**: A test that fails without the fix and passes with it
+
+### Features
+
+Feature PRs MUST include:
+- Unit tests for new logic
+- Integration test if it adds an API endpoint
+- No hardcoded values or secrets
+
+### All PRs
+
+- Backend tests MUST pass: `cd backend-ts && npm test`
+- Frontend tests MUST pass: `cd frontend && npm test`
+- No console.log statements
+- Follow immutable patterns (no object mutation)
+
+## Never Commit
+
+- `.env` (secrets)
+- `data/` (runtime database)
+- `logs/` (runtime logs)
+- `node_modules/` (npm packages)
+- `backend-ts/dist/` (compiled TypeScript output)
+- `frontend/build/` (build output)
+- `static/chat/` (deployed build)
