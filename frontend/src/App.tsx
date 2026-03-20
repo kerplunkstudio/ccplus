@@ -4,7 +4,6 @@ import { useWorkspace } from './hooks/useWorkspace';
 import { useTabSocket } from './hooks/useTabSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
-import { TrustScore } from './components/TrustScore';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
@@ -114,7 +113,6 @@ function AppContent() {
 
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
 
-  const [showTrustScore, setShowTrustScore] = useState<boolean>(false);
 
   const [activePage, setActivePage] = useState<string | null>(null);
 
@@ -346,7 +344,6 @@ function AppContent() {
 
   useEffect(() => {
     prevActiveSessionRef.current = activeTab?.sessionId || null;
-    setShowTrustScore(false);
   }, [activeTab?.sessionId]);
 
   useEffect(() => {
@@ -580,9 +577,6 @@ function AppContent() {
     toggleDrawer('activity');
   }, [toggleDrawer]);
 
-  const handleToggleTrustScore = useCallback(() => {
-    setShowTrustScore(prev => !prev);
-  }, []);
 
   const hasProjects = workspace.state.projects.length > 0;
   const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
@@ -739,7 +733,6 @@ function AppContent() {
                     onCancel={cancelQuery}
                     onToggleSessions={() => toggleDrawer('sessions')}
                     onToggleActivity={() => toggleDrawer('activity')}
-                    onToggleTrustScore={handleToggleTrustScore}
                     projectPath={activeProject?.path || null}
                     onLoadSession={handleLoadSession}
                     sessionId={activeTab?.sessionId}
@@ -768,11 +761,7 @@ function AppContent() {
           </div>
           {shouldShowChatPanel && !activePage && (
             <div key={activeTab?.sessionId} className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
-              {showTrustScore && activeTab?.sessionId ? (
-                <TrustScore sessionId={activeTab.sessionId} onClose={() => setShowTrustScore(false)} />
-              ) : (
-                <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} />
-              )}
+              <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} sessionId={activeTab?.sessionId} />
             </div>
           )}
           {/* Floating terminal panels — always mounted, visibility toggled */}

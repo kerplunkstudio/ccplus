@@ -8,7 +8,6 @@ interface ChatPanelHeaderProps {
   onSelectModel: (model: string) => void;
   onToggleSessions?: () => void;
   onToggleActivity?: () => void;
-  onToggleTrustScore?: () => void;
 }
 
 export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
@@ -17,7 +16,6 @@ export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
   onSelectModel,
   onToggleSessions,
   onToggleActivity,
-  onToggleTrustScore,
 }) => {
   return (
     <div className="chat-panel-header">
@@ -46,16 +44,6 @@ export const ChatPanelHeader: React.FC<ChatPanelHeaderProps> = ({
           selectedModel={selectedModel}
           onSelectModel={onSelectModel}
         />
-        {onToggleTrustScore && (
-          <button
-            className="mobile-drawer-btn"
-            onClick={onToggleTrustScore}
-            aria-label="Toggle trust score"
-            title="Trust Score"
-          >
-            🛡
-          </button>
-        )}
         {onToggleActivity && (
           <button
             className="mobile-drawer-btn"
