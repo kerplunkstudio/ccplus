@@ -38,6 +38,7 @@ export interface TrustSummary {
   files_touched: string[];
   files_created: string[];
   files_deleted: string[];
+  files_written: string[];
   tests_run: number;
   tests_passed: number;
   tests_failed: number;
@@ -102,6 +103,7 @@ export function computeSummary(
   const filesTouched = new Set<string>();
   const filesCreated = new Set<string>();
   const filesDeleted = new Set<string>();
+  const filesWritten = new Set<string>();
   let testsRun = 0;
   let testsPassed = 0;
   let testsFailed = 0;
@@ -114,10 +116,11 @@ export function computeSummary(
 
     if (tool.tool_name === "Write") {
       const filePath = extractFilePath(params);
-      if (filePath) { filesCreated.add(filePath); filesTouched.add(filePath); }
+      if (filePath) { filesCreated.add(filePath); filesTouched.add(filePath); filesWritten.add(filePath); }
     } else if (tool.tool_name === "Edit" || tool.tool_name === "Read") {
       const filePath = extractFilePath(params);
       if (filePath) filesTouched.add(filePath);
+      if (tool.tool_name === "Edit" && filePath) filesWritten.add(filePath);
     } else if (tool.tool_name === "Glob" || tool.tool_name === "Grep") {
       const filePath = extractFilePath(params);
       if (filePath) filesTouched.add(filePath);
@@ -155,6 +158,7 @@ export function computeSummary(
     files_touched: Array.from(filesTouched),
     files_created: Array.from(filesCreated),
     files_deleted: Array.from(filesDeleted),
+    files_written: Array.from(filesWritten),
     tests_run: testsRun,
     tests_passed: testsPassed,
     tests_failed: testsFailed,
@@ -191,9 +195,6 @@ export function computeFlags(summary: TrustSummary, tools: SessionToolData[]): T
   if (summary.files_deleted.length > 5) {
     flags.push({ severity: "warning", message: "High number of file deletions", detail: `${summary.files_deleted.length} files deleted` });
   }
-  if (summary.tests_run === 0 && summary.total_tool_calls > 0) {
-    flags.push({ severity: "info", message: "No tests run", detail: "Consider adding test coverage" });
-  }
   if (summary.total_tool_calls > 0) {
     const failureRate = summary.failed_tool_calls / summary.total_tool_calls;
     if (failureRate > 0.3) {
@@ -205,6 +206,8 @@ export function computeFlags(summary: TrustSummary, tools: SessionToolData[]): T
 }
 
 export function scoreTestCoverage(summary: TrustSummary): number {
+  const isReadOnly = summary.files_written.length === 0 && summary.files_deleted.length === 0;
+  if (isReadOnly) return 100;
   if (summary.tests_run === 0) return 0;
   if (summary.tests_failed === 0) return 100;
   return Math.max(0, Math.round((100 * summary.tests_passed) / summary.tests_run));
@@ -212,7 +215,7 @@ export function scoreTestCoverage(summary: TrustSummary): number {
 
 export function scoreScopeDiscipline(summary: TrustSummary): number {
   const files = summary.files_touched.length;
-  if (files <= 3) return 100;
+  if (files <= 2) return 100;
   return Math.max(0, Math.round(100 - 20 * Math.log2(files / 3)));
 }
 
@@ -260,13 +263,24 @@ export function computeTrustScore(
     security: scoreSecurity(summary, flags),
   };
 
-  const overallScore = Math.round(
-    dimensions.test_coverage * 0.3 +
-    dimensions.scope_discipline * 0.2 +
-    dimensions.error_rate * 0.2 +
-    dimensions.cost_efficiency * 0.1 +
-    dimensions.security * 0.2
-  );
+  const hasWrites = summary.files_written.length > 0 || summary.files_deleted.length > 0;
+  const writeWithoutTests = hasWrites && summary.tests_run === 0;
+
+  const overallScore = writeWithoutTests
+    ? Math.round(
+        dimensions.test_coverage * 0.40 +
+        dimensions.scope_discipline * 0.15 +
+        dimensions.error_rate * 0.20 +
+        dimensions.cost_efficiency * 0.10 +
+        dimensions.security * 0.15
+      )
+    : Math.round(
+        dimensions.test_coverage * 0.30 +
+        dimensions.scope_discipline * 0.20 +
+        dimensions.error_rate * 0.20 +
+        dimensions.cost_efficiency * 0.10 +
+        dimensions.security * 0.20
+      );
 
   return {
     session_id: sessionId,

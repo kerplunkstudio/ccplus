@@ -245,7 +245,7 @@ describe("Trust Score Tests", () => {
       expect(chmodFlag?.severity).toBe("warning");
     });
 
-    it("should produce info flag when no tests run", () => {
+    it("should NOT produce info flag when no tests run (score reflects this already)", () => {
       const tools: SessionToolData[] = [
         {
           tool_name: "Write",
@@ -258,8 +258,7 @@ describe("Trust Score Tests", () => {
       const flags = computeFlags(summary, tools);
 
       const noTestsFlag = flags.find((f) => f.message.includes("No tests run"));
-      expect(noTestsFlag).toBeDefined();
-      expect(noTestsFlag?.severity).toBe("info");
+      expect(noTestsFlag).toBeUndefined();
     });
 
     it("should produce warning for >5 deletions", () => {
@@ -308,8 +307,16 @@ describe("Trust Score Tests", () => {
   });
 
   describe("scoreTestCoverage", () => {
-    it("should return 0 for no tests", () => {
-      const summary = computeSummary([], [], []);
+    it("should return 0 for no tests when files were written", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/path/to/file.ts", content: "code" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
       expect(scoreTestCoverage(summary)).toBe(0);
     });
 
@@ -328,6 +335,12 @@ describe("Trust Score Tests", () => {
 
     it("should return proportional score for mixed results", () => {
       const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/file.ts", content: "code" }),
+          success: 1,
+          timestamp: "2026-03-20T09:59:00Z",
+        },
         {
           tool_name: "Bash",
           parameters: JSON.stringify({ command: "npm test" }),
@@ -350,10 +363,36 @@ describe("Trust Score Tests", () => {
       const summary = computeSummary(tools, [], []);
       expect(scoreTestCoverage(summary)).toBe(67); // 2/3 = 66.67%, rounded to 67
     });
+
+    it("should return 100 for read-only sessions (no writes)", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Read",
+          parameters: JSON.stringify({ file_path: "/path/to/file.ts" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreTestCoverage(summary)).toBe(100);
+    });
+
+    it("should return 0 (not 100) when files were deleted but no tests run", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "rm obsolete-file.ts" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreTestCoverage(summary)).toBe(0);
+    });
   });
 
   describe("scoreScopeDiscipline", () => {
-    it("should return 100 for <=3 files", () => {
+    it("should return 100 for <=2 files", () => {
       const tools: SessionToolData[] = [
         {
           tool_name: "Write",
@@ -594,6 +633,56 @@ describe("Trust Score Tests", () => {
       expect(metrics.summary).toHaveProperty("security_flags");
 
       expect(Array.isArray(metrics.flags)).toBe(true);
+    });
+
+    it("should apply heavier test_coverage weight when files written but no tests run", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/file.ts", content: "code" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const queries: SessionQueryData[] = [
+        {
+          total_tokens: 3000,
+          input_tokens: 2000,
+          output_tokens: 1000,
+          cost_usd: 0.01,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+
+      const metrics = computeTrustScore("test-session", tools, queries, []);
+
+      // test_coverage=0 with weight 0.40, all others=100
+      // 0*0.40 + 100*0.15 + 100*0.20 + 100*0.10 + 100*0.15 = 60
+      expect(metrics.overall_score).toBe(60);
+    });
+
+    it("should score ~100 for a read-only session", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Read",
+          parameters: JSON.stringify({ file_path: "/file.ts" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const queries: SessionQueryData[] = [
+        {
+          total_tokens: 3000,
+          input_tokens: 2000,
+          output_tokens: 1000,
+          cost_usd: 0.01,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+
+      const metrics = computeTrustScore("test-session", tools, queries, []);
+
+      expect(metrics.overall_score).toBeGreaterThanOrEqual(95);
     });
   });
 });

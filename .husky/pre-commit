@@ -1,4 +1,8 @@
 #!/bin/sh
 
-# Lint frontend
-cd frontend && npx eslint src/ --max-warnings 0 --quiet
+# Lint frontend only if frontend files are staged
+FRONTEND_STAGED=$(git diff --cached --name-only | grep '^frontend/' || true)
+
+if [ -n "$FRONTEND_STAGED" ]; then
+  cd frontend && npx eslint src/ --max-warnings 0 --quiet
+fi
