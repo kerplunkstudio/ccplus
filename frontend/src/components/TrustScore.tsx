@@ -68,6 +68,12 @@ export const TrustScore: React.FC<TrustScoreProps> = ({
     security: 'Security'
   }), []);
 
+  const isMdOnlySession = useMemo(() => {
+    if (!trustMetrics) return false;
+    const allWritten = [...trustMetrics.summary.files_created, ...trustMetrics.summary.files_deleted];
+    return allWritten.length > 0 && allWritten.every(f => f.toLowerCase().endsWith('.md'));
+  }, [trustMetrics]);
+
   if (loading) {
     return (
       <div className="trust-score-panel">
@@ -124,7 +130,9 @@ export const TrustScore: React.FC<TrustScoreProps> = ({
             const label = dimensionLabels[key] || key;
             return (
               <div key={key} className="trust-dimension-row">
-                <span className="trust-dimension-label">{label}</span>
+                <span className="trust-dimension-label">
+                  {label}{key === 'test_coverage' && isMdOnlySession ? ' (docs only)' : ''}
+                </span>
                 <div className="trust-dimension-bar-track">
                   <div
                     className="trust-dimension-bar-fill"
