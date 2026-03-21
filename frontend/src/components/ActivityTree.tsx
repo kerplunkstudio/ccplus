@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { ActivityNode, isAgentNode, AgentNode, ToolNode, UsageStats } from '../types';
 import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
+import { ToolGroupRow } from './ToolGroupRow';
 import { NodeDetail } from './NodeDetail';
 import { UsageStatsBar } from './UsageStatsBar';
 import { TrustScore } from './TrustScore';
 import { useTrustScore } from '../hooks/useTrustScore';
+import { groupConsecutiveTools, ToolGroup } from '../utils/toolGrouping';
 import './ActivityTree.css';
 
 interface ActivityTreeProps {
@@ -14,15 +16,18 @@ interface ActivityTreeProps {
   contextTokens?: number | null;
   sessionId?: string;
   variant?: 'tabs' | 'split';
+  workspacePath?: string;
 }
 
 interface TreeNodeProps {
   node: ActivityNode;
   depth: number;
   onNodeSelect: (node: ActivityNode) => void;
+  currentTime?: number;
+  workspacePath?: string;
 }
 
-const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelect }) => {
+const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelect, currentTime, workspacePath }) => {
   const isAgent = isAgentNode(node);
 
   if (isAgent) {
@@ -39,6 +44,8 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelec
             node={child}
             depth={depth + 1}
             onNodeSelect={onNodeSelect}
+            currentTime={currentTime}
+            workspacePath={workspacePath}
           />
         ))}
       </AgentCard>
@@ -50,6 +57,8 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelec
       node={node as ToolNode}
       depth={depth}
       onSelect={onNodeSelect}
+      currentTime={currentTime}
+      workspacePath={workspacePath}
     />
   );
 });
@@ -141,7 +150,7 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs' }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs', workspacePath }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const agentsContainerRef = useRef<HTMLDivElement>(null);
   const toolsContainerRef = useRef<HTMLDivElement>(null);
@@ -154,6 +163,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
+  const displayToolNodes = useMemo(() => groupConsecutiveTools(toolNodes), [toolNodes]);
   const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
   const activityStats = useMemo(() => {
@@ -300,9 +310,38 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
               </div>
             ) : (
               <div className="tree-root">
-                {visibleNodes.map((node) => (
-                  <TreeNode key={node.tool_use_id} node={node} depth={0} onNodeSelect={handleNodeSelect} />
-                ))}
+                {activeTab === 'agents'
+                  ? agentNodes.map((node) => (
+                      <TreeNode
+                        key={node.tool_use_id}
+                        node={node}
+                        depth={0}
+                        onNodeSelect={handleNodeSelect}
+                        currentTime={currentTime}
+                        workspacePath={workspacePath}
+                      />
+                    ))
+                  : displayToolNodes.map((item) =>
+                      'type' in item && item.type === 'group' ? (
+                        <ToolGroupRow
+                          key={item.tool_use_id}
+                          group={item as ToolGroup}
+                          depth={0}
+                          onSelect={handleNodeSelect}
+                          currentTime={currentTime}
+                          workspacePath={workspacePath}
+                        />
+                      ) : (
+                        <ToolRow
+                          key={item.tool_use_id}
+                          node={item as ToolNode}
+                          depth={0}
+                          onSelect={handleNodeSelect}
+                          currentTime={currentTime}
+                          workspacePath={workspacePath}
+                        />
+                      )
+                    )}
               </div>
             )}
           </div>
@@ -370,6 +409,8 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                         node={node}
                         depth={0}
                         onNodeSelect={handleNodeSelect}
+                        currentTime={currentTime}
+                        workspacePath={workspacePath}
                       />
                     ))}
                   </div>
@@ -389,14 +430,27 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                   </div>
                 ) : (
                   <div className="tree-root">
-                    {toolNodes.map((node) => (
-                      <TreeNode
-                        key={node.tool_use_id}
-                        node={node}
-                        depth={0}
-                        onNodeSelect={handleNodeSelect}
-                      />
-                    ))}
+                    {displayToolNodes.map((item) =>
+                      'type' in item && item.type === 'group' ? (
+                        <ToolGroupRow
+                          key={item.tool_use_id}
+                          group={item as ToolGroup}
+                          depth={0}
+                          onSelect={handleNodeSelect}
+                          currentTime={currentTime}
+                          workspacePath={workspacePath}
+                        />
+                      ) : (
+                        <ToolRow
+                          key={item.tool_use_id}
+                          node={item as ToolNode}
+                          depth={0}
+                          onSelect={handleNodeSelect}
+                          currentTime={currentTime}
+                          workspacePath={workspacePath}
+                        />
+                      )
+                    )}
                   </div>
                 )}
               </div>
