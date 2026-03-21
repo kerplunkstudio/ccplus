@@ -28,6 +28,8 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
   const detectedDevServerUrls = new Set<string>();
+  let hasWriteOperations = false;
+  let codeReviewerInvoked = false;
 
   // Helper to emit tool events and set flag for message splitting
   const emitToolEvent = (event: any) => {
@@ -46,6 +48,29 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     const toolParams = (input.tool_input as Record<string, unknown>) ?? {};
 
     toolTimers.set(actualToolUseId, performance.now());
+
+    // Track write operations for code review gate
+    if (toolName === 'Write' || toolName === 'Edit') {
+      hasWriteOperations = true;
+    }
+
+    // Code review gate: block git commit if writes occurred without code-reviewer
+    try {
+      if (toolName === 'Bash') {
+        const command = String((toolParams as Record<string, unknown>).command ?? '')
+        if (command.includes('git commit') && hasWriteOperations && !codeReviewerInvoked) {
+          return {
+            hookSpecificOutput: {
+              hookEventName: 'PreToolUse' as const,
+              permissionDecision: 'deny' as const,
+              permissionDecisionReason: 'Code review required before committing. Invoke a code-reviewer agent first, or confirm this is a read-only session.',
+            },
+          }
+        }
+      }
+    } catch (_err) {
+      // Never crash the session on gate errors
+    }
 
     const parentId = input.agent_id as string | undefined;
     const isAgent = toolName === "Agent" || toolName === "Task";
@@ -373,6 +398,12 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     if (agentId && pendingAgentToolUseIds.length > 0) {
       const toolUseIdForAgent = pendingAgentToolUseIds.pop()!;
       agentIdToToolUseId.set(agentId, toolUseIdForAgent);
+    }
+
+    // Track code-reviewer invocations
+    const subagentType = (hookInput as Record<string, unknown>).agent_type as string | undefined
+    if (subagentType === 'code-reviewer') {
+      codeReviewerInvoked = true
     }
 
     // Auto-transition workflow phase based on agent type
