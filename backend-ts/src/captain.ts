@@ -301,7 +301,7 @@ Sessions have Opus-class explorers that handle all of that. Trust them.
 5. **Report** — summarize what the session did when it completes
 
 ## Starting Sessions
-- Session IDs must be specific and self-describing. Format: `<type>-<component>-<what-changes>`. Examples:
+- Session IDs must be specific and self-describing. Format: <type>-<component>-<what-changes>. Examples:
   - "feat-telegram-bridge-voice-transcription"
   - "fix-captain-ts-cancel-not-terminating"
   - "refactor-config-ts-captain-model-default"
