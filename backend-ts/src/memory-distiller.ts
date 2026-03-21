@@ -276,18 +276,20 @@ export async function distillSession(
       );
     }
 
-    // Store all memories concurrently
-    const settled = await Promise.allSettled(storePromises);
-
-    // Log individual failures
-    for (const result of settled) {
-      if (result.status === 'rejected') {
-        log.warn('Memory store failed for one type', { reason: String(result.reason) });
-      }
-    }
-
-    // Always update debounce timestamp even on partial failure
+    // Update debounce tracking BEFORE store (so we don't retry immediately on failure)
     distillationTimestamps.set(sessionId, Date.now());
+
+    // Store all memories concurrently
+    const results = await Promise.allSettled(storePromises);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        log.warn('Failed to store memory sub-item', {
+          sessionId,
+          index,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
 
     log.info("Session distilled to memory", {
       sessionId,

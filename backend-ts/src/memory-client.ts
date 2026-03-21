@@ -357,21 +357,21 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
       arguments: args,
     });
 
-    let resultText = '';
+    let semanticText = '';
     // MCP tools/call response format: { content: [...], isError: false }
     if (typeof response === 'object' && response !== null && 'content' in response) {
       const content = (response as { content: unknown[] }).content;
       if (Array.isArray(content) && content.length > 0) {
         const firstItem = content[0];
         if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
-          resultText = (firstItem as { text: string }).text;
+          semanticText = (firstItem as { text: string }).text;
         }
       }
     }
 
     // Log observability data
-    if (resultText) {
-      const resultCount = resultText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length;
+    if (semanticText) {
+      const resultCount = semanticText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length;
       log.debug('Memory search', {
         query: query.substring(0, 50),
         resultCount,
@@ -379,7 +379,7 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
     }
 
     recordSuccess();
-    return resultText;
+    return semanticText;
   } catch (error) {
     log.error('Memory search failed', { error: String(error), query });
     recordFailure();
