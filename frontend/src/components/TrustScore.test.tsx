@@ -143,11 +143,11 @@ describe('TrustScore', () => {
     const touchedButton = screen.getByText(/Files Touched/);
     fireEvent.click(touchedButton);
 
-    expect(screen.getByText('src/App.tsx')).toBeInTheDocument();
-    expect(screen.getByText('src/components/Panel.tsx')).toBeInTheDocument();
+    expect(screen.getByText('App.tsx')).toBeInTheDocument();
+    expect(screen.getByText('Panel.tsx')).toBeInTheDocument();
 
     fireEvent.click(touchedButton);
-    expect(screen.queryByText('src/App.tsx')).not.toBeInTheDocument();
+    expect(screen.queryByText('App.tsx')).not.toBeInTheDocument();
   });
 
   it('expands files created section', () => {
@@ -163,7 +163,7 @@ describe('TrustScore', () => {
     const createdButton = screen.getByText(/Files Created/);
     fireEvent.click(createdButton);
 
-    expect(screen.getByText('src/new.tsx')).toBeInTheDocument();
+    expect(screen.getByText('new.tsx')).toBeInTheDocument();
   });
 
   it('does not render files deleted section when empty', () => {
