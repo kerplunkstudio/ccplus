@@ -1,7 +1,7 @@
 /**
  * Telegram bridge for Captain.
  * Forwards text and voice messages to Captain and sends formatted responses back.
- * Voice messages are transcribed locally using Whisper via @xenova/transformers.
+ * Voice messages are transcribed locally using whisper-cli.
  */
 
 import { Bot, Context } from 'grammy';
