@@ -2,12 +2,23 @@ import React from 'react';
 import { ToolNode } from '../types';
 import { ToolIcon } from './ToolIcon';
 import { formatDuration } from '../utils/formatDuration';
+import { getToolSubtitle } from '../utils/toolSubtitle';
 import './ToolRow.css';
 
 interface ToolRowProps {
   node: ToolNode;
   depth: number;
   onSelect: (node: ToolNode) => void;
+  currentTime?: number;
+  workspacePath?: string;
+}
+
+function formatLiveElapsed(ms: number): string {
+  if (ms < 1000) return '0s';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes === 0 ? `${seconds}s` : `${minutes}m ${seconds}s`;
 }
 
 const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
@@ -25,10 +36,26 @@ const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
   }
 };
 
-export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSelect }) => {
+const areEqual = (prev: ToolRowProps, next: ToolRowProps): boolean => {
+  if (prev.node !== next.node) return false;
+  if (prev.node.status === 'running' && prev.currentTime !== next.currentTime) return false;
+  if (prev.depth !== next.depth) return false;
+  if (prev.workspacePath !== next.workspacePath) return false;
+  return true;
+};
+
+export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSelect, currentTime, workspacePath }) => {
   const handleClick = () => {
     onSelect(node);
   };
+
+  const subtitle = node.status === 'failed' && node.error
+    ? node.error
+    : getToolSubtitle(node, workspacePath);
+
+  const isRunning = node.status === 'running';
+  const showLiveTimer = isRunning && currentTime !== undefined;
+  const elapsedMs = showLiveTimer ? currentTime - new Date(node.timestamp).getTime() : 0;
 
   return (
     <div
@@ -52,16 +79,25 @@ export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSele
         </div>
 
         <div className="tool-row-info">
-          {node.sequence !== undefined && (
-            <span className="node-sequence">#{node.sequence}</span>
-          )}{' '}
-          <span className="tool-row-name">{node.tool_name}</span>
+          <div className="tool-row-info-header">
+            {node.sequence !== undefined && (
+              <span className="node-sequence">#{node.sequence}</span>
+            )}{' '}
+            <span className="tool-row-name">{node.tool_name}</span>
+          </div>
+          {subtitle && (
+            <span className={node.status === 'failed' && node.error ? 'tool-row-error-hint' : 'tool-row-subtitle'}>
+              {subtitle}
+            </span>
+          )}
         </div>
 
         <div className="tool-row-meta">
-          {node.duration_ms !== undefined && (
+          {showLiveTimer ? (
+            <span className="tool-row-live-timer">{formatLiveElapsed(elapsedMs)}</span>
+          ) : node.duration_ms !== undefined ? (
             <span className="tool-row-duration">{formatDuration(node.duration_ms)}</span>
-          )}
+          ) : null}
           <span className="tool-row-status-wrapper" role="status" aria-label={`Status: ${node.status}`}>
             <StatusIcon status={node.status} />
           </span>
@@ -69,4 +105,4 @@ export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSele
       </div>
     </div>
   );
-});
+}, areEqual);
