@@ -7,7 +7,7 @@ import * as config from "../config.js";
 import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase } from '../workflow-state.js';
 import { WORKFLOW_ENABLED } from '../config.js';
 import * as fleetMonitor from '../fleet-monitor.js';
-import { searchMemories } from '../memory-client.js';
+import { searchMemories, storeMemory } from '../memory-client.js';
 
 export function safeParams(params: Record<string, unknown>): Record<string, unknown> {
   const cleaned: Record<string, unknown> = {};
@@ -457,35 +457,35 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
           );
 
           // Search agent-specific memories first, then project-wide
-          const searchPromises: Promise<string>[] = [];
+          let agentSpecificResults = '';
+          let projectWideResults = '';
 
           // 1. Agent-specific memories (if agent type is known)
           if (agentType && projectName) {
             const agentTag = `project:${projectName},agent:${agentType}`;
-            searchPromises.push(
-              searchMemories(searchQuery, 2, agentTag).catch(() => '')
-            );
+            agentSpecificResults = await Promise.race([
+              searchMemories(searchQuery, 2, agentTag).catch(() => ''),
+              timeoutPromise,
+            ]);
           }
 
           // 2. Project-wide memories
           if (projectName) {
             const projectTag = `project:${projectName}`;
-            searchPromises.push(
-              searchMemories(searchQuery, 3, projectTag).catch(() => '')
-            );
+            projectWideResults = await Promise.race([
+              searchMemories(searchQuery, 3, projectTag).catch(() => ''),
+              timeoutPromise,
+            ]);
           }
 
-          // Wait for all searches with timeout
-          const results = await Promise.race([
-            Promise.all(searchPromises),
-            timeoutPromise.then(() => []),
-          ]);
-
           // Combine results - agent-specific first, then project-wide
-          const combinedMemories = results.filter(r => r.length > 0).join('\n\n---\n\n');
+          const combinedMemories = [agentSpecificResults, projectWideResults]
+            .filter(r => r.length > 0)
+            .join('\n\n---\n\n');
+
           if (combinedMemories) {
-            const agentSpecificCount = results[0]?.split('\n').filter(l => l.trim()).length || 0;
-            const projectCount = results[1]?.split('\n').filter(l => l.trim()).length || 0;
+            const agentSpecificCount = agentSpecificResults.split('\n').filter(l => l.trim()).length;
+            const projectCount = projectWideResults.split('\n').filter(l => l.trim()).length;
 
             log.debug('Memory injection for subagent', {
               agentType,
@@ -546,26 +546,22 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
               ].join('\n');
 
               // Fire and forget - don't block on memory storage
-              import('../memory-client.js').then(({ storeMemory }) => {
-                storeMemory(
-                  agentMemory,
-                  [
-                    `project:${projectName}`,
-                    `agent:${agentType}`,
-                    `session:${sessionId}`,
-                    'type:agent-lesson',
-                    'auto-distill',
-                  ].join(','),
-                  {
-                    session_id: sessionId,
-                    agent_id: agentId,
-                    agent_type: agentType,
-                  }
-                ).catch(error => {
-                  log.debug('Agent memory storage failed', { error: String(error), agentType });
-                });
-              }).catch(() => {
-                // Ignore import errors
+              void storeMemory(
+                agentMemory,
+                [
+                  `project:${projectName}`,
+                  `agent:${agentType}`,
+                  `session:${sessionId}`,
+                  'type:agent-lesson',
+                  'auto-distill',
+                ].join(','),
+                {
+                  session_id: sessionId,
+                  agent_id: agentId,
+                  agent_type: agentType,
+                }
+              ).catch(error => {
+                log.debug('Agent memory storage failed', { error: String(error), agentType });
               });
             }
           }
