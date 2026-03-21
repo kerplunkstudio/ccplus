@@ -100,20 +100,36 @@
             margin-bottom: clamp(0.75rem, 1.5vw, 1rem);
             max-width: 70%;
             position: relative;
-        }
-
-        .hero h1 .line1,
-        .hero h1 .line2 {
-            display: block;
             opacity: 0;
+            animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
         }
 
-        .hero h1 .line1 {
-            animation: slideInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+        .hero-headline {
+            position: relative;
+            display: block;
+            height: 1.1em;
+            overflow: hidden;
         }
 
-        .hero h1 .line2 {
-            animation: slideInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+        .hero-headline span {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .hero-headline span.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .hero-headline span.exiting {
+            opacity: 0;
+            transform: translateY(-100%);
         }
 
         .hero .subtitle {
@@ -1368,14 +1384,14 @@
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
             margin-bottom: clamp(2rem, 4vw, 3rem);
         }
 
         .features-grid-secondary {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 1.5rem;
             margin-bottom: 1.5rem;
         }
@@ -1388,6 +1404,9 @@
         }
 
         @media (max-width: 1100px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
             .features-grid-secondary,
             .features-grid-tertiary {
                 grid-template-columns: repeat(2, 1fr);
@@ -1668,11 +1687,14 @@
     <section class="hero">
         <div class="container">
             <h1>
-                <span class="line1">Max out</span>
-                <span class="line2">Claude Code.</span>
+                <span class="hero-headline" id="hero-headline">
+                    <span class="active">Watch your agents work.</span>
+                    <span>Every agent. Every tool call.</span>
+                    <span>Max out Claude Code.</span>
+                </span>
             </h1>
             <p class="subtitle">
-                Multi-session. Real-time observability. Scale your agentic workflow. Free, open source.
+                Open-source desktop app for Claude Code. See every tool call, every agent, every token, in real-time.
             </p>
             <div class="hero-cta-group">
                 <div class="hero-install-command">
@@ -2113,7 +2135,7 @@
     <!-- Features Grid - NEW COMPACT DESIGN -->
     <section class="features">
         <div class="container">
-            <h2>Everything you need to scale</h2>
+            <h2>What's inside</h2>
             <div class="features-grid">
                 <div class="feature-card featured">
                     <h3>Multi-Tab Sessions</h3>
@@ -2122,6 +2144,10 @@
                 <div class="feature-card featured">
                     <h3>Agent Observability</h3>
                     <p>Watch agents work in real time. See what they're doing, not the code they're writing. Activity trees show every tool call, every agent spawn, every decision.</p>
+                </div>
+                <div class="feature-card featured">
+                    <h3>Captain</h3>
+                    <p>Watches your fleet so you don't have to. Knows which sessions are running, what files changed, and whether anything is stuck.</p>
                 </div>
             </div>
             <div class="features-grid-secondary">
@@ -2138,8 +2164,12 @@
                     <p>Cmd+K. Find any session, project, or action instantly.</p>
                 </div>
                 <div class="feature-card">
+                    <h3>Telegram Bridge</h3>
+                    <p>Access from your phone. Message Captain, get status updates, start sessions remotely. Voice messages supported.</p>
+                </div>
+                <div class="feature-card">
                     <h3>Open Source & Free</h3>
-                    <p>MIT license. No tracking. Plugins, themes, MCP servers. 1,644 tests.</p>
+                    <p>MIT license. No tracking. Plugins, themes, MCP servers.</p>
                 </div>
             </div>
             <div class="features-grid-tertiary">
@@ -2226,6 +2256,9 @@
                 screen.classList.toggle('active', i === index);
             });
 
+            // Sync hero headline
+            syncHeadline(index);
+
             // If manual click, pause cycling for 12 seconds
             if (!isAutomatic) {
                 stopCycling();
@@ -2281,6 +2314,19 @@
                 item.addEventListener('click', () => switchScreen(i, false));
             });
         });
+
+        // Hero headline sync — called from switchScreen
+        function syncHeadline(screenIndex) {
+            const container = document.getElementById('hero-headline');
+            if (!container) return;
+            const headlines = container.querySelectorAll('span');
+            headlines.forEach((h, i) => {
+                h.classList.remove('active', 'exiting');
+                if (i === screenIndex) {
+                    h.classList.add('active');
+                }
+            });
+        }
     </script>
 </body>
 </html>
