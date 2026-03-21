@@ -8,11 +8,25 @@ vi.mock('https');
 // Mock fs module
 vi.mock('fs');
 
-// Mock @xenova/transformers with a function that returns the mock
-const mockPipeline = vi.fn();
-vi.mock('@xenova/transformers', () => ({
-  pipeline: mockPipeline,
+// Mock child_process module
+const mockExecFile = vi.fn();
+vi.mock('child_process', () => ({
+  execFile: mockExecFile,
 }));
+
+// Mock util module to return a promisified version of execFile
+vi.mock('util', async () => {
+  const actual = await vi.importActual('util');
+  return {
+    ...actual,
+    promisify: (fn: any) => {
+      if (fn === mockExecFile) {
+        return mockExecFile;
+      }
+      return (actual as any).promisify(fn);
+    },
+  };
+});
 
 describe('voice-transcriber', () => {
   beforeEach(() => {
@@ -150,8 +164,7 @@ describe('voice-transcriber', () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Hello, this is a test transcription';
 
-      const mockTranscriber = vi.fn().mockResolvedValue({ text: transcriptionText });
-      mockPipeline.mockResolvedValue(mockTranscriber as any);
+      mockExecFile.mockResolvedValue({ stdout: transcriptionText + '\n', stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -162,14 +175,13 @@ describe('voice-transcriber', () => {
       expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
       expect(mockUnlinkSync).toHaveBeenCalledOnce();
-      expect(mockTranscriber).toHaveBeenCalledOnce();
+      expect(mockExecFile).toHaveBeenCalledOnce();
     });
 
     it('should return empty string when transcription result is empty', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
-      const mockTranscriber = vi.fn().mockResolvedValue({ text: '' });
-      mockPipeline.mockResolvedValue(mockTranscriber as any);
+      mockExecFile.mockResolvedValue({ stdout: '', stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -185,8 +197,7 @@ describe('voice-transcriber', () => {
     it('should return empty string and log error on transcription failure', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
-      const mockTranscriber = vi.fn().mockRejectedValue(new Error('Whisper model failed'));
-      mockPipeline.mockResolvedValue(mockTranscriber as any);
+      mockExecFile.mockRejectedValue(new Error('Whisper CLI failed'));
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -204,8 +215,7 @@ describe('voice-transcriber', () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Test transcription';
 
-      const mockTranscriber = vi.fn().mockResolvedValue({ text: transcriptionText });
-      mockPipeline.mockResolvedValue(mockTranscriber as any);
+      mockExecFile.mockResolvedValue({ stdout: transcriptionText, stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync).mockImplementation(() => {
@@ -221,11 +231,11 @@ describe('voice-transcriber', () => {
       expect(mockUnlinkSync).toHaveBeenCalledOnce();
     });
 
-    it('should handle result without text property', async () => {
+    it('should trim whitespace from transcription result', async () => {
       const audioBuffer = Buffer.from('mock audio data');
+      const transcriptionText = 'Test transcription';
 
-      const mockTranscriber = vi.fn().mockResolvedValue({});
-      mockPipeline.mockResolvedValue(mockTranscriber as any);
+      mockExecFile.mockResolvedValue({ stdout: `  ${transcriptionText}  \n`, stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -233,7 +243,7 @@ describe('voice-transcriber', () => {
       const { transcribeAudio } = await import('../voice-transcriber.js');
       const result = await transcribeAudio(audioBuffer);
 
-      expect(result).toBe('');
+      expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
       expect(mockUnlinkSync).toHaveBeenCalledOnce();
     });
