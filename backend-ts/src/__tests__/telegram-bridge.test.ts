@@ -21,6 +21,7 @@ vi.mock('grammy', () => {
 vi.mock('../config.js', () => ({
   TELEGRAM_BOT_TOKEN: 'test-token',
   TELEGRAM_ALLOWLIST: ['12345'],
+  TELEGRAM_STATE_PATH: '/tmp/test-telegram-state.json',
 }));
 
 vi.mock('../captain.js', () => ({
@@ -46,6 +47,12 @@ vi.mock('../logger.js', () => ({
 vi.mock('../voice-transcriber.js', () => ({
   downloadTelegramFile: vi.fn().mockResolvedValue(Buffer.from('audio')),
   transcribeAudio: vi.fn().mockResolvedValue('Test transcription'),
+}));
+
+vi.mock('../state-persistence.js', () => ({
+  saveTelegramState: vi.fn(),
+  loadTelegramState: vi.fn().mockReturnValue(null),
+  removeTelegramState: vi.fn(),
 }));
 
 import { Bot } from 'grammy';
