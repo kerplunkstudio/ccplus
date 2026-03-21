@@ -17,6 +17,7 @@ interface ChatState {
   readonly callbackId: string;
   readonly pendingText: string;
   readonly typingInterval: ReturnType<typeof setInterval> | null;
+  readonly ackMessageId: number | null;
 }
 
 // ---- State ----
@@ -206,6 +207,7 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
     callbackId,
     pendingText: '',
     typingInterval,
+    ackMessageId: null,
   };
   chatStates.set(chatId, newState);
 
@@ -234,7 +236,11 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
 
   // Send immediate acknowledgment
   if (bot) {
-    await bot.api.sendMessage(chatId, '⏳');
+    const ackMsg = await bot.api.sendMessage(chatId, '⏳');
+    const currentState = chatStates.get(chatId);
+    if (currentState) {
+      chatStates.set(chatId, { ...currentState, ackMessageId: ackMsg.message_id });
+    }
   }
 
   // Send to Captain
@@ -264,6 +270,15 @@ async function handleComplete(chatId: number): Promise<void> {
   if (!state) return;
 
   try {
+    // Delete the ack message
+    if (state.ackMessageId) {
+      try {
+        await bot.api.deleteMessage(chatId, state.ackMessageId);
+      } catch {
+        // Ignore — message may already be deleted
+      }
+    }
+
     if (state.pendingText) {
       // Format and send final version with markdown
       const chunks = formatForTelegram(state.pendingText);
@@ -288,10 +303,19 @@ async function handleComplete(chatId: number): Promise<void> {
 async function handleError(chatId: number, message: string): Promise<void> {
   if (!bot) return;
 
-  try {
-    const errorText = `⚠ ${message}`;
-    const state = chatStates.get(chatId);
+  const state = chatStates.get(chatId);
 
+  try {
+    // Delete the ack message
+    if (state?.ackMessageId) {
+      try {
+        await bot.api.deleteMessage(chatId, state.ackMessageId);
+      } catch {
+        // Ignore — message may already be deleted
+      }
+    }
+
+    const errorText = `⚠ ${message}`;
     await bot.api.sendMessage(chatId, errorText);
   } catch (error) {
     log.error('Telegram error handler failed', { chatId, error: String(error) });
@@ -312,6 +336,7 @@ function cleanupChatState(chatId: number): void {
     ...state,
     pendingText: '',
     typingInterval: null,
+    ackMessageId: null,
   });
 }
 
