@@ -232,6 +232,11 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
     },
   });
 
+  // Send immediate acknowledgment
+  if (bot) {
+    await bot.api.sendMessage(chatId, '⏳');
+  }
+
   // Send to Captain
   try {
     captain.sendCaptainMessage(text, 'telegram', String(chatId));
