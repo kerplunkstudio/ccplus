@@ -58,7 +58,7 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
       </div>
 
       <div className="fleet-session-detail-activity">
-        <ActivityTree tree={activityTree} usageStats={usageStats} />
+        <ActivityTree tree={activityTree} usageStats={usageStats} variant="split" />
       </div>
 
       <button className="fleet-session-detail-open-btn" onClick={handleOpenAsTab}>

@@ -18,10 +18,10 @@ const mockStats: UsageStats = {
 describe('ActivityTree', () => {
   it('renders empty state when no tree nodes', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
-    expect(screen.getAllByText('Standby')).toHaveLength(2); // One for each panel
+    expect(screen.getByText('Standby')).toBeInTheDocument();
   });
 
-  it('renders the split panel headers', () => {
+  it('renders the tab headers', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Tools')).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('ActivityTree', () => {
     expect(wrapper).not.toHaveClass('expanded');
   });
 
-  it('shows both tool nodes in split panel', () => {
+  it('shows tool nodes in tools tab', () => {
     const nodes: ActivityNode[] = [
       {
         tool_use_id: 't1',
@@ -128,7 +128,8 @@ describe('ActivityTree', () => {
       } as ToolNode,
     ];
     render(<ActivityTree tree={nodes} usageStats={mockStats} />);
-    // Both tool nodes should appear in the Tools panel
+    const toolsTab = screen.getByRole('tab', { name: 'Tools' });
+    fireEvent.click(toolsTab);
     expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.getByText('Write')).toBeInTheDocument();
   });

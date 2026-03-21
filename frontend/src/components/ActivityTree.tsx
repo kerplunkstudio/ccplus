@@ -13,6 +13,7 @@ interface ActivityTreeProps {
   usageStats: UsageStats;
   contextTokens?: number | null;
   sessionId?: string;
+  variant?: 'tabs' | 'split';
 }
 
 interface TreeNodeProps {
@@ -140,16 +141,20 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs' }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const agentsContainerRef = useRef<HTMLDivElement>(null);
   const toolsContainerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
+  const [activeTab, setActiveTab] = useState<'agents' | 'tools' | 'trust'>('agents');
   const [showTrustPanel, setShowTrustPanel] = useState(false);
+  const userOverrideRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const { trustScore, loading: trustLoading, error: trustError } = useTrustScore(sessionId);
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
+  const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
   const activityStats = useMemo(() => {
     const totalTools = countTools(tree);
@@ -183,7 +188,25 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
   }, [activityStats.hasRunning]);
 
   useEffect(() => {
-    if (!selectedNode && !showTrustPanel) {
+    if (variant === 'tabs' && containerRef.current && !selectedNode) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [tree, selectedNode, activeTab, variant]);
+
+  useEffect(() => {
+    if (variant !== 'tabs') return;
+    if (tree.length === 0) {
+      userOverrideRef.current = false;
+      setActiveTab('agents');
+      return;
+    }
+    if (userOverrideRef.current) return;
+    const lastNode = tree[tree.length - 1];
+    setActiveTab(isAgentNode(lastNode) ? 'agents' : 'tools');
+  }, [tree, variant]);
+
+  useEffect(() => {
+    if (!selectedNode && !showTrustPanel && variant === 'split') {
       if (agentsContainerRef.current && agentNodes.length > 0) {
         agentsContainerRef.current.scrollTop = agentsContainerRef.current.scrollHeight;
       }
@@ -191,7 +214,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
         toolsContainerRef.current.scrollTop = toolsContainerRef.current.scrollHeight;
       }
     }
-  }, [tree, selectedNode, showTrustPanel, agentNodes.length, toolNodes.length]);
+  }, [tree, selectedNode, showTrustPanel, variant, agentNodes.length, toolNodes.length]);
 
   const handleNodeSelect = useCallback((node: ActivityNode) => {
     setSelectedNode(node);
@@ -205,10 +228,85 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setShowTrustPanel(!showTrustPanel);
   };
 
+  const handleTabClick = (tab: 'agents' | 'tools' | 'trust') => {
+    userOverrideRef.current = true;
+    setActiveTab(tab);
+  };
+
   return (
     <div className="activity-tree">
       {selectedNode ? (
         <NodeDetail node={selectedNode} onClose={handleCloseDetail} />
+      ) : variant === 'tabs' ? (
+        <>
+          <div className="activity-header">
+            <div className="activity-tabs" role="tablist" aria-label="Activity views">
+              <button
+                className={`activity-tab ${activeTab === 'agents' ? 'activity-tab-active' : ''}`}
+                onClick={() => handleTabClick('agents')}
+                role="tab"
+                aria-selected={activeTab === 'agents'}
+                aria-controls="activity-panel-agents"
+                id="tab-agents"
+              >
+                Agents
+              </button>
+              <button
+                className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
+                onClick={() => handleTabClick('tools')}
+                role="tab"
+                aria-selected={activeTab === 'tools'}
+                aria-controls="activity-panel-tools"
+                id="tab-tools"
+              >
+                Tools
+              </button>
+              {sessionId && (
+                <button
+                  className={`activity-tab ${activeTab === 'trust' ? 'activity-tab-active' : ''}`}
+                  onClick={() => handleTabClick('trust')}
+                  role="tab"
+                  aria-selected={activeTab === 'trust'}
+                  aria-controls="activity-panel-trust"
+                  id="tab-trust"
+                >
+                  Trust
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+            {activeTab === 'trust' ? (
+              trustLoading || trustError || !trustScore ? (
+                <div className="activity-empty">
+                  <div className="activity-empty-pulse" />
+                  <p className="activity-empty-title">Standby</p>
+                  <p className="activity-empty-sub">Activity appears here as Claude works</p>
+                </div>
+              ) : (
+                <TrustScore
+                  sessionId={sessionId || ''}
+                  trustMetrics={trustScore}
+                  loading={false}
+                  error={null}
+                />
+              )
+            ) : visibleNodes.length === 0 ? (
+              <div className="activity-empty">
+                <div className="activity-empty-pulse" />
+                <p className="activity-empty-title">Standby</p>
+                <p className="activity-empty-sub">Activity appears here as Claude works</p>
+              </div>
+            ) : (
+              <div className="tree-root">
+                {visibleNodes.map((node) => (
+                  <TreeNode key={node.tool_use_id} node={node} depth={0} onNodeSelect={handleNodeSelect} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       ) : showTrustPanel && sessionId ? (
         <>
           <div className="activity-header">
