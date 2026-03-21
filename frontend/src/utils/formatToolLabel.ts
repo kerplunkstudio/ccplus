@@ -4,6 +4,25 @@ function basename(path: string): string {
   return path.split('/').pop() || path;
 }
 
+export function sanitizeBashCommand(command: string): string {
+  let sanitized = command;
+
+  // Strip all leading "cd <path> &&" and "cd <path> ;" prefixes
+  // Handles both quoted and unquoted paths
+  while (true) {
+    const prevLength = sanitized.length;
+
+    // Match "cd <path> &&" or "cd <path> ;"
+    // Path can be quoted or unquoted
+    sanitized = sanitized.replace(/^\s*cd\s+(?:"[^"]+"|'[^']+'|[^\s;]+)\s*(?:&&|;)\s*/, '');
+
+    // If no change, we're done
+    if (sanitized.length === prevLength) break;
+  }
+
+  return sanitized;
+}
+
 export function formatToolLabel(event: ToolEvent): string {
   const params = event.parameters || {};
   switch (event.tool_name) {
@@ -14,7 +33,7 @@ export function formatToolLabel(event: ToolEvent): string {
     case 'Edit':
       return `Edit ${basename(String(params.file_path || ''))}`;
     case 'Bash': {
-      const cmd = String(params.command || '');
+      const cmd = sanitizeBashCommand(String(params.command || ''));
       return `Bash ${cmd.slice(0, 50)}${cmd.length > 50 ? '...' : ''}`;
     }
     case 'Glob':
