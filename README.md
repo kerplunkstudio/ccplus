@@ -9,7 +9,7 @@ Open-source desktop app for Claude Code. See every tool call, every agent, every
   <a href="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge" alt="Platform"></a>
 </p>
 
-<p align="center"><img src="docs/screenshot.png" alt="cc+ activity tree" width="800"></p>
+<p align="center"><img src="docs/demo.gif" alt="cc+ demo" width="800"></p>
 
 [Website](https://ccplus.run) · [GitHub](https://github.com/kerplunkstudio/ccplus) · [Install](#install)
 
