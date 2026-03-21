@@ -126,14 +126,14 @@ describe('useSessionActions', () => {
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
 
-    it('should dispatch CANCEL_QUERY before sending new message', () => {
+    it('should NOT dispatch CANCEL_QUERY (allows mid-stream injection)', () => {
       const { result } = renderHook(() => useSessionActions(mockProps));
 
       act(() => {
         result.current.sendMessage('New message');
       });
 
-      expect(mockProps.streamDispatch).toHaveBeenCalledWith({ type: 'CANCEL_QUERY' });
+      expect(mockProps.streamDispatch).not.toHaveBeenCalledWith({ type: 'CANCEL_QUERY' });
     });
 
     it('should dispatch SEND_MESSAGE with user message', () => {
@@ -152,7 +152,7 @@ describe('useSessionActions', () => {
       });
     });
 
-    it('should clear tool log', () => {
+    it('should NOT clear tool log (preserves state during injection)', () => {
       mockProps.toolLogRef.current = [
         { type: 'tool_start', tool_name: 'Bash', tool_use_id: 'tool-1', parent_agent_id: null, timestamp: '2025-01-01T00:00:00Z' },
       ];
@@ -163,18 +163,18 @@ describe('useSessionActions', () => {
         result.current.sendMessage('Hello');
       });
 
-      expect(mockProps.toolLogRef.current).toEqual([]);
-      expect(mockProps.setToolLog).toHaveBeenCalledWith([]);
+      expect(mockProps.toolLogRef.current).not.toEqual([]);
+      expect(mockProps.setToolLog).not.toHaveBeenCalled();
     });
 
-    it('should clear signals', () => {
+    it('should NOT clear signals (preserves state during injection)', () => {
       const { result } = renderHook(() => useSessionActions(mockProps));
 
       act(() => {
         result.current.sendMessage('Hello');
       });
 
-      expect(mockProps.setSignals).toHaveBeenCalledWith({ status: null });
+      expect(mockProps.setSignals).not.toHaveBeenCalled();
     });
 
     it('should clear prompt suggestions', () => {

@@ -192,10 +192,10 @@ describe('ChatPanel', () => {
     expect(screen.queryByText('Background agents running...')).not.toBeInTheDocument();
   });
 
-  it('shows cancel button when actively streaming, even if backgroundProcessing was true', () => {
+  it('shows both cancel and send buttons when actively streaming', () => {
     render(<ChatPanel {...defaultProps} streaming={true} backgroundProcessing={false} />);
     expect(screen.getByLabelText('Cancel streaming')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Send message')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Send message')).toBeInTheDocument(); // Send button always present for mid-stream injection
   });
 
   it('adds drag-over class when files are dragged over input container', () => {
