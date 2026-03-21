@@ -28,8 +28,6 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
   const detectedDevServerUrls = new Set<string>();
-  let hasWriteOperations = false;
-  let codeReviewerInvoked = false;
 
   // Helper to emit tool events and set flag for message splitting
   const emitToolEvent = (event: any) => {
@@ -48,29 +46,6 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     const toolParams = (input.tool_input as Record<string, unknown>) ?? {};
 
     toolTimers.set(actualToolUseId, performance.now());
-
-    // Track write operations for code review gate
-    if (toolName === 'Write' || toolName === 'Edit') {
-      hasWriteOperations = true;
-    }
-
-    // Code review gate: block git commit if writes occurred without code-reviewer
-    try {
-      if (toolName === 'Bash') {
-        const command = String((toolParams as Record<string, unknown>).command ?? '')
-        if (command.includes('git commit') && hasWriteOperations && !codeReviewerInvoked) {
-          return {
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse' as const,
-              permissionDecision: 'deny' as const,
-              permissionDecisionReason: 'Code review required before committing. Invoke a code-reviewer agent first, or confirm this is a read-only session.',
-            },
-          }
-        }
-      }
-    } catch (_err) {
-      // Never crash the session on gate errors
-    }
 
     const parentId = input.agent_id as string | undefined;
     const isAgent = toolName === "Agent" || toolName === "Task";
@@ -400,12 +375,6 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
       agentIdToToolUseId.set(agentId, toolUseIdForAgent);
     }
 
-    // Track code-reviewer invocations
-    const subagentType = (hookInput as Record<string, unknown>).agent_type as string | undefined
-    if (subagentType === 'code-reviewer') {
-      codeReviewerInvoked = true
-    }
-
     // Auto-transition workflow phase based on agent type
     if (WORKFLOW_ENABLED) {
       const agentType = (input as { agent_type?: string }).agent_type ?? '';
@@ -457,35 +426,41 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
           );
 
           // Search agent-specific memories first, then project-wide
-          let agentSpecificResults = '';
-          let projectWideResults = '';
+          const searchPromises: Promise<string>[] = [];
+          let agentSearchIndex = -1;
+          let projectSearchIndex = -1;
 
           // 1. Agent-specific memories (if agent type is known)
           if (agentType && projectName) {
+            agentSearchIndex = searchPromises.length;
             const agentTag = `project:${projectName},agent:${agentType}`;
-            agentSpecificResults = await Promise.race([
-              searchMemories(searchQuery, 2, agentTag).catch(() => ''),
-              timeoutPromise,
-            ]);
+            searchPromises.push(
+              searchMemories(searchQuery, 2, agentTag).catch(() => '')
+            );
           }
 
           // 2. Project-wide memories
           if (projectName) {
+            projectSearchIndex = searchPromises.length;
             const projectTag = `project:${projectName}`;
-            projectWideResults = await Promise.race([
-              searchMemories(searchQuery, 3, projectTag).catch(() => ''),
-              timeoutPromise,
-            ]);
+            searchPromises.push(
+              searchMemories(searchQuery, 3, projectTag).catch(() => '')
+            );
           }
 
-          // Combine results - agent-specific first, then project-wide
-          const combinedMemories = [agentSpecificResults, projectWideResults]
-            .filter(r => r.length > 0)
-            .join('\n\n---\n\n');
+          // Wait for all searches with timeout
+          const results = await Promise.race([
+            Promise.all(searchPromises),
+            timeoutPromise.then(() => []),
+          ]);
 
+          // Combine results - agent-specific first, then project-wide
+          const combinedMemories = results.filter(r => r.length > 0).join('\n\n---\n\n');
           if (combinedMemories) {
-            const agentSpecificCount = agentSpecificResults.split('\n').filter(l => l.trim()).length;
-            const projectCount = projectWideResults.split('\n').filter(l => l.trim()).length;
+            const agentSpecificResult = agentSearchIndex >= 0 ? results[agentSearchIndex] : '';
+            const projectResult = projectSearchIndex >= 0 ? results[projectSearchIndex] : '';
+            const agentSpecificCount = agentSpecificResult?.split('\n').filter(l => l.trim()).length || 0;
+            const projectCount = projectResult?.split('\n').filter(l => l.trim()).length || 0;
 
             log.debug('Memory injection for subagent', {
               agentType,
