@@ -191,14 +191,21 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/myproject");
 
-      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
+      // Now stores task-summary + files-modified
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(2);
 
-      // Content should include all three file paths
-      expect(content).toContain("/src/server.ts");
-      expect(content).toContain("/src/database.ts");
-      expect(content).toContain("/src/new-file.ts");
-      expect(content).toContain("Files:");
+      // Check files-modified memory
+      const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:files-modified')
+      );
+      expect(filesCall).toBeTruthy();
+      if (filesCall) {
+        const [content] = filesCall;
+        expect(content).toContain("/src/server.ts");
+        expect(content).toContain("/src/database.ts");
+        expect(content).toContain("/src/new-file.ts");
+        expect(content).toContain("Files modified:");
+      }
     });
 
     it("should extract errors from failed tool events", async () => {
@@ -245,13 +252,20 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/myproject");
 
-      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
+      // Now stores task-summary + files-modified + errors-encountered
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(3);
 
-      // Content should include errors
-      expect(content).toContain("Errors:");
-      expect(content).toContain("Build failed");
-      expect(content).toContain("Test suite failed");
+      // Check errors-encountered memory
+      const errorsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:errors-encountered')
+      );
+      expect(errorsCall).toBeTruthy();
+      if (errorsCall) {
+        const [content] = errorsCall;
+        expect(content).toContain("Errors encountered:");
+        expect(content).toContain("Build failed");
+        expect(content).toContain("Test suite failed");
+      }
     });
 
     it("should format memory content correctly with all sections", async () => {
@@ -298,22 +312,41 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/authproject");
 
-      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
+      // Now stores multiple memories (task-summary, files-modified, agents-used)
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(3);
 
-      // Verify all sections are present
-      expect(content).toContain("Session session-7 in authproject");
-      expect(content).toContain("Goal: Implement user authentication");
-      expect(content).toContain("Files: /src/auth.ts");
-      expect(content).toContain("Tools:");
-      expect(content).toContain("Agents:");
-      expect(content).toContain("Outcome: Successfully deployed authentication system");
+      // Check task summary memory
+      const taskSummaryCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:task-summary')
+      );
+      expect(taskSummaryCall).toBeTruthy();
+      if (taskSummaryCall) {
+        const [content] = taskSummaryCall;
+        expect(content).toContain("Goal: Implement user authentication");
+        expect(content).toContain("Outcome: Successfully deployed authentication system");
+      }
 
-      // Verify structure
-      const lines = content.split("\n");
-      expect(lines[0]).toContain("Session");
-      expect(lines[1]).toContain("Goal:");
-      expect(lines[lines.length - 1]).toContain("Outcome:");
+      // Check files-modified memory
+      const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:files-modified')
+      );
+      expect(filesCall).toBeTruthy();
+      if (filesCall) {
+        const [content] = filesCall;
+        expect(content).toContain("Files modified: /src/auth.ts");
+      }
+
+      // Check agents-used memory
+      const agentsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:agents-used')
+      );
+      expect(agentsCall).toBeTruthy();
+      if (agentsCall) {
+        const [content] = agentsCall;
+        expect(content).toContain("Agents used:");
+        expect(content).toContain("code_agent");
+        expect(content).toContain("deployment_agent");
+      }
     });
 
     it("should call storeMemory with correct tags including project name", async () => {
@@ -460,12 +493,20 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
-      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
+      // Now stores task-summary + errors-encountered
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(2);
 
-      // Error should be truncated to 200 chars + "..."
-      expect(content).toContain("A".repeat(200) + "...");
-      expect(content).not.toContain("A".repeat(300));
+      // Check errors-encountered memory
+      const errorsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:errors-encountered')
+      );
+      expect(errorsCall).toBeTruthy();
+      if (errorsCall) {
+        const [content] = errorsCall;
+        // Error should be truncated to 200 chars + "..."
+        expect(content).toContain("A".repeat(200) + "...");
+        expect(content).not.toContain("A".repeat(300));
+      }
     });
 
     it("should skip distillation when debounce prevents it", async () => {
@@ -582,12 +623,20 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
-      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
+      // Now stores task-summary + files-modified
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(2);
 
-      // File should appear only once despite multiple tool events
-      const fileMatches = content.match(/\/src\/app\.ts/g);
-      expect(fileMatches).toHaveLength(1);
+      // Check files-modified memory
+      const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:files-modified')
+      );
+      expect(filesCall).toBeTruthy();
+      if (filesCall) {
+        const [content] = filesCall;
+        // File should appear only once despite multiple tool events
+        const fileMatches = content.match(/\/src\/app\.ts/g);
+        expect(fileMatches).toHaveLength(1);
+      }
     });
 
     it("should deduplicate tool names", async () => {
@@ -614,18 +663,14 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
+      // Only task-summary stored (no files, no agents, no errors)
       expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
 
-      // Bash should appear only once in Tools section
-      expect(content).toContain("Tools:");
-      const toolsMatch = content.match(/Tools: (.+)/);
-      expect(toolsMatch).toBeTruthy();
-      if (toolsMatch) {
-        const tools = toolsMatch[1].split(", ");
-        const bashCount = tools.filter(t => t === "Bash").length;
-        expect(bashCount).toBe(1);
-      }
+      // Task summary doesn't include tool names anymore (moved to agents-used if applicable)
+      const taskSummaryCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:task-summary')
+      );
+      expect(taskSummaryCall).toBeTruthy();
     });
 
     it("should exclude tool IDs starting with 'toolu_' from tool names", async () => {
@@ -651,13 +696,20 @@ describe("Memory Distiller Tests", () => {
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
+      // Only task-summary stored (no agents involved)
       expect(memoryClient.storeMemory).toHaveBeenCalledTimes(1);
-      const [content] = vi.mocked(memoryClient.storeMemory).mock.calls[0];
 
-      // Should not include toolu_ prefix tool name
-      expect(content).not.toContain("toolu_");
-      expect(content).toContain("Read");
-      expect(content).toContain("Bash");
+      const taskSummaryCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:task-summary')
+      );
+      expect(taskSummaryCall).toBeTruthy();
+
+      // Task summary should not include tool names (only agents-used memory has tools)
+      // And should not contain toolu_ prefix tool names
+      if (taskSummaryCall) {
+        const [content] = taskSummaryCall;
+        expect(content).not.toContain("toolu_");
+      }
     });
 
     it("should truncate goal and outcome messages", async () => {
@@ -720,6 +772,329 @@ describe("Memory Distiller Tests", () => {
       expect(result).toBe(true);
 
       vi.useRealTimers();
+    });
+  });
+
+  describe("Split memory types", () => {
+    it("should create task-summary memory for every session", async () => {
+      const sessionId = "session-split-1";
+      const conversations = [
+        { id: 1, role: "user", content: "Build feature X" },
+        { id: 2, role: "assistant", content: "Working..." },
+        { id: 3, role: "user", content: "Done?" },
+        { id: 4, role: "assistant", content: "Finished" },
+        { id: 5, role: "user", content: "Great" },
+        { id: 6, role: "assistant", content: "Feature X complete" },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue([]);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      const taskSummaryCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:task-summary')
+      );
+
+      expect(taskSummaryCall).toBeTruthy();
+      if (taskSummaryCall) {
+        const [content, tags] = taskSummaryCall;
+        expect(content).toContain("Goal: Build feature X");
+        expect(content).toContain("Outcome: Feature X complete");
+        expect(tags).toContain("type:task-summary");
+      }
+    });
+
+    it("should only create files-modified memory when files are touched", async () => {
+      const sessionId = "session-split-2";
+      const conversations = [
+        { id: 1, role: "user", content: "Check status" },
+        { id: 2, role: "assistant", content: "Status OK" },
+        { id: 3, role: "user", content: "Good" },
+        { id: 4, role: "assistant", content: "Done" },
+        { id: 5, role: "user", content: "Thanks" },
+        { id: 6, role: "assistant", content: "Welcome" },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue([]); // No file tools
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      // Should only have task-summary, no files-modified
+      const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:files-modified')
+      );
+      expect(filesCall).toBeUndefined();
+    });
+
+    it("should create files-modified memory when files are touched", async () => {
+      const sessionId = "session-split-3";
+      const conversations = [
+        { id: 1, role: "user", content: "Update code" },
+        { id: 2, role: "assistant", content: "Updating..." },
+        { id: 3, role: "user", content: "Test" },
+        { id: 4, role: "assistant", content: "Testing..." },
+        { id: 5, role: "user", content: "Done" },
+        { id: 6, role: "assistant", content: "Complete" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Edit",
+          parameters: { file_path: "/src/app.ts", old_string: "old", new_string: "new" },
+          success: 1,
+          error: null,
+          agent_type: null,
+        },
+        {
+          id: 2,
+          tool_name: "Write",
+          parameters: { file_path: "/src/utils.ts", content: "export {}" },
+          success: 1,
+          error: null,
+          agent_type: null,
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:files-modified')
+      );
+
+      expect(filesCall).toBeTruthy();
+      if (filesCall) {
+        const [content, tags] = filesCall;
+        expect(content).toContain("Files modified:");
+        expect(content).toContain("/src/app.ts");
+        expect(content).toContain("/src/utils.ts");
+        expect(tags).toContain("type:files-modified");
+      }
+    });
+
+    it("should only create errors-encountered memory when errors exist", async () => {
+      const sessionId = "session-split-4";
+      const conversations = [
+        { id: 1, role: "user", content: "Run build" },
+        { id: 2, role: "assistant", content: "Building..." },
+        { id: 3, role: "user", content: "Status" },
+        { id: 4, role: "assistant", content: "Success" },
+        { id: 5, role: "user", content: "Good" },
+        { id: 6, role: "assistant", content: "Done" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Bash",
+          parameters: { command: "npm run build" },
+          success: 1, // Success
+          error: null,
+          agent_type: null,
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      // Should not have errors-encountered memory
+      const errorsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:errors-encountered')
+      );
+      expect(errorsCall).toBeUndefined();
+    });
+
+    it("should create errors-encountered memory when errors exist", async () => {
+      const sessionId = "session-split-5";
+      const conversations = [
+        { id: 1, role: "user", content: "Deploy" },
+        { id: 2, role: "assistant", content: "Deploying..." },
+        { id: 3, role: "user", content: "Fix" },
+        { id: 4, role: "assistant", content: "Fixed" },
+        { id: 5, role: "user", content: "Retry" },
+        { id: 6, role: "assistant", content: "Success" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Bash",
+          parameters: { command: "npm run deploy" },
+          success: 0,
+          error: "Deployment failed: connection timeout",
+          agent_type: null,
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      const errorsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:errors-encountered')
+      );
+
+      expect(errorsCall).toBeTruthy();
+      if (errorsCall) {
+        const [content, tags] = errorsCall;
+        expect(content).toContain("Errors encountered:");
+        expect(content).toContain("Deployment failed");
+        expect(tags).toContain("type:errors-encountered");
+      }
+    });
+
+    it("should only create agents-used memory when agents are involved", async () => {
+      const sessionId = "session-split-6";
+      const conversations = [
+        { id: 1, role: "user", content: "Check files" },
+        { id: 2, role: "assistant", content: "Checking..." },
+        { id: 3, role: "user", content: "OK" },
+        { id: 4, role: "assistant", content: "Done" },
+        { id: 5, role: "user", content: "Thanks" },
+        { id: 6, role: "assistant", content: "Welcome" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Read",
+          parameters: { file_path: "/src/app.ts" },
+          success: 1,
+          error: null,
+          agent_type: null, // No agent
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      // Should not have agents-used memory
+      const agentsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:agents-used')
+      );
+      expect(agentsCall).toBeUndefined();
+    });
+
+    it("should create agents-used memory when agents are involved", async () => {
+      const sessionId = "session-split-7";
+      const conversations = [
+        { id: 1, role: "user", content: "Review code" },
+        { id: 2, role: "assistant", content: "Reviewing..." },
+        { id: 3, role: "user", content: "Deploy" },
+        { id: 4, role: "assistant", content: "Deploying..." },
+        { id: 5, role: "user", content: "Done" },
+        { id: 6, role: "assistant", content: "Complete" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Agent",
+          parameters: { description: "Review code quality" },
+          success: 1,
+          error: null,
+          agent_type: "code-reviewer",
+        },
+        {
+          id: 2,
+          tool_name: "Agent",
+          parameters: { description: "Deploy app" },
+          success: 1,
+          error: null,
+          agent_type: "deployment_agent",
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      const agentsCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(
+        call => call[1].includes('type:agents-used')
+      );
+
+      expect(agentsCall).toBeTruthy();
+      if (agentsCall) {
+        const [content, tags] = agentsCall;
+        expect(content).toContain("Agents used:");
+        expect(content).toContain("code-reviewer");
+        expect(content).toContain("deployment_agent");
+        expect(tags).toContain("type:agents-used");
+      }
+    });
+
+    it("should create all 4 memory types when applicable", async () => {
+      const sessionId = "session-split-8";
+      const conversations = [
+        { id: 1, role: "user", content: "Implement auth" },
+        { id: 2, role: "assistant", content: "Working..." },
+        { id: 3, role: "user", content: "Test" },
+        { id: 4, role: "assistant", content: "Testing..." },
+        { id: 5, role: "user", content: "Deploy" },
+        { id: 6, role: "assistant", content: "Auth deployed successfully" },
+      ];
+
+      const toolEvents = [
+        {
+          id: 1,
+          tool_name: "Write",
+          parameters: { file_path: "/src/auth.ts", content: "export {}" },
+          success: 1,
+          error: null,
+          agent_type: "code_agent",
+        },
+        {
+          id: 2,
+          tool_name: "Bash",
+          parameters: { command: "npm test" },
+          success: 0,
+          error: "Test failed: auth validation",
+          agent_type: null,
+        },
+        {
+          id: 3,
+          tool_name: "Agent",
+          parameters: { description: "Fix tests" },
+          success: 1,
+          error: null,
+          agent_type: "tdd-guide",
+        },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+
+      await memoryDistiller.distillSession(sessionId, "/workspace/authapp");
+
+      // Should have all 4 types
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(4);
+
+      const calls = vi.mocked(memoryClient.storeMemory).mock.calls;
+      const tagsSets = calls.map(c => c[1]);
+
+      expect(tagsSets.some(t => t.includes('type:task-summary'))).toBe(true);
+      expect(tagsSets.some(t => t.includes('type:files-modified'))).toBe(true);
+      expect(tagsSets.some(t => t.includes('type:errors-encountered'))).toBe(true);
+      expect(tagsSets.some(t => t.includes('type:agents-used'))).toBe(true);
     });
   });
 });

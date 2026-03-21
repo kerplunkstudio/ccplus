@@ -76,7 +76,7 @@ export async function buildSystemPrompt(projectPath?: string, userPrompt?: strin
   if (config.MEMORY_ENABLED && userPrompt) {
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';
-      const searchQuery = userPrompt.slice(0, 200);
+      const searchQuery = userPrompt; // Use full prompt for better retrieval
       const projectTag = projectName ? `project:${projectName}` : undefined;
       const memoryText = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS, projectTag);
 
