@@ -50,9 +50,47 @@ export async function startTelegramBridge(): Promise<void> {
     log.info('Telegram bridge allowlist configured', { count: config.TELEGRAM_ALLOWLIST.length });
   }
 
+  // Set up handlers
+  setupBotHandlers(bot);
+
+  // Start polling with error recovery
+  startPollingWithRetry().catch((err) => {
+    log.error('Telegram polling permanently failed after retries', { error: String(err) });
+    bot = null;
+  });
+}
+
+export async function stopTelegramBridge(): Promise<void> {
+  if (!bot) return;
+
+  // Clean up all chat states
+  for (const [chatId, state] of chatStates.entries()) {
+    if (state.typingInterval) {
+      clearInterval(state.typingInterval);
+    }
+    captain.unregisterResponseCallback(state.callbackId);
+    chatStates.delete(chatId);
+  }
+
+  try {
+    bot.stop();
+  } catch (error) {
+    log.warn('Error stopping Telegram bot', { error: String(error) });
+  }
+  bot = null;
+  log.info('Telegram bridge stopped');
+}
+
+export function isTelegramBridgeActive(): boolean {
+  return bot !== null;
+}
+
+// ---- Internal ----
+
+function setupBotHandlers(botInstance: Bot): void {
   // -- Commands --
 
-  bot.command('start', async (ctx) => {
+  botInstance.command('start', async (ctx) => {
     if (!isAllowed(ctx)) {
       await ctx.reply('Access denied. Contact the cc+ admin for access.');
       return;
@@ -63,7 +101,7 @@ export async function startTelegramBridge(): Promise<void> {
     );
   });
 
-  bot.command('status', async (ctx) => {
+  botInstance.command('status', async (ctx) => {
     if (!isAllowed(ctx)) {
       await ctx.reply('Access denied.');
       return;
@@ -76,14 +114,14 @@ export async function startTelegramBridge(): Promise<void> {
     await handleMessage(ctx, 'What is the current fleet status? List all sessions.');
   });
 
-  bot.command('clear', async (ctx) => {
+  botInstance.command('clear', async (ctx) => {
     if (!isAllowed(ctx)) return;
     await ctx.reply('Chat context cleared on Telegram side. Captain retains its session memory.');
   });
 
   // -- Message handler --
 
-  bot.on('message:text', async (ctx) => {
+  botInstance.on('message:text', async (ctx) => {
     if (!isAllowed(ctx)) {
       await ctx.reply('Access denied. Contact the cc+ admin for access.');
       return;
@@ -97,7 +135,7 @@ export async function startTelegramBridge(): Promise<void> {
 
   // -- Voice message handler --
 
-  bot.on('message:voice', async (ctx) => {
+  botInstance.on('message:voice', async (ctx) => {
     if (!isAllowed(ctx)) {
       await ctx.reply('Access denied. Contact the cc+ admin for access.');
       return;
@@ -130,40 +168,57 @@ export async function startTelegramBridge(): Promise<void> {
 
   // -- Error handler --
 
-  bot.catch((err) => {
+  botInstance.catch((err) => {
     log.error('Telegram bot error', { error: String(err.error) });
   });
-
-  // Start polling
-  bot.start({
-    onStart: () => {
-      log.info('Telegram bridge started (polling mode)');
-    },
-  });
 }
 
-export async function stopTelegramBridge(): Promise<void> {
-  if (!bot) return;
+async function startPollingWithRetry(): Promise<void> {
+  const MAX_RETRIES = 5;
+  const BASE_DELAY_MS = 1000;
+  const MAX_DELAY_MS = 30000;
 
-  // Clean up all chat states
-  for (const [chatId, state] of chatStates.entries()) {
-    if (state.typingInterval) {
-      clearInterval(state.typingInterval);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await bot!.start({
+        onStart: () => {
+          log.info('Telegram bridge started (polling mode)');
+        },
+      });
+      return; // bot.start() resolved normally (bot was stopped gracefully)
+    } catch (error) {
+      const errorStr = String(error);
+      const is409 = errorStr.includes('409') || errorStr.includes('Conflict');
+
+      if (attempt === MAX_RETRIES) {
+        throw error;
+      }
+
+      const delayMs = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+      log.warn('Telegram polling error, retrying', {
+        attempt: attempt + 1,
+        maxRetries: MAX_RETRIES,
+        delayMs,
+        is409,
+        error: errorStr,
+      });
+
+      if (is409) {
+        // Another instance is polling — stop current bot and recreate
+        try {
+          bot!.stop();
+        } catch {
+          // Ignore stop errors
+        }
+        await delay(delayMs);
+        bot = new Bot(config.TELEGRAM_BOT_TOKEN!);
+        setupBotHandlers(bot);
+      } else {
+        await delay(delayMs);
+      }
     }
-    captain.unregisterResponseCallback(state.callbackId);
-    chatStates.delete(chatId);
   }
-
-  bot.stop();
-  bot = null;
-  log.info('Telegram bridge stopped');
 }
-
-export function isTelegramBridgeActive(): boolean {
-  return bot !== null;
-}
-
-// ---- Internal ----
 
 function isAllowed(ctx: Context): boolean {
   if (config.TELEGRAM_ALLOWLIST.length === 0) return true;
