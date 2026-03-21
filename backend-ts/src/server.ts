@@ -1819,10 +1819,15 @@ function gracefulShutdown(signal: string): void {
   database.close();
   console.log("Database closed");
 
-  // 4. Remove PID file
+  // 4. Stop Telegram bridge
+  import('./telegram-bridge.js').then(({ stopTelegramBridge }) => {
+    stopTelegramBridge().catch(() => {});
+  }).catch(() => {});
+
+  // 5. Remove PID file
   removePidFile();
 
-  // 5. Exit
+  // 6. Exit
   console.log("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
@@ -1901,5 +1906,14 @@ httpServer.listen(config.PORT, config.HOST, () => {
     captain.startCaptainSession(config.CAPTAIN_WORKSPACE ?? process.cwd(), captainDeps)
       .then(({ sessionId }) => log.info('Captain auto-started', { sessionId }))
       .catch((err) => log.error('Captain auto-start failed', { error: String(err) }));
+  }
+
+  // Auto-start Telegram bridge if token configured
+  if (config.TELEGRAM_BOT_TOKEN) {
+    import('./telegram-bridge.js').then(({ startTelegramBridge }) => {
+      startTelegramBridge()
+        .then(() => log.info('Telegram bridge started'))
+        .catch((err: unknown) => log.error('Telegram bridge failed to start', { error: String(err) }));
+    });
   }
 });

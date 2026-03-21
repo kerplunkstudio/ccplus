@@ -374,7 +374,7 @@ export async function startCaptainSession(
     const fleetMcpServer = buildFleetMcpServer(captainDeps);
 
     // Boot message
-    const bootMessage = "You are now active as the Fleet Captain. Report status: 'Fleet Captain online. Ready to manage sessions.'";
+    const bootMessage = "You are now active as the Fleet Captain. Acknowledge silently — do not produce any output.";
 
     log.info("Starting Captain session", { sessionId, workspace });
 
