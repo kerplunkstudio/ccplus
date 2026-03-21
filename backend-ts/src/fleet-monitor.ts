@@ -15,6 +15,7 @@ export interface FleetSessionInfo {
   lastActivity: string;
   label: string;
   filesTouched: string[];
+  requestedBy?: { source: string; sourceId: string };
 }
 
 export interface FleetState {
@@ -38,7 +39,7 @@ let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // ---- Public API ----
 
-export function registerSession(sessionId: string, workspace: string): void {
+export function registerSession(sessionId: string, workspace: string, requestedBy?: { source: string; sourceId: string }): void {
   const existing = sessions.get(sessionId);
   if (!existing) {
     const info: FleetSessionInfo = {
@@ -54,6 +55,7 @@ export function registerSession(sessionId: string, workspace: string): void {
       lastActivity: new Date().toISOString(),
       label: '',
       filesTouched: [],
+      requestedBy,
     };
     sessions.set(sessionId, info);
   }

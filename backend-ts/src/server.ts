@@ -1295,6 +1295,7 @@ io.on("connection", (socket) => {
       buildSocketCallbacks(sid, projectPathData || undefined),
       model,
       imageIdsData.length ? imageIdsData : undefined,
+      undefined, // requestedBy (not applicable for direct web sessions)
     );
   });
 
@@ -1888,6 +1889,7 @@ setInterval(() => {
           buildSocketCallbacks(sessionId, workspace),
           undefined,
           undefined,
+          undefined, // requestedBy (not applicable for scheduled tasks)
         );
 
         // Mark task as fired

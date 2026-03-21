@@ -15,6 +15,7 @@ import { eventLog } from './event-log.js';
 import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase } from './workflow-state.js';
 import { WORKFLOW_ENABLED } from './config.js';
 import * as fleetMonitor from './fleet-monitor.js';
+import * as captain from './captain.js';
 
 // ---- Skills discovery (cached) ----
 
@@ -876,11 +877,12 @@ export function submitQuery(
   callbacks: SessionCallbacks,
   model?: string,
   imageIds?: string[],
+  requestedBy?: { source: string; sourceId: string },
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
 
   // Register session and mark as running
-  fleetMonitor.registerSession(sessionId, workspace);
+  fleetMonitor.registerSession(sessionId, workspace, requestedBy);
   fleetMonitor.updateSessionStatus(sessionId, 'running');
 
   // Force-close stale query if one is lingering
@@ -1557,6 +1559,15 @@ async function streamQuery(
     if (gotResult && Object.keys(lastCompletionData).length > 0) {
       callbacks.onComplete(lastCompletionData);
       fleetMonitor.updateSessionStatus(sessionId, 'completed');
+
+      // Notify Captain if this is a fleet session
+      const sessionInfo = fleetMonitor.getSessionDetail(sessionId);
+      if (sessionInfo) {
+        captain.notifySessionComplete(sessionId, {
+          requestedBy: sessionInfo.requestedBy,
+          filesTouched: sessionInfo.filesTouched,
+        });
+      }
     }
   } catch (err) {
     const errorStr = String(err);

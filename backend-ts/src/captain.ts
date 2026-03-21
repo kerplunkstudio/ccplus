@@ -48,6 +48,7 @@ interface CaptainState {
   readonly sdkSessionId: string | null;
   readonly workspace: string | null;
   readonly lastQueryCallbackId: string | null;
+  readonly lastQuerySource: { source: string; sourceId: string } | null;
 }
 
 let captainState: CaptainState = {
@@ -59,6 +60,7 @@ let captainState: CaptainState = {
   sdkSessionId: null,
   workspace: null,
   lastQueryCallbackId: null,
+  lastQuerySource: null,
 };
 
 let captainDeps: CaptainDependencies | null = null;
@@ -128,6 +130,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
               prompt: fullPrompt,
               workspace: args.workspace,
               sessionId: args.session_id,
+              requestedBy: getLastQuerySource() ?? undefined,
             },
             dependencies
           );
@@ -410,6 +413,7 @@ export async function startCaptainSession(
       sdkSessionId: captainState.sdkSessionId,
       workspace,
       lastQueryCallbackId: null,
+      lastQuerySource: null,
     };
 
     // Process boot query in background
@@ -549,11 +553,12 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     ? `${source}:${sourceId}`
     : null; // web/api → broadcast to all
 
-  // Increment message count and store routing target
+  // Increment message count and store routing target & source
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
     lastQueryCallbackId: queryCallbackId,
+    lastQuerySource: { source, sourceId },
   };
 
   log.info("Captain message queued", { source, sourceId, length: content.length });
@@ -681,4 +686,40 @@ export function getCaptainStatus(): {
     uptimeMs,
     messageCount: captainState.messageCount,
   };
+}
+
+/**
+ * Get the last query source (for tracking session requesters).
+ */
+export function getLastQuerySource(): { source: string; sourceId: string } | null {
+  return captainState.lastQuerySource;
+}
+
+/**
+ * Notify Captain when a session completes.
+ * Injects a fleet message so Captain can send a summary to the requester.
+ */
+export function notifySessionComplete(sessionId: string, info: { requestedBy?: { source: string; sourceId: string }; filesTouched?: string[] }): void {
+  if (!isCaptainAlive()) {
+    log.info("Captain not alive, skipping session completion notification", { sessionId });
+    return;
+  }
+
+  // Only notify if we know who requested it
+  if (!info.requestedBy) {
+    log.info("Session has no requester info, skipping notification", { sessionId });
+    return;
+  }
+
+  const { source, sourceId } = info.requestedBy;
+  const filesChanged = info.filesTouched && info.filesTouched.length > 0
+    ? info.filesTouched.join(', ')
+    : 'none';
+
+  const fleetMessage = `Session "${sessionId}" completed. Files changed: ${filesChanged}. Send a brief success summary to [${source.toUpperCase()}:${sourceId}].`;
+
+  log.info("Notifying Captain of session completion", { sessionId, source, sourceId });
+
+  // Send as a fleet message (will be tagged with [FLEET] prefix)
+  sendCaptainMessage(fleetMessage, 'fleet', 'system');
 }
