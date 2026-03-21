@@ -415,21 +415,54 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
         const toolInput = input.tool_input as Record<string, unknown> | undefined;
         const description = (toolInput?.description as string) ?? '';
         const prompt = (toolInput?.prompt as string) ?? '';
-        const searchQuery = (description + ' ' + prompt.slice(0, 200)).trim();
+        const searchQuery = (description + ' ' + prompt).trim(); // Use full prompt for better retrieval
 
         if (searchQuery.length > 10) {
           const projectName = session?.workspace ? path.basename(session.workspace) : '';
-          const projectTag = projectName ? `project:${projectName}` : undefined;
+          const agentType = (input as { agent_type?: string }).agent_type ?? '';
 
           const timeoutPromise = new Promise<string>(resolve =>
             setTimeout(() => resolve(''), config.MEMORY_HOOK_TIMEOUT_MS)
           );
-          const memoryText = await Promise.race([
-            searchMemories(searchQuery, 3, projectTag),
-            timeoutPromise,
+
+          // Search agent-specific memories first, then project-wide
+          const searchPromises: Promise<string>[] = [];
+
+          // 1. Agent-specific memories (if agent type is known)
+          if (agentType && projectName) {
+            const agentTag = `project:${projectName},agent:${agentType}`;
+            searchPromises.push(
+              searchMemories(searchQuery, 2, agentTag).catch(() => '')
+            );
+          }
+
+          // 2. Project-wide memories
+          if (projectName) {
+            const projectTag = `project:${projectName}`;
+            searchPromises.push(
+              searchMemories(searchQuery, 3, projectTag).catch(() => '')
+            );
+          }
+
+          // Wait for all searches with timeout
+          const results = await Promise.race([
+            Promise.all(searchPromises),
+            timeoutPromise.then(() => []),
           ]);
-          if (memoryText) {
-            memoryContext = `## Prior Knowledge\n${memoryText}`;
+
+          // Combine results - agent-specific first, then project-wide
+          const combinedMemories = results.filter(r => r.length > 0).join('\n\n---\n\n');
+          if (combinedMemories) {
+            const agentSpecificCount = results[0]?.split('\n').filter(l => l.trim()).length || 0;
+            const projectCount = results[1]?.split('\n').filter(l => l.trim()).length || 0;
+
+            log.debug('Memory injection for subagent', {
+              agentType,
+              agentSpecificCount,
+              projectCount,
+            });
+
+            memoryContext = `## Prior Knowledge\n${combinedMemories}`;
           }
         }
       } catch (error) {
@@ -461,9 +494,53 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
           transcriptPath: input.agent_transcript_path as string | undefined,
           lastMessage: input.last_assistant_message as string | undefined,
         });
+
+        // Store agent-specific memory with agent namespace tag
+        if (config.MEMORY_DISTILL_ENABLED) {
+          const agentType = (input.agent_type as string) ?? 'agent';
+          const lastMessage = input.last_assistant_message as string | undefined;
+          const toolInput = input.tool_input as Record<string, unknown> | undefined;
+          const taskDescription = (toolInput?.description as string) ?? (toolInput?.prompt as string) ?? '';
+
+          // Only store if we have meaningful content
+          if (lastMessage && lastMessage.length > 50 && taskDescription.length > 10) {
+            const session = sessions.get(sessionId);
+            const projectName = session?.workspace ? path.basename(session.workspace) : '';
+
+            if (projectName) {
+              const agentMemory = [
+                `Agent: ${agentType}`,
+                `Task: ${taskDescription.substring(0, 200)}`,
+                `Outcome: ${lastMessage.substring(0, 300)}`,
+              ].join('\n');
+
+              // Fire and forget - don't block on memory storage
+              import('../memory-client.js').then(({ storeMemory }) => {
+                storeMemory(
+                  agentMemory,
+                  [
+                    `project:${projectName}`,
+                    `agent:${agentType}`,
+                    `session:${sessionId}`,
+                    'type:agent-lesson',
+                    'auto-distill',
+                  ].join(','),
+                  {
+                    session_id: sessionId,
+                    agent_id: agentId,
+                    agent_type: agentType,
+                  }
+                ).catch(error => {
+                  log.debug('Agent memory storage failed', { error: String(error), agentType });
+                });
+              }).catch(() => {
+                // Ignore import errors
+              });
+            }
+          }
+        }
       }
     }
-
 
     return {};
   };
