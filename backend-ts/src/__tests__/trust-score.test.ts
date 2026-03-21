@@ -8,6 +8,7 @@ import {
   scoreCostEfficiency,
   scoreSecurity,
   computeTrustScore,
+  isMdOnly,
   type SessionToolData,
   type SessionQueryData,
   type SessionConversationData,
@@ -379,6 +380,19 @@ describe("Trust Score Tests", () => {
       expect(scoreTestCoverage(summary)).toBe(100);
     });
 
+    it("should return 100 for MD-only write session", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/docs/README.md", content: "docs" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreTestCoverage(summary)).toBe(100);
+    });
+
     it("should return 0 (not 100) when files were deleted but no tests run", () => {
       const tools: SessionToolData[] = [
         {
@@ -390,6 +404,56 @@ describe("Trust Score Tests", () => {
       ];
       const summary = computeSummary(tools, [], []);
       expect(scoreTestCoverage(summary)).toBe(0);
+    });
+
+    it("should return 0 for mixed md + ts files with no tests", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/docs/README.md", content: "docs" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/src/foo.ts", content: "code" }),
+          success: 1,
+          timestamp: "2026-03-20T10:01:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreTestCoverage(summary)).toBe(0);
+    });
+
+    it("should return 100 for uppercase .MD files", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Write",
+          parameters: JSON.stringify({ file_path: "/CHANGELOG.MD", content: "changes" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreTestCoverage(summary)).toBe(100);
+    });
+  });
+
+  describe("isMdOnly", () => {
+    it("should return true for empty array", () => {
+      expect(isMdOnly([])).toBe(true);
+    });
+
+    it("should return true for array of md files", () => {
+      expect(isMdOnly(["README.md", "CHANGELOG.md"])).toBe(true);
+    });
+
+    it("should return false for mixed files", () => {
+      expect(isMdOnly(["README.md", "foo.ts"])).toBe(false);
+    });
+
+    it("should return true for uppercase .MD files", () => {
+      expect(isMdOnly(["CHANGELOG.MD"])).toBe(true);
     });
   });
 

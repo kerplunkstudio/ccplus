@@ -205,9 +205,15 @@ export function computeFlags(summary: TrustSummary, tools: SessionToolData[]): T
   return flags;
 }
 
+export function isMdOnly(files: string[]): boolean {
+  return files.every(f => f.toLowerCase().endsWith('.md'));
+}
+
 export function scoreTestCoverage(summary: TrustSummary): number {
   const isReadOnly = summary.files_written.length === 0 && summary.files_deleted.length === 0;
   if (isReadOnly) return 100;
+  const allWrittenFiles = [...summary.files_written, ...summary.files_deleted];
+  if (allWrittenFiles.length > 0 && isMdOnly(allWrittenFiles)) return 100;
   if (summary.tests_run === 0) return 0;
   if (summary.tests_failed === 0) return 100;
   return Math.max(0, Math.round((100 * summary.tests_passed) / summary.tests_run));
