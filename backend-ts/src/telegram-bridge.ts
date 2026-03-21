@@ -1,6 +1,7 @@
 /**
  * Telegram bridge for Captain.
- * Forwards Telegram messages to Captain and sends formatted responses back.
+ * Forwards text and voice messages to Captain and sends formatted responses back.
+ * Voice messages are transcribed locally using Whisper via @xenova/transformers.
  */
 
 import { Bot, Context } from 'grammy';
@@ -8,6 +9,7 @@ import * as config from './config.js';
 import * as captain from './captain.js';
 import { formatForTelegram, escapeMarkdownV2 } from './telegram-format.js';
 import { log } from './logger.js';
+import { downloadTelegramFile, transcribeAudio } from './voice-transcriber.js';
 
 // ---- Types ----
 
@@ -90,6 +92,39 @@ export async function startTelegramBridge(): Promise<void> {
     if (!text || text.startsWith('/')) return;
 
     await handleMessage(ctx, text);
+  });
+
+  // -- Voice message handler --
+
+  bot.on('message:voice', async (ctx) => {
+    if (!isAllowed(ctx)) {
+      await ctx.reply('Access denied. Contact the cc+ admin for access.');
+      return;
+    }
+
+    const fileId = ctx.message.voice.file_id;
+    const chatId = ctx.chat.id;
+
+    try {
+      await ctx.replyWithChatAction('typing');
+
+      log.info('Downloading voice message', { chatId, fileId });
+      const audioBuffer = await downloadTelegramFile(config.TELEGRAM_BOT_TOKEN!, fileId);
+
+      log.info('Transcribing voice message', { chatId, fileId, size: audioBuffer.length });
+      const transcription = await transcribeAudio(audioBuffer);
+
+      if (!transcription.trim()) {
+        await ctx.reply('Could not detect speech in voice message. Please try sending text instead.');
+        return;
+      }
+
+      log.info('Voice message transcribed', { chatId, fileId, length: transcription.length });
+      await handleMessage(ctx, `[Voice] ${transcription.trim()}`);
+    } catch (error) {
+      log.error('Telegram voice message error', { chatId, fileId, error: String(error) });
+      await ctx.reply('Could not transcribe voice message. Please try sending text instead.');
+    }
   });
 
   // -- Error handler --
