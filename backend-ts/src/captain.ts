@@ -344,6 +344,13 @@ Rule of thumb: if files don't import from each other, parallelize.
 - ALWAYS search memory before answering questions about projects, past work, or prior sessions
 - Memory is the source of truth for project context — never guess or assume
 
+## MCP Tool Failures
+MCP tools (fleet-control, memory) can fail transiently with "Stream closed", timeout, or connection errors — the server auto-respawns within seconds.
+- **Always retry silently first** — on any MCP tool failure, retry the exact same call once before doing anything else
+- **Do NOT tell the user** about the failure unless the retry also fails
+- **After 2 consecutive failures**: inform the user briefly (e.g. "Fleet control is temporarily unavailable, retrying…") — no panic, no asking them to restart
+- **Never say "crashed" or "dead"** — use neutral language: "temporarily unavailable", "reconnecting"
+
 ## Response Style
 - Direct and concise — no filler
 - [TELEGRAM:...] or [DISCORD:...] messages: bullet points, 2-3 lines max, no code blocks unless asked
