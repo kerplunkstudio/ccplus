@@ -19,6 +19,7 @@ import { createCaptainRouter } from "./captain-router.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import { scheduler } from "./scheduler.js";
+import { saveCaptainState, loadCaptainState } from './state-persistence.js';
 import { buildSocketCallbacks } from "./socket/callbacks.js";
 import { setupSocketHandlers } from "./socket/handlers.js";
 import { createHealthRoutes } from "./routes/health.js";
@@ -235,6 +236,13 @@ writePidFile();
 function gracefulShutdown(signal: string): void {
   log.info("Received shutdown signal", { signal });
 
+  // Save Captain state for resume on next startup
+  const captainPersistState = captain.getCaptainStateForPersistence()
+  if (captainPersistState) {
+    saveCaptainState({ ...captainPersistState, savedAt: Date.now() }, config.CAPTAIN_STATE_PATH)
+    log.info('Captain state saved for resume on next startup', { sdkSessionId: captainPersistState.sdkSessionId })
+  }
+
   // Force exit after timeout if graceful shutdown hangs
   const forceExitTimeout = setTimeout(() => {
     log.error("Shutdown timed out, forcing exit");
@@ -341,9 +349,26 @@ httpServer.listen(config.PORT, config.HOST, () => {
 
   // Auto-start Captain if enabled
   if (config.CAPTAIN_AUTO_START) {
-    captain.startCaptainSession(config.CAPTAIN_WORKSPACE ?? process.cwd(), captainDeps)
-      .then(({ sessionId }) => log.info('Captain auto-started', { sessionId }))
-      .catch((err) => log.error('Captain auto-start failed', { error: String(err) }));
+    const persistedState = config.CAPTAIN_RESUME_ON_STARTUP
+      ? loadCaptainState(config.CAPTAIN_STATE_PATH)
+      : null
+
+    if (persistedState) {
+      log.info('Resuming Captain from persisted state', {
+        sdkSessionId: persistedState.sdkSessionId,
+        savedAt: new Date(persistedState.savedAt).toISOString(),
+      })
+    } else {
+      log.info('Starting Captain fresh (no persisted state found)')
+    }
+
+    captain.startCaptainSession(
+      persistedState?.workspace ?? config.CAPTAIN_WORKSPACE ?? process.cwd(),
+      captainDeps,
+      persistedState?.sdkSessionId
+    )
+      .then(({ sessionId }) => log.info('Captain session started', { sessionId, resumed: !!persistedState }))
+      .catch((err: unknown) => log.error('Captain auto-start failed', { error: String(err) }))
   }
 
   // Auto-start Telegram bridge if token configured

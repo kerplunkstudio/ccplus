@@ -14,6 +14,7 @@ import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import { startSession } from "./session-api.js";
+import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 
 // ---- Types ----
 
@@ -366,7 +367,8 @@ MCP tools (fleet-control, memory) can fail transiently with "Stream closed", tim
  */
 export async function startCaptainSession(
   workspace: string,
-  dependencies?: CaptainDependencies
+  dependencies?: CaptainDependencies,
+  resumeSdkSessionId?: string
 ): Promise<{ sessionId: string }> {
   // If Captain is already running, return existing session ID
   if (captainState.sessionId && !captainState.isStarting) {
@@ -420,7 +422,7 @@ export async function startCaptainSession(
         mcpServers: {
           "fleet-control": fleetMcpServer,
         } as any,
-        resume: captainState.sdkSessionId ?? undefined,
+        resume: resumeSdkSessionId ?? captainState.sdkSessionId ?? undefined,
         maxTurns: config.CAPTAIN_MAX_TURNS,
         includePartialMessages: true,
         permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
@@ -521,6 +523,18 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
             ...captainState,
             sdkSessionId: result.session_id,
           };
+          // Persist state for resume on next startup
+          if (captainState.sessionId) {
+            persistCaptainState(
+              {
+                sessionId: captainState.sessionId,
+                sdkSessionId: result.session_id,
+                workspace: captainState.workspace ?? '',
+                savedAt: Date.now(),
+              },
+              config.CAPTAIN_STATE_PATH
+            )
+          }
         }
 
         // Send completion to target callback(s)
@@ -741,6 +755,18 @@ export function getCaptainStatus(): {
  */
 export function getLastQuerySource(): { source: string; sourceId: string } | null {
   return captainState.lastQuerySource;
+}
+
+/**
+ * Get Captain state for persistence (used during shutdown).
+ */
+export function getCaptainStateForPersistence(): { sessionId: string; sdkSessionId: string; workspace: string } | null {
+  if (!captainState.sessionId || !captainState.sdkSessionId) return null
+  return {
+    sessionId: captainState.sessionId,
+    sdkSessionId: captainState.sdkSessionId,
+    workspace: captainState.workspace ?? '',
+  }
 }
 
 /**
