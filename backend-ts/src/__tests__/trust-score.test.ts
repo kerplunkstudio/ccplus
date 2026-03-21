@@ -85,6 +85,8 @@ describe("Trust Score Tests", () => {
       expect(summary.files_touched).toContain("/path/to/existing.ts");
       expect(summary.files_touched).toContain("/path/to/read.ts");
       expect(summary.files_touched.length).toBe(3);
+      expect(summary.files_written).toContain("/path/to/new-file.ts");
+      expect(summary.files_written).toContain("/path/to/existing.ts");
     });
 
     it("should count agents from Agent tool calls", () => {
@@ -392,7 +394,7 @@ describe("Trust Score Tests", () => {
   });
 
   describe("scoreScopeDiscipline", () => {
-    it("should return 100 for <=2 files", () => {
+    it("should return 100 for <=3 files", () => {
       const tools: SessionToolData[] = [
         {
           tool_name: "Write",
@@ -407,6 +409,17 @@ describe("Trust Score Tests", () => {
           timestamp: "2026-03-20T10:01:00Z",
         },
       ];
+      const summary = computeSummary(tools, [], []);
+      expect(scoreScopeDiscipline(summary)).toBe(100);
+    });
+
+    it("should return 100 for exactly 3 files (formula gives 100 at boundary)", () => {
+      const tools: SessionToolData[] = Array.from({ length: 3 }, (_, i) => ({
+        tool_name: "Write" as const,
+        parameters: JSON.stringify({ file_path: `/file${i}.ts` }),
+        success: 1,
+        timestamp: "2026-03-20T10:00:00Z",
+      }));
       const summary = computeSummary(tools, [], []);
       expect(scoreScopeDiscipline(summary)).toBe(100);
     });
@@ -621,6 +634,7 @@ describe("Trust Score Tests", () => {
       expect(metrics.summary).toHaveProperty("files_touched");
       expect(metrics.summary).toHaveProperty("files_created");
       expect(metrics.summary).toHaveProperty("files_deleted");
+      expect(metrics.summary).toHaveProperty("files_written");
       expect(metrics.summary).toHaveProperty("tests_run");
       expect(metrics.summary).toHaveProperty("tests_passed");
       expect(metrics.summary).toHaveProperty("tests_failed");
@@ -659,6 +673,39 @@ describe("Trust Score Tests", () => {
       // test_coverage=0 with weight 0.40, all others=100
       // 0*0.40 + 100*0.15 + 100*0.20 + 100*0.10 + 100*0.15 = 60
       expect(metrics.overall_score).toBe(60);
+    });
+
+    it("should apply normal weights when files deleted but tests were run", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "rm obsolete-file.ts" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "npm test" }),
+          success: 1,
+          timestamp: "2026-03-20T10:01:00Z",
+        },
+      ];
+      const queries: SessionQueryData[] = [
+        {
+          total_tokens: 3000,
+          input_tokens: 2000,
+          output_tokens: 1000,
+          cost_usd: 0.01,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+      ];
+
+      const metrics = computeTrustScore("test-session", tools, queries, []);
+
+      // hasWrites=true (file deleted), but tests_run=1, so writeWithoutTests=false
+      // Normal weights apply: test_coverage=100, all other dims=100 → score=100
+      // If penalty weights were applied erroneously: 0*0.40+100*0.15+100*0.20+100*0.10+100*0.15=60
+      expect(metrics.overall_score).toBe(100);
     });
 
     it("should score ~100 for a read-only session", () => {

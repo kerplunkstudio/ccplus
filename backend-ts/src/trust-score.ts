@@ -215,7 +215,7 @@ export function scoreTestCoverage(summary: TrustSummary): number {
 
 export function scoreScopeDiscipline(summary: TrustSummary): number {
   const files = summary.files_touched.length;
-  if (files <= 2) return 100;
+  if (files <= 3) return 100;
   return Math.max(0, Math.round(100 - 20 * Math.log2(files / 3)));
 }
 
