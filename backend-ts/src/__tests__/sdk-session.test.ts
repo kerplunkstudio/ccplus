@@ -3186,6 +3186,305 @@ description: Project command
         "Agent failed due to error"
       );
     });
+
+    it("should auto-transition workflow from review to complete when code-reviewer agent finishes successfully", async () => {
+      // Reset module cache so WORKFLOW_ENABLED constant is re-evaluated with env var
+      vi.resetModules();
+      process.env.CCPLUS_WORKFLOW_ENABLED = 'true';
+
+      // Import modules (fresh after resetModules)
+      const { buildHooks } = await import("../sdk/hooks.js");
+      const { sessions } = await import("../sdk/session-manager.js");
+
+      // Set up session with callbacks
+      const toolEventCallback = vi.fn();
+      const sessionId = "workflow-transition-test";
+
+      sessions.set(sessionId, {
+        workspace: "/tmp/test-workspace",
+        model: "sonnet",
+        callbacks: {
+          onText: vi.fn(),
+          onToolEvent: toolEventCallback,
+          onComplete: vi.fn(),
+          onError: vi.fn(),
+        },
+        hadToolSinceLastText: false,
+        latestTodos: [],
+      } as any);
+
+      const hooks = buildHooks(sessionId);
+
+      // Import workflow-state to set up the workflow in review phase
+      const workflowState = await import("../workflow-state.js");
+
+      // Skip to review phase for testing (bypass normal transition rules)
+      workflowState.skipToPhase("workflow-transition-test", "review");
+
+      // Verify we're in review phase
+      let state = workflowState.getWorkflowState("workflow-transition-test");
+      expect(state.phase).toBe("review");
+
+      // Simulate PreToolUse for Agent tool with code-reviewer type
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "code-reviewer" },
+            agent_id: undefined,
+          },
+          "toolu_reviewer123"
+        );
+      }
+
+      // Simulate SubagentStart
+      if (hooks?.SubagentStart?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStart[0].hooks[0](
+          {
+            agent_id: "agent_reviewer",
+            agent_type: "code-reviewer",
+            tool_input: { subagent_type: "code-reviewer" }
+          },
+          undefined
+        );
+      }
+
+      // Simulate SubagentStop with transcript
+      if (hooks?.SubagentStop?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStop[0].hooks[0](
+          {
+            agent_id: "agent_reviewer",
+            agent_transcript_path: "/tmp/review-transcript.txt",
+            last_assistant_message: "Review complete. No blocking issues found.",
+          },
+          undefined
+        );
+      }
+
+      // Simulate PostToolUse (successful completion)
+      if (hooks?.PostToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PostToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "code-reviewer" },
+            agent_id: undefined,
+          },
+          "toolu_reviewer123"
+        );
+      }
+
+      // Wait for async operations
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify workflow transitioned to complete phase
+      state = workflowState.getWorkflowState("workflow-transition-test");
+      expect(state.phase).toBe("complete");
+
+      // Verify transition record exists
+      const lastTransition = state.transitions[state.transitions.length - 1];
+      expect(lastTransition.from).toBe("review");
+      expect(lastTransition.to).toBe("complete");
+      expect(lastTransition.trigger).toBe("agent_complete:code-reviewer");
+
+      // Clean up
+      sessions.delete(sessionId);
+      delete process.env.CCPLUS_WORKFLOW_ENABLED;
+    });
+
+    it("should auto-transition workflow from review to complete when security-reviewer agent finishes successfully", async () => {
+      // Reset module cache so WORKFLOW_ENABLED constant is re-evaluated with env var
+      vi.resetModules();
+      process.env.CCPLUS_WORKFLOW_ENABLED = 'true';
+
+      // Import modules (fresh after resetModules)
+      const { buildHooks } = await import("../sdk/hooks.js");
+      const { sessions } = await import("../sdk/session-manager.js");
+
+      // Set up session with callbacks
+      const toolEventCallback = vi.fn();
+      const sessionId = "workflow-security-test";
+
+      sessions.set(sessionId, {
+        workspace: "/tmp/test-workspace",
+        model: "sonnet",
+        callbacks: {
+          onText: vi.fn(),
+          onToolEvent: toolEventCallback,
+          onComplete: vi.fn(),
+          onError: vi.fn(),
+        },
+        hadToolSinceLastText: false,
+        latestTodos: [],
+      } as any);
+
+      const hooks = buildHooks(sessionId);
+
+      // Import workflow-state to set up the workflow in review phase
+      const workflowState = await import("../workflow-state.js");
+
+      // Skip to review phase for testing (bypass normal transition rules)
+      workflowState.skipToPhase("workflow-security-test", "review");
+
+      // Verify we're in review phase
+      let state = workflowState.getWorkflowState("workflow-security-test");
+      expect(state.phase).toBe("review");
+
+      // Simulate PreToolUse for Agent tool with security-reviewer type
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "security-reviewer" },
+            agent_id: undefined,
+          },
+          "toolu_security123"
+        );
+      }
+
+      // Simulate SubagentStart
+      if (hooks?.SubagentStart?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStart[0].hooks[0](
+          {
+            agent_id: "agent_security",
+            agent_type: "security-reviewer",
+            tool_input: { subagent_type: "security-reviewer" }
+          },
+          undefined
+        );
+      }
+
+      // Simulate SubagentStop
+      if (hooks?.SubagentStop?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStop[0].hooks[0](
+          {
+            agent_id: "agent_security",
+            last_assistant_message: "Security review passed.",
+          },
+          undefined
+        );
+      }
+
+      // Simulate PostToolUse (successful completion)
+      if (hooks?.PostToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PostToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "security-reviewer" },
+            agent_id: undefined,
+          },
+          "toolu_security123"
+        );
+      }
+
+      // Wait for async operations
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify workflow transitioned to complete phase
+      state = workflowState.getWorkflowState("workflow-security-test");
+      expect(state.phase).toBe("complete");
+
+      // Clean up
+      sessions.delete(sessionId);
+      delete process.env.CCPLUS_WORKFLOW_ENABLED;
+    });
+
+    it("should NOT transition workflow when code-reviewer agent fails", async () => {
+      // Reset module cache so WORKFLOW_ENABLED constant is re-evaluated with env var
+      vi.resetModules();
+      process.env.CCPLUS_WORKFLOW_ENABLED = 'true';
+
+      // Import modules (fresh after resetModules)
+      const { buildHooks } = await import("../sdk/hooks.js");
+      const { sessions } = await import("../sdk/session-manager.js");
+
+      // Set up session with callbacks
+      const toolEventCallback = vi.fn();
+      const sessionId = "workflow-failure-test";
+
+      sessions.set(sessionId, {
+        workspace: "/tmp/test-workspace",
+        model: "sonnet",
+        callbacks: {
+          onText: vi.fn(),
+          onToolEvent: toolEventCallback,
+          onComplete: vi.fn(),
+          onError: vi.fn(),
+        },
+        hadToolSinceLastText: false,
+        latestTodos: [],
+      } as any);
+
+      const hooks = buildHooks(sessionId);
+
+      // Import workflow-state to set up the workflow in review phase
+      const workflowState = await import("../workflow-state.js");
+
+      // Skip to review phase for testing (bypass normal transition rules)
+      workflowState.skipToPhase("workflow-failure-test", "review");
+
+      // Verify we're in review phase
+      let state = workflowState.getWorkflowState("workflow-failure-test");
+      expect(state.phase).toBe("review");
+
+      // Simulate PreToolUse for Agent tool with code-reviewer type
+      if (hooks?.PreToolUse?.[0]?.hooks?.[0]) {
+        await hooks.PreToolUse[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "code-reviewer" },
+            agent_id: undefined,
+          },
+          "toolu_reviewer_fail"
+        );
+      }
+
+      // Simulate SubagentStart
+      if (hooks?.SubagentStart?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStart[0].hooks[0](
+          {
+            agent_id: "agent_reviewer_fail",
+            agent_type: "code-reviewer",
+            tool_input: { subagent_type: "code-reviewer" }
+          },
+          undefined
+        );
+      }
+
+      // Simulate SubagentStop
+      if (hooks?.SubagentStop?.[0]?.hooks?.[0]) {
+        await hooks.SubagentStop[0].hooks[0](
+          {
+            agent_id: "agent_reviewer_fail",
+            last_assistant_message: "Review found blocking issues.",
+          },
+          undefined
+        );
+      }
+
+      // Simulate PostToolUseFailure (agent failed)
+      if (hooks?.PostToolUseFailure?.[0]?.hooks?.[0]) {
+        await hooks.PostToolUseFailure[0].hooks[0](
+          {
+            tool_name: "Agent",
+            tool_input: { subagent_type: "code-reviewer" },
+            agent_id: undefined,
+            error: "Review found BLOCK issues",
+          },
+          "toolu_reviewer_fail"
+        );
+      }
+
+      // Wait for async operations
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Verify workflow is STILL in review phase (no transition)
+      state = workflowState.getWorkflowState("workflow-failure-test");
+      expect(state.phase).toBe("review");
+
+      // Clean up
+      sessions.delete(sessionId);
+      delete process.env.CCPLUS_WORKFLOW_ENABLED;
+    });
   });
 
   describe("Session Edge Cases", () => {

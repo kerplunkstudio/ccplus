@@ -234,6 +234,18 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
       } catch (e) {
         log.error("Database write failed (postToolUse agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
+
+      // Auto-transition workflow after review agents complete successfully
+      if (WORKFLOW_ENABLED) {
+        const agentType = (toolParams.subagent_type as string) ?? 'agent';
+        const inferredPhase = inferPhaseFromAgent(agentType);
+        if (inferredPhase === 'review') {
+          const currentState = getWorkflowState(sessionId);
+          if (currentState.phase === 'review') {
+            transitionPhase(sessionId, 'complete', `agent_complete:${agentType}`);
+          }
+        }
+      }
     } else {
       const event: Record<string, unknown> = {
         type: "tool_complete",
