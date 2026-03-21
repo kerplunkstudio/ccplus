@@ -243,6 +243,52 @@ describe("SDK Session", () => {
       }).not.toThrow();
     });
 
+    it("should update fleet monitor status to completed on cancel", async () => {
+      const mockInterrupt = vi.fn().mockResolvedValue(undefined);
+      const mockClose = vi.fn();
+      const customMockQuery: Partial<Query> = {
+        interrupt: mockInterrupt,
+        close: mockClose,
+        [Symbol.asyncIterator]: async function* () {
+          // Yield slowly to allow cancellation
+          await new Promise((r) => setTimeout(r, 100));
+          yield {
+            type: "result",
+            session_id: "test-sdk-id",
+          } as any;
+        },
+      };
+
+      mockQuery.mockReturnValue(customMockQuery);
+
+      const callbacks = {
+        onText: vi.fn(),
+        onToolEvent: vi.fn(),
+        onComplete: vi.fn(),
+        onError: vi.fn(),
+      };
+
+      sdkSession.submitQuery(
+        "cancel-status-test",
+        "Query",
+        "/tmp/workspace",
+        callbacks,
+      );
+
+      // Give query a moment to start
+      await new Promise((r) => setTimeout(r, 10));
+
+      sdkSession.cancelQuery("cancel-status-test");
+
+      // Wait for cancellation to complete
+      await new Promise((r) => setTimeout(r, 150));
+
+      // Verify fleet monitor status was updated to completed
+      const fleetState = (await import("../fleet-monitor.js")).getFleetState();
+      const session = fleetState.sessions.find((s) => s.sessionId === "cancel-status-test");
+      expect(session?.status).toBe("completed");
+    });
+
     it("should unblock pending question on cancel", () => {
       const callbacks = {
         onText: vi.fn(),

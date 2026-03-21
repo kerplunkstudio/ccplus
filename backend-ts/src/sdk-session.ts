@@ -1326,6 +1326,7 @@ async function streamQuery(
       if (session.cancelRequested) {
         await q.interrupt();
         try { q.close(); } catch { /* already closed */ }
+        fleetMonitor.updateSessionStatus(sessionId, 'completed');
         break;
       }
 
