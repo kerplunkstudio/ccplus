@@ -47,6 +47,7 @@ interface CaptainState {
   readonly startedAt: number | null;
   readonly sdkSessionId: string | null;
   readonly workspace: string | null;
+  readonly lastQueryCallbackId: string | null;
 }
 
 let captainState: CaptainState = {
@@ -57,6 +58,7 @@ let captainState: CaptainState = {
   startedAt: null,
   sdkSessionId: null,
   workspace: null,
+  lastQueryCallbackId: null,
 };
 
 let captainDeps: CaptainDependencies | null = null;
@@ -330,6 +332,7 @@ Don't just watch passively:
 - When proposing improvements, be specific: "Change the prompt from X to Y because Z"
 - When asked about fleet state, use list_sessions first
 - When asked about projects, past work, ongoing tasks, or what has been done before, ALWAYS call mcp__memory__memory_search before responding. Search with a relevant query (e.g. "project overview", "current work", "recent sessions"). Never answer project questions from context alone — memory is the source of truth.
+- When responding to [TELEGRAM:...] or [DISCORD:...] messages, keep responses short and mobile-friendly: use bullet points, avoid long paragraphs, skip code blocks unless specifically requested.
 `.trim();
 
 // ---- Public API ----
@@ -411,6 +414,7 @@ export async function startCaptainSession(
       startedAt: Date.now(),
       sdkSessionId: captainState.sdkSessionId,
       workspace,
+      lastQueryCallbackId: null,
     };
 
     // Process boot query in background
@@ -429,12 +433,27 @@ export async function startCaptainSession(
 }
 
 /**
+ * Get target callbacks based on routing ID.
+ * If routeToId is non-null, returns only that callback (if registered).
+ * If routeToId is null, broadcasts to all callbacks.
+ */
+function getTargetCallbacks(routeToId: string | null): ResponseCallback[] {
+  if (routeToId !== null) {
+    const cb = responseCallbacks.get(routeToId);
+    return cb ? [cb] : [];
+  }
+  return Array.from(responseCallbacks.values());
+}
+
+/**
  * Process query response.
  * Extracts text from 'assistant' messages and broadcasts to callbacks.
  * Stores session_id from 'result' messages for resume.
  * No auto-restart - Captain stays alive with stored sdkSessionId.
  */
 async function processQueryResponse(q: Query, sessionId: string): Promise<void> {
+  // Capture routing target at the START (before any awaits)
+  const routeToCallbackId = captainState.lastQueryCallbackId;
   let messageIndex = 0;
 
   try {
@@ -448,7 +467,7 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
           if (block.type === "text") {
             textBlocks.push(block.text);
           } else if (block.type === "thinking" && block.thinking) {
-            for (const callback of responseCallbacks.values()) {
+            for (const callback of getTargetCallbacks(routeToCallbackId)) {
               try {
                 callback.onThinking(block.thinking);
               } catch (error) {
@@ -460,8 +479,8 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 
         const fullText = textBlocks.join("");
         if (fullText.length > 0) {
-          // Broadcast to all registered callbacks
-          for (const callback of responseCallbacks.values()) {
+          // Send to target callback(s)
+          for (const callback of getTargetCallbacks(routeToCallbackId)) {
             try {
               callback.onText(fullText, messageIndex);
             } catch (error) {
@@ -480,8 +499,8 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
           };
         }
 
-        // Broadcast completion
-        for (const callback of responseCallbacks.values()) {
+        // Send completion to target callback(s)
+        for (const callback of getTargetCallbacks(routeToCallbackId)) {
           try {
             callback.onComplete();
           } catch (error) {
@@ -495,8 +514,8 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
   } catch (error) {
     log.error("Captain query error", { sessionId, error: String(error) });
 
-    // Broadcast error
-    for (const callback of responseCallbacks.values()) {
+    // Send error to target callback(s)
+    for (const callback of getTargetCallbacks(routeToCallbackId)) {
       try {
         callback.onError(String(error));
       } catch (err) {
@@ -530,10 +549,16 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   }
   // 'web' and 'api' get no prefix
 
-  // Increment message count
+  // Compute routing target before incrementing message count
+  const queryCallbackId = (source === 'telegram' || source === 'discord')
+    ? `${source}:${sourceId}`
+    : null; // web/api → broadcast to all
+
+  // Increment message count and store routing target
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
+    lastQueryCallbackId: queryCallbackId,
   };
 
   log.info("Captain message queued", { source, sourceId, length: content.length });

@@ -96,7 +96,7 @@ export const WORKTREE_ENABLED = process.env.CCPLUS_WORKTREES !== 'false';
 
 // Captain configuration
 export const CAPTAIN_AUTO_START = process.env.CCPLUS_CAPTAIN_AUTO_START !== 'false';
-export const CAPTAIN_MODEL = process.env.CCPLUS_CAPTAIN_MODEL ?? SDK_MODEL;
+export const CAPTAIN_MODEL = process.env.CCPLUS_CAPTAIN_MODEL ?? 'claude-opus-4-6';
 export const CAPTAIN_MAX_TURNS = parseInt(process.env.CCPLUS_CAPTAIN_MAX_TURNS ?? '1000', 10);
 export const CAPTAIN_WORKSPACE = process.env.CCPLUS_CAPTAIN_WORKSPACE ?? WORKSPACE_PATH;
 
