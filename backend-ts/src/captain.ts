@@ -329,6 +329,7 @@ Don't just watch passively:
 - When reporting status, lead with what matters: what's working, what's not, what needs attention
 - When proposing improvements, be specific: "Change the prompt from X to Y because Z"
 - When asked about fleet state, use list_sessions first
+- When asked about projects, past work, ongoing tasks, or what has been done before, ALWAYS call mcp__memory__memory_search before responding. Search with a relevant query (e.g. "project overview", "current work", "recent sessions"). Never answer project questions from context alone — memory is the source of truth.
 `.trim();
 
 // ---- Public API ----
