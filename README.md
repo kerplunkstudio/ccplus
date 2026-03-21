@@ -27,19 +27,19 @@ Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macO
 
 ## See Everything
 
-Real-time activity trees. Every agent spawn, tool call, and file edit — structured as a hierarchy. Agent → sub-agent → Read → Edit → Write. Status, duration, parameters. Not terminal scroll — a live tree.
+Real-time activity trees. Every agent spawn, tool call, and file edit, structured as a hierarchy. Agent → sub-agent → Read → Edit → Write. Status, duration, parameters. Not terminal scroll, a live tree.
 
 Token and cost tracking per query, session, and project. Context window usage. Trust scores. Cache efficiency.
 
 ## Run the Fleet
 
-Multi-tab sessions (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is its own Claude Code session. Fleet monitor shows all sessions at once — status, tools, tokens, files touched.
+Multi-tab sessions (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is its own Claude Code session. Fleet monitor shows all sessions at once: status, tools, tokens, files touched.
 
-Captain: persistent AI orchestrator. Starts sessions with crafted prompts, monitors progress, cancels stuck agents, restarts with better prompts. Manages your fleet so you don't have to watch every session.
+Captain: a persistent AI that manages your sessions. Tell it what you want in plain language. It writes the prompt, picks the workspace, starts the session in an isolated worktree, and watches it. If an agent gets stuck, Captain cancels and retries with a better prompt. When it's done, you get a summary.
 
 ## Access Anywhere
 
-Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge — message Captain from your phone, get status updates, start sessions remotely. Voice messages transcribed with Whisper.
+Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. Voice messages transcribed with Whisper.
 
 ---
 
