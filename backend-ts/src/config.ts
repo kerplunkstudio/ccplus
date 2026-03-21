@@ -99,6 +99,9 @@ export const CAPTAIN_AUTO_START = process.env.CCPLUS_CAPTAIN_AUTO_START !== 'fal
 export const CAPTAIN_MODEL = process.env.CCPLUS_CAPTAIN_MODEL ?? 'claude-opus-4-6';
 export const CAPTAIN_MAX_TURNS = parseInt(process.env.CCPLUS_CAPTAIN_MAX_TURNS ?? '1000', 10);
 export const CAPTAIN_WORKSPACE = process.env.CCPLUS_CAPTAIN_WORKSPACE ?? WORKSPACE_PATH;
+export const CAPTAIN_STATE_PATH = path.join(DATA_DIR, 'captain_state.json');
+export const TELEGRAM_STATE_PATH = path.join(DATA_DIR, 'telegram_state.json');
+export const CAPTAIN_RESUME_ON_STARTUP = process.env.CCPLUS_CAPTAIN_RESUME_ON_STARTUP !== 'false';
 
 // Telegram bridge
 export const TELEGRAM_BOT_TOKEN = process.env.CCPLUS_TELEGRAM_BOT_TOKEN ?? '';

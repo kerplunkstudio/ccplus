@@ -10,6 +10,7 @@ import * as captain from './captain.js';
 import { formatForTelegram, escapeMarkdownV2 } from './telegram-format.js';
 import { log } from './logger.js';
 import { downloadTelegramFile, transcribeAudio } from './voice-transcriber.js';
+import { saveTelegramState as persistTelegramState, loadTelegramState, removeTelegramState } from './state-persistence.js';
 
 // ---- Types ----
 
@@ -30,6 +31,22 @@ const TYPING_INTERVAL_MS = 4000;
 
 // ---- Public API ----
 
+async function cleanupOrphanedAckMessages(botInstance: Bot): Promise<void> {
+  const state = loadTelegramState(config.TELEGRAM_STATE_PATH)
+  if (!state || state.ackMessages.length === 0) return
+
+  log.info('Cleaning up orphaned Telegram ack messages', { count: state.ackMessages.length })
+  for (const { chatId, messageId } of state.ackMessages) {
+    try {
+      await botInstance.api.deleteMessage(chatId, messageId)
+      log.debug('Deleted orphaned ack message', { chatId, messageId })
+    } catch {
+      log.warn('Could not delete orphaned ack message (may be expired or already deleted)', { chatId, messageId })
+    }
+  }
+  removeTelegramState(config.TELEGRAM_STATE_PATH)
+}
+
 export async function startTelegramBridge(): Promise<void> {
   if (!config.TELEGRAM_BOT_TOKEN) {
     log.info('Telegram bridge skipped: no CCPLUS_TELEGRAM_BOT_TOKEN set');
@@ -42,6 +59,9 @@ export async function startTelegramBridge(): Promise<void> {
   }
 
   bot = new Bot(config.TELEGRAM_BOT_TOKEN);
+
+  // Clean up orphaned ack messages from previous run
+  await cleanupOrphanedAckMessages(bot);
 
   // Log allowlist status
   if (config.TELEGRAM_ALLOWLIST.length === 0) {
@@ -62,6 +82,18 @@ export async function startTelegramBridge(): Promise<void> {
 
 export async function stopTelegramBridge(): Promise<void> {
   if (!bot) return;
+
+  // Collect pending ack messages before cleanup
+  const ackMessages: Array<{ chatId: number; messageId: number }> = []
+  for (const [chatId, chatState] of chatStates.entries()) {
+    if (chatState.ackMessageId !== null) {
+      ackMessages.push({ chatId: Number(chatId), messageId: chatState.ackMessageId })
+    }
+  }
+  if (ackMessages.length > 0) {
+    persistTelegramState(ackMessages, config.TELEGRAM_STATE_PATH)
+    log.info('Telegram ack state saved', { count: ackMessages.length })
+  }
 
   // Clean up all chat states
   for (const [chatId, state] of chatStates.entries()) {
