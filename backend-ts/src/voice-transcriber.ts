@@ -64,7 +64,11 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
     // Convert OGG Opus to WAV using ffmpeg
     // Telegram sends OGG Opus which whisper-cli can't decode
     // We need 16kHz, mono, PCM s16le WAV
-    const ffmpegPath = '/opt/homebrew/bin/ffmpeg';
+    const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
+    if (!process.env.FFMPEG_PATH) {
+      log.warn('FFMPEG_PATH not set, using system PATH to resolve ffmpeg');
+    }
+
     await execFileAsync(ffmpegPath, [
       '-y',                    // Overwrite output file
       '-i', tmpOgg,            // Input file
@@ -75,14 +79,21 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
     ]);
 
     // Run whisper-cli on the WAV file
-    const whisperCliPath = '/opt/homebrew/bin/whisper-cli';
-    const modelPath = '/opt/homebrew/Cellar/whisper-cpp/1.8.3/share/whisper-cpp/ggml-base.bin';
+    const whisperCliPath = process.env.WHISPER_CLI_PATH || 'whisper-cli';
+    const modelPath = process.env.WHISPER_MODEL_PATH;
 
-    const { stdout } = await execFileAsync(whisperCliPath, [
-      '-m', modelPath,
-      '-f', tmpWav,
-      '--no-timestamps'
-    ]);
+    if (!process.env.WHISPER_CLI_PATH) {
+      log.warn('WHISPER_CLI_PATH not set, using system PATH to resolve whisper-cli');
+    }
+    if (!modelPath) {
+      log.warn('WHISPER_MODEL_PATH not set, whisper-cli may fail without model path');
+    }
+
+    const whisperArgs = modelPath
+      ? ['-m', modelPath, '-f', tmpWav, '--no-timestamps']
+      : ['-f', tmpWav, '--no-timestamps'];
+
+    const { stdout } = await execFileAsync(whisperCliPath, whisperArgs);
 
     return stdout.trim();
   } catch (error) {

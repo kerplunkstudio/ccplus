@@ -98,8 +98,10 @@ export function useStreamingMessages({
     const rafHandleRef = { current: 0 };
     const rafLatestMessageIndexRef = { current: 0 };
     const rafLatestSeqRef = { current: 0 };
+    const cancelledRef = { current: false };
 
     const flushTextDeltas = () => {
+      if (cancelledRef.current) return;
       if (rafBufferRef.current) {
         dispatch({
           type: 'TEXT_DELTA',
@@ -234,11 +236,12 @@ export function useStreamingMessages({
     });
 
     return () => {
-      // Cancel pending rAF and flush remaining buffer
+      // Cancel pending rAF and mark as cancelled to prevent dispatch
+      cancelledRef.current = true;
       if (rafHandleRef.current) {
         cancelAnimationFrame(rafHandleRef.current);
+        rafHandleRef.current = 0;
       }
-      flushTextDeltas();
 
       socket.off('message_received');
       socket.off('stream_active');

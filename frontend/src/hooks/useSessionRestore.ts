@@ -60,6 +60,9 @@ export function useSessionRestore({
   // Store lastSeq in a ref to avoid stale closure in reconnect handler
   const lastSeqRef = useRef(lastSeq);
 
+  // Mounted ref to guard socket operations during cleanup
+  const mountedRef = useRef(true);
+
   // Sync ref with prop value
   useEffect(() => {
     lastSeqRef.current = lastSeq;
@@ -101,7 +104,7 @@ export function useSessionRestore({
       }
 
       // Leave previous session room
-      if (socket?.connected && previousSessionId) {
+      if (mountedRef.current && socket?.connected && previousSessionId) {
         socket.emit('leave_session', { session_id: previousSessionId });
       }
       // NOTE: join_session now happens AFTER DB history loads in restoreSession
@@ -218,7 +221,7 @@ export function useSessionRestore({
 
         // NOW join the session room — this triggers stream_content_sync from the server
         // which layers current streaming content on top of the DB history we just loaded
-        if (!isMounted) return;
+        if (!isMounted || !mountedRef.current) return;
         if (socket?.connected) {
           socket.emit('join_session', { session_id: sessionId, last_seq: 0 });
         }
@@ -241,18 +244,22 @@ export function useSessionRestore({
     if (!socket) return;
 
     const handleReconnect = () => {
+      if (!mountedRef.current) return;
       const activeSessionId = currentSessionIdRef.current;
       if (!activeSessionId) return;
 
       // Rejoin with our cursor — server replays missed events
       // Use ref to get the latest lastSeq value (avoid stale closure)
-      socket.emit('join_session', {
-        session_id: activeSessionId,
-        last_seq: lastSeqRef.current
-      });
+      if (socket.connected) {
+        socket.emit('join_session', {
+          session_id: activeSessionId,
+          last_seq: lastSeqRef.current
+        });
+      }
     };
 
     const handleFullResetRequired = async (data: { session_id: string }) => {
+      if (!mountedRef.current) return;
       if (data.session_id !== currentSessionIdRef.current) return;
 
       // Client is too far behind - need full session restore
@@ -261,7 +268,7 @@ export function useSessionRestore({
 
         // Re-fetch history from database
         const historyRes = await fetch(`${SOCKET_URL}/api/history/${data.session_id}`);
-        if (!historyRes.ok) return;
+        if (!mountedRef.current || !historyRes.ok) return;
 
         const historyData = await historyRes.json();
         const { messages: dbMessages, streaming: isStreaming, context_tokens, model, streamingContent } = historyData;
@@ -288,9 +295,10 @@ export function useSessionRestore({
 
         // Re-fetch activity events
         const activityRes = await fetch(`${SOCKET_URL}/api/activity/${data.session_id}`);
-        if (!activityRes.ok) return;
+        if (!mountedRef.current || !activityRes.ok) return;
 
         const { events } = await activityRes.json();
+        if (!mountedRef.current) return;
 
         if (events && events.length > 0) {
           const toolEvents: ToolEvent[] = [];
@@ -357,19 +365,22 @@ export function useSessionRestore({
         }
 
         // Rejoin session with reset cursor
-        if (socket.connected) {
+        if (mountedRef.current && socket?.connected) {
           socket.emit('join_session', { session_id: data.session_id, last_seq: 0 });
         }
       } catch (err) {
         // Failed to restore - safe to ignore
       } finally {
-        setIsRestoringSession(false);
+        if (mountedRef.current) {
+          setIsRestoringSession(false);
+        }
       }
     };
 
     socket.io.on('reconnect', handleReconnect);
     socket.on('full_reset_required', handleFullResetRequired);
     return () => {
+      mountedRef.current = false;
       socket.io.off('reconnect', handleReconnect);
       socket.off('full_reset_required');
     };

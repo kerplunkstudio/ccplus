@@ -182,7 +182,7 @@ describe('voice-transcriber', () => {
 
       // Verify ffmpeg was called with correct args
       const ffmpegCall = mockExecFile.mock.calls[0];
-      expect(ffmpegCall[0]).toBe('/opt/homebrew/bin/ffmpeg');
+      expect(ffmpegCall[0]).toBe(process.env.FFMPEG_PATH || 'ffmpeg');
       expect(ffmpegCall[1]).toContain('-y');
       expect(ffmpegCall[1]).toContain('-ar');
       expect(ffmpegCall[1]).toContain('16000');
@@ -193,7 +193,7 @@ describe('voice-transcriber', () => {
 
       // Verify whisper-cli was called
       const whisperCall = mockExecFile.mock.calls[1];
-      expect(whisperCall[0]).toBe('/opt/homebrew/bin/whisper-cli');
+      expect(whisperCall[0]).toBe(process.env.WHISPER_CLI_PATH || 'whisper-cli');
       expect(whisperCall[1]).toContain('--no-timestamps');
       expect(whisperCall[1]).not.toContain('--output-txt');  // Should not have this flag
     });

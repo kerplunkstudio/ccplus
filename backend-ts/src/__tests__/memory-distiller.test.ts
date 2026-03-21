@@ -45,23 +45,37 @@ describe("Memory Distiller Tests", () => {
       expect(result).toBe(true);
     });
 
-    it("should return false within debounce window", () => {
-      // First call should succeed
-      const first = memoryDistiller.shouldDistill("session-2");
+    it("should return false within debounce window", async () => {
+      const sessionId = "session-2-debounce";
+
+      // First call should return true (no previous distillation)
+      const first = memoryDistiller.shouldDistill(sessionId);
       expect(first).toBe(true);
 
-      // Simulate successful distillation by calling distillSession
-      // (which will update the timestamp)
-      // For this test, we just need to verify shouldDistill logic
-      // We'll manually test the debounce by checking immediate second call
+      // Mock database to return enough messages for distillation
+      const conversations = [
+        { id: 1, role: "user", content: "First message" },
+        { id: 2, role: "assistant", content: "Response 1" },
+        { id: 3, role: "user", content: "Second message" },
+        { id: 4, role: "assistant", content: "Response 2" },
+        { id: 5, role: "user", content: "Third message" },
+        { id: 6, role: "assistant", content: "Response 3" },
+      ];
 
-      // Actually, shouldDistill doesn't update timestamps, distillSession does
-      // So we need to call distillSession or wait for debounce
-      // Let's test the logic by verifying second immediate call
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue([]);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
 
-      // Second immediate call should return false
-      const second = memoryDistiller.shouldDistill("session-2");
-      expect(second).toBe(true); // Still true because timestamp not updated yet
+      // Perform actual distillation (this updates the timestamp)
+      await memoryDistiller.distillSession(sessionId, "/workspace/test");
+
+      // Immediately after distillation, shouldDistill should return false (within debounce window)
+      const second = memoryDistiller.shouldDistill(sessionId);
+      expect(second).toBe(false);
+
+      // Verify that calling shouldDistill multiple times while debounced still returns false
+      const third = memoryDistiller.shouldDistill(sessionId);
+      expect(third).toBe(false);
     });
 
     it("should return true after debounce window expires", async () => {
