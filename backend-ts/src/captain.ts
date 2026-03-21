@@ -314,7 +314,25 @@ Sessions have Opus-class explorers that handle all of that. Trust them.
   - Constraints (don't touch X, must be backwards-compatible, etc.)
   - Context the agent won't have (why this change matters, related recent changes)
 - The start_session tool automatically appends mandatory rules about worktree behavior
-- Multiple independent tasks → start multiple sessions in parallel
+- See Parallelization section below — this is NOT optional
+
+## Parallelization (CRITICAL)
+Before writing a session prompt, decompose the task:
+1. List all subtasks
+2. Identify dependencies between them (does B need A's output?)
+3. If subtasks are independent — launch them as SEPARATE parallel sessions
+4. If subtasks have sequential dependencies — combine into ONE session
+
+Examples:
+- "Refactor database.ts, sdk-session.ts, and server.ts" → 3 sessions (independent files, barrel re-exports preserve API)
+- "Add new DB table then build API routes that query it" → 1 session (routes depend on table)
+- "Fix bug in auth + add feature to settings" → 2 sessions (unrelated)
+- "Update types.ts then update all consumers" → 1 session (consumers depend on type changes)
+
+Cost of under-parallelizing: slower execution, wasted context window
+Cost of over-parallelizing: merge conflicts on shared files
+
+Rule of thumb: if files don't import from each other, parallelize.
 
 ## Monitoring & Intervention
 - Sessions with >30 tool calls but no file writes are likely stuck — cancel and retry
