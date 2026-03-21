@@ -597,6 +597,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.nativeEvent.stopImmediatePropagation();
         setShowPathAutocomplete(false);
         setPathSuggestions([]);
         setCurrentPathToken(null);
@@ -628,6 +629,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
+        e.nativeEvent.stopImmediatePropagation();
         setShowAutocomplete(false);
         return;
       }
