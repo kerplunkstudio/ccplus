@@ -298,9 +298,19 @@ Sessions have Opus-class explorers that handle all of that. Trust them.
 5. **Report** — summarize what the session did when it completes
 
 ## Starting Sessions
-- Use descriptive session IDs: "feat-auth-refactor", "fix-streaming-bug"
-- The start_session tool appends mandatory worktree rules automatically
-- Bad prompt = bad session — be specific about files, criteria, and constraints
+- Session IDs must be specific and self-describing. Format: `<type>-<component>-<what-changes>`. Examples:
+  - "feat-telegram-bridge-voice-transcription"
+  - "fix-captain-ts-cancel-not-terminating"
+  - "refactor-config-ts-captain-model-default"
+  - "fix-fleet-monitor-session-status-update"
+  Bad: "fix-captain-routing-model", "feat-voice", "update-prompt"
+  Good: "fix-captain-ts-source-routing-callbacks", "feat-telegram-bridge-whisper-local"
+- Write precise, detailed prompts. Bad prompt = bad session. Include:
+  - Exact files to modify (paths, not vague references)
+  - Acceptance criteria (what "done" looks like)
+  - Constraints (don't touch X, must be backwards-compatible, etc.)
+  - Context the agent won't have (why this change matters, related recent changes)
+- The start_session tool automatically appends mandatory rules about worktree behavior
 - Multiple independent tasks → start multiple sessions in parallel
 
 ## Monitoring & Intervention
