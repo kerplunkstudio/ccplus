@@ -1,8 +1,6 @@
-# cc+ — Desktop App for Claude Code
+# cc+ — Watch your agents work.
 
-<p align="center">
-  <img src="docs/demo.gif" alt="cc+ demo" width="800">
-</p>
+Open-source desktop app for Claude Code. See every tool call, every agent, every token — in real-time. Run multiple sessions. Orchestrate your fleet with Captain. Free, local, yours.
 
 <p align="center">
   <a href="https://github.com/kerplunkstudio/ccplus/actions"><img src="https://img.shields.io/github/actions/workflow/status/kerplunkstudio/ccplus/ci.yml?branch=main&style=for-the-badge" alt="CI"></a>
@@ -11,9 +9,11 @@
   <a href="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=for-the-badge" alt="Platform"></a>
 </p>
 
-cc+ wraps the Claude Agent SDK in a desktop app with full observability. Multi-tab sessions, real-time activity trees, usage analytics, and a built-in browser — all in one window. Free, open source, local.
+<p align="center"><img src="docs/screenshot.png" alt="cc+ activity tree" width="800"></p>
 
-[Website](https://ccplus.run) · [GitHub](https://github.com/kerplunkstudio/ccplus) · [Install](#install) · [Highlights](#highlights) · [CLI Reference](#cli-reference) · [Development](#development) · [Contributing](#contributing)
+[Website](https://ccplus.run) · [GitHub](https://github.com/kerplunkstudio/ccplus) · [Install](#install)
+
+---
 
 ## Install
 
@@ -23,38 +23,54 @@ curl -fsSL https://ccplus.run/install | sh
 
 Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macOS and Linux.
 
-## Highlights
+---
 
-- **Multi-Tab Sessions** — Browser-style tabs. Cmd+T, Cmd+W, Ctrl+Tab. Each tab is its own session.
-- **Agent Observability** — Real-time activity trees. Every tool call, agent spawn, and decision.
-- **Built-in Browser** — Open localhost next to chat. Dev servers detected automatically.
-- **Integrated Terminal** — Floating terminal inside the app. Drag, resize, minimize.
-- **Command Palette** — Cmd+K. Find any session, project, or action.
-- **Usage Insights** — Cost tracking, model breakdowns, cache efficiency, tool success rates. Import historical sessions. CSV export.
-- **Conversation Search** — Full-text search across all messages (FTS5).
-- **Scheduled Tasks** — Recurring prompts on intervals. `/loop 5m check the deploy`.
-- **Cross-Session Memory** — Agents remember what they learned. Knowledge carries between sessions.
-- **Workflow Enforcement** — Agents plan before they act. State machine keeps them honest.
-- **Themes** — Six color presets. Switch from the profile.
-- **Session Import** — Pull in historical Claude Code sessions from `~/.claude/projects/`.
-- **Model Selection** — Switch Claude models per session.
-- **Image Attachments** — Drag and drop images into chat.
-- **Path Autocomplete** — File path completion in the input box.
-- **Plugin System** — Install, manage, and build plugins. MCP server support.
-- **Crash Recovery** — Auto-recovers from renderer crashes. No lost work.
+## See Everything
 
-## Stats
+Real-time activity trees. Every agent spawn, tool call, and file edit — structured as a hierarchy. Agent → sub-agent → Read → Edit → Write. Status, duration, parameters. Not terminal scroll — a live tree.
 
-- 1,644 tests (524 backend Vitest + 1,120 frontend Jest)
-- 75 React components, 25 custom hooks
-- 19 SQLite tables with FTS
-- CI on every PR
+Token and cost tracking per query, session, and project. Context window usage. Trust scores. Cache efficiency.
+
+## Run the Fleet
+
+Multi-tab sessions (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is its own Claude Code session. Fleet monitor shows all sessions at once — status, tools, tokens, files touched.
+
+Captain: persistent AI orchestrator. Starts sessions with crafted prompts, monitors progress, cancels stuck agents, restarts with better prompts. Manages your fleet so you don't have to watch every session.
+
+## Access Anywhere
+
+Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge — message Captain from your phone, get status updates, start sessions remotely. Voice messages transcribed with Whisper.
+
+---
+
+## More Features
+
+<details>
+<summary><strong>Click to expand</strong></summary>
+
+- Built-in browser (dev servers detected automatically)
+- Integrated terminal
+- Command palette (Cmd+K)
+- Conversation search (FTS5)
+- Scheduled tasks (cron-based recurring prompts)
+- Cross-session memory
+- Session import from Claude Code history
+- Insights dashboard (daily trends, model breakdowns, tool success rates)
+- Image attachments
+- Themes
+- Crash recovery
+
+</details>
+
+---
 
 ## Architecture
 
-User messages → WebSocket → Claude Agent SDK (in-process streaming) → Real-time callbacks → SQLite + activity tree.
+User messages → WebSocket → Claude Agent SDK → Real-time callbacks → SQLite + activity tree.
 
 **Stack**: Node.js / TypeScript / Express + Socket.IO / React 19 / SQLite / Electron
+
+---
 
 ## CLI Reference
 
@@ -75,6 +91,8 @@ User messages → WebSocket → Claude Agent SDK (in-process streaming) → Real
 | `./ccplus logs` | Tail server logs |
 | `./ccplus update` | Update to latest version |
 | `./ccplus release` | Package desktop app for distribution |
+
+---
 
 ## Development
 
@@ -147,8 +165,8 @@ ccplus/
 │   └── dist/            # Compiled output (gitignored)
 ├── electron/            # Desktop app (Electron)
 ├── frontend/            # React 19 app
-│   ├── src/components/  # 75 components
-│   ├── src/hooks/       # 25 custom hooks
+│   ├── src/components/  # React components
+│   ├── src/hooks/       # Custom hooks
 │   └── build/           # Build output (gitignored)
 ├── static/chat/         # Deployed frontend (gitignored)
 ├── data/                # SQLite database (gitignored)
@@ -175,16 +193,12 @@ cd backend-ts && npx vitest run src/__tests__/database.test.ts
 cd backend-ts && npm run test:coverage
 ```
 
-**Test suite**: 524 tests across core modules (config, auth, database, sdk-session, server) and features (search, logger, mcp-api, mcp-config).
-
 #### Frontend Tests
 
 **Run all tests**:
 ```bash
 cd frontend && npm test
 ```
-
-**Test suite**: 1,120 tests covering components, hooks, and utilities.
 
 #### Test Policy
 
@@ -197,9 +211,13 @@ Coverage targets: 80%+ on critical paths (sdk-session, database), 100% on utilit
 
 </details>
 
+---
+
 ## Contributing
 
 Fork, branch, test, PR. See [CLAUDE.md](CLAUDE.md) for conventions.
+
+---
 
 ## License
 
