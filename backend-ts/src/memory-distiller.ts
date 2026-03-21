@@ -276,11 +276,20 @@ export async function distillSession(
       );
     }
 
-    // Store all memories concurrently
-    await Promise.all(storePromises);
-
-    // Update debounce tracking
+    // Update debounce tracking BEFORE store (so we don't retry immediately on failure)
     distillationTimestamps.set(sessionId, Date.now());
+
+    // Store all memories concurrently
+    const results = await Promise.allSettled(storePromises);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        log.warn('Failed to store memory sub-item', {
+          sessionId,
+          index,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
 
     log.info("Session distilled to memory", {
       sessionId,

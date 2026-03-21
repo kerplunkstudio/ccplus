@@ -317,102 +317,7 @@ async function initialize(): Promise<boolean> {
 }
 
 /**
- * Perform exact-match search using memory_search with different query processing
- * Returns array of memory IDs and scores
- */
-async function exactSearch(query: string, limit: number, tags?: string): Promise<Map<string, number>> {
-  try {
-    const args: Record<string, unknown> = {
-      query,
-      limit: Math.min(limit * 2, 20), // Get more results for fusion
-    };
-    if (tags) {
-      args.tags = tags;
-    }
-
-    const response = await sendRequest('tools/call', {
-      name: 'memory_search',
-      arguments: args,
-    });
-
-    const results = new Map<string, number>();
-    if (typeof response === 'object' && response !== null && 'content' in response) {
-      const content = (response as { content: unknown[] }).content;
-      if (Array.isArray(content) && content.length > 0) {
-        const firstItem = content[0];
-        if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
-          const text = (firstItem as { text: string }).text;
-          // Parse text to extract memory IDs - simple heuristic based on line structure
-          const lines = text.split('\n');
-          let rank = 0;
-          for (const line of lines) {
-            if (line.trim() && !line.startsWith('#') && !line.startsWith('---')) {
-              // Use line hash as memory ID approximation
-              const memId = line.substring(0, 50); // Use first 50 chars as ID
-              results.set(memId, rank++);
-            }
-          }
-        }
-      }
-    }
-    return results;
-  } catch (error) {
-    log.debug('Exact search failed, falling back to semantic only', { error: String(error) });
-    return new Map();
-  }
-}
-
-/**
- * Reciprocal Rank Fusion - merge semantic and exact search results
- * Formula: score = 1/(k + rank) where k=60
- */
-function reciprocalRankFusion(
-  semanticResults: string,
-  exactResults: Map<string, number>,
-  k = 60
-): string {
-  if (exactResults.size === 0) {
-    return semanticResults; // No exact results, return semantic as-is
-  }
-
-  // Parse semantic results (they're already text)
-  const semanticLines = semanticResults.split('\n').filter(line =>
-    line.trim() && !line.startsWith('#') && !line.startsWith('---')
-  );
-
-  const fusionScores = new Map<string, number>();
-
-  // Add semantic scores
-  semanticLines.forEach((line, rank) => {
-    const memId = line.substring(0, 50);
-    fusionScores.set(memId, 1 / (k + rank));
-  });
-
-  // Add exact scores
-  for (const [memId, rank] of exactResults.entries()) {
-    const currentScore = fusionScores.get(memId) || 0;
-    fusionScores.set(memId, currentScore + 1 / (k + rank));
-  }
-
-  // Sort by fusion score (highest first)
-  const sortedMemIds = Array.from(fusionScores.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([memId]) => memId);
-
-  // Rebuild text output prioritizing high-scoring memories
-  const rerankedLines: string[] = [];
-  for (const memId of sortedMemIds) {
-    const matchingLine = semanticLines.find(line => line.substring(0, 50) === memId);
-    if (matchingLine) {
-      rerankedLines.push(matchingLine);
-    }
-  }
-
-  return rerankedLines.join('\n');
-}
-
-/**
- * Search memories using hybrid search (vector + BM25 exact match)
+ * Search memories using semantic search
  * Returns the raw text from the MCP response (human-readable format)
  */
 export async function searchMemories(query: string, limit?: number, tags?: string): Promise<string> {
@@ -446,7 +351,7 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
       args.tags = tags;
     }
 
-    // Run semantic search (primary)
+    // Run semantic search
     const response = await sendRequest('tools/call', {
       name: 'memory_search',
       arguments: args,
@@ -464,26 +369,17 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
       }
     }
 
-    // Run exact search in parallel for hybrid fusion (best-effort)
-    const exactResults = await exactSearch(query, effectiveLimit, tags).catch(() => new Map());
-
-    // Fuse results using RRF
-    const fusedText = reciprocalRankFusion(semanticText, exactResults);
-
     // Log observability data
-    if (fusedText) {
-      const semanticCount = semanticText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length;
-      const exactCount = exactResults.size;
-      log.debug('Memory hybrid search', {
+    if (semanticText) {
+      const resultCount = semanticText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length;
+      log.debug('Memory search', {
         query: query.substring(0, 50),
-        semanticCount,
-        exactCount,
-        fusionUsed: exactCount > 0,
+        resultCount,
       });
     }
 
     recordSuccess();
-    return fusedText || semanticText; // Fall back to semantic if fusion fails
+    return semanticText;
   } catch (error) {
     log.error('Memory search failed', { error: String(error), query });
     recordFailure();

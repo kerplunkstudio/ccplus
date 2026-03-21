@@ -64,7 +64,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       // Perform actual distillation (this updates the timestamp)
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
@@ -79,6 +79,7 @@ describe("Memory Distiller Tests", () => {
     });
 
     it("should return true after debounce window expires", async () => {
+      vi.useFakeTimers();  // Set up fake timers FIRST
       const sessionId = "session-3";
 
       // Mock distillSession to update timestamp
@@ -103,7 +104,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       // First distillation
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
@@ -112,7 +113,6 @@ describe("Memory Distiller Tests", () => {
       expect(memoryDistiller.shouldDistill(sessionId)).toBe(false);
 
       // Mock time passage (advance by debounce + 1ms)
-      vi.useFakeTimers();
       vi.advanceTimersByTime(config.MEMORY_DISTILL_DEBOUNCE_MS + 1);
 
       // After debounce window, should return true
@@ -187,7 +187,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/myproject");
 
@@ -248,7 +248,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/myproject");
 
@@ -308,7 +308,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/authproject");
 
@@ -362,7 +362,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/dashboard-app");
 
@@ -396,7 +396,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test", { preCompaction: true });
 
@@ -419,7 +419,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/docs", { preCompaction: false });
 
@@ -489,7 +489,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -522,7 +522,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       // First distillation
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
@@ -546,7 +546,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -569,7 +569,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -619,7 +619,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -659,7 +659,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -692,7 +692,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -727,7 +727,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -756,7 +756,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       // Process each session
       for (const sessionId of sessions) {
@@ -789,7 +789,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -819,7 +819,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue([]); // No file tools
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -862,7 +862,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -904,7 +904,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -939,7 +939,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -980,7 +980,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -1023,7 +1023,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/test");
 
@@ -1081,7 +1081,7 @@ describe("Memory Distiller Tests", () => {
 
       vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
       vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
-      vi.mocked(memoryClient.storeMemory).mockResolvedValue(undefined);
+      vi.mocked(memoryClient.storeMemory).mockResolvedValue(null);
 
       await memoryDistiller.distillSession(sessionId, "/workspace/authapp");
 
@@ -1095,6 +1095,37 @@ describe("Memory Distiller Tests", () => {
       expect(tagsSets.some(t => t.includes('type:files-modified'))).toBe(true);
       expect(tagsSets.some(t => t.includes('type:errors-encountered'))).toBe(true);
       expect(tagsSets.some(t => t.includes('type:agents-used'))).toBe(true);
+    });
+
+    it("should store remaining memories even if one fails (Promise.allSettled)", async () => {
+      const sessionId = "session-partial-fail";
+      const conversations = [
+        { id: 1, role: "user", content: "Do work" },
+        { id: 2, role: "assistant", content: "Working" },
+        { id: 3, role: "user", content: "More" },
+        { id: 4, role: "assistant", content: "Done" },
+        { id: 5, role: "user", content: "Finish" },
+        { id: 6, role: "assistant", content: "Complete" },
+      ];
+      const toolEvents = [
+        { id: 1, tool_name: "Write", parameters: { file_path: "/src/b.ts" }, success: 1, error: null, agent_type: null },
+      ];
+
+      vi.mocked(database.getConversationHistory).mockReturnValue(conversations);
+      vi.mocked(database.getToolEvents).mockReturnValue(toolEvents);
+
+      // First call fails, second succeeds
+      vi.mocked(memoryClient.storeMemory)
+        .mockRejectedValueOnce(new Error("Network failure"))
+        .mockResolvedValue(null);
+
+      // Should not throw
+      await expect(
+        memoryDistiller.distillSession(sessionId, "/workspace/test")
+      ).resolves.toBeUndefined();
+
+      // Both stores were attempted
+      expect(memoryClient.storeMemory).toHaveBeenCalledTimes(2);
     });
   });
 });
