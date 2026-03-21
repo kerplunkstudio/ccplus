@@ -1,5 +1,5 @@
 import { query, type ModelUsage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { existsSync, readdirSync, writeFileSync, copyFileSync } from "fs";
+import { existsSync, readdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
 import type { ActiveSession } from "./types.js";
@@ -266,11 +266,6 @@ export async function streamQuery(
         break;
       }
 
-      // DEBUG: Log every message type from SDK
-      writeFileSync("/tmp/ccplus-msg-types.log",
-        JSON.stringify({ type: message.type, keys: Object.keys(message as any) }) + "\n",
-        { flag: "a" });
-
       if (message.type === "assistant") {
         messageIndex++;
         const msg = message as any;
@@ -386,14 +381,6 @@ export async function streamQuery(
           model: session.model,
           pct: Math.round((currentInputTokens / contextWindowSize) * 100),
         });
-
-        writeFileSync("/tmp/ccplus-context-debug.log", JSON.stringify({
-          modelUsage: result.modelUsage,
-          usage: result.usage,
-          inputTokens: currentInputTokens,
-          contextWindow: contextWindowSize,
-          model: session.model,
-        }, null, 2) + "\n", { flag: "a" });
 
         lastCompletionData = {
           text: resultText.join(""),

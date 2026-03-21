@@ -7,13 +7,13 @@ import { log } from "../logger.js";
 
 // ---- Session Manager ----
 
-export const sessions = new Map<string, ActiveSession>();
+const sessions = new Map<string, ActiveSession>();
 
 // Maximum buffer size for streaming content (2MB)
 // This buffer is only used for reconnection sync, so trimming from the front is acceptable
-export const MAX_STREAMING_BUFFER = 2 * 1024 * 1024;
+const MAX_STREAMING_BUFFER = 2 * 1024 * 1024;
 
-export function getOrCreateSession(sessionId: string, workspace: string, model?: string): ActiveSession {
+function getOrCreateSession(sessionId: string, workspace: string, model?: string): ActiveSession {
   const existing = sessions.get(sessionId);
   if (existing) {
     // If workspace or model changed, reset
@@ -51,7 +51,7 @@ export function getOrCreateSession(sessionId: string, workspace: string, model?:
   return session;
 }
 
-export function getSdkSettingsPath(): string {
+function getSdkSettingsPath(): string {
   const userSettingsPath = path.join(homedir(), ".claude", "settings.json");
   const sdkSettingsPath = path.join(config.DATA_DIR, "sdk_settings.json");
 
@@ -71,3 +71,6 @@ export function getSdkSettingsPath(): string {
   writeFileSync(sdkSettingsPath, JSON.stringify(settings, null, 2));
   return sdkSettingsPath;
 }
+
+// ---- Exports (for use within sdk/ directory only) ----
+export { sessions, MAX_STREAMING_BUFFER, getOrCreateSession, getSdkSettingsPath };
