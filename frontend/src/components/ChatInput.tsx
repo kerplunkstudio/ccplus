@@ -65,7 +65,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [input, setInput] = useState('');
   const inputDraftsRef = useRef<Record<string, string>>({});
   const previousSessionIdRef = useRef<string | undefined>(sessionId);
-  const previousQueuedSessionRef = useRef<string | undefined>(sessionId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteIndex, setAutocompleteIndex] = useState(0);
@@ -83,8 +82,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const pathDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [currentPathToken, setCurrentPathToken] = useState<{ start: number; end: number; path: string } | null>(null);
   const currentSlashCommandRef = useRef<{ start: number; command: string } | null>(null);
-  const [queuedMessage, setQueuedMessage] = useState<{content: string, imageIds?: string[], images?: ImageAttachment[]} | null>(null);
-  const queuedMessagesRef = useRef<Record<string, {content: string, imageIds?: string[], images?: ImageAttachment[]}>>({});
 
   // Handle pending input from "Send to new session"
   useEffect(() => {
@@ -183,47 +180,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, [messages.length, streaming, connected, sessionId]);
 
-  // Auto-send queued message when streaming ends
-  useEffect(() => {
-    if (!streaming && queuedMessage) {
-      onSendMessage(queuedMessage.content, undefined, undefined, queuedMessage.imageIds, queuedMessage.images);
-      setQueuedMessage(null);
-      // Also clean up from ref map
-      if (sessionId) {
-        const { [sessionId]: _, ...rest } = queuedMessagesRef.current;
-        queuedMessagesRef.current = rest;
-      }
-    }
-  }, [streaming, queuedMessage, onSendMessage, sessionId]);
-
-  // Persist queued messages per session on tab switch
-  useEffect(() => {
-    const prevSession = previousQueuedSessionRef.current;
-    if (prevSession && prevSession !== sessionId) {
-      // Save current queued message under old session
-      if (queuedMessage) {
-        queuedMessagesRef.current = {
-          ...queuedMessagesRef.current,
-          [prevSession]: queuedMessage,
-        };
-      } else {
-        // Clean up if no queued message
-        const { [prevSession]: _, ...rest } = queuedMessagesRef.current;
-        queuedMessagesRef.current = rest;
-      }
-
-      // Restore queued message for new session (if any)
-      const restored = sessionId ? queuedMessagesRef.current[sessionId] || null : null;
-      setQueuedMessage(restored);
-      if (restored && sessionId) {
-        const { [sessionId]: _, ...rest } = queuedMessagesRef.current;
-        queuedMessagesRef.current = rest;
-      }
-    }
-    previousQueuedSessionRef.current = sessionId;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]); // intentionally exclude queuedMessage to avoid loops
-
   const handleSubmit = () => {
     const trimmed = input.trim();
     if ((!trimmed && uploadedImages.length === 0) || !connected) return;
@@ -269,42 +225,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    // If streaming and not background processing, queue the message instead of sending
-    if (streaming && !backgroundProcessing) {
-      const imageIds = uploadedImages.map(img => img.id);
-      const images = uploadedImages.map(img => ({
-        id: img.id,
-        filename: img.filename,
-        mime_type: 'image/png',
-        size: 0,
-        url: img.url,
-      }));
-
-      setQueuedMessage({
-        content: trimmed || '[Image]',
-        imageIds: imageIds.length > 0 ? imageIds : undefined,
-        images: images.length > 0 ? images : undefined,
-      });
-
-      // Clear input and images to show user it was "sent"
-      setInput('');
-      setUploadedImages([]);
-      setShowAutocomplete(false);
-      historyIndexRef.current = -1;
-      savedDraftRef.current = '';
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
-      if (sessionId) {
-        inputDraftsRef.current = {
-          ...inputDraftsRef.current,
-          [sessionId]: '',
-        };
-      }
-      return;
-    }
-
-    // Normal send flow (not streaming, or background processing)
+    // Send message (works during streaming too via backend injection)
     const imageIds = uploadedImages.map(img => img.id);
     const images = uploadedImages.map(img => ({
       id: img.id,
@@ -829,7 +750,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={connected ? (streaming && !backgroundProcessing ? 'Type a message to queue...' : 'Send a message or type / for commands...') : 'Reconnecting — hang tight...'}
+            placeholder={connected ? (streaming && !backgroundProcessing ? 'Send a follow-up...' : 'Send a message or type / for commands...') : 'Reconnecting — hang tight...'}
             disabled={!connected}
             rows={1}
           />
@@ -858,52 +779,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </svg>
             )}
           </button>
-          {streaming && !backgroundProcessing ? (
-            <>
-              <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-                </svg>
-              </button>
-              <button
-                className="queue-send-btn"
-                onClick={handleSubmit}
-                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
-                aria-label="Queue message"
-                title="Queue for after response"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="M22 2L11 13" />
-                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-                </svg>
-              </button>
-            </>
-          ) : (
-            <button
-              className="send-btn"
-              onClick={handleSubmit}
-              disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
-              aria-label="Send message"
-            >
+          {streaming && !backgroundProcessing && (
+            <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
               </svg>
             </button>
           )}
-        </div>
-      </div>
-      {queuedMessage && (
-        <div className="queued-message-indicator">
-          <span className="queued-accent-bar" />
-          <span className="queued-text">
-            {queuedMessage.content.length > 80 ? queuedMessage.content.slice(0, 80) + '...' : queuedMessage.content}
-          </span>
-          <button className="queued-dismiss" onClick={() => setQueuedMessage(null)} aria-label="Cancel queued message">
-            cancel
+          <button
+            className="send-btn"
+            onClick={handleSubmit}
+            disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
+            aria-label="Send message"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
           </button>
         </div>
-      )}
+      </div>
       {backgroundProcessing && !streaming && (
         <div className="background-processing-indicator">
           <span className="processing-dot"></span>

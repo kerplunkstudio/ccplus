@@ -47,9 +47,6 @@ export function useSessionActions({
         dispatchTree({ type: 'MARK_ALL_STOPPED' });
       }
 
-      // Cancel any existing query and finalize streaming
-      streamDispatch({ type: 'CANCEL_QUERY' });
-
       const userMessage: Message = {
         id: `user_${Date.now()}`,
         content,
@@ -58,12 +55,10 @@ export function useSessionActions({
         images: images || [],
       };
       streamDispatch({ type: 'SEND_MESSAGE', message: userMessage });
-      toolLogRef.current = [];
-      setToolLog([]);
-      setSignals({ status: null });
+
       socket.emit('message', { content, workspace, model, image_ids: imageIds, session_id: currentSessionIdRef.current });
     },
-    [socket, connected, backgroundProcessing, currentSessionIdRef, streamDispatch, toolLogRef, setToolLog, setSignals, dispatchTree, setPromptSuggestions]
+    [socket, connected, backgroundProcessing, currentSessionIdRef, streamDispatch, dispatchTree, setPromptSuggestions]
   );
 
   const cancelQuery = useCallback(() => {

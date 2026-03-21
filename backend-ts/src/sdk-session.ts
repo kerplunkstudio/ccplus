@@ -1,4 +1,4 @@
-import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool, type ModelUsage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Query, type HookCallback, type HookCallbackMatcher, createSdkMcpServer, tool, type ModelUsage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, createWriteStream, copyFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { homedir } from "os";
@@ -940,6 +940,42 @@ export function cancelQuery(sessionId: string): void {
 export function isActive(sessionId: string): boolean {
   const session = sessions.get(sessionId);
   return session?.activeQuery !== null && session?.activeQuery !== undefined;
+}
+
+/**
+ * Inject a message into an active query using streamInput.
+ * Returns true if injected, false if no active query (caller should fall back to submitQuery).
+ */
+export async function injectMessage(
+  sessionId: string,
+  content: string,
+  imageIds?: string[],
+): Promise<boolean> {
+  const session = sessions.get(sessionId);
+  if (!session?.activeQuery) {
+    return false;
+  }
+
+  try {
+    const userMessage: SDKUserMessage = {
+      type: 'user' as const,
+      message: { role: 'user', content },
+      session_id: session.sdkSessionId ?? sessionId,
+      parent_tool_use_id: null,
+      priority: 'now',
+    };
+
+    async function* singleMessage(): AsyncGenerator<SDKUserMessage> {
+      yield userMessage;
+    }
+
+    await session.activeQuery.streamInput(singleMessage());
+    log.info('Injected message into active query', { sessionId, contentLength: content.length, hasImages: !!imageIds?.length });
+    return true;
+  } catch (error) {
+    log.error('Failed to inject message', { sessionId, error: String(error) });
+    return false;
+  }
 }
 
 export function getActiveSessions(): string[] {

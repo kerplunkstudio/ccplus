@@ -1287,16 +1287,46 @@ io.on("connection", (socket) => {
 
     socket.emit("message_received", { status: "ok" });
 
-    // Submit to SDK
-    sdkSession.submitQuery(
-      sid,
-      content || "[Image attached]",
-      workspace,
-      buildSocketCallbacks(sid, projectPathData || undefined),
-      model,
-      imageIdsData.length ? imageIdsData : undefined,
-      undefined, // requestedBy (not applicable for direct web sessions)
-    );
+    // Submit to SDK — inject into active query if one is running
+    if (sdkSession.isActive(sid)) {
+      sdkSession.injectMessage(sid, content || "[Image attached]", imageIdsData.length ? imageIdsData : undefined)
+        .then((injected) => {
+          if (!injected) {
+            // Query ended between check and inject, fall back to new query
+            sdkSession.submitQuery(
+              sid,
+              content || "[Image attached]",
+              workspace,
+              buildSocketCallbacks(sid, projectPathData || undefined),
+              model,
+              imageIdsData.length ? imageIdsData : undefined,
+              undefined,
+            );
+          }
+        })
+        .catch(() => {
+          // Injection failed, fall back to new query
+          sdkSession.submitQuery(
+            sid,
+            content || "[Image attached]",
+            workspace,
+            buildSocketCallbacks(sid, projectPathData || undefined),
+            model,
+            imageIdsData.length ? imageIdsData : undefined,
+            undefined,
+          );
+        });
+    } else {
+      sdkSession.submitQuery(
+        sid,
+        content || "[Image attached]",
+        workspace,
+        buildSocketCallbacks(sid, projectPathData || undefined),
+        model,
+        imageIdsData.length ? imageIdsData : undefined,
+        undefined,
+      );
+    }
   });
 
   // -- Cancel --

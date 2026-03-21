@@ -6,7 +6,7 @@
  * to the SDK's AsyncIterable prompt interface.
  */
 
-import { query, createSdkMcpServer, tool, type Query } from "@anthropic-ai/claude-agent-sdk";
+import { query, createSdkMcpServer, tool, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import * as config from "./config.js";
 import * as database from "./database.js";
@@ -562,6 +562,29 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   };
 
   log.info("Captain message queued", { source, sourceId, length: content.length });
+
+  // If a query is active, inject the message instead of waiting
+  if (captainState.activeQuery) {
+    const userMessage: SDKUserMessage = {
+      type: 'user' as const,
+      message: { role: 'user', content: taggedContent },
+      session_id: captainState.sdkSessionId ?? captainState.sessionId ?? '',
+      parent_tool_use_id: null,
+      priority: 'now' as const,
+    };
+
+    async function* singleMessage() {
+      yield userMessage;
+    }
+
+    captainState.activeQuery.streamInput(singleMessage()).catch((error: unknown) => {
+      log.error('Captain: failed to inject message, falling back to new query', { error: String(error) });
+      startCaptainQuery(taggedContent).catch((err: unknown) => {
+        log.error('Captain query failed', { error: String(err) });
+      });
+    });
+    return;
+  }
 
   // Start new query with resume
   startCaptainQuery(taggedContent).catch((error) => {

@@ -39,7 +39,7 @@ Captain: a persistent AI that manages your sessions. Tell it what you want in pl
 
 ## Access Anywhere
 
-Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. Voice messages transcribed with Whisper.
+Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. Voice messages supported.
 
 ---
 

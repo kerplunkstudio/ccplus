@@ -280,6 +280,13 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
     }
 
     case 'SEND_MESSAGE': {
+      if (state.streaming) {
+        // Mid-stream injection: just append user message, keep stream state
+        return {
+          ...state,
+          messages: [...state.messages, action.message],
+        };
+      }
       return {
         ...state,
         messages: [...state.messages, action.message],
