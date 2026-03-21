@@ -160,11 +160,14 @@ describe('voice-transcriber', () => {
   });
 
   describe('transcribeAudio', () => {
-    it('should transcribe audio and return text', async () => {
+    it('should convert OGG to WAV and transcribe audio', async () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Hello, this is a test transcription';
 
-      mockExecFile.mockResolvedValue({ stdout: transcriptionText + '\n', stderr: '' });
+      // Mock execFile for both ffmpeg and whisper-cli
+      mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg conversion
+        .mockResolvedValueOnce({ stdout: transcriptionText + '\n', stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -174,14 +177,33 @@ describe('voice-transcriber', () => {
 
       expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
-      expect(mockUnlinkSync).toHaveBeenCalledOnce();
-      expect(mockExecFile).toHaveBeenCalledOnce();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);  // Clean up both OGG and WAV
+      expect(mockExecFile).toHaveBeenCalledTimes(2);  // ffmpeg + whisper-cli
+
+      // Verify ffmpeg was called with correct args
+      const ffmpegCall = mockExecFile.mock.calls[0];
+      expect(ffmpegCall[0]).toBe('/opt/homebrew/bin/ffmpeg');
+      expect(ffmpegCall[1]).toContain('-y');
+      expect(ffmpegCall[1]).toContain('-ar');
+      expect(ffmpegCall[1]).toContain('16000');
+      expect(ffmpegCall[1]).toContain('-ac');
+      expect(ffmpegCall[1]).toContain('1');
+      expect(ffmpegCall[1]).toContain('-c:a');
+      expect(ffmpegCall[1]).toContain('pcm_s16le');
+
+      // Verify whisper-cli was called
+      const whisperCall = mockExecFile.mock.calls[1];
+      expect(whisperCall[0]).toBe('/opt/homebrew/bin/whisper-cli');
+      expect(whisperCall[1]).toContain('--no-timestamps');
+      expect(whisperCall[1]).not.toContain('--output-txt');  // Should not have this flag
     });
 
     it('should return empty string when transcription result is empty', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
-      mockExecFile.mockResolvedValue({ stdout: '', stderr: '' });
+      mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg
+        .mockResolvedValueOnce({ stdout: '', stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -191,13 +213,32 @@ describe('voice-transcriber', () => {
 
       expect(result).toBe('');
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
-      expect(mockUnlinkSync).toHaveBeenCalledOnce();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
-    it('should return empty string and log error on transcription failure', async () => {
+    it('should return empty string and log error on ffmpeg failure', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
-      mockExecFile.mockRejectedValue(new Error('Whisper CLI failed'));
+      mockExecFile.mockRejectedValueOnce(new Error('ffmpeg conversion failed'));
+
+      const mockWriteFileSync = vi.mocked(fs.writeFileSync);
+      const mockUnlinkSync = vi.mocked(fs.unlinkSync);
+
+      const { transcribeAudio } = await import('../voice-transcriber.js');
+      const result = await transcribeAudio(audioBuffer);
+
+      expect(result).toBe('');
+      expect(mockWriteFileSync).toHaveBeenCalledOnce();
+      // File cleanup should still happen for both files
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return empty string and log error on whisper failure', async () => {
+      const audioBuffer = Buffer.from('mock audio data');
+
+      mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg succeeds
+        .mockRejectedValueOnce(new Error('Whisper CLI failed'));  // whisper fails
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -208,14 +249,16 @@ describe('voice-transcriber', () => {
       expect(result).toBe('');
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
       // File cleanup should still happen
-      expect(mockUnlinkSync).toHaveBeenCalledOnce();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
-    it('should clean up temp file even if unlink fails', async () => {
+    it('should clean up temp files even if unlink fails', async () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Test transcription';
 
-      mockExecFile.mockResolvedValue({ stdout: transcriptionText, stderr: '' });
+      mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })
+        .mockResolvedValueOnce({ stdout: transcriptionText, stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync).mockImplementation(() => {
@@ -228,14 +271,16 @@ describe('voice-transcriber', () => {
 
       expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
-      expect(mockUnlinkSync).toHaveBeenCalledOnce();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
     it('should trim whitespace from transcription result', async () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Test transcription';
 
-      mockExecFile.mockResolvedValue({ stdout: `  ${transcriptionText}  \n`, stderr: '' });
+      mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })
+        .mockResolvedValueOnce({ stdout: `  ${transcriptionText}  \n`, stderr: '' });
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
@@ -245,7 +290,7 @@ describe('voice-transcriber', () => {
 
       expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
-      expect(mockUnlinkSync).toHaveBeenCalledOnce();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
   });
 });
