@@ -1,5 +1,47 @@
-import { formatToolLabel, formatToolLabelVerbose } from './formatToolLabel';
+import { formatToolLabel, formatToolLabelVerbose, sanitizeBashCommand } from './formatToolLabel';
 import { ToolEvent } from '../types';
+
+describe('sanitizeBashCommand', () => {
+  it('strips cd with unquoted path and &&', () => {
+    expect(sanitizeBashCommand('cd /some/path && git status')).toBe('git status');
+  });
+
+  it('strips cd with quoted path and &&', () => {
+    expect(sanitizeBashCommand('cd "/path with spaces" && npm test')).toBe('npm test');
+  });
+
+  it('strips cd with single-quoted path and &&', () => {
+    expect(sanitizeBashCommand("cd '/path with spaces' && npm test")).toBe('npm test');
+  });
+
+  it('strips cd with unquoted path and semicolon', () => {
+    expect(sanitizeBashCommand('cd /foo; npm install')).toBe('npm install');
+  });
+
+  it('strips cd with quoted path and semicolon', () => {
+    expect(sanitizeBashCommand('cd "/foo bar"; npm install')).toBe('npm install');
+  });
+
+  it('does not modify command without cd prefix', () => {
+    expect(sanitizeBashCommand('git log')).toBe('git log');
+  });
+
+  it('strips multiple cd prefixes', () => {
+    expect(sanitizeBashCommand('cd /foo && cd /bar && git push')).toBe('git push');
+  });
+
+  it('strips multiple cd prefixes with mixed separators', () => {
+    expect(sanitizeBashCommand('cd /foo; cd /bar && git push')).toBe('git push');
+  });
+
+  it('handles whitespace variations', () => {
+    expect(sanitizeBashCommand('  cd   /path  &&  npm test')).toBe('npm test');
+  });
+
+  it('handles empty string', () => {
+    expect(sanitizeBashCommand('')).toBe('');
+  });
+});
 
 describe('formatToolLabel', () => {
   describe('Read tool', () => {

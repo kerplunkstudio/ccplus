@@ -34,3 +34,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.tool-log-tool-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
