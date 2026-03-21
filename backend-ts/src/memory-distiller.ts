@@ -186,54 +186,98 @@ export async function distillSession(
     // Extract project name from workspace path
     const projectName = path.basename(workspace);
 
-    // Format as memory content
-    const sections: string[] = [
-      `Session ${sessionId} in ${projectName}`,
-      `Goal: ${goal}`,
-    ];
-
-    if (filePaths.length > 0) {
-      sections.push(`Files: ${filePaths.join(", ")}`);
-    }
-
-    if (toolNames.length > 0) {
-      sections.push(`Tools: ${toolNames.join(", ")}`);
-    }
-
-    if (agentTypes.length > 0) {
-      sections.push(`Agents: ${agentTypes.join(", ")}`);
-    }
-
-    if (errors.length > 0) {
-      sections.push(`Errors: ${errors.join("; ")}`);
-    }
-
-    sections.push(`Outcome: ${outcome}`);
-
-    const content = sections.join("\n");
-
-    // Build tags
-    const tags = [
+    // Build base tags and metadata
+    const baseTags = [
       `project:${projectName}`,
       `session:${sessionId}`,
       "auto-distill",
     ];
 
     if (options?.preCompaction) {
-      tags.push("pre-compact");
+      baseTags.push("pre-compact");
     }
 
-    // Store via memory client
-    await storeMemory(
-      content,
-      tags.join(","),
-      {
-        session_id: sessionId,
-        workspace,
-        message_count: String(conversations.length),
-        tool_count: String(toolEvents.length),
-      }
+    const baseMetadata = {
+      session_id: sessionId,
+      workspace,
+      message_count: String(conversations.length),
+      tool_count: String(toolEvents.length),
+    };
+
+    // Store memories split by type for better targeted retrieval
+    const storePromises: Promise<string | null>[] = [];
+
+    // 1. Task summary memory (goal + outcome)
+    const taskSummary = [
+      `Session ${sessionId} in ${projectName}`,
+      `Goal: ${goal}`,
+      `Outcome: ${outcome}`,
+    ].join("\n");
+
+    storePromises.push(
+      storeMemory(
+        taskSummary,
+        [...baseTags, "type:task-summary"].join(","),
+        baseMetadata
+      )
     );
+
+    // 2. Files modified memory (only if files were touched)
+    if (filePaths.length > 0) {
+      const filesMemory = [
+        `Session ${sessionId} in ${projectName}`,
+        `Files modified: ${filePaths.join(", ")}`,
+        `Context: ${goal}`,
+      ].join("\n");
+
+      storePromises.push(
+        storeMemory(
+          filesMemory,
+          [...baseTags, "type:files-modified"].join(","),
+          baseMetadata
+        )
+      );
+    }
+
+    // 3. Errors encountered memory (only if errors exist)
+    if (errors.length > 0) {
+      const errorsMemory = [
+        `Session ${sessionId} in ${projectName}`,
+        `Errors encountered:`,
+        ...errors.map(e => `- ${e}`),
+        `Context: ${goal}`,
+      ].join("\n");
+
+      storePromises.push(
+        storeMemory(
+          errorsMemory,
+          [...baseTags, "type:errors-encountered"].join(","),
+          baseMetadata
+        )
+      );
+    }
+
+    // 4. Agents used memory (only if agents were involved)
+    if (agentTypes.length > 0) {
+      const agentsMemory = [
+        `Session ${sessionId} in ${projectName}`,
+        `Agents used: ${agentTypes.join(", ")}`,
+        `Tools used: ${toolNames.join(", ")}`,
+        `Goal: ${goal}`,
+        `Outcome: ${outcome}`,
+      ].join("\n");
+
+      storePromises.push(
+        storeMemory(
+          agentsMemory,
+          [...baseTags, "type:agents-used"].join(","),
+          baseMetadata
+        )
+      );
+    }
+
+    // Store all memories concurrently
+    await Promise.all(storePromises);
 
     // Update debounce tracking
     distillationTimestamps.set(sessionId, Date.now());
@@ -243,6 +287,7 @@ export async function distillSession(
       messageCount: conversations.length,
       toolCount: toolEvents.length,
       preCompaction: options?.preCompaction ?? false,
+      memoryTypes: storePromises.length,
     });
   } catch (error) {
     // Never throw - log and return silently
