@@ -141,16 +141,15 @@ const formatElapsed = (ms: number): string => {
 };
 
 export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const userOverrideRef = useRef(false);
+  const agentsContainerRef = useRef<HTMLDivElement>(null);
+  const toolsContainerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'tools' | 'trust'>('agents');
+  const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const { trustScore, loading: trustLoading, error: trustError } = useTrustScore(sessionId);
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
-  const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
 
   const activityStats = useMemo(() => {
     const totalTools = countTools(tree);
@@ -184,23 +183,15 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
   }, [activityStats.hasRunning]);
 
   useEffect(() => {
-    if (tree.length === 0) {
-      userOverrideRef.current = false;
-      setActiveTab('agents');
-      return;
+    if (!selectedNode && !showTrustPanel) {
+      if (agentsContainerRef.current && agentNodes.length > 0) {
+        agentsContainerRef.current.scrollTop = agentsContainerRef.current.scrollHeight;
+      }
+      if (toolsContainerRef.current && toolNodes.length > 0) {
+        toolsContainerRef.current.scrollTop = toolsContainerRef.current.scrollHeight;
+      }
     }
-
-    if (userOverrideRef.current) return;
-
-    const lastNode = tree[tree.length - 1];
-    setActiveTab(isAgentNode(lastNode) ? 'agents' : 'tools');
-  }, [tree]);
-
-  useEffect(() => {
-    if (containerRef.current && !selectedNode) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }, [tree, selectedNode, activeTab]);
+  }, [tree, selectedNode, showTrustPanel, agentNodes.length, toolNodes.length]);
 
   const handleNodeSelect = useCallback((node: ActivityNode) => {
     setSelectedNode(node);
@@ -210,73 +201,27 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setSelectedNode(null);
   };
 
-  const handleTabClick = (tab: 'agents' | 'tools' | 'trust') => {
-    userOverrideRef.current = true;
-    setActiveTab(tab);
+  const handleTrustToggle = () => {
+    setShowTrustPanel(!showTrustPanel);
   };
 
   return (
     <div className="activity-tree">
       {selectedNode ? (
         <NodeDetail node={selectedNode} onClose={handleCloseDetail} />
-      ) : (
+      ) : showTrustPanel && sessionId ? (
         <>
           <div className="activity-header">
-            <div className="activity-tabs" role="tablist" aria-label="Activity views">
-              <button
-                className={`activity-tab ${activeTab === 'agents' ? 'activity-tab-active' : ''}`}
-                onClick={() => handleTabClick('agents')}
-                role="tab"
-                aria-selected={activeTab === 'agents'}
-                aria-controls="activity-panel-agents"
-                id="tab-agents"
-              >
-                Agents
-              </button>
-              <button
-                className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
-                onClick={() => handleTabClick('tools')}
-                role="tab"
-                aria-selected={activeTab === 'tools'}
-                aria-controls="activity-panel-tools"
-                id="tab-tools"
-              >
-                Tools
-              </button>
-              {sessionId && (
-                <button
-                  className={`activity-tab ${activeTab === 'trust' ? 'activity-tab-active' : ''}`}
-                  onClick={() => handleTabClick('trust')}
-                  role="tab"
-                  aria-selected={activeTab === 'trust'}
-                  aria-controls="activity-panel-trust"
-                  id="tab-trust"
-                >
-                  Trust
-                </button>
-              )}
-            </div>
+            <button
+              className="trust-back-btn"
+              onClick={handleTrustToggle}
+              aria-label="Back to activity view"
+            >
+              ← Back
+            </button>
           </div>
-
-          <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-            {activeTab === 'trust' ? (
-              trustLoading || trustError || !trustScore ? (
-                <div className="activity-empty">
-                  <div className="activity-empty-pulse" />
-                  <p className="activity-empty-title">Standby</p>
-                  <p className="activity-empty-sub">
-                    Activity appears here as Claude works
-                  </p>
-                </div>
-              ) : (
-                <TrustScore
-                  sessionId={sessionId || ''}
-                  trustMetrics={trustScore}
-                  loading={false}
-                  error={null}
-                />
-              )
-            ) : visibleNodes.length === 0 ? (
+          <div className="activity-content">
+            {trustLoading || trustError || !trustScore ? (
               <div className="activity-empty">
                 <div className="activity-empty-pulse" />
                 <p className="activity-empty-title">Standby</p>
@@ -285,17 +230,79 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                 </p>
               </div>
             ) : (
-              <div className="tree-root">
-                {visibleNodes.map((node) => (
-                  <TreeNode
-                    key={node.tool_use_id}
-                    node={node}
-                    depth={0}
-                    onNodeSelect={handleNodeSelect}
-                  />
-                ))}
-              </div>
+              <TrustScore
+                sessionId={sessionId}
+                trustMetrics={trustScore}
+                loading={false}
+                error={null}
+              />
             )}
+          </div>
+        </>
+      ) : (
+        <>
+          {sessionId && (
+            <div className="activity-header">
+              <button
+                className="trust-toggle-btn"
+                onClick={handleTrustToggle}
+                aria-label="View trust score"
+              >
+                Trust Score
+              </button>
+            </div>
+          )}
+          <div className="activity-split">
+            <div className="activity-panel">
+              <div className="activity-panel-header">Agents</div>
+              <div className="activity-panel-content" ref={agentsContainerRef}>
+                {agentNodes.length === 0 ? (
+                  <div className="activity-empty">
+                    <div className="activity-empty-pulse" />
+                    <p className="activity-empty-title">Standby</p>
+                    <p className="activity-empty-sub">
+                      Agents appear here as Claude works
+                    </p>
+                  </div>
+                ) : (
+                  <div className="tree-root">
+                    {agentNodes.map((node) => (
+                      <TreeNode
+                        key={node.tool_use_id}
+                        node={node}
+                        depth={0}
+                        onNodeSelect={handleNodeSelect}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="activity-panel">
+              <div className="activity-panel-header">Tools</div>
+              <div className="activity-panel-content" ref={toolsContainerRef}>
+                {toolNodes.length === 0 ? (
+                  <div className="activity-empty">
+                    <div className="activity-empty-pulse" />
+                    <p className="activity-empty-title">Standby</p>
+                    <p className="activity-empty-sub">
+                      Tools appear here as Claude works
+                    </p>
+                  </div>
+                ) : (
+                  <div className="tree-root">
+                    {toolNodes.map((node) => (
+                      <TreeNode
+                        key={node.tool_use_id}
+                        node={node}
+                        depth={0}
+                        onNodeSelect={handleNodeSelect}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}

@@ -18,13 +18,13 @@ const mockStats: UsageStats = {
 describe('ActivityTree', () => {
   it('renders empty state when no tree nodes', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
-    expect(screen.getByText('Standby')).toBeInTheDocument();
+    expect(screen.getAllByText('Standby')).toHaveLength(2); // One for each panel
   });
 
-  it('renders the activity tabs', () => {
+  it('renders the split panel headers', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} />);
     expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.getByText('Tool Logs')).toBeInTheDocument();
+    expect(screen.getByText('Tools')).toBeInTheDocument();
   });
 
   it('renders a tool node', () => {
@@ -37,7 +37,7 @@ describe('ActivityTree', () => {
       parent_agent_id: null,
     };
     render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
-    // The tree auto-switches to 'tools' tab when last node is a tool
+    // Tool node appears in the Tools panel
     expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.getByText('150ms')).toBeInTheDocument();
   });
@@ -110,7 +110,7 @@ describe('ActivityTree', () => {
     expect(wrapper).not.toHaveClass('expanded');
   });
 
-  it('shows activity count badge in tab', () => {
+  it('shows both tool nodes in split panel', () => {
     const nodes: ActivityNode[] = [
       {
         tool_use_id: 't1',
@@ -128,12 +128,9 @@ describe('ActivityTree', () => {
       } as ToolNode,
     ];
     render(<ActivityTree tree={nodes} usageStats={mockStats} />);
-    // The tab count badge shows "2" for tool nodes
-    const toolLogsTab = screen.getByRole('tab', { name: /Tool Logs/i });
-    expect(toolLogsTab).toBeInTheDocument();
-    // The badge renders as a span with class activity-tab-count
-    const badge = toolLogsTab.querySelector('.activity-tab-count');
-    expect(badge).toHaveTextContent('2');
+    // Both tool nodes should appear in the Tools panel
+    expect(screen.getByText('Read')).toBeInTheDocument();
+    expect(screen.getByText('Write')).toBeInTheDocument();
   });
 
   it('formats duration using formatDuration utility', () => {

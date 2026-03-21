@@ -57,9 +57,16 @@
 }
 
 .fleet-sessions-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-sm);
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .fleet-sessions-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .fleet-empty-state {
