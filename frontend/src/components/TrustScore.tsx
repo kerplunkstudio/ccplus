@@ -70,7 +70,7 @@ export const TrustScore: React.FC<TrustScoreProps> = ({
 
   const isMdOnlySession = useMemo(() => {
     if (!trustMetrics) return false;
-    const allWritten = [...trustMetrics.summary.files_written, ...trustMetrics.summary.files_deleted];
+    const allWritten = [...(trustMetrics.summary.files_written ?? []), ...trustMetrics.summary.files_deleted];
     return allWritten.length > 0 && allWritten.every(f => f.toLowerCase().endsWith('.md'));
   }, [trustMetrics]);
 
