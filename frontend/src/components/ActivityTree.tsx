@@ -40,7 +40,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, depth, onNodeSelec
           <TreeNode
             key={child.tool_use_id}
             node={child}
-            depth={depth + 1}
+            depth={0}
             onNodeSelect={onNodeSelect}
             currentTime={currentTime}
             workspacePath={workspacePath}
