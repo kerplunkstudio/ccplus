@@ -5,6 +5,11 @@ import { v4 as uuidv4 } from "uuid";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { log } from "./logger.js";
+import * as config from "./config.js";
+
+// ---- Constants ----
+
+const WORKTREE_RULES_FOOTER = "\n\nRULES: Do NOT create branches, PRs, or push. You are in a worktree. Just implement, test, and commit.";
 
 // ---- Types ----
 
@@ -96,7 +101,9 @@ export function startSession(
   }
 
   const uid = "local";
-  const trimmedPrompt = prompt.trim();
+  const trimmedPrompt = config.WORKTREE_ENABLED
+    ? prompt.trim() + WORKTREE_RULES_FOOTER
+    : prompt.trim();
 
   // Record user message in database
   try {

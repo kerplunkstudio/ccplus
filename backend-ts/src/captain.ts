@@ -122,13 +122,9 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
           session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
         },
         async (args) => {
-          // Append mandatory rules to the prompt
-          const rulesFooter = "\n\nRULES: Do NOT create branches, PRs, or push. You are in a worktree. Just implement, test, and commit.";
-          const fullPrompt = args.prompt + rulesFooter;
-
           const result = startSession(
             {
-              prompt: fullPrompt,
+              prompt: args.prompt,
               workspace: args.workspace,
               sessionId: args.session_id,
               requestedBy: getLastQuerySource() ?? undefined,

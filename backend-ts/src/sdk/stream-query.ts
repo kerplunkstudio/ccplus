@@ -314,6 +314,8 @@ export async function streamQuery(
           }
 
           // Signal intermediate completion
+          // Note: Only include token fields when they have actual values (not null)
+          // to prevent frontend from overwriting valid context state with null
           callbacks.onComplete({
             text: currentMessageText.join(""),
             sdk_session_id: null,
@@ -321,8 +323,6 @@ export async function streamQuery(
             duration_ms: null,
             is_error: false,
             num_turns: null,
-            input_tokens: null,
-            output_tokens: null,
             model: session.model,
             message_index: messageIndex,
           });

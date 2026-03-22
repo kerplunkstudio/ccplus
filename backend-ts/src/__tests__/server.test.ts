@@ -1051,7 +1051,7 @@ describe("POST /api/sessions/start", () => {
     expect(historyData.messages.length).toBeGreaterThan(0);
     const userMessage = historyData.messages.find((m: { role: string }) => m.role === "user");
     expect(userMessage).toBeDefined();
-    expect(userMessage.content).toBe("Database test message");
+    expect(userMessage.content).toContain("Database test message");
   });
 });
 

@@ -175,7 +175,7 @@ describe('session-api', () => {
         expect.any(String),
         'local',
         'user',
-        'test prompt',
+        expect.stringContaining('test prompt'),
         undefined,
         homedir(),
         undefined
@@ -225,7 +225,7 @@ describe('session-api', () => {
 
       expect(mockSdkSession.submitQuery).toHaveBeenCalledWith(
         result.sessionId,
-        'test prompt',
+        expect.stringContaining('test prompt'),
         homedir(),
         expect.any(Object),
         'claude-opus-4',

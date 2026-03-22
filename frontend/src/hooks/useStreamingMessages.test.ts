@@ -514,6 +514,123 @@ describe('useStreamingMessages', () => {
       expect(result.current.contextTokens).toBe(5000);
     });
 
+    it('should NOT overwrite context tokens when input_tokens is null', async () => {
+      const mockSocket = createMockSocket();
+      const mockRefs = createMockRefs();
+
+      const { result } = renderHook(() =>
+        useStreamingMessages({
+          socket: mockSocket,
+          sessionId: 'test-session',
+          ...mockRefs,
+        })
+      );
+
+      const responseCompleteHandler = (mockSocket.on as jest.Mock).mock.calls.find(
+        (call) => call[0] === 'response_complete'
+      )?.[1];
+
+      // First set a valid context token value
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          input_tokens: 5000,
+        });
+      });
+
+      expect(result.current.contextTokens).toBe(5000);
+
+      // Then receive an intermediate completion with null input_tokens
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          input_tokens: null,
+          sdk_session_id: null,
+        });
+      });
+
+      // Context tokens should still be 5000, not overwritten with null
+      expect(result.current.contextTokens).toBe(5000);
+    });
+
+    it('should NOT overwrite context tokens when input_tokens is undefined', async () => {
+      const mockSocket = createMockSocket();
+      const mockRefs = createMockRefs();
+
+      const { result } = renderHook(() =>
+        useStreamingMessages({
+          socket: mockSocket,
+          sessionId: 'test-session',
+          ...mockRefs,
+        })
+      );
+
+      const responseCompleteHandler = (mockSocket.on as jest.Mock).mock.calls.find(
+        (call) => call[0] === 'response_complete'
+      )?.[1];
+
+      // First set a valid context token value
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          input_tokens: 3000,
+        });
+      });
+
+      expect(result.current.contextTokens).toBe(3000);
+
+      // Then receive an intermediate completion with undefined input_tokens
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          // input_tokens is undefined (not sent)
+          sdk_session_id: null,
+        });
+      });
+
+      // Context tokens should still be 3000, not overwritten
+      expect(result.current.contextTokens).toBe(3000);
+    });
+
+    it('should NOT overwrite context tokens when input_tokens is 0', async () => {
+      const mockSocket = createMockSocket();
+      const mockRefs = createMockRefs();
+
+      const { result } = renderHook(() =>
+        useStreamingMessages({
+          socket: mockSocket,
+          sessionId: 'test-session',
+          ...mockRefs,
+        })
+      );
+
+      const responseCompleteHandler = (mockSocket.on as jest.Mock).mock.calls.find(
+        (call) => call[0] === 'response_complete'
+      )?.[1];
+
+      // First set a valid context token value
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          input_tokens: 8000,
+        });
+      });
+
+      expect(result.current.contextTokens).toBe(8000);
+
+      // Then receive a completion with 0 input_tokens
+      await act(async () => {
+        responseCompleteHandler?.({
+          session_id: 'test-session',
+          input_tokens: 0,
+          sdk_session_id: null,
+        });
+      });
+
+      // Context tokens should still be 8000, not overwritten with 0
+      expect(result.current.contextTokens).toBe(8000);
+    });
+
     it('should update context window size based on model', async () => {
       const mockSocket = createMockSocket();
       const mockRefs = createMockRefs();

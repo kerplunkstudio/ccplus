@@ -180,21 +180,30 @@ export function useStreamingMessages({
       });
 
       // Side effects for usage stats and context tokens
+      // Only update contextTokens when we have a valid positive value (not null/undefined)
+      // This prevents intermediate completions from overwriting valid context state
       if (data.input_tokens != null && data.input_tokens > 0) {
         setContextTokens(data.input_tokens);
       }
 
-      // Update context window size - try backend value, then model lookup, then default
+      // Update context window size - only when we have a valid positive value
+      // Try backend value first, then model lookup, then default
       const windowSize = (data.context_window_size && data.context_window_size > 0)
         ? data.context_window_size
         : data.model
           ? (MODEL_CONTEXT_WINDOWS[data.model] || DEFAULT_CONTEXT_WINDOW)
           : null;
-      if (windowSize || data.model) {
+      if (windowSize && windowSize > 0) {
         setUsageStats(prev => ({
           ...prev,
-          contextWindowSize: windowSize || prev.contextWindowSize,
+          contextWindowSize: windowSize,
           model: data.model || prev.model,
+        }));
+      } else if (data.model) {
+        // Update model only if we have it
+        setUsageStats(prev => ({
+          ...prev,
+          model: data.model,
         }));
       }
 
