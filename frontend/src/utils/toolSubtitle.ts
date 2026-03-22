@@ -35,6 +35,11 @@ export function shortenPath(path: string, workspacePath?: string): string {
   return path;
 }
 
+function fileWithParent(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  return parts.length >= 2 ? parts.slice(-2).join('/') : parts.join('/') || path;
+}
+
 export function getToolSubtitle(node: ToolNode, workspacePath?: string): string | null {
   const p = node.parameters;
   if (!p) return null;
@@ -43,7 +48,7 @@ export function getToolSubtitle(node: ToolNode, workspacePath?: string): string 
     case 'Read':
     case 'Write':
     case 'Edit':
-      return p.file_path ? shortenPath(String(p.file_path), workspacePath) : null;
+      return p.file_path ? fileWithParent(String(p.file_path)) : null;
     case 'Bash':
       return p.command ? truncate(String(p.command), 60) : null;
     case 'Grep': {
