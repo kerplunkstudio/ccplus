@@ -90,12 +90,12 @@ describe('getToolSubtitle', () => {
   it('returns file path for Write tool', () => {
     const node = createToolNode('Write', { file_path: '/path/to/file.txt' });
     const result = getToolSubtitle(node);
-    expect(result).toBe('/path/to/file.txt');
+    expect(result).toBe('to/file.txt');
   });
 
   it('returns file path for Edit tool', () => {
     const node = createToolNode('Edit', { file_path: '/a/b/c.ts' });
-    expect(getToolSubtitle(node)).toBe('/a/b/c.ts');
+    expect(getToolSubtitle(node)).toBe('b/c.ts');
   });
 
   it('returns truncated command for Bash tool', () => {
