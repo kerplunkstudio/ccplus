@@ -41,6 +41,18 @@ Captain: a persistent AI that manages your sessions. Tell it what you want in pl
 
 Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. Voice messages supported.
 
+### Telegram Setup
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) and copy the token
+2. Add to your `.env`:
+   ```
+   CCPLUS_TELEGRAM_BOT_TOKEN=your-bot-token
+   CCPLUS_TELEGRAM_ALLOWLIST=your-username
+   ```
+3. Restart cc+. Message your bot to talk to Captain.
+
+Comma-separated for multiple users.
+
 ---
 
 ## More Features
