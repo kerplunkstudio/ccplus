@@ -2,6 +2,7 @@ import { config as dotenvConfig } from "dotenv";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
+import { log } from "./logger.js";
 
 // Load .env from project root (one level up from backend-ts/)
 dotenvConfig({ path: path.resolve(import.meta.dirname, "../../.env") });
@@ -120,16 +121,16 @@ export const DISCORD_ALLOWLIST: readonly string[] = (process.env.CCPLUS_DISCORD_
 export function reloadConfig(key: string, value: string | undefined): void {
   switch (key) {
     case "SDK_MODEL":
-      runtimeConfig.SDK_MODEL = value ?? "claude-sonnet-4-6";
+      runtimeConfig = { ...runtimeConfig, SDK_MODEL: value ?? "claude-sonnet-4-6" };
       break;
     case "MAX_CONVERSATION_HISTORY":
-      runtimeConfig.MAX_CONVERSATION_HISTORY = value ? parseInt(value, 10) : MAX_CONVERSATION_HISTORY_DEFAULT;
+      runtimeConfig = { ...runtimeConfig, MAX_CONVERSATION_HISTORY: value ? parseInt(value, 10) : MAX_CONVERSATION_HISTORY_DEFAULT };
       break;
     case "MAX_ACTIVITY_EVENTS":
-      runtimeConfig.MAX_ACTIVITY_EVENTS = value ? parseInt(value, 10) : MAX_ACTIVITY_EVENTS_DEFAULT;
+      runtimeConfig = { ...runtimeConfig, MAX_ACTIVITY_EVENTS: value ? parseInt(value, 10) : MAX_ACTIVITY_EVENTS_DEFAULT };
       break;
     case "CCPLUS_BYPASS_PERMISSIONS":
-      runtimeConfig.BYPASS_PERMISSIONS = value === 'true';
+      runtimeConfig = { ...runtimeConfig, BYPASS_PERMISSIONS: value === 'true' };
       break;
   }
 }
@@ -249,7 +250,7 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 // In-memory settings state
-let settingsData: Settings = { ...DEFAULT_SETTINGS };
+let settingsData: Settings = structuredClone(DEFAULT_SETTINGS);
 
 /**
  * Deep merge helper - immutably merges source into target
@@ -301,10 +302,10 @@ export function loadSettings(): Settings {
       return settingsData;
     }
   } catch (error) {
-    console.warn("Failed to load settings.json, using defaults:", String(error));
+    log.warn("Failed to load settings.json, using defaults", { error: String(error) });
   }
 
-  settingsData = { ...DEFAULT_SETTINGS };
+  settingsData = structuredClone(DEFAULT_SETTINGS);
   return settingsData;
 }
 
@@ -361,13 +362,13 @@ function isRestartRequired(partial: DeepPartial<Settings>): boolean {
  * Apply hot-reloadable settings to runtimeConfig
  */
 function applyHotReloadableSettings(): void {
-  if (settingsData.models?.sdk_model) {
-    runtimeConfig.SDK_MODEL = settingsData.models.sdk_model;
-  }
-
-  if (settingsData.sessions?.bypass_permissions !== undefined) {
-    runtimeConfig.BYPASS_PERMISSIONS = settingsData.sessions.bypass_permissions;
-  }
+  runtimeConfig = {
+    ...runtimeConfig,
+    ...(settingsData.models?.sdk_model !== undefined && { SDK_MODEL: settingsData.models.sdk_model }),
+    ...(settingsData.sessions?.bypass_permissions !== undefined && {
+      BYPASS_PERMISSIONS: settingsData.sessions.bypass_permissions,
+    }),
+  };
 }
 
 /**

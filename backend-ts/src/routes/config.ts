@@ -81,8 +81,8 @@ export function createConfigRoutes(app: Express): void {
         return;
       }
 
-      // Save settings (cast to satisfy TypeScript - Zod validation ensures type safety)
-      const { restart_required } = config.saveSettings(parseResult.data as any);
+      // Save settings
+      const { restart_required } = config.saveSettings(parseResult.data);
 
       // Return updated config
       const updatedConfig = config.getResolvedConfig();
