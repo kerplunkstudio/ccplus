@@ -89,8 +89,15 @@ export function useCaptainSocket(socket: Socket | null) {
 
     socket.emit('join_captain');
 
+    // Re-register on reconnect (socket.id changes, server-side callback was cleaned up)
+    const handleReconnect = () => {
+      socket.emit('join_captain');
+    };
+    socket.io.on('reconnect', handleReconnect);
+
     return () => {
       socket.emit('leave_captain');
+      socket.io.off('reconnect', handleReconnect);
     };
   }, [socket, captainSessionId]);
 
