@@ -212,6 +212,9 @@ async function startPollingWithRetry(): Promise<void> {
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
+      // Delete any existing webhook to prevent 409 conflicts
+      await bot!.api.deleteWebhook({ drop_pending_updates: false });
+
       await bot!.start({
         onStart: () => {
           log.info('Telegram bridge started (polling mode)');

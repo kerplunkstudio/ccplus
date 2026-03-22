@@ -30,6 +30,7 @@ import { createSessionRoutes } from "./routes/sessions.js";
 import { createWorkspaceRoutes } from "./routes/workspace.js";
 import { createImageRoutes } from "./routes/images.js";
 import { createMiscRoutes } from "./routes/misc.js";
+import { stopTelegramBridge } from './telegram-bridge.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -233,7 +234,7 @@ log.info("Starting ccplus server", {
 
 writePidFile();
 
-function gracefulShutdown(signal: string): void {
+async function gracefulShutdown(signal: string): Promise<void> {
   log.info("Received shutdown signal", { signal });
 
   // Save Captain state for resume on next startup
@@ -248,26 +249,22 @@ function gracefulShutdown(signal: string): void {
     log.error("Shutdown timed out, forcing exit");
     process.exit(1);
   }, 5000);
-  forceExitTimeout.unref(); // Don't keep process alive just for this timer
+  forceExitTimeout.unref();
 
-  // 1. Stop accepting new connections
-  httpServer.close(() => {
-    console.log("HTTP server closed");
-  });
+  // 1. Stop Telegram bridge (deregisters polling with Telegram API)
+  await stopTelegramBridge();
 
-  // 2. Close all active Socket.IO connections
-  io.close(() => {
-    console.log("Socket.IO server closed");
-  });
+  // 2. Stop accepting new connections
+  await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  console.log("HTTP server closed");
 
-  // 3. Close database connection
+  // 3. Close all active Socket.IO connections
+  await new Promise<void>((resolve) => io.close(() => resolve()));
+  console.log("Socket.IO server closed");
+
+  // 4. Close database connection
   database.close();
   console.log("Database closed");
-
-  // 4. Stop Telegram bridge
-  import('./telegram-bridge.js').then(({ stopTelegramBridge }) => {
-    stopTelegramBridge().catch(() => {});
-  }).catch(() => {});
 
   // 5. Remove PID file
   removePidFile();
