@@ -410,12 +410,12 @@ export function getResolvedConfig(): object {
     },
     integrations: {
       telegram: {
-        bot_token_set: Boolean(settingsData.integrations?.telegram?.bot_token || TELEGRAM_BOT_TOKEN),
+        bot_token_set: Boolean(settingsData.integrations?.telegram?.bot_token ?? TELEGRAM_BOT_TOKEN),
         allowed_users: settingsData.integrations?.telegram?.allowed_users ?? DEFAULT_SETTINGS.integrations!.telegram!.allowed_users,
         typing_interval_ms: settingsData.integrations?.telegram?.typing_interval_ms ?? DEFAULT_SETTINGS.integrations!.telegram!.typing_interval_ms,
       },
       discord: {
-        bot_token_set: Boolean(settingsData.integrations?.discord?.bot_token || DISCORD_BOT_TOKEN),
+        bot_token_set: Boolean(settingsData.integrations?.discord?.bot_token ?? DISCORD_BOT_TOKEN),
         allowed_users: settingsData.integrations?.discord?.allowed_users ?? DEFAULT_SETTINGS.integrations!.discord!.allowed_users,
       },
     },
