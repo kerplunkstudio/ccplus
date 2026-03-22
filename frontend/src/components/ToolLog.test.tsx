@@ -11,6 +11,7 @@ jest.mock('../utils/formatToolLabel', () => ({
     }
     return event.tool_name;
   },
+  sanitizeBashCommand: (cmd: string) => cmd,
 }));
 
 describe('ToolLog', () => {
@@ -20,6 +21,7 @@ describe('ToolLog', () => {
     tool_use_id: 'tool_1',
     parent_agent_id: null,
     timestamp: '2025-01-15T10:00:00',
+    parameters: { command: 'Bash' },
   };
 
   const toolCompleteEvent: ToolEvent = {
@@ -30,6 +32,7 @@ describe('ToolLog', () => {
     timestamp: '2025-01-15T10:00:05',
     success: true,
     duration_ms: 5000,
+    parameters: { command: 'Bash' },
   };
 
   const toolFailedEvent: ToolEvent = {
@@ -89,9 +92,10 @@ describe('ToolLog', () => {
       expect(container.firstChild).toBeNull();
     });
 
-    it('renders null when no root-level events', () => {
+    it('renders all events regardless of parent_agent_id', () => {
       const { container } = render(<ToolLog events={[nestedToolEvent]} />);
-      expect(container.firstChild).toBeNull();
+      expect(container.querySelector('.tool-log')).toBeInTheDocument();
+      expect(container.querySelectorAll('.tool-log-item')).toHaveLength(1);
     });
 
     it('renders tool log container for root-level events', () => {
@@ -110,20 +114,21 @@ describe('ToolLog', () => {
     });
 
     it('renders agent type using formatToolLabel', () => {
-      render(<ToolLog events={[agentStartEvent]} />);
-      expect(screen.getByText(/Agent: code_agent/)).toBeInTheDocument();
+      const { container } = render(<ToolLog events={[agentStartEvent]} />);
+      const label = container.querySelector('.tool-log-label');
+      expect(label?.textContent).toMatch(/Agent: code_agent/);
     });
   });
 
   describe('Event Filtering', () => {
-    it('shows only root-level events (parent_agent_id === null)', () => {
+    it('renders all events including nested ones', () => {
       const events = [toolStartEvent, nestedToolEvent];
       const { container } = render(<ToolLog events={events} />);
       const items = container.querySelectorAll('.tool-log-item');
-      expect(items).toHaveLength(1);
+      expect(items).toHaveLength(2);
     });
 
-    it('filters out nested tool events', () => {
+    it('renders all events including deeply nested tool events', () => {
       const events = [
         toolStartEvent,
         nestedToolEvent,
@@ -131,7 +136,7 @@ describe('ToolLog', () => {
       ];
       const { container } = render(<ToolLog events={events} />);
       const items = container.querySelectorAll('.tool-log-item');
-      expect(items).toHaveLength(1);
+      expect(items).toHaveLength(3);
     });
 
     it('shows multiple root-level events', () => {
@@ -285,13 +290,15 @@ describe('ToolLog', () => {
     });
 
     it('handles agent_start events', () => {
-      render(<ToolLog events={[agentStartEvent]} />);
-      expect(screen.getByText(/Agent: code_agent/)).toBeInTheDocument();
+      const { container } = render(<ToolLog events={[agentStartEvent]} />);
+      const label = container.querySelector('.tool-log-label');
+      expect(label?.textContent).toMatch(/Agent: code_agent/);
     });
 
     it('handles agent_stop events', () => {
-      render(<ToolLog events={[agentStopEvent]} />);
-      expect(screen.getByText(/Agent: code_agent/)).toBeInTheDocument();
+      const { container } = render(<ToolLog events={[agentStopEvent]} />);
+      const label = container.querySelector('.tool-log-label');
+      expect(label?.textContent).toMatch(/Agent: code_agent/);
     });
 
     it('handles mixed event types', () => {
@@ -350,12 +357,12 @@ describe('ToolLog', () => {
     });
 
     it('renders correctly when events order changes', () => {
-      const { rerender } = render(<ToolLog events={[toolStartEvent, agentStartEvent]} />);
-      let items = screen.getAllByText(/Bash|Agent/).length;
+      const { rerender, container } = render(<ToolLog events={[toolStartEvent, agentStartEvent]} />);
+      let items = container.querySelectorAll('.tool-log-item').length;
       expect(items).toBe(2);
 
       rerender(<ToolLog events={[agentStartEvent, toolStartEvent]} />);
-      items = screen.getAllByText(/Bash|Agent/).length;
+      items = container.querySelectorAll('.tool-log-item').length;
       expect(items).toBe(2);
     });
 
