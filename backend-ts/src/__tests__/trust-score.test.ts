@@ -84,8 +84,8 @@ describe("Trust Score Tests", () => {
       expect(summary.files_created).toContain("/path/to/new-file.ts");
       expect(summary.files_touched).toContain("/path/to/new-file.ts");
       expect(summary.files_touched).toContain("/path/to/existing.ts");
-      expect(summary.files_touched).toContain("/path/to/read.ts");
-      expect(summary.files_touched.length).toBe(3);
+      expect(summary.files_touched).not.toContain("/path/to/read.ts");
+      expect(summary.files_touched.length).toBe(2);
       expect(summary.files_written).toContain("/path/to/new-file.ts");
       expect(summary.files_written).toContain("/path/to/existing.ts");
     });

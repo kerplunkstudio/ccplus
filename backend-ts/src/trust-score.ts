@@ -117,13 +117,9 @@ export function computeSummary(
     if (tool.tool_name === "Write") {
       const filePath = extractFilePath(params);
       if (filePath) { filesCreated.add(filePath); filesTouched.add(filePath); filesWritten.add(filePath); }
-    } else if (tool.tool_name === "Edit" || tool.tool_name === "Read") {
+    } else if (tool.tool_name === "Edit") {
       const filePath = extractFilePath(params);
-      if (filePath) filesTouched.add(filePath);
-      if (tool.tool_name === "Edit" && filePath) filesWritten.add(filePath);
-    } else if (tool.tool_name === "Glob" || tool.tool_name === "Grep") {
-      const filePath = extractFilePath(params);
-      if (filePath) filesTouched.add(filePath);
+      if (filePath) { filesTouched.add(filePath); filesWritten.add(filePath); }
     }
 
     if (tool.tool_name === "Bash" && params.command && typeof params.command === "string") {
