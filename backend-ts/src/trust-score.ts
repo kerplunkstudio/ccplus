@@ -174,22 +174,67 @@ export function computeSummary(
 
 export function computeFlags(summary: TrustSummary, tools: SessionToolData[]): TrustFlag[] {
   const flags: TrustFlag[] = [];
+  const seenMessages = new Map<string, { count: number; toolNames: Set<string> }>();
 
   for (const tool of tools) {
     const params = tool.parameters ?? "";
 
     if (params.includes(".env")) {
-      flags.push({ severity: "critical", message: "Access to .env file detected", detail: `Tool: ${tool.tool_name}` });
+      const message = "Access to .env file detected";
+      if (!seenMessages.has(message)) {
+        seenMessages.set(message, { count: 0, toolNames: new Set() });
+      }
+      const entry = seenMessages.get(message)!;
+      entry.count++;
+      entry.toolNames.add(tool.tool_name);
     }
     if (tool.tool_name === "Bash" && params.includes("sudo")) {
-      flags.push({ severity: "critical", message: "sudo command detected", detail: "Elevated privileges used" });
+      const message = "sudo command detected";
+      if (!seenMessages.has(message)) {
+        seenMessages.set(message, { count: 0, toolNames: new Set() });
+      }
+      const entry = seenMessages.get(message)!;
+      entry.count++;
+      entry.toolNames.add(tool.tool_name);
     }
     if (tool.tool_name === "Bash" && params.includes("rm -rf")) {
-      flags.push({ severity: "critical", message: "Destructive rm -rf command detected", detail: "Force removal of files/directories" });
+      const message = "Destructive rm -rf command detected";
+      if (!seenMessages.has(message)) {
+        seenMessages.set(message, { count: 0, toolNames: new Set() });
+      }
+      const entry = seenMessages.get(message)!;
+      entry.count++;
+      entry.toolNames.add(tool.tool_name);
     }
     if (tool.tool_name === "Bash" && params.includes("chmod 777")) {
-      flags.push({ severity: "warning", message: "chmod 777 detected", detail: "Overly permissive file permissions" });
+      const message = "chmod 777 detected";
+      if (!seenMessages.has(message)) {
+        seenMessages.set(message, { count: 0, toolNames: new Set() });
+      }
+      const entry = seenMessages.get(message)!;
+      entry.count++;
+      entry.toolNames.add(tool.tool_name);
     }
+  }
+
+  // Convert aggregated flags to TrustFlag objects
+  for (const [message, { count, toolNames }] of seenMessages) {
+    const toolList = Array.from(toolNames).join(", ");
+    const uniqueToolCount = toolNames.size;
+    let severity: "info" | "warning" | "critical" = "critical";
+    let detail: string;
+
+    if (uniqueToolCount > 1) {
+      detail = `${uniqueToolCount} tools: ${toolList}`;
+    } else {
+      detail = `Tools: ${toolList}`;
+    }
+
+    if (message === "chmod 777 detected") {
+      severity = "warning";
+    }
+
+    flags.push({ severity, message, detail });
   }
 
   if (summary.files_deleted.length > 5) {
