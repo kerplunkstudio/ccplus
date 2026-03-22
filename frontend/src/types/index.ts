@@ -274,6 +274,7 @@ export interface TrustDimensions {
 export interface TrustSummary {
   files_touched: string[];
   files_created: string[];
+  files_written: string[];
   files_deleted: string[];
   tests_run: number;
   tests_passed: number;
