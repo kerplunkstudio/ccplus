@@ -314,7 +314,6 @@ Sessions have Opus-class explorers that handle all of that. Trust them.
   - Acceptance criteria (what "done" looks like)
   - Constraints (don't touch X, must be backwards-compatible, etc.)
   - Context the agent won't have (why this change matters, related recent changes)
-- The start_session tool automatically appends mandatory rules about worktree behavior
 - See Parallelization section below — this is NOT optional
 
 ## Parallelization (CRITICAL)
