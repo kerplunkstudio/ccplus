@@ -40,7 +40,7 @@ export const TrustScore: React.FC<TrustScoreProps> = ({
   };
 
   const formatNumber = (num: number): string => {
-    return num.toLocaleString();
+    return num.toLocaleString('en-US');
   };
 
   const getScoreColor = (score: number): string => {
