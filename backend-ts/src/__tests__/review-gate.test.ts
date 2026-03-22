@@ -190,6 +190,75 @@ describe("Code Review Gate", () => {
     expect(result).not.toHaveProperty("hookSpecificOutput");
   });
 
+  it("allows git commit when only .md files were written (no code-reviewer needed)", async () => {
+    const writeHook = hooks.PreToolUse[0].hooks[0];
+    await writeHook(
+      {
+        tool_name: "Write",
+        tool_use_id: "tu_write_1",
+        tool_input: { file_path: "/docs/plans/my-plan.md", content: "# Plan" },
+      },
+      "tu_write_1"
+    );
+    await writeHook(
+      {
+        tool_name: "Edit",
+        tool_use_id: "tu_edit_1",
+        tool_input: { file_path: "/docs/README.MD", old_string: "old", new_string: "new" },
+      },
+      "tu_edit_1"
+    );
+
+    const bashHook = hooks.PreToolUse[0].hooks[0];
+    const result = await bashHook(
+      {
+        tool_name: "Bash",
+        tool_use_id: "tu_bash_1",
+        tool_input: { command: 'git commit -m "docs: update plan"' },
+      },
+      "tu_bash_1"
+    );
+
+    expect(result).not.toHaveProperty("hookSpecificOutput");
+  });
+
+  it("blocks git commit when .ts and .md files were written without code-reviewer", async () => {
+    const writeHook = hooks.PreToolUse[0].hooks[0];
+    await writeHook(
+      {
+        tool_name: "Write",
+        tool_use_id: "tu_write_1",
+        tool_input: { file_path: "/src/feature.ts", content: "code" },
+      },
+      "tu_write_1"
+    );
+    await writeHook(
+      {
+        tool_name: "Write",
+        tool_use_id: "tu_write_2",
+        tool_input: { file_path: "/docs/notes.md", content: "# Notes" },
+      },
+      "tu_write_2"
+    );
+
+    const bashHook = hooks.PreToolUse[0].hooks[0];
+    const result = await bashHook(
+      {
+        tool_name: "Bash",
+        tool_use_id: "tu_bash_1",
+        tool_input: { command: 'git commit -m "feat: add feature"' },
+      },
+      "tu_bash_1"
+    );
+
+    expect(result).toHaveProperty("hookSpecificOutput");
+    expect(result.hookSpecificOutput).toMatchObject({
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: expect.stringContaining("Code review required"),
+    });
+  });
+
   it("blocks git commit --amend with writes but no review", async () => {
     // 1. Simulate Write tool
     const writeHook = hooks.PreToolUse[0].hooks[0];

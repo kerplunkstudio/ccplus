@@ -28,7 +28,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
   const detectedDevServerUrls = new Set<string>();
-  let hasWriteOperations = false;
+  const writtenFiles = new Set<string>();
   let codeReviewerInvoked = false;
 
   // Helper to emit tool events and set flag for message splitting
@@ -51,10 +51,11 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
 
     // Track write operations for code review gate
     if (toolName === 'Write' || toolName === 'Edit') {
-      if (hasWriteOperations && codeReviewerInvoked) {
+      if (writtenFiles.size > 0 && codeReviewerInvoked) {
         codeReviewerInvoked = false;
       }
-      hasWriteOperations = true;
+      const filePath = String((toolParams as Record<string, unknown>).file_path ?? '');
+      if (filePath) writtenFiles.add(filePath);
     }
 
     // Code review gate: block git commit if writes occurred without code-reviewer
@@ -63,7 +64,9 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
         const command = String((toolParams as Record<string, unknown>).command ?? '');
         const GIT_COMMIT_RE = /\bgit\s+commit\b/;
         if (GIT_COMMIT_RE.test(command)) {
-          if (hasWriteOperations && !codeReviewerInvoked) {
+          const allMdOnly = writtenFiles.size > 0 &&
+            Array.from(writtenFiles).every(f => f.toLowerCase().endsWith('.md'));
+          if (writtenFiles.size > 0 && !codeReviewerInvoked && !allMdOnly) {
             return {
               hookSpecificOutput: {
                 hookEventName: 'PreToolUse' as const,
@@ -72,7 +75,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
               },
             };
           }
-          hasWriteOperations = false;
+          writtenFiles.clear();
           codeReviewerInvoked = false;
         }
       }
