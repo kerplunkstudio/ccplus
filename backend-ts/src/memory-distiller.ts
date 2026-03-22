@@ -142,6 +142,9 @@ export async function distillSession(
   workspace: string,
   options?: { preCompaction?: boolean }
 ): Promise<void> {
+  const distillStartMs = performance.now();
+  const trigger = options?.preCompaction ? 'pre-compaction' : 'post-completion';
+
   try {
     // Check debounce
     if (!shouldDistill(sessionId)) {
@@ -281,8 +284,11 @@ export async function distillSession(
 
     // Store all memories concurrently
     const results = await Promise.allSettled(storePromises);
+    let successCount = 0;
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
+      if (result.status === 'fulfilled') {
+        successCount++;
+      } else {
         log.warn('Failed to store memory sub-item', {
           sessionId,
           index,
@@ -291,14 +297,24 @@ export async function distillSession(
       }
     });
 
+    const durationMs = Math.round(performance.now() - distillStartMs);
+    try {
+      database.recordDistillation(sessionId, trigger, successCount > 0, successCount, durationMs, null);
+    } catch { /* never throw from observability */ }
+
     log.info("Session distilled to memory", {
       sessionId,
       messageCount: conversations.length,
       toolCount: toolEvents.length,
       preCompaction: options?.preCompaction ?? false,
       memoryTypes: storePromises.length,
+      successCount,
     });
   } catch (error) {
+    const durationMs = Math.round(performance.now() - distillStartMs);
+    try {
+      database.recordDistillation(sessionId, trigger, false, 0, durationMs, error instanceof Error ? error.message : String(error));
+    } catch { /* never throw from observability */ }
     // Never throw - log and return silently
     log.error("Failed to distill session", {
       sessionId,

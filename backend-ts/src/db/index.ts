@@ -12,3 +12,4 @@ export * from "./insights.js";
 export * from "./import.js";
 export * from "./trust.js";
 export * from "./utility.js";
+export * from "./memory-observability.js";

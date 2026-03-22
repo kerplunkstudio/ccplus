@@ -3,6 +3,8 @@ import { execSync } from "child_process";
 import * as config from "./config.js";
 import Database from "better-sqlite3";
 import path from "path";
+import { isMemoryAvailable } from "./memory-client.js";
+import * as database from "./database.js";
 
 export interface CheckResult {
   status: "ok" | "warning" | "error";
@@ -566,6 +568,69 @@ export function checkConfigWatcher(envPath: string): CheckResult {
       message: `Could not check .env file: ${String(error)}`,
     };
   }
+}
+
+/**
+ * Check memory system health (availability and recent statistics)
+ */
+export function checkMemoryHealth(): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  // Check if memory is enabled
+  if (!config.MEMORY_ENABLED) {
+    results.push({
+      status: "ok",
+      message: "Memory system disabled (MEMORY_ENABLED=false)",
+    });
+    return results;
+  }
+
+  // Check MCP connectivity
+  const available = isMemoryAvailable();
+  if (!available) {
+    results.push({
+      status: "warning",
+      message: "Memory server not configured or binary not found",
+    });
+    return results;
+  }
+
+  results.push({
+    status: "ok",
+    message: "Memory server configured",
+  });
+
+  // Check distillation stats (last 24 hours)
+  try {
+    const stats = database.getDistillationStats(24);
+    const successRate = stats.total > 0 ? Math.round((stats.successes / stats.total) * 100) : 0;
+
+    if (stats.total === 0) {
+      results.push({
+        status: "ok",
+        message: "No distillation events in last 24h",
+      });
+    } else {
+      results.push({
+        status: "ok",
+        message: `Distillation stats (24h): ${stats.total} total, ${stats.successes} success (${successRate}%), avg ${stats.avgDurationMs}ms`,
+      });
+
+      if (stats.failures > 0) {
+        results.push({
+          status: "warning",
+          message: `${stats.failures} distillation failure(s) in last 24h`,
+        });
+      }
+    }
+  } catch (error) {
+    results.push({
+      status: "warning",
+      message: `Could not check distillation stats: ${String(error)}`,
+    });
+  }
+
+  return results;
 }
 
 /**

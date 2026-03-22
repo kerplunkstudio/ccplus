@@ -3,6 +3,7 @@ import { discoverSkills } from "./skills.js";
 import * as config from "../config.js";
 import { searchMemories } from '../memory-client.js';
 import { log } from "../logger.js";
+import * as database from '../database.js';
 
 // System prompt appended to every SDK session
 const CCPLUS_SYSTEM_PROMPT_BASE = `
@@ -73,12 +74,20 @@ export async function buildSystemPrompt(projectPath?: string, userPrompt?: strin
   }
 
   // Inject relevant memories from knowledge base
-  if (config.MEMORY_ENABLED && userPrompt) {
+  if (config.MEMORY_ENABLED && userPrompt && sessionId) {
+    const memStartMs = performance.now();
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';
       const searchQuery = userPrompt; // Use full prompt for better retrieval
       const projectTag = projectName ? `project:${projectName}` : undefined;
       const memoryText = await searchMemories(searchQuery, config.MEMORY_MAX_RESULTS, projectTag);
+
+      const memDurationMs = Math.round(performance.now() - memStartMs);
+      const memoryCount = memoryText ? memoryText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length : 0;
+
+      try {
+        database.recordDistillation(sessionId, 'system-prompt-injection', !!memoryText, memoryCount, memDurationMs, null);
+      } catch { /* never throw from observability */ }
 
       if (memoryText) {
         // Truncate to max inject size to prevent context bloat
@@ -88,6 +97,10 @@ export async function buildSystemPrompt(projectPath?: string, userPrompt?: strin
         prompt += `\n\n## Prior Knowledge\n${truncated}`;
       }
     } catch (error) {
+      const memDurationMs = Math.round(performance.now() - memStartMs);
+      try {
+        database.recordDistillation(sessionId, 'system-prompt-injection', false, 0, memDurationMs, error instanceof Error ? error.message : String(error));
+      } catch { /* never throw from observability */ }
       log.warn('Failed to inject memories into system prompt', { error: String(error) });
     }
   }

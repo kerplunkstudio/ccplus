@@ -218,6 +218,24 @@ CREATE TABLE IF NOT EXISTS imported_sessions (
 CREATE INDEX IF NOT EXISTS idx_imported_sessions_id ON imported_sessions(jsonl_session_id);
 `,
   },
+  {
+    version: 9,
+    sql: `
+-- Migration v9: Memory observability layer
+CREATE TABLE IF NOT EXISTS memory_distillations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  success INTEGER NOT NULL DEFAULT 0,
+  memory_count INTEGER NOT NULL DEFAULT 0,
+  duration_ms INTEGER,
+  error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_distillations_session ON memory_distillations(session_id);
+CREATE INDEX IF NOT EXISTS idx_distillations_created ON memory_distillations(created_at);
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

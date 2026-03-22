@@ -5,6 +5,7 @@ import * as memoryDistiller from "../memory-distiller.js";
 vi.mock("../database.js", () => ({
   getConversationHistory: vi.fn(),
   getToolEvents: vi.fn(),
+  recordDistillation: vi.fn(),
 }));
 
 vi.mock("../memory-client.js", () => ({
@@ -193,6 +194,16 @@ describe("Memory Distiller Tests", () => {
 
       // Now stores task-summary + files-modified
       expect(memoryClient.storeMemory).toHaveBeenCalledTimes(2);
+
+      // Verify recordDistillation was called
+      expect(database.recordDistillation).toHaveBeenCalledWith(
+        sessionId,
+        'post-completion',
+        true,
+        expect.any(Number),
+        expect.any(Number),
+        null
+      );
 
       // Check files-modified memory
       const filesCall = vi.mocked(memoryClient.storeMemory).mock.calls.find(

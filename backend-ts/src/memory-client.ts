@@ -321,6 +321,8 @@ async function initialize(): Promise<boolean> {
  * Returns the raw text from the MCP response (human-readable format)
  */
 export async function searchMemories(query: string, limit?: number, tags?: string): Promise<string> {
+  const startMs = performance.now();
+
   if (isCircuitOpen()) {
     log.debug('Memory circuit breaker is open, skipping search');
     return '';
@@ -369,19 +371,22 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
       }
     }
 
-    // Log observability data
-    if (semanticText) {
-      const resultCount = semanticText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length;
-      log.debug('Memory search', {
-        query: query.substring(0, 50),
-        resultCount,
-      });
-    }
+    // Log observability data with timing
+    const durationMs = Math.round(performance.now() - startMs);
+    const resultCount = semanticText ? semanticText.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length : 0;
+    log.debug('Memory search', {
+      query: query.substring(0, 50),
+      resultCount,
+      durationMs,
+      tags,
+      success: true,
+    });
 
     recordSuccess();
     return semanticText;
   } catch (error) {
-    log.error('Memory search failed', { error: String(error), query });
+    const durationMs = Math.round(performance.now() - startMs);
+    log.error('Memory search failed', { error: String(error), query, durationMs, success: false });
     recordFailure();
     return '';
   }
@@ -395,6 +400,8 @@ export async function storeMemory(
   tags: string,
   metadata?: Record<string, string>
 ): Promise<string | null> {
+  const startMs = performance.now();
+
   if (isCircuitOpen()) {
     log.debug('Memory circuit breaker is open, skipping store');
     return null;
@@ -434,16 +441,21 @@ export async function storeMemory(
       if (Array.isArray(contentArray) && contentArray.length > 0) {
         const firstItem = contentArray[0];
         if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
+          const durationMs = Math.round(performance.now() - startMs);
+          log.debug('Memory store', { durationMs, success: true });
           recordSuccess();
           return (firstItem as { text: string }).text;
         }
       }
     }
 
+    const durationMs = Math.round(performance.now() - startMs);
+    log.debug('Memory store', { durationMs, success: true });
     recordSuccess();
     return null;
   } catch (error) {
-    log.error('Memory store failed', { error: String(error) });
+    const durationMs = Math.round(performance.now() - startMs);
+    log.error('Memory store failed', { error: String(error), durationMs, success: false });
     recordFailure();
     return null;
   }

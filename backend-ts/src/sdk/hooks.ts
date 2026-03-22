@@ -464,6 +464,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
 
     let memoryContext = '';
     if (config.MEMORY_ENABLED) {
+      const memStartMs = performance.now();
       try {
         const session = sessions.get(sessionId);
         const toolInput = input.tool_input as Record<string, unknown> | undefined;
@@ -510,6 +511,13 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
 
           // Combine results - agent-specific first, then project-wide
           const combinedMemories = results.filter(r => r.length > 0).join('\n\n---\n\n');
+          const durationMs = Math.round(performance.now() - memStartMs);
+          const resultCount = combinedMemories ? combinedMemories.split('\n').filter(l => l.trim() && !l.startsWith('#') && !l.startsWith('---')).length : 0;
+
+          try {
+            database.recordDistillation(sessionId, 'subagent-start', true, resultCount, durationMs, null);
+          } catch { /* never throw from observability */ }
+
           if (combinedMemories) {
             const agentSpecificResult = agentSearchIndex >= 0 ? results[agentSearchIndex] : '';
             const projectResult = projectSearchIndex >= 0 ? results[projectSearchIndex] : '';
@@ -526,6 +534,10 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
           }
         }
       } catch (error) {
+        const durationMs = Math.round(performance.now() - memStartMs);
+        try {
+          database.recordDistillation(sessionId, 'subagent-start', false, 0, durationMs, String(error));
+        } catch { /* never throw from observability */ }
         log.warn('Memory injection into subagent failed', { error: String(error) });
       }
     }
@@ -557,6 +569,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
 
         // Store agent-specific memory with agent namespace tag
         if (config.MEMORY_DISTILL_ENABLED) {
+          const memStartMs = performance.now();
           const agentType = (input.agent_type as string) ?? 'agent';
           const lastMessage = input.last_assistant_message as string | undefined;
           const toolInput = input.tool_input as Record<string, unknown> | undefined;
@@ -589,9 +602,20 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
                   agent_id: agentId,
                   agent_type: agentType,
                 }
-              ).catch(error => {
-                log.debug('Agent memory storage failed', { error: String(error), agentType });
-              });
+              )
+                .then(() => {
+                  const durationMs = Math.round(performance.now() - memStartMs);
+                  try {
+                    database.recordDistillation(sessionId, 'subagent-stop', true, 1, durationMs, null);
+                  } catch { /* never throw from observability */ }
+                })
+                .catch(error => {
+                  const durationMs = Math.round(performance.now() - memStartMs);
+                  try {
+                    database.recordDistillation(sessionId, 'subagent-stop', false, 0, durationMs, String(error));
+                  } catch { /* never throw from observability */ }
+                  log.debug('Agent memory storage failed', { error: String(error), agentType });
+                });
             }
           }
         }
