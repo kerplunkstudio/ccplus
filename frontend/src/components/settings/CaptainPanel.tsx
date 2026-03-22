@@ -1,3 +1,4 @@
+import './settings-shared.css'
 import './CaptainPanel.css'
 import SettingsToggleRow from './SettingsToggleRow'
 

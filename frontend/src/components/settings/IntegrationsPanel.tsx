@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useId, KeyboardEvent } from 'react';
+import './settings-shared.css';
 import './IntegrationsPanel.css';
 
 interface IntegrationsPanelProps {
@@ -59,11 +60,7 @@ function TokenField({ tokenSet, onSave, helperText, labelId }: TokenFieldProps) 
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      if (tokenSet) {
-        handleSave();
-      } else if (draft.trim()) {
-        onSave(draft.trim());
-      }
+      handleSave();
     }
     if (e.key === 'Escape' && tokenSet) {
       handleCancel();

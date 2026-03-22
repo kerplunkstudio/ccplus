@@ -1,3 +1,4 @@
+import './settings-shared.css'
 import './MemoryPanel.css'
 
 interface MemoryPanelProps {

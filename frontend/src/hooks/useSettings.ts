@@ -61,27 +61,56 @@ export function useSettings() {
   }, []);
 
   const updateSetting = useCallback(async (category: string, key: string, value: any) => {
-    // Optimistically update local state (immutable pattern)
-    setState((prev) => ({
-      ...prev,
-      config: {
-        ...prev.config,
-        [category]: {
-          ...(prev.config?.[category] || {}),
-          [key]: value,
+    // Helper to expand dot-notation keys into nested objects
+    function expandDotKey(key: string, value: unknown): Record<string, unknown> {
+      const parts = key.split('.');
+      if (parts.length === 1) return { [key]: value };
+      let result: Record<string, unknown> = { [parts[parts.length - 1]]: value };
+      for (let i = parts.length - 2; i >= 0; i--) {
+        result = { [parts[i]]: result };
+      }
+      return result;
+    }
+
+    // Helper to deep merge two objects
+    function deepMerge(target: any, source: any): any {
+      const output = { ...target };
+      for (const key in source) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          output[key] = deepMerge(target[key] || {}, source[key]);
+        } else {
+          output[key] = source[key];
+        }
+      }
+      return output;
+    }
+
+    // Capture previous config for rollback
+    let prevConfig: Record<string, any> | null = null;
+
+    // Optimistically update local state (immutable pattern with deep merge)
+    setState((prev) => {
+      prevConfig = prev.config;
+      const expanded = expandDotKey(key, value);
+      const newCategoryData = deepMerge(prev.config?.[category] || {}, expanded);
+
+      return {
+        ...prev,
+        config: {
+          ...prev.config,
+          [category]: newCategoryData,
         },
-      },
-    }));
+      };
+    });
 
     // POST to backend
     try {
+      const expanded = expandDotKey(key, value);
       const response = await fetch(`${SOCKET_URL}/api/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          [category]: {
-            [key]: value,
-          },
+          [category]: expanded,
         }),
       });
 
@@ -98,15 +127,19 @@ export function useSettings() {
         // Endpoint not yet implemented - silently succeed (optimistic update already applied)
         // No error shown to user
       } else {
+        // Rollback to previous config on error
         const errorText = await response.text();
         setState((prev) => ({
           ...prev,
+          config: prevConfig,
           error: `Failed to update setting: ${errorText}`,
         }));
       }
     } catch (err) {
+      // Rollback to previous config on error
       setState((prev) => ({
         ...prev,
+        config: prevConfig,
         error: `Network error: ${err instanceof Error ? err.message : String(err)}`,
       }));
     }

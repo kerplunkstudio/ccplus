@@ -1,3 +1,4 @@
+import './settings-shared.css'
 import './WorkflowPanel.css'
 import SettingsToggleRow from './SettingsToggleRow'
 

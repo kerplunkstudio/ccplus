@@ -1,3 +1,4 @@
+import './settings-shared.css'
 import './ModelsPanel.css';
 
 interface ModelsPanelProps {
@@ -120,7 +121,7 @@ export default function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
     {
       label: 'code_agent',
       description: 'Executes code modifications and file operations.',
-      value: config.agent_overrides.code_agent ?? 'inherit',
+      value: config.agent_overrides?.code_agent ?? 'inherit',
       options: OVERRIDE_MODELS,
       configKey: 'agent_overrides.code_agent',
       onUpdate,
@@ -129,7 +130,7 @@ export default function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
     {
       label: 'explore',
       description: 'Fast codebase exploration and search agent.',
-      value: config.agent_overrides.explore ?? 'inherit',
+      value: config.agent_overrides?.explore ?? 'inherit',
       options: OVERRIDE_MODELS,
       configKey: 'agent_overrides.explore',
       onUpdate,
@@ -138,7 +139,7 @@ export default function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
     {
       label: 'code-reviewer',
       description: 'Code quality, security, and maintainability review.',
-      value: config.agent_overrides.code_reviewer ?? 'inherit',
+      value: config.agent_overrides?.code_reviewer ?? 'inherit',
       options: OVERRIDE_MODELS,
       configKey: 'agent_overrides.code_reviewer',
       onUpdate,
@@ -147,7 +148,7 @@ export default function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
     {
       label: 'orchestrator',
       description: 'Coordinates multi-agent workflows.',
-      value: config.agent_overrides.orchestrator ?? 'inherit',
+      value: config.agent_overrides?.orchestrator ?? 'inherit',
       options: OVERRIDE_MODELS,
       configKey: 'agent_overrides.orchestrator',
       onUpdate,

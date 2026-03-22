@@ -1,3 +1,4 @@
+import './settings-shared.css'
 import './SessionsPanel.css'
 
 interface SessionsPanelProps {

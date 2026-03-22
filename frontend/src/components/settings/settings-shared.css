@@ -1,17 +1,20 @@
 /* Shared styles for settings panels */
 
+/* Panel structure */
 .settings-panel {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
+.settings-panel-header,
 .panel-header {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+.settings-panel-title,
 .panel-title {
   margin: 0;
   font-size: 18px;
@@ -19,27 +22,53 @@
   color: var(--text-primary);
 }
 
+.settings-panel-description,
 .panel-description {
   margin: 0;
   font-size: 13px;
   color: var(--text-muted);
 }
 
+/* Row containers */
+.settings-rows,
 .settings-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
+.settings-list {
+  gap: 2px;
+  border: none;
+  overflow: visible;
+}
+
+/* Individual row */
+.settings-row,
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border-radius: 8px;
+  gap: 24px;
+  padding: 16px 20px;
   background: var(--bg-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-row:last-child,
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-row {
+  padding: 14px 16px;
+  gap: 16px;
+  border-radius: 8px;
   transition: opacity 0.2s;
+  border-bottom: none;
 }
 
 .setting-row--column {
@@ -48,31 +77,44 @@
   gap: 8px;
 }
 
+.settings-row--disabled,
 .setting-row--disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   pointer-events: none;
 }
 
+/* Row label/info */
+.settings-row-label,
 .setting-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   flex: 1;
   min-width: 0;
+}
+
+.setting-info {
+  gap: 2px;
+}
+
+.settings-row-name,
+.setting-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .setting-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
 }
 
+.settings-row-desc,
 .setting-description {
   font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .restart-badge {
@@ -81,38 +123,65 @@
   color: var(--warning, #f59e0b);
 }
 
-/* Toggle switch */
-.toggle {
+/* Row control */
+.settings-row-control {
   flex-shrink: 0;
+}
+
+/* Toggle switch */
+.settings-toggle,
+.toggle {
   position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggle {
   width: 40px;
   height: 22px;
   border-radius: 11px;
-  border: none;
   background: var(--toggle-track-off, #444);
-  cursor: pointer;
-  transition: background 0.2s;
-  padding: 0;
 }
 
+.settings-toggle--on,
 .toggle--on {
   background: var(--accent);
 }
 
+.settings-toggle:disabled,
 .toggle:disabled {
   cursor: not-allowed;
 }
 
+.settings-toggle-thumb,
 .toggle-thumb {
   position: absolute;
   top: 3px;
   left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  display: block;
+  pointer-events: none;
+}
+
+.toggle-thumb {
   width: 16px;
   height: 16px;
-  border-radius: 50%;
   background: var(--toggle-thumb, #fff);
-  transition: transform 0.2s;
-  pointer-events: none;
+}
+
+.settings-toggle--on .settings-toggle-thumb {
+  transform: translateX(20px);
 }
 
 .toggle--on .toggle-thumb {
@@ -120,23 +189,123 @@
 }
 
 /* Text input */
+.settings-text-input,
 .setting-input {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid #333;
   background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
   color: var(--text-primary);
   font-size: 13px;
-  box-sizing: border-box;
+  padding: 7px 10px;
+  width: 240px;
   outline: none;
   transition: border-color 0.15s;
 }
 
+.setting-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  box-sizing: border-box;
+}
+
+.settings-text-input:focus,
 .setting-input:focus {
   border-color: var(--accent);
 }
 
+.settings-text-input::placeholder,
 .setting-input::placeholder {
   color: var(--text-muted);
+}
+
+/* Select dropdown */
+.setting-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 7px 28px 7px 10px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s ease;
+  min-width: 210px;
+}
+
+.setting-select:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.setting-select:focus {
+  border-color: var(--accent);
+}
+
+/* Number input with +/- buttons */
+.settings-number-input {
+  display: flex;
+  align-items: center;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.settings-number-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-number-btn:first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-number-btn:last-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-number-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.settings-number-btn:disabled {
+  cursor: not-allowed;
+}
+
+.settings-number-field {
+  width: 80px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 7px 4px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.settings-number-field::-webkit-inner-spin-button,
+.settings-number-field::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.settings-number-field:disabled {
+  cursor: not-allowed;
 }
