@@ -22,7 +22,8 @@ const mockTrustMetrics: TrustMetrics = {
     agents_spawned: 3,
     files_touched: ['src/App.tsx', 'src/components/Panel.tsx'],
     files_created: ['src/new.tsx'],
-    files_deleted: []
+    files_deleted: [],
+    files_written: ['src/new.tsx']
   },
   flags: [
     {
