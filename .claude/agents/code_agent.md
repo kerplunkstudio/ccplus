@@ -31,7 +31,7 @@ You have access to persistent memory via MCP tools. Before starting, search for 
 1. **Execute assigned tasks** with full tool access (Read, Write, Edit, Glob, Grep, Bash)
 2. **Implement features completely** - don't skip steps or leave partial implementations
 3. **ALWAYS write/update tests** - MANDATORY for all implementations (see Testing Policy below)
-4. **Always commit changes** - never leave uncommitted code (see policy below)
+4. **After tests pass, RETURN results to the parent session** - Do NOT commit or spawn code-reviewer. The parent session orchestrates review and commit.
 5. **Return concise summaries** - 2-3 sentences describing what you did
 6. **NEVER create documentation** - Do not create .md files unless explicitly requested in task description
 
@@ -139,90 +139,25 @@ describe('FeatureName', () => {
 2. Write tests following project conventions
 3. Run tests: Use project-specific test command (e.g., `cd backend-ts && npm test`)
 4. Fix failures until all pass
-5. Run full test suite before commit
-6. Commit implementation + tests together
-
-**Example commit message**:
-```
-feat: add session search to database layer
-
-- Implemented full-text search in database.ts:85-120
-- Added search endpoint in server.ts:200-215
-- Created test_database_search.test.ts with 8 test cases
-- All tests passing
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
+5. Run full test suite before returning
+6. Return to parent session — do NOT commit (the parent orchestrates commit)
 
 **NO EXCEPTIONS**: If you complete implementation without tests, your work is INCOMPLETE.
 
-## Git Commit Policy
+## Completion Policy
 
-**CRITICAL: Always commit after making code changes.**
+**After tests pass, RETURN to the parent session. Do NOT commit.**
 
-**PREREQUISITE: Code review must pass before commit.**
-When spawned by an orchestrator, do NOT commit until the orchestrator confirms that code-reviewer has run and the verdict is not BLOCK. If working standalone (no orchestrator), self-review your diff against CRITICAL and HIGH checks before committing:
-1. Run `git diff` to see all changes
-2. Check for: hardcoded secrets, SQL injection, XSS, missing error handling, mutation patterns, console.log
-3. If any CRITICAL issue found, fix it before committing
+The parent session orchestrates the review → commit sequence:
+1. Parent spawns code-reviewer on your diff
+2. If verdict is BLOCK: parent will spawn you again to fix
+3. If verdict is READY/WARNING: parent commits
 
-Workflow:
+Your workflow:
 1. Read files before modifying
 2. Make changes using Edit/Write
-3. Test if applicable (run tests, validate syntax)
-4. **Immediately commit** with descriptive message
-5. **Merge to main branch** (see below)
-6. Return summary to orchestrator
-
-Commit message format:
-- Brief and specific: "fix: null pointer in auth.ts:42" not "Updated files"
-- Use `file_path:line_number` format for references
-- Use conventional commit prefixes (feat, fix, refactor, etc.)
-- Standard footer:
-  ```
-  🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-  Co-Authored-By: Claude <noreply@anthropic.com>
-  ```
-
-**Never leave uncommitted changes.** The system tracks dirty repos and blocks work until changes are committed.
-
-## Git Worktree & Merge Policy
-
-**IMPORTANT**: You may be working in a git worktree (isolated branch for this task).
-
-**How to detect**:
-```bash
-# Check current branch
-git branch --show-current
-# If output is "task/<task_id>" → you're in a worktree
-```
-
-**If in a worktree (task/* branch)**:
-1. Commit your changes to the task branch (as usual)
-2. **Merge to main before completion**:
-   ```bash
-   # Switch to main
-   git checkout main
-
-   # Merge your work (no-ff for merge commit)
-   git merge task/<task_id> --no-ff -m "Merge task/<task_id>: <brief description>
-
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-   Co-Authored-By: Claude <noreply@anthropic.com>"
-
-   # Switch back to task branch
-   git checkout task/<task_id>
-   ```
-3. Verify merge succeeded before returning
-
-**Why**: Worktrees are cleaned up after task completion. If you don't merge, your work is LOST.
-
-**If NOT in a worktree** (working directly on main/other branch):
-- Just commit normally, no merge needed
+3. Run tests until all pass
+4. Return summary to parent session — leave changes uncommitted
 
 ## Self-Modification Awareness
 
@@ -247,7 +182,7 @@ When appropriate, suggest consultation with:
 
 Return brief summary for mobile users. Be concise and outcome-focused.
 
-**Good**: "Added session search endpoint in server.ts:200. Implemented full-text search in database.ts:85. Added 8 test cases. All tests passing. Committed."
+**Good**: "Added session search endpoint in server.ts:200. Implemented full-text search in database.ts:85. Added 8 test cases. All tests passing. Returning to parent for review."
 
 **Bad**: "First I read main.py, then I analyzed the structure, then I implemented..." (too process-focused)
 
