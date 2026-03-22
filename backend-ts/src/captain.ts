@@ -115,7 +115,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
       // start_session - Start a new coding session
       tool(
         "start_session",
-        "Start a new coding session with a specific prompt and workspace. Returns the session_id. Always append these rules to the prompt: 'RULES: Do NOT create branches, PRs, or push. You are in a worktree. Just implement, test, and commit.'",
+        "Start a new coding session with a specific prompt and workspace. Returns the session_id.",
         {
           prompt: z.string().describe("The task prompt for the session"),
           workspace: z.string().describe("Absolute path to the workspace/project directory"),
