@@ -52,37 +52,6 @@
   border-color: color-mix(in oklch, #8b8b8b 20%, transparent);
 }
 
-.tool-row-connector {
-  display: flex;
-  align-items: center;
-  position: relative;
-  width: 12px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.tool-row-line {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 8px;
-  height: 10px;
-  border-left: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  border-bottom-left-radius: 4px;
-}
-
-.tool-row-dot {
-  position: absolute;
-  left: 7px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 50%;
-}
-
 .tool-row-icon {
   display: flex;
   align-items: center;

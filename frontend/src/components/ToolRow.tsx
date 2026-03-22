@@ -69,11 +69,6 @@ export const ToolRow: React.FC<ToolRowProps> = React.memo(({ node, depth, onSele
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && handleClick()}
       >
-        <div className="tool-row-connector">
-          <span className="tool-row-line" />
-          <span className="tool-row-dot" />
-        </div>
-
         <div className="tool-row-icon">
           <ToolIcon toolName={node.tool_name} size={14} />
         </div>
