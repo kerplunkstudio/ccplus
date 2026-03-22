@@ -1,0 +1,142 @@
+/* Shared styles for settings panels */
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.panel-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  transition: opacity 0.2s;
+}
+
+.setting-row--column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.setting-row--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.setting-description {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.restart-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--warning, #f59e0b);
+}
+
+/* Toggle switch */
+.toggle {
+  flex-shrink: 0;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  border: none;
+  background: var(--toggle-track-off, #444);
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.toggle--on {
+  background: var(--accent);
+}
+
+.toggle:disabled {
+  cursor: not-allowed;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--toggle-thumb, #fff);
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+
+.toggle--on .toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* Text input */
+.setting-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.setting-input:focus {
+  border-color: var(--accent);
+}
+
+.setting-input::placeholder {
+  color: var(--text-muted);
+}
