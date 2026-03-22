@@ -1,0 +1,71 @@
+/* Shared panel structure (rows, toggle, text input) lives in SessionsPanel.css */
+
+/* Disabled row state */
+.settings-row--disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Number input control */
+.settings-number-input {
+  display: flex;
+  align-items: center;
+  background: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.settings-number-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-number-btn:first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-number-btn:last-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-number-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.settings-number-btn:disabled {
+  cursor: not-allowed;
+}
+
+.settings-number-field {
+  width: 80px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 7px 4px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.settings-number-field::-webkit-inner-spin-button,
+.settings-number-field::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.settings-number-field:disabled {
+  cursor: not-allowed;
+}
