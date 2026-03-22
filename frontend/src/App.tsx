@@ -8,6 +8,7 @@ import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { MCPPanel } from './components/MCPPanel';
+import { SettingsPage } from './components/SettingsPage';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
 import { TerminalTab } from './components/TerminalTab';
@@ -613,12 +614,14 @@ function AppContent() {
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
   const shouldShowCaptain = activePage === 'captain';
+  const shouldShowSettings = activePage === 'settings';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
     : shouldShowProfile ? 'profile'
     : shouldShowMcp ? 'mcp'
     : shouldShowCaptain ? 'captain'
+    : shouldShowSettings ? 'settings'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
@@ -705,7 +708,7 @@ function AppContent() {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowCaptain || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -720,6 +723,8 @@ function AppContent() {
                 <MCPPanel projectPath={activeProject?.path} />
               ) : shouldShowCaptain ? (
                 <CaptainDashboard socket={socket} onSessionClick={handleFleetSessionClick} />
+              ) : shouldShowSettings ? (
+                <SettingsPage onClose={() => setActivePage(null)} />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard

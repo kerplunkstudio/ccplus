@@ -831,6 +831,17 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <span className="footer-nav-label">Insights</span>
           </button>
           <button
+            className={`footer-nav-item ${activePage === 'settings' ? 'active' : ''}`}
+            onClick={() => onNavigate('settings')}
+            aria-label="Settings"
+          >
+            <svg className="footer-nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 10C9.10457 10 10 9.10457 10 8C10 6.89543 9.10457 6 8 6C6.89543 6 6 6.89543 6 8C6 9.10457 6.89543 10 8 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12.93 8.5C12.86 8.82 12.86 9.18 12.93 9.5L14.04 10.25C14.16 10.33 14.2 10.49 14.13 10.62L13.13 12.38C13.06 12.51 12.9 12.56 12.77 12.5L11.5 11.94C11.22 12.15 10.91 12.32 10.57 12.45L10.4 13.84C10.38 13.98 10.26 14.08 10.12 14.08H8.12C7.98 14.08 7.86 13.98 7.84 13.84L7.67 12.45C7.33 12.32 7.02 12.15 6.74 11.94L5.47 12.5C5.34 12.56 5.18 12.51 5.11 12.38L4.11 10.62C4.04 10.49 4.08 10.33 4.2 10.25L5.31 9.5C5.24 9.18 5.24 8.82 5.31 8.5L4.2 7.75C4.08 7.67 4.04 7.51 4.11 7.38L5.11 5.62C5.18 5.49 5.34 5.44 5.47 5.5L6.74 6.06C7.02 5.85 7.33 5.68 7.67 5.55L7.84 4.16C7.86 4.02 7.98 3.92 8.12 3.92H10.12C10.26 3.92 10.38 4.02 10.4 4.16L10.57 5.55C10.91 5.68 11.22 5.85 11.5 6.06L12.77 5.5C12.9 5.44 13.06 5.49 13.13 5.62L14.13 7.38C14.2 7.51 14.16 7.67 14.04 7.75L12.93 8.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="footer-nav-label">Settings</span>
+          </button>
+          <button
             className={`footer-nav-item ${activePage === 'profile' ? 'active' : ''}`}
             onClick={() => onNavigate('profile')}
             aria-label="Profile"
