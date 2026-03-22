@@ -307,6 +307,101 @@ describe("Trust Score Tests", () => {
       expect(failureFlag).toBeDefined();
       expect(failureFlag?.severity).toBe("warning");
     });
+
+    it("should deduplicate .env flags when multiple tools touch .env", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Read",
+          parameters: JSON.stringify({ file_path: ".env" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+        {
+          tool_name: "Edit",
+          parameters: JSON.stringify({ file_path: ".env", old_string: "a", new_string: "b" }),
+          success: 1,
+          timestamp: "2026-03-20T10:01:00Z",
+        },
+        {
+          tool_name: "Read",
+          parameters: JSON.stringify({ file_path: ".env" }),
+          success: 1,
+          timestamp: "2026-03-20T10:02:00Z",
+        },
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "cat .env" }),
+          success: 1,
+          timestamp: "2026-03-20T10:03:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      const flags = computeFlags(summary, tools);
+
+      const envFlags = flags.filter((f) => f.message.includes(".env"));
+      expect(envFlags.length).toBe(1);
+      expect(envFlags[0].severity).toBe("critical");
+      expect(envFlags[0].detail).toContain("3 tools");
+      expect(envFlags[0].detail).toContain("Read");
+      expect(envFlags[0].detail).toContain("Edit");
+      expect(envFlags[0].detail).toContain("Bash");
+    });
+
+    it("should deduplicate sudo flags when multiple Bash commands use sudo", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "sudo apt-get update" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "sudo systemctl restart service" }),
+          success: 1,
+          timestamp: "2026-03-20T10:01:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      const flags = computeFlags(summary, tools);
+
+      const sudoFlags = flags.filter((f) => f.message.includes("sudo"));
+      expect(sudoFlags.length).toBe(1);
+      expect(sudoFlags[0].severity).toBe("critical");
+      expect(sudoFlags[0].detail).toBe("Tools: Bash");
+      expect(sudoFlags[0].detail).toContain("Bash");
+    });
+
+    it("should deduplicate rm -rf flags when multiple Bash commands use rm -rf", () => {
+      const tools: SessionToolData[] = [
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "rm -rf /tmp/dir1" }),
+          success: 1,
+          timestamp: "2026-03-20T10:00:00Z",
+        },
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "rm -rf /tmp/dir2" }),
+          success: 1,
+          timestamp: "2026-03-20T10:01:00Z",
+        },
+        {
+          tool_name: "Bash",
+          parameters: JSON.stringify({ command: "rm -rf /tmp/dir3" }),
+          success: 1,
+          timestamp: "2026-03-20T10:02:00Z",
+        },
+      ];
+      const summary = computeSummary(tools, [], []);
+      const flags = computeFlags(summary, tools);
+
+      const rmFlags = flags.filter((f) => f.message.includes("rm -rf"));
+      expect(rmFlags.length).toBe(1);
+      expect(rmFlags[0].severity).toBe("critical");
+      expect(rmFlags[0].detail).toBe("Tools: Bash");
+      expect(rmFlags[0].detail).toContain("Bash");
+    });
   });
 
   describe("scoreTestCoverage", () => {
