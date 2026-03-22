@@ -19,6 +19,7 @@ interface CaptainChatProps {
   onSendMessage: (content: string) => void;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
+  onClear: () => void;
 }
 
 function formatConversationDate(timestamp: number): string {
@@ -49,6 +50,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   onSendMessage,
   archivedConversations,
   onClearHistory,
+  onClear,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -86,8 +88,8 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
               {showHistory ? 'Close' : `${archivedConversations.length} past`}
             </button>
           )}
-          {!isStreaming && (
-            <div className="captain-status idle">Ready</div>
+          {messages.length > 0 && !isStreaming && (
+            <button className="captain-clear-btn" onClick={onClear}>Clear</button>
           )}
         </div>
       </div>
