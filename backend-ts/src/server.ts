@@ -287,8 +287,8 @@ process.on("unhandledRejection", (reason) => {
   console.error("[server] Unhandled rejection (not crashing):", reason);
 });
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => { gracefulShutdown("SIGTERM").catch((err) => { log.error("Shutdown error", { error: String(err) }); process.exit(1); }); });
+process.on("SIGINT", () => { gracefulShutdown("SIGINT").catch((err) => { log.error("Shutdown error", { error: String(err) }); process.exit(1); }); });
 process.on("exit", removePidFile);
 
 // ---- Scheduled tasks tick ----
