@@ -13,9 +13,23 @@
 }
 
 .settings-sidebar {
+  position: relative;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   overflow-y: auto;
+}
+
+.settings-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0 4px;
 }
 
 .settings-sidebar-list {

@@ -16,7 +16,11 @@ type SettingsCategory =
   | 'captain'
   | 'integrations';
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  onClose: () => void;
+}
+
+export function SettingsPage({ onClose }: SettingsPageProps) {
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('models');
   const { config, loading, error, needsRestart, updateConfig } = useSettings();
 
@@ -86,6 +90,13 @@ export function SettingsPage() {
         </div>
       )}
       <aside className="settings-sidebar">
+        <button
+          onClick={onClose}
+          className="settings-close-btn"
+          aria-label="Close settings"
+        >
+          ×
+        </button>
         <nav>
           <ul className="settings-sidebar-list">
             <li
