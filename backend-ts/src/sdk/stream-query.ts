@@ -366,7 +366,7 @@ export async function streamQuery(
           + (usageObj.cache_creation_input_tokens || 0);
 
         // Update fleet monitor with token counts
-        fleetMonitor.updateTokens(sessionId, currentInputTokens, usageObj.output_tokens || 0);
+        fleetMonitor.updateSessionTokens(sessionId, currentInputTokens, usageObj.output_tokens || 0);
         // SDK contextWindow is the agent's working limit (200k), not the model's actual capacity
         const MODEL_CONTEXT_LIMITS: Record<string, number> = {
           'claude-sonnet-4-6': 1_000_000,
