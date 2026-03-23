@@ -132,6 +132,15 @@ export function useDiffReview(sessionId: string | undefined, streaming: boolean)
     prevStreamingRef.current = streaming;
   }, [streaming, sessionId, fetchDiff]);
 
+  // Fetch diff on mount if session is already idle (completed session)
+  useEffect(() => {
+    if (sessionId && !streaming) {
+      fetchDiff();
+    }
+    // Only run on mount/sessionId change, NOT when streaming changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
   return {
     diffResult,
     loading,

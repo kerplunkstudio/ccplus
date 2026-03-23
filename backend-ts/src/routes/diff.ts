@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import { isGitRepo, getGitDiff, commitChanges, discardChanges } from '../git-operations.js';
+import { getFleetSession } from '../db/fleet-sessions.js';
 
 export function createDiffRoutes(
   app: Express,
@@ -15,16 +16,26 @@ export function createDiffRoutes(
    * Helper: Look up workspace for a session
    */
   function getWorkspace(sessionId: string): string | null {
-    // First check sessionWorkspaces map
+    // First check in-memory sessionWorkspaces map
     if (sessionWorkspaces.has(sessionId)) {
       return sessionWorkspaces.get(sessionId)!;
     }
 
-    // Fallback: check active sessions via sdkSession
+    // Check active sessions
     const activeSessions = sdkSession.getActiveSessions?.() ?? [];
     const activeSession = activeSessions.find((s: any) => s.sessionId === sessionId);
     if (activeSession?.workspace) {
       return activeSession.workspace;
+    }
+
+    // Fallback: check fleet_sessions DB table
+    try {
+      const fleetSession = getFleetSession(sessionId);
+      if (fleetSession?.workspace) {
+        return fleetSession.workspace;
+      }
+    } catch {
+      // DB lookup failed, continue
     }
 
     return null;
