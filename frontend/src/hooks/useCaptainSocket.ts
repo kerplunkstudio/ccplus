@@ -96,7 +96,6 @@ export function useCaptainSocket(socket: Socket | null) {
     socket.io.on('reconnect', handleReconnect);
 
     return () => {
-      socket.emit('leave_captain');
       socket.io.off('reconnect', handleReconnect);
     };
   }, [socket, captainSessionId]);

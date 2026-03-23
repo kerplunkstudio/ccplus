@@ -478,10 +478,6 @@ export function setupSocketHandlers(
       }
     });
 
-    socket.on('leave_captain', () => {
-      captain.unregisterResponseCallback(`socket:${socket.id}`);
-    });
-
     // -- Disconnect --
 
     socket.on("disconnect", () => {
