@@ -12,6 +12,8 @@ export type TreeAction =
   | { type: 'TOOL_PROGRESS'; toolUseId: string; elapsedSeconds: number }
   | { type: 'SET_TREE'; tree: ActivityNode[] };
 
+export const ORCHESTRATOR_ID = '__orchestrator__';
+
 export function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
   return nodes.map((node) => {
     if (isAgentNode(node) && node.tool_use_id === parentId) {
@@ -50,6 +52,66 @@ export function markRunningAsStopped(nodes: ActivityNode[]): ActivityNode[] {
   });
 }
 
+// Insert a node at the chronologically correct position by timestamp
+export function insertNodeChronologically(nodes: ActivityNode[], newNode: ActivityNode): ActivityNode[] {
+  const idx = nodes.findIndex(n => new Date(n.timestamp) > new Date(newNode.timestamp));
+  if (idx === -1) return [...nodes, newNode];
+  return [...nodes.slice(0, idx), newNode, ...nodes.slice(idx)];
+}
+
+// Derive Orchestrator status from its children (call after any child status change)
+export function syncOrchestratorStatus(nodes: ActivityNode[]): ActivityNode[] {
+  const orchIdx = nodes.findIndex(n => isAgentNode(n) && n.tool_use_id === ORCHESTRATOR_ID);
+  if (orchIdx === -1) return nodes;
+
+  const orch = nodes[orchIdx] as AgentNode;
+  const children = orch.children;
+
+  let newStatus: AgentNode['status'];
+  if (children.length === 0 || children.some(c => c.status === 'running')) {
+    newStatus = 'running';
+  } else if (children.some(c => c.status === 'failed')) {
+    newStatus = 'failed';
+  } else if (children.some(c => c.status === 'stopped')) {
+    newStatus = 'stopped';
+  } else {
+    newStatus = 'completed';
+  }
+
+  if (newStatus === orch.status) return nodes;
+  return nodes.map((n, i) => i === orchIdx ? { ...orch, status: newStatus } : n);
+}
+
+// Group orphan tool nodes (root-level ToolNodes) under a virtual Orchestrator AgentNode.
+// Returns the nodes unchanged if there are no orphan tools.
+export function groupOrphanTools(nodes: ActivityNode[]): ActivityNode[] {
+  const orphanTools = nodes.filter(n => !isAgentNode(n)) as ToolNode[];
+  if (orphanTools.length === 0) return nodes;
+  // Guard: if Orchestrator already exists, don't create a duplicate
+  if (nodes.some(n => isAgentNode(n) && n.tool_use_id === ORCHESTRATOR_ID)) return nodes;
+
+  const agentNodes = nodes.filter(n => isAgentNode(n));
+
+  // Derive Orchestrator status from children
+  let orchStatus: AgentNode['status'] = 'running';
+  if (orphanTools.every(t => t.status !== 'running')) {
+    if (orphanTools.some(t => t.status === 'failed')) orchStatus = 'failed';
+    else if (orphanTools.some(t => t.status === 'stopped')) orchStatus = 'stopped';
+    else orchStatus = 'completed';
+  }
+
+  const orchestratorNode: AgentNode = {
+    tool_use_id: ORCHESTRATOR_ID,
+    agent_type: 'orchestrator',
+    tool_name: 'Agent',
+    timestamp: orphanTools[0].timestamp, // first orphan tool's timestamp
+    children: orphanTools,
+    status: orchStatus,
+  };
+
+  return insertNodeChronologically(agentNodes, orchestratorNode);
+}
+
 export function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] {
   switch (action.type) {
     case 'AGENT_START': {
@@ -80,17 +142,32 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
       if (action.event.parent_agent_id) {
         return findAndInsert(state, action.event.parent_agent_id, newTool);
       }
-      return [...state, newTool];
+      // Orphan tool — route to Orchestrator virtual node
+      const orchExists = state.some(n => isAgentNode(n) && n.tool_use_id === ORCHESTRATOR_ID);
+      if (orchExists) {
+        return findAndInsert(state, ORCHESTRATOR_ID, newTool);
+      }
+      // Create Orchestrator with this tool as its first child
+      const orchestratorNode: AgentNode = {
+        tool_use_id: ORCHESTRATOR_ID,
+        agent_type: 'orchestrator',
+        tool_name: 'Agent',
+        timestamp: action.event.timestamp,
+        children: [newTool],
+        status: 'running',
+      };
+      return insertNodeChronologically(state, orchestratorNode);
     }
 
     case 'TOOL_COMPLETE': {
       const isWorkerRestart = action.event.error === 'Worker restarted';
-      return findAndUpdate(state, action.event.tool_use_id, (node) => ({
+      const updated = findAndUpdate(state, action.event.tool_use_id, (node) => ({
         ...node,
         status: (action.event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
         duration_ms: action.event.duration_ms,
         error: isWorkerRestart ? undefined : action.event.error,
       }));
+      return syncOrchestratorStatus(updated);
     }
 
     case 'AGENT_STOP': {
@@ -153,7 +230,7 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
           }));
         }
       }
-      return newNodes;
+      return groupOrphanTools(newNodes);
     }
 
     case 'CLEAR':

@@ -7,6 +7,9 @@ import {
   checkHasRunningAgents,
   useActivityTree,
   TreeAction,
+  ORCHESTRATOR_ID,
+  groupOrphanTools,
+  syncOrchestratorStatus,
 } from './useActivityTree';
 import { ActivityNode, AgentNode, ToolNode, ToolEvent } from '../types';
 
@@ -452,7 +455,7 @@ describe('useActivityTree', () => {
     });
 
     describe('TOOL_START', () => {
-      it('adds tool at root level (no parent)', () => {
+      it('routes orphan tool to Orchestrator virtual node', () => {
         const event: ToolEvent = {
           type: 'tool_start',
           tool_name: 'Read',
@@ -466,10 +469,14 @@ describe('useActivityTree', () => {
         const result = treeReducer([], action);
 
         expect(result).toHaveLength(1);
-        expect(result[0].tool_use_id).toBe('tool_1');
-        expect(result[0].tool_name).toBe('Read');
-        expect(result[0].status).toBe('running');
-        expect((result[0] as ToolNode).parameters).toEqual({ file_path: '/test.txt' });
+        const orch = result[0] as AgentNode;
+        expect(orch.tool_use_id).toBe(ORCHESTRATOR_ID);
+        expect(orch.agent_type).toBe('orchestrator');
+        expect(orch.children).toHaveLength(1);
+        expect(orch.children[0].tool_use_id).toBe('tool_1');
+        expect(orch.children[0].tool_name).toBe('Read');
+        expect(orch.children[0].status).toBe('running');
+        expect((orch.children[0] as ToolNode).parameters).toEqual({ file_path: '/test.txt' });
       });
 
       it('adds tool under parent agent', () => {
@@ -775,8 +782,11 @@ describe('useActivityTree', () => {
         const action: TreeAction = { type: 'LOAD_HISTORY', events };
         const result = treeReducer([], action);
 
+        // result[0] = agent_1 (sequence 1), result[1] = Orchestrator containing tool_1 (sequence 2)
         expect((result[0] as AgentNode).sequence).toBe(1);
-        expect((result[1] as ToolNode).sequence).toBe(2);
+        const orch = result[1] as AgentNode;
+        expect(orch.tool_use_id).toBe(ORCHESTRATOR_ID);
+        expect((orch.children[0] as ToolNode).sequence).toBe(2);
       });
 
       it('handles empty history', () => {
@@ -993,6 +1003,388 @@ describe('useActivityTree', () => {
       ];
 
       expect(checkHasRunningAgents(tree)).toBe(false);
+    });
+  });
+
+  describe('Orchestrator virtual node', () => {
+    describe('TOOL_START routing', () => {
+      it('creates Orchestrator node for first orphan tool', () => {
+        const event: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        const result = treeReducer([], { type: 'TOOL_START', event, sequence: 1 });
+
+        expect(result).toHaveLength(1);
+        const orch = result[0] as AgentNode;
+        expect(orch.tool_use_id).toBe(ORCHESTRATOR_ID);
+        expect(orch.agent_type).toBe('orchestrator');
+        expect(orch.status).toBe('running');
+        expect(orch.children).toHaveLength(1);
+      });
+
+      it('adds subsequent orphan tools to existing Orchestrator', () => {
+        const event1: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        const event2: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Write',
+          tool_use_id: 'tool_2',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+
+        let state = treeReducer([], { type: 'TOOL_START', event: event1, sequence: 1 });
+        state = treeReducer(state, { type: 'TOOL_START', event: event2, sequence: 2 });
+
+        expect(state).toHaveLength(1);
+        const orch = state[0] as AgentNode;
+        expect(orch.children).toHaveLength(2);
+        expect(orch.children[0].tool_use_id).toBe('tool_1');
+        expect(orch.children[1].tool_use_id).toBe('tool_2');
+      });
+
+      it('does NOT affect tools with a parent_agent_id', () => {
+        const parentAgent: AgentNode = {
+          tool_use_id: 'agent_1',
+          agent_type: 'code_agent',
+          tool_name: 'Agent',
+          timestamp: '2025-01-01T00:00:00Z',
+          children: [],
+          status: 'running',
+        };
+        const event: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Write',
+          tool_use_id: 'tool_1',
+          parent_agent_id: 'agent_1',
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+
+        const result = treeReducer([parentAgent], { type: 'TOOL_START', event, sequence: 2 });
+
+        expect(result).toHaveLength(1); // only parentAgent, no Orchestrator
+        expect((result[0] as AgentNode).children).toHaveLength(1);
+        expect((result[0] as AgentNode).children[0].tool_use_id).toBe('tool_1');
+      });
+
+      it('places Orchestrator chronologically before real agents if tools come first', () => {
+        // Tool at T+0, Agent at T+1
+        const toolEvent: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        const agentEvent: ToolEvent = {
+          type: 'agent_start',
+          tool_name: 'Agent',
+          tool_use_id: 'agent_1',
+          parent_agent_id: null,
+          agent_type: 'code_agent',
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+
+        let state = treeReducer([], { type: 'TOOL_START', event: toolEvent, sequence: 1 });
+        state = treeReducer(state, { type: 'AGENT_START', event: agentEvent, sequence: 2 });
+
+        expect(state).toHaveLength(2);
+        expect(state[0].tool_use_id).toBe(ORCHESTRATOR_ID); // Orchestrator first (T+0)
+        expect(state[1].tool_use_id).toBe('agent_1');           // Agent second (T+1)
+      });
+
+      it('places Orchestrator chronologically after real agents if tools come later', () => {
+        // Agent at T+0, Tool at T+1
+        const agentEvent: ToolEvent = {
+          type: 'agent_start',
+          tool_name: 'Agent',
+          tool_use_id: 'agent_1',
+          parent_agent_id: null,
+          agent_type: 'code_agent',
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        const toolEvent: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+
+        let state = treeReducer([], { type: 'AGENT_START', event: agentEvent, sequence: 1 });
+        state = treeReducer(state, { type: 'TOOL_START', event: toolEvent, sequence: 2 });
+
+        expect(state).toHaveLength(2);
+        expect(state[0].tool_use_id).toBe('agent_1');            // Agent first (T+0)
+        expect(state[1].tool_use_id).toBe(ORCHESTRATOR_ID);   // Orchestrator second (T+1)
+      });
+    });
+
+    describe('Orchestrator status sync', () => {
+      it('Orchestrator becomes completed when all children complete', () => {
+        const event: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        let state = treeReducer([], { type: 'TOOL_START', event, sequence: 1 });
+
+        const completeEvent: ToolEvent = {
+          type: 'tool_complete',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:01Z',
+          success: true,
+          duration_ms: 1000,
+        };
+        state = treeReducer(state, { type: 'TOOL_COMPLETE', event: completeEvent });
+
+        const orch = state[0] as AgentNode;
+        expect(orch.status).toBe('completed');
+      });
+
+      it('Orchestrator stays running while any child is running', () => {
+        const event1: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        const event2: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Write',
+          tool_use_id: 'tool_2',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+        let state = treeReducer([], { type: 'TOOL_START', event: event1, sequence: 1 });
+        state = treeReducer(state, { type: 'TOOL_START', event: event2, sequence: 2 });
+
+        const completeEvent: ToolEvent = {
+          type: 'tool_complete',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:02Z',
+          success: true,
+          duration_ms: 2000,
+        };
+        state = treeReducer(state, { type: 'TOOL_COMPLETE', event: completeEvent });
+
+        const orch = state[0] as AgentNode;
+        expect(orch.status).toBe('running'); // tool_2 still running
+      });
+
+      it('Orchestrator becomes failed if any child fails and none running', () => {
+        const event: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Write',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+        let state = treeReducer([], { type: 'TOOL_START', event, sequence: 1 });
+
+        const failEvent: ToolEvent = {
+          type: 'tool_complete',
+          tool_name: 'Write',
+          tool_use_id: 'tool_1',
+          parent_agent_id: null,
+          timestamp: '2025-01-01T00:00:01Z',
+          success: false,
+          error: 'Permission denied',
+          duration_ms: 100,
+        };
+        state = treeReducer(state, { type: 'TOOL_COMPLETE', event: failEvent });
+
+        const orch = state[0] as AgentNode;
+        expect(orch.status).toBe('failed');
+      });
+    });
+
+    describe('LOAD_HISTORY groupOrphanTools', () => {
+      it('groups orphan tools under Orchestrator node', () => {
+        const events: ToolEvent[] = [
+          {
+            type: 'tool_start',
+            tool_name: 'Read',
+            tool_use_id: 'tool_1',
+            parent_agent_id: null,
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+          {
+            type: 'tool_complete',
+            tool_name: 'Read',
+            tool_use_id: 'tool_1',
+            parent_agent_id: null,
+            timestamp: '2025-01-01T00:00:01Z',
+            success: true,
+            duration_ms: 1000,
+          },
+        ];
+
+        const result = treeReducer([], { type: 'LOAD_HISTORY', events });
+
+        expect(result).toHaveLength(1);
+        const orch = result[0] as AgentNode;
+        expect(orch.tool_use_id).toBe(ORCHESTRATOR_ID);
+        expect(orch.agent_type).toBe('orchestrator');
+        expect(orch.children).toHaveLength(1);
+        expect(orch.children[0].tool_use_id).toBe('tool_1');
+        expect(orch.children[0].status).toBe('completed');
+        expect(orch.status).toBe('completed');
+      });
+
+      it('does NOT create Orchestrator if no orphan tools', () => {
+        const events: ToolEvent[] = [
+          {
+            type: 'agent_start',
+            tool_name: 'Agent',
+            tool_use_id: 'agent_1',
+            parent_agent_id: null,
+            agent_type: 'code_agent',
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+          {
+            type: 'tool_start',
+            tool_name: 'Read',
+            tool_use_id: 'tool_1',
+            parent_agent_id: 'agent_1',
+            timestamp: '2025-01-01T00:00:01Z',
+          },
+        ];
+
+        const result = treeReducer([], { type: 'LOAD_HISTORY', events });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].tool_use_id).toBe('agent_1');
+        expect((result[0] as AgentNode).children).toHaveLength(1);
+      });
+
+      it('creates Orchestrator even when ALL tools are orphans', () => {
+        const events: ToolEvent[] = [
+          {
+            type: 'tool_start',
+            tool_name: 'Read',
+            tool_use_id: 'tool_1',
+            parent_agent_id: null,
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+          {
+            type: 'tool_start',
+            tool_name: 'Write',
+            tool_use_id: 'tool_2',
+            parent_agent_id: null,
+            timestamp: '2025-01-01T00:00:01Z',
+          },
+        ];
+
+        const result = treeReducer([], { type: 'LOAD_HISTORY', events });
+
+        expect(result).toHaveLength(1);
+        const orch = result[0] as AgentNode;
+        expect(orch.tool_use_id).toBe(ORCHESTRATOR_ID);
+        expect(orch.children).toHaveLength(2);
+      });
+
+      it('places Orchestrator chronologically among agents', () => {
+        // Agent at T+0, orphan tools at T+1 and T+2
+        const events: ToolEvent[] = [
+          {
+            type: 'agent_start',
+            tool_name: 'Agent',
+            tool_use_id: 'agent_1',
+            parent_agent_id: null,
+            agent_type: 'code_agent',
+            timestamp: '2025-01-01T00:00:00Z',
+          },
+          {
+            type: 'tool_start',
+            tool_name: 'Read',
+            tool_use_id: 'tool_1',
+            parent_agent_id: null,
+            timestamp: '2025-01-01T00:00:01Z',
+          },
+        ];
+
+        const result = treeReducer([], { type: 'LOAD_HISTORY', events });
+
+        expect(result).toHaveLength(2);
+        expect(result[0].tool_use_id).toBe('agent_1');           // Agent at T+0
+        expect(result[1].tool_use_id).toBe(ORCHESTRATOR_ID);  // Orchestrator at T+1
+      });
+    });
+
+    describe('groupOrphanTools helper', () => {
+      it('returns unchanged nodes if no orphan tools', () => {
+        const agent: AgentNode = {
+          tool_use_id: 'agent_1',
+          agent_type: 'code_agent',
+          tool_name: 'Agent',
+          timestamp: '2025-01-01T00:00:00Z',
+          children: [],
+          status: 'running',
+        };
+        const result = groupOrphanTools([agent]);
+        expect(result).toHaveLength(1);
+        expect(result[0]).toBe(agent);
+      });
+
+      it('returns empty array for empty input', () => {
+        const result = groupOrphanTools([]);
+        expect(result).toEqual([]);
+      });
+    });
+
+    describe('syncOrchestratorStatus helper', () => {
+      it('returns unchanged nodes if no Orchestrator', () => {
+        const nodes: ActivityNode[] = [
+          {
+            tool_use_id: 'tool_1',
+            tool_name: 'Read',
+            timestamp: '2025-01-01T00:00:00Z',
+            status: 'running',
+            parent_agent_id: null,
+          },
+        ];
+        const result = syncOrchestratorStatus(nodes);
+        expect(result).toBe(nodes);
+      });
+
+      it('does not create a new array reference if status unchanged', () => {
+        const orchNode: AgentNode = {
+          tool_use_id: ORCHESTRATOR_ID,
+          agent_type: 'orchestrator',
+          tool_name: 'Agent',
+          timestamp: '2025-01-01T00:00:00Z',
+          children: [
+            {
+              tool_use_id: 'tool_1',
+              tool_name: 'Read',
+              timestamp: '2025-01-01T00:00:01Z',
+              status: 'running',
+              parent_agent_id: null,
+            },
+          ],
+          status: 'running',
+        };
+        const nodes = [orchNode];
+        const result = syncOrchestratorStatus(nodes);
+        expect(result).toBe(nodes); // no change, same reference
+      });
     });
   });
 
