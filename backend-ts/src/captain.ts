@@ -247,6 +247,71 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
         }
       ),
 
+      // resume_session - Send a follow-up message to an existing session
+      tool(
+        "resume_session",
+        "Send a follow-up message to an existing session to continue its work. The session resumes with full conversation context.",
+        {
+          session_id: z.string().describe("The session ID to resume"),
+          prompt: z.string().describe("The follow-up message/instructions"),
+        },
+        async (args) => {
+          const sessionInfo = fleetMonitor.getSessionDetail(args.session_id);
+          if (!sessionInfo) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    success: false,
+                    error: "Session not found",
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          if (dependencies.sdkSession.isActive(args.session_id)) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    success: false,
+                    error: "Session already has an active query",
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          const callbacks = dependencies.buildSocketCallbacks(args.session_id, sessionInfo.workspace) as any;
+          dependencies.sdkSession.submitQuery(
+            args.session_id,
+            args.prompt,
+            sessionInfo.workspace,
+            callbacks,
+            undefined,
+            undefined,
+            getLastQuerySource() ?? undefined
+          );
+          fleetMonitor.updateSessionStatus(args.session_id, 'running');
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  success: true,
+                  session_id: args.session_id,
+                  message: "Session resumed",
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      ),
+
       // get_fleet_stats - Get aggregate statistics from fleet monitor + database
       tool(
         "get_fleet_stats",

@@ -4,6 +4,7 @@ import { computeTrustScore } from "../trust-score.js";
 import { startSession as startSessionApi } from "../session-api.js";
 import type { Server as SocketIOServer } from "socket.io";
 import type { SessionCallbacks } from "../sdk-session.js";
+import * as fleetMonitor from "../fleet-monitor.js";
 
 export function createSessionRoutes(
   app: Express,
@@ -84,6 +85,40 @@ export function createSessionRoutes(
       }
     } catch (err) {
       log.error('Failed to start session', { error: String(err) });
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  });
+
+  app.post("/api/sessions/:id/resume", (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { prompt } = req.body;
+
+      if (!prompt || typeof prompt !== 'string') {
+        return res.status(400).json({ success: false, error: 'prompt is required' });
+      }
+
+      // Get session info from fleet monitor
+      const sessionInfo = fleetMonitor.getSessionDetail(id);
+      if (!sessionInfo) {
+        return res.status(404).json({ success: false, error: 'Session not found' });
+      }
+
+      if (sdkSession.isActive(id)) {
+        return res.status(409).json({ success: false, error: 'Session already has an active query' });
+      }
+
+      const callbacks = buildSocketCallbacks(id, sessionInfo.workspace);
+      sdkSession.submitQuery(id, prompt, sessionInfo.workspace, callbacks);
+      fleetMonitor.updateSessionStatus(id, 'running');
+
+      res.json({
+        success: true,
+        session_id: id,
+        message: 'Session resumed'
+      });
+    } catch (err) {
+      log.error('Failed to resume session', { sessionId: req.params.id, error: String(err) });
       res.status(500).json({ success: false, error: 'Internal server error' });
     }
   });
