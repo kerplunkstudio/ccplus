@@ -66,16 +66,6 @@ let captainState: CaptainState = {
 
 let captainDeps: CaptainDependencies | null = null;
 
-// ---- Pending Message Queue ----
-
-interface PendingMessage {
-  readonly content: string;
-  readonly callbackId: string | null;
-  readonly source: { source: string; sourceId: string };
-}
-
-const pendingMessages: PendingMessage[] = [];
-
 // ---- MCP Server ----
 
 /**
@@ -637,16 +627,12 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
       ...captainState,
       activeQuery: null,
     };
-    // Process any messages that arrived during the query
-    drainQueue().catch((err) => {
-      log.error("Captain drain queue error", { error: String(err) });
-    });
   }
 }
 
 /**
  * Send a message to the Captain session.
- * Tags content based on source and queues it for processing.
+ * Tags content based on source and starts a new query immediately.
  */
 export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string): void {
   if (!captainState.sessionId) {
@@ -667,45 +653,20 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     ? `${source}:${sourceId}`
     : null; // web/api → broadcast to all
 
-  // Increment message count
+  // Store routing target and increment message count
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
+    lastQueryCallbackId: queryCallbackId,
+    lastQuerySource: { source, sourceId },
   };
 
-  log.info("Captain message queued", { source, sourceId, length: content.length, queueDepth: pendingMessages.length + 1 });
+  log.info("Captain message received", { source, sourceId, length: content.length });
 
-  // Add to queue
-  pendingMessages.push({
-    content: taggedContent,
-    callbackId: queryCallbackId,
-    source: { source, sourceId },
+  // Start a new query immediately — SDK handles conversation continuity via resume
+  startCaptainQuery(taggedContent).catch((error) => {
+    log.error("Captain query failed", { error: String(error) });
   });
-
-  // Drain queue
-  drainQueue().catch((error) => {
-    log.error("Captain drain queue error", { error: String(error) });
-  });
-}
-
-/**
- * Drain the message queue by processing one message at a time.
- * Only starts a new query if no query is active and queue has messages.
- */
-async function drainQueue(): Promise<void> {
-  if (captainState.activeQuery || pendingMessages.length === 0) {
-    return;
-  }
-
-  const msg = pendingMessages.shift()!;
-
-  captainState = {
-    ...captainState,
-    lastQueryCallbackId: msg.callbackId,
-    lastQuerySource: msg.source,
-  };
-
-  await startCaptainQuery(msg.content);
 }
 
 /**
