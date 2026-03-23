@@ -74,7 +74,7 @@ export async function buildSystemPrompt(projectPath?: string, userPrompt?: strin
   }
 
   // Inject relevant memories from knowledge base
-  if (config.MEMORY_ENABLED && userPrompt && sessionId) {
+  if (config.getMemoryEnabled() && userPrompt && sessionId) {
     const memStartMs = performance.now();
     try {
       const projectName = projectPath ? path.basename(projectPath) : '';

@@ -101,7 +101,7 @@ export function startSession(
   }
 
   const uid = "local";
-  const trimmedPrompt = config.WORKTREE_ENABLED
+  const trimmedPrompt = config.getWorktreeEnabled()
     ? prompt.trim() + WORKTREE_RULES_FOOTER
     : prompt.trim();
 

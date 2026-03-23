@@ -23,7 +23,7 @@ import * as captain from '../captain.js';
  * This allows SDK sessions created in worktrees to be resumed from the main workspace.
  */
 export function copyWorktreeConversation(sdkSessionId: string, workspace: string): void {
-  if (!config.WORKTREE_ENABLED) return;
+  if (!config.getWorktreeEnabled()) return;
 
   try {
     // Compute main project dir path
@@ -219,11 +219,11 @@ export async function streamQuery(
     const q = query({
       prompt: queryContent as string,
       options: {
-        model: model ?? config.SDK_MODEL,
+        model: model ?? config.getSDKModel(),
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
-        allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
+        permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
+        allowDangerouslySkipPermissions: config.getBypassPermissions(),
         env: cleanEnv,
         hooks: hooks as any,
         plugins: [
@@ -244,7 +244,7 @@ export async function streamQuery(
         maxTurns: 50,
         includePartialMessages: true,
         promptSuggestions: true,
-        ...(config.WORKTREE_ENABLED && !resumeId && {
+        ...(config.getWorktreeEnabled() && !resumeId && {
           extraArgs: { worktree: null },
           settings: {
             worktree: {
@@ -450,7 +450,7 @@ export async function streamQuery(
       // Context compaction boundary
       else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
         // Flush knowledge to memory before compaction
-        if (config.MEMORY_ENABLED) {
+        if (config.getMemoryEnabled()) {
           distillSession(sessionId, workspace, { preCompaction: true }).catch(err => {
             log.warn('Pre-compaction memory flush failed', { sessionId, error: String(err) });
           });
@@ -530,7 +530,7 @@ export async function streamQuery(
     }
 
     // Fire-and-forget memory distillation
-    if (config.MEMORY_ENABLED && gotResult && !session.cancelRequested && resultText.length > 0) {
+    if (config.getMemoryEnabled() && gotResult && !session.cancelRequested && resultText.length > 0) {
       distillSession(sessionId, workspace).catch(err => {
         log.warn('Memory distillation failed', { sessionId, error: String(err) });
       });
