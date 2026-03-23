@@ -45,6 +45,11 @@ let runtimeConfig = {
   MAX_CONVERSATION_HISTORY: 50,
   MAX_ACTIVITY_EVENTS: 200,
   BYPASS_PERMISSIONS: true,
+  MEMORY_ENABLED: process.env.CCPLUS_MEMORY_ENABLED !== 'false',
+  MEMORY_DISTILL_ENABLED: process.env.CCPLUS_MEMORY_DISTILL !== 'false',
+  MEMORY_DISTILL_DEBOUNCE_MS: 60000,
+  MEMORY_DISTILL_MIN_MESSAGES: 3,
+  WORKTREE_ENABLED: process.env.CCPLUS_WORKTREES !== 'false',
 };
 
 export const MAX_CONVERSATION_HISTORY_DEFAULT = 50;
@@ -65,6 +70,26 @@ export function getMaxActivityEvents(): number {
 
 export function getBypassPermissions(): boolean {
   return runtimeConfig.BYPASS_PERMISSIONS;
+}
+
+export function getMemoryEnabled(): boolean {
+  return runtimeConfig.MEMORY_ENABLED;
+}
+
+export function getDistillationEnabled(): boolean {
+  return runtimeConfig.MEMORY_DISTILL_ENABLED;
+}
+
+export function getDistillDebounceMs(): number {
+  return runtimeConfig.MEMORY_DISTILL_DEBOUNCE_MS;
+}
+
+export function getDistillMinMessages(): number {
+  return runtimeConfig.MEMORY_DISTILL_MIN_MESSAGES;
+}
+
+export function getWorktreeEnabled(): boolean {
+  return runtimeConfig.WORKTREE_ENABLED;
 }
 
 // Legacy exports for backward compatibility (deprecated, use getters)
@@ -130,6 +155,21 @@ export function reloadConfig(key: string, value: string | undefined): void {
       break;
     case "CCPLUS_BYPASS_PERMISSIONS":
       runtimeConfig = { ...runtimeConfig, BYPASS_PERMISSIONS: value === 'true' };
+      break;
+    case "CCPLUS_MEMORY_ENABLED":
+      runtimeConfig.MEMORY_ENABLED = value !== 'false';
+      break;
+    case "CCPLUS_MEMORY_DISTILL":
+      runtimeConfig.MEMORY_DISTILL_ENABLED = value !== 'false';
+      break;
+    case "CCPLUS_MEMORY_DISTILL_DEBOUNCE_MS":
+      runtimeConfig.MEMORY_DISTILL_DEBOUNCE_MS = value ? parseInt(value, 10) : 60000;
+      break;
+    case "CCPLUS_MEMORY_DISTILL_MIN_MESSAGES":
+      runtimeConfig.MEMORY_DISTILL_MIN_MESSAGES = value ? parseInt(value, 10) : 3;
+      break;
+    case "CCPLUS_WORKTREES":
+      runtimeConfig.WORKTREE_ENABLED = value !== 'false';
       break;
   }
 }

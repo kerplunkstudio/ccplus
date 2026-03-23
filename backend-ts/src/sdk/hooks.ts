@@ -463,7 +463,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     }
 
     let memoryContext = '';
-    if (config.MEMORY_ENABLED) {
+    if (config.getMemoryEnabled()) {
       const memStartMs = performance.now();
       try {
         const session = sessions.get(sessionId);
@@ -568,7 +568,7 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
         });
 
         // Store agent-specific memory with agent namespace tag
-        if (config.MEMORY_DISTILL_ENABLED) {
+        if (config.getDistillationEnabled()) {
           const memStartMs = performance.now();
           const agentType = (input.agent_type as string) ?? 'agent';
           const lastMessage = input.last_assistant_message as string | undefined;

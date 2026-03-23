@@ -46,6 +46,8 @@ vi.mock("../config.js", () => ({
   WORKFLOW_ENABLED: false,
   MEMORY_ENABLED: false,
   MEMORY_HOOK_TIMEOUT_MS: 1000,
+  getMemoryEnabled: vi.fn(() => false),
+  getDistillationEnabled: vi.fn(() => false),
 }));
 
 vi.mock("../workflow-state.js", () => mockWorkflow);

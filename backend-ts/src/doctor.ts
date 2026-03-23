@@ -99,15 +99,15 @@ export function checkConfig(): CheckResult[] {
 
   // Check SDK_MODEL
   const validModels = ["sonnet", "opus", "haiku"];
-  if (!validModels.includes(config.SDK_MODEL)) {
+  if (!validModels.includes(config.getSDKModel())) {
     results.push({
       status: "warning",
-      message: `SDK_MODEL is "${config.SDK_MODEL}" (expected: sonnet, opus, or haiku)`,
+      message: `SDK_MODEL is "${config.getSDKModel()}" (expected: sonnet, opus, or haiku)`,
     });
   } else {
     results.push({
       status: "ok",
-      message: `SDK_MODEL: ${config.SDK_MODEL}`,
+      message: `SDK_MODEL: ${config.getSDKModel()}`,
     });
   }
 
@@ -577,7 +577,7 @@ export function checkMemoryHealth(): CheckResult[] {
   const results: CheckResult[] = [];
 
   // Check if memory is enabled
-  if (!config.MEMORY_ENABLED) {
+  if (!config.getMemoryEnabled()) {
     results.push({
       status: "ok",
       message: "Memory system disabled (MEMORY_ENABLED=false)",
