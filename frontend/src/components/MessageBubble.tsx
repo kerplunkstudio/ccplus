@@ -41,6 +41,38 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     });
   };
 
+  // Linkify file paths in markdown content (outside code blocks)
+  const linkifyFilePaths = useCallback((content: string): string => {
+    // File path patterns: relative (./, ../, src/, etc) and absolute (/Users/, /home/, etc)
+    // Lookbehind: don't match after :, /, (, [, ", ` to avoid URLs (https://) and existing markdown links
+    const filePathRegex = /(?<![:/(["`])(?:\.{1,2}\/[\w._-]+(?:\/[\w._-]+)*\.[\w]+|(?:src|frontend|backend-ts|\.claude)\/[\w._-]+(?:\/[\w._-]+)*(?:\.[\w]+)?|\/(?:Users|home|tmp|var)\/[\w._-]+(?:\/[\w._-]+)*\.[\w]+)(?![)\]"`])/g;
+
+    // Split content by code blocks (both inline and fenced)
+    const parts: string[] = [];
+    let lastIndex = 0;
+
+    // Match both inline code (`...`) and fenced code blocks (```...```)
+    // Using [\s\S] instead of . with s flag for ES5 compatibility
+    const codeBlockRegex = /(`{1,3})([\s\S]*?)\1/g;
+    let match;
+
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      // Process text before code block
+      const beforeCode = content.slice(lastIndex, match.index);
+      parts.push(beforeCode.replace(filePathRegex, (path) => `[${path}](file://${path})`));
+
+      // Keep code block as-is
+      parts.push(match[0]);
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Process remaining text after last code block
+    const afterCode = content.slice(lastIndex);
+    parts.push(afterCode.replace(filePathRegex, (path) => `[${path}](file://${path})`));
+
+    return parts.join('');
+  }, []);
+
 
   const markdownComponents = useMemo<Partial<Components>>(() => ({
     code(props) {
@@ -111,6 +143,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         </div>
       );
     },
+    a({ href, children, ...props }) {
+      const isFilePath = href?.startsWith('file://');
+      return (
+        <a
+          href={href}
+          className={isFilePath ? 'file-path-link' : undefined}
+          {...props}
+        >
+          {children}
+        </a>
+      );
+    },
   }), [copiedId, copyToClipboard, previewMarkdown, isLight]);
 
   // Intercept link clicks via event delegation (more reliable than react-markdown component override)
@@ -128,11 +172,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
   }, [onLinkClick]);
 
   // Memoize markdown rendering to prevent re-parsing when only streaming flag changes
-  const renderedMarkdown = useMemo(() => (
-    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-      {message.content ?? ''}
-    </ReactMarkdown>
-  ), [message.content, markdownComponents]);
+  const renderedMarkdown = useMemo(() => {
+    const linkedContent = linkifyFilePaths(message.content ?? '');
+    return (
+      <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+        {linkedContent}
+      </ReactMarkdown>
+    );
+  }, [message.content, markdownComponents, linkifyFilePaths]);
+
+  // Memoize user message linkifyFilePaths call (parallel to renderedMarkdown)
+  const linkedUserContent = useMemo(() => {
+    return linkifyFilePaths(message.content || '');
+  }, [message.content, linkifyFilePaths]);
 
   // Handle compact boundary messages (after all hooks)
   if (message.isCompactBoundary) {
@@ -166,7 +218,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
           <>
             <div className="message-text" onClick={handleContentClick}>
               <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-                {message.content || ''}
+                {linkedUserContent}
               </ReactMarkdown>
             </div>
             {message.content && (

@@ -202,7 +202,7 @@ function createWindow() {
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:'];
+    const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:', 'file:'];
     try {
       const parsedUrl = new URL(url);
       if (SAFE_PROTOCOLS.includes(parsedUrl.protocol)) {
@@ -469,7 +469,7 @@ ipcMain.handle('get-server-url', () => {
 });
 
 ipcMain.handle('open-external', async (event, url) => {
-  const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:'];
+  const SAFE_PROTOCOLS = ['https:', 'http:', 'mailto:', 'file:'];
   try {
     const parsedUrl = new URL(url);
     if (SAFE_PROTOCOLS.includes(parsedUrl.protocol)) {

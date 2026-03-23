@@ -563,6 +563,20 @@ function AppContent() {
   }, [activeProject, workspace]);
 
   const handleOpenBrowserTab = useCallback((url: string, label: string) => {
+    // Handle file:// URLs (file paths)
+    if (url.startsWith('file://')) {
+      const windowWithElectron = window as WindowWithElectron;
+      if (windowWithElectron.electronAPI?.openExternal) {
+        // Electron can open files directly with file:// protocol
+        windowWithElectron.electronAPI.openExternal(url);
+      } else {
+        // In web mode, just copy to clipboard since we can't open local files
+        const filePath = url.replace('file://', '');
+        navigator.clipboard.writeText(filePath);
+      }
+      return;
+    }
+
     // Open URL in system browser (Electron) or new tab (web mode)
     const windowWithElectron = window as WindowWithElectron;
     if (windowWithElectron.electronAPI?.openExternal) {
