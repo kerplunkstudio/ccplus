@@ -201,10 +201,9 @@ export function useStreamingMessages({
         }));
       } else if (data.model) {
         // Update model only if we have it
-        const modelName = data.model;
         setUsageStats(prev => ({
           ...prev,
-          model: modelName,
+          model: data.model,
         }));
       }
 
