@@ -6,7 +6,7 @@
  * to the SDK's AsyncIterable prompt interface.
  */
 
-import { query, createSdkMcpServer, tool, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, createSdkMcpServer, tool, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import * as config from "./config.js";
 import * as database from "./database.js";
@@ -65,6 +65,16 @@ let captainState: CaptainState = {
 };
 
 let captainDeps: CaptainDependencies | null = null;
+
+// ---- Pending Message Queue ----
+
+interface PendingMessage {
+  readonly content: string;
+  readonly callbackId: string | null;
+  readonly source: { source: string; sourceId: string };
+}
+
+const pendingMessages: PendingMessage[] = [];
 
 // ---- MCP Server ----
 
@@ -627,12 +637,16 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
       ...captainState,
       activeQuery: null,
     };
+    // Process any messages that arrived during the query
+    drainQueue().catch((err) => {
+      log.error("Captain drain queue error", { error: String(err) });
+    });
   }
 }
 
 /**
  * Send a message to the Captain session.
- * Tags content based on source and starts a new query with resume.
+ * Tags content based on source and queues it for processing.
  */
 export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string): void {
   if (!captainState.sessionId) {
@@ -648,74 +662,56 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   }
   // 'web' and 'api' get no prefix
 
-  // Compute routing target before incrementing message count
+  // Compute routing target
   const queryCallbackId = (source === 'telegram' || source === 'discord')
     ? `${source}:${sourceId}`
     : null; // web/api → broadcast to all
 
-  // Increment message count and store routing target & source
+  // Increment message count
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
-    lastQueryCallbackId: queryCallbackId,
-    lastQuerySource: { source, sourceId },
   };
 
-  log.info("Captain message queued", { source, sourceId, length: content.length });
+  log.info("Captain message queued", { source, sourceId, length: content.length, queueDepth: pendingMessages.length + 1 });
 
-  // If a query is active, inject the message instead of waiting
-  if (captainState.activeQuery) {
-    const userMessage: SDKUserMessage = {
-      type: 'user' as const,
-      message: { role: 'user', content: taggedContent },
-      session_id: captainState.sdkSessionId ?? captainState.sessionId ?? '',
-      parent_tool_use_id: null,
-      priority: 'now' as const,
-    };
+  // Add to queue
+  pendingMessages.push({
+    content: taggedContent,
+    callbackId: queryCallbackId,
+    source: { source, sourceId },
+  });
 
-    async function* singleMessage() {
-      yield userMessage;
-    }
-
-    captainState.activeQuery.streamInput(singleMessage()).catch((error: unknown) => {
-      log.error('Captain: failed to inject message, falling back to new query', { error: String(error) });
-      startCaptainQuery(taggedContent).catch((err: unknown) => {
-        log.error('Captain query failed', { error: String(err) });
-      });
-    });
-    return;
-  }
-
-  // Start new query with resume
-  startCaptainQuery(taggedContent).catch((error) => {
-    log.error("Captain query failed", { error: String(error) });
+  // Drain queue
+  drainQueue().catch((error) => {
+    log.error("Captain drain queue error", { error: String(error) });
   });
 }
 
 /**
- * Start a new Captain query with the given content, resuming the conversation.
- * Waits for any active query to complete first.
+ * Drain the message queue by processing one message at a time.
+ * Only starts a new query if no query is active and queue has messages.
  */
-async function startCaptainQuery(content: string): Promise<void> {
-  // Wait for any active query to finish
-  if (captainState.activeQuery) {
-    const startWait = Date.now();
-    while (captainState.activeQuery && Date.now() - startWait < 30000) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    // If still active after timeout, notify clients and drop the message
-    if (captainState.activeQuery) {
-      for (const callback of responseCallbacks.values()) {
-        try {
-          callback.onError('Captain is busy processing a previous query. Please try again in a moment.');
-        } catch {
-          // ignore callback errors
-        }
-      }
-      return;
-    }
+async function drainQueue(): Promise<void> {
+  if (captainState.activeQuery || pendingMessages.length === 0) {
+    return;
   }
 
+  const msg = pendingMessages.shift()!;
+
+  captainState = {
+    ...captainState,
+    lastQueryCallbackId: msg.callbackId,
+    lastQuerySource: msg.source,
+  };
+
+  await startCaptainQuery(msg.content);
+}
+
+/**
+ * Start a new Captain query with the given content, resuming the conversation.
+ */
+async function startCaptainQuery(content: string): Promise<void> {
   if (!captainState.sessionId || !captainDeps) {
     return;
   }
