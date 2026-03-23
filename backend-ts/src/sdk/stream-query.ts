@@ -81,6 +81,8 @@ export async function streamQuery(
   let streamEventsActive = false;
   let lastCompletionData: Record<string, unknown> = {};
   let messageIndex = 0;
+  let cumulativeInputTokens = 0;
+  let cumulativeOutputTokens = 0;
 
   const { sessionId } = session;
   const callbacks = session.callbacks;
@@ -420,6 +422,22 @@ export async function streamQuery(
             callbacks.onText(delta.text, messageIndex);
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
+          }
+        } else if (eventType === "message_stop") {
+          // Extract usage data from message_stop event and update fleet monitor
+          const usage = eventData.message?.usage ?? eventData.usage;
+          if (usage) {
+            const inputTokens = (usage.input_tokens || 0)
+              + (usage.cache_read_input_tokens || 0)
+              + (usage.cache_creation_input_tokens || 0);
+            const outputTokens = usage.output_tokens || 0;
+
+            // Accumulate tokens (message_stop fires after each assistant turn)
+            cumulativeInputTokens += inputTokens;
+            cumulativeOutputTokens += outputTokens;
+
+            // Update fleet monitor with cumulative tokens
+            fleetMonitor.updateSessionTokens(sessionId, cumulativeInputTokens, cumulativeOutputTokens);
           }
         }
       }
