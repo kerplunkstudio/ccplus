@@ -73,10 +73,20 @@ export function registerSession(sessionId: string, workspace: string, requestedB
 export function updateSessionStatus(sessionId: string, status: FleetSessionInfo['status']): void {
   const session = sessions.get(sessionId);
   if (session) {
+    const now = new Date().toISOString();
+    let durationMs = session.durationMs;
+
+    // Calculate duration when session reaches terminal state
+    if (status === 'completed' || status === 'failed') {
+      const startTime = new Date(session.startedAt).getTime();
+      durationMs = Date.now() - startTime;
+    }
+
     const updated: FleetSessionInfo = {
       ...session,
       status,
-      lastActivity: new Date().toISOString(),
+      durationMs,
+      lastActivity: now,
     };
     sessions.set(sessionId, updated);
     upsertFleetSession(updated);

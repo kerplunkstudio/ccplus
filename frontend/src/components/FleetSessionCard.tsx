@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { FleetSession } from '../types';
 import './FleetSessionCard.css';
 
@@ -35,6 +35,20 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onClick }) => {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (session.status === 'running' && session.startedAt) {
+      const startTime = new Date(session.startedAt).getTime();
+      const update = () => setElapsed(Date.now() - startTime);
+      update();
+      const interval = setInterval(update, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setElapsed(session.durationMs);
+    }
+  }, [session.status, session.startedAt, session.durationMs]);
+
   const statusClass = `status-${session.status}`;
   const label = session.label || session.sessionId.slice(0, 12);
   const truncatedLabel = label.length > 80 ? label.slice(0, 80) + '…' : label;
@@ -68,7 +82,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
           <span className="fleet-stat-label">agents</span>
         </div>
         <div className="fleet-stat">
-          <span className="fleet-stat-value">{formatDuration(session.durationMs)}</span>
+          <span className="fleet-stat-value">{formatDuration(elapsed)}</span>
           <span className="fleet-stat-label">elapsed</span>
         </div>
       </div>
