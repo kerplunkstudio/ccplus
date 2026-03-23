@@ -338,14 +338,14 @@ describe("Config API Routes", () => {
       expect(data).toHaveProperty("captain");
       expect(data).toHaveProperty("integrations");
 
-      expect(data.models).toHaveProperty("sdk_model");
-      expect(data.models).toHaveProperty("captain_model");
+      expect(data.models).toHaveProperty("defaultModel");
+      expect(data.models).toHaveProperty("captainModel");
       expect(data.models).toHaveProperty("agent_overrides");
 
-      expect(data.integrations.telegram).toHaveProperty("bot_token_set");
-      expect(data.integrations.discord).toHaveProperty("bot_token_set");
-      expect(typeof data.integrations.telegram.bot_token_set).toBe("boolean");
-      expect(typeof data.integrations.discord.bot_token_set).toBe("boolean");
+      expect(data.integrations.telegram).toHaveProperty("botToken");
+      expect(data.integrations.discord).toHaveProperty("botToken");
+      expect(typeof data.integrations.telegram.botToken).toBe("string");
+      expect(typeof data.integrations.discord.botToken).toBe("string");
     });
   });
 
@@ -355,18 +355,16 @@ describe("Config API Routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          models: {
-            sdk_model: "claude-opus-4-6",
-          },
+          key: "models.defaultModel",
+          value: "claude-opus-4-6",
         }),
       });
 
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.success).toBe(true);
-      expect(data.config.models.sdk_model).toBe("claude-opus-4-6");
-      expect(typeof data.restart_required).toBe("boolean");
+      expect(data.status).toBe("ok");
+      expect(typeof data.needsRestart).toBe("boolean");
     });
 
     it("returns 400 with invalid body", async () => {
@@ -410,16 +408,15 @@ describe("Config API Routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          captain: {
-            auto_start: false,
-          },
+          key: "captain.autoStart",
+          value: false,
         }),
       });
 
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.restart_required).toBe(true);
+      expect(data.needsRestart).toBe(true);
     });
 
     it("returns restart_required: false for hot-reloadable changes", async () => {
@@ -427,19 +424,15 @@ describe("Config API Routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          models: {
-            sdk_model: "claude-haiku-4-5-20251001",
-          },
-          memory: {
-            enabled: false,
-          },
+          key: "models.defaultModel",
+          value: "claude-haiku-4-5-20251001",
         }),
       });
 
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.restart_required).toBe(false);
+      expect(data.needsRestart).toBe(false);
     });
 
     it("persists settings across multiple updates", async () => {
@@ -448,21 +441,28 @@ describe("Config API Routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          models: {
-            sdk_model: "claude-opus-4-6",
-            captain_model: "claude-sonnet-4-6",
-          },
+          key: "models.defaultModel",
+          value: "claude-opus-4-6",
         }),
       });
 
-      // Second update (only change one field)
+      // Second update (different field)
       await fetch(`${serverUrl}/api/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          models: {
-            sdk_model: "claude-haiku-4-5-20251001",
-          },
+          key: "models.captainModel",
+          value: "claude-sonnet-4-6",
+        }),
+      });
+
+      // Third update (change first field again)
+      await fetch(`${serverUrl}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: "models.defaultModel",
+          value: "claude-haiku-4-5-20251001",
         }),
       });
 
@@ -470,8 +470,8 @@ describe("Config API Routes", () => {
       const response = await fetch(`${serverUrl}/api/config`);
       const data = await response.json();
 
-      expect(data.models.sdk_model).toBe("claude-haiku-4-5-20251001");
-      expect(data.models.captain_model).toBe("claude-sonnet-4-6");
+      expect(data.models.defaultModel).toBe("claude-haiku-4-5-20251001");
+      expect(data.models.captainModel).toBe("claude-sonnet-4-6");
     });
   });
 });

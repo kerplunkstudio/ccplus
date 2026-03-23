@@ -257,3 +257,7 @@
     min-height: 200px;
   }
 }
+
+.agent-card-selected .agent-card {
+  border-left: 3px solid var(--accent, #6366f1);
+}

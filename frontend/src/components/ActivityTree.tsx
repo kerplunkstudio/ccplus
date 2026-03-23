@@ -150,6 +150,30 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
+const extractToolsFromAgent = (agent: AgentNode): ToolNode[] => {
+  const tools: ToolNode[] = [];
+  for (const child of agent.children) {
+    if (isAgentNode(child)) {
+      tools.push(...extractToolsFromAgent(child as AgentNode));
+    } else {
+      tools.push(child as ToolNode);
+    }
+  }
+  return tools;
+};
+
+const extractAllTools = (nodes: ActivityNode[]): ToolNode[] => {
+  const tools: ToolNode[] = [];
+  for (const node of nodes) {
+    if (isAgentNode(node)) {
+      tools.push(...extractToolsFromAgent(node as AgentNode));
+    } else {
+      tools.push(node as ToolNode);
+    }
+  }
+  return tools;
+};
+
 export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs', workspacePath, streaming = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const agentsContainerRef = useRef<HTMLDivElement>(null);
@@ -157,12 +181,12 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
   const [activeTab, setActiveTab] = useState<'agents' | 'score' | 'review'>('agents');
   const [showTrustPanel, setShowTrustPanel] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const userOverrideRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const { trustScore, loading: trustLoading, error: trustError } = useTrustScore(sessionId);
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
-  const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
   const visibleNodes = agentNodes;
 
   const activityStats = useMemo(() => {
@@ -218,11 +242,14 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
       if (agentsContainerRef.current && agentNodes.length > 0) {
         agentsContainerRef.current.scrollTop = agentsContainerRef.current.scrollHeight;
       }
-      if (toolsContainerRef.current && toolNodes.length > 0) {
-        toolsContainerRef.current.scrollTop = toolsContainerRef.current.scrollHeight;
+      if (toolsContainerRef.current) {
+        const allTools = extractAllTools(tree);
+        if (allTools.length > 0) {
+          toolsContainerRef.current.scrollTop = toolsContainerRef.current.scrollHeight;
+        }
       }
     }
-  }, [tree, selectedNode, showTrustPanel, variant, agentNodes.length, toolNodes.length]);
+  }, [tree, selectedNode, showTrustPanel, variant, agentNodes.length]);
 
   const handleNodeSelect = useCallback((node: ActivityNode) => {
     setSelectedNode(node);
@@ -385,45 +412,80 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                   </div>
                 ) : (
                   <div className="tree-root">
-                    {agentNodes.map((node) => (
-                      <TreeNode
-                        key={node.tool_use_id}
-                        node={node}
-                        depth={0}
-                        onNodeSelect={handleNodeSelect}
-                        currentTime={currentTime}
-                        workspacePath={workspacePath}
-                      />
-                    ))}
+                    {agentNodes.map((node) => {
+                      const agentNode = node as AgentNode;
+                      const isSelected = selectedAgentId === agentNode.tool_use_id;
+                      return (
+                        <div
+                          key={agentNode.tool_use_id}
+                          className={isSelected ? 'agent-card-selected' : ''}
+                          onClick={() => {
+                            setSelectedAgentId(isSelected ? null : agentNode.tool_use_id);
+                          }}
+                        >
+                          <AgentCard
+                            node={agentNode}
+                            depth={0}
+                            onSelect={() => {}}
+                          >
+                            {agentNode.children.map((child) => (
+                              <TreeNode
+                                key={child.tool_use_id}
+                                node={child}
+                                depth={0}
+                                onNodeSelect={() => {}}
+                                currentTime={currentTime}
+                                workspacePath={workspacePath}
+                              />
+                            ))}
+                          </AgentCard>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
             <div className="activity-panel">
-              <div className="activity-panel-header">Tools</div>
+              <div className="activity-panel-header">
+                {selectedAgentId ? (() => {
+                  const selectedAgent = agentNodes.find(n => (n as AgentNode).tool_use_id === selectedAgentId);
+                  return selectedAgent ? `Tools — ${(selectedAgent as AgentNode).agent_type}` : 'Tools';
+                })() : 'Tools'}
+              </div>
               <div className="activity-panel-content" ref={toolsContainerRef}>
-                {toolNodes.length === 0 ? (
-                  <div className="activity-empty">
-                    <div className="activity-empty-pulse" />
-                    <p className="activity-empty-title">Standby</p>
-                    <p className="activity-empty-sub">
-                      Tools appear here as Claude works
-                    </p>
-                  </div>
-                ) : (
-                  <div className="tree-root">
-                    {toolNodes.map((node) => (
-                      <ToolRow
-                        key={node.tool_use_id}
-                        node={node}
-                        depth={0}
-                        onSelect={handleNodeSelect}
-                        currentTime={currentTime}
-                        workspacePath={workspacePath}
-                      />
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const allTools = extractAllTools(tree);
+                  const displayTools = selectedAgentId
+                    ? (() => {
+                        const selectedAgent = agentNodes.find(n => (n as AgentNode).tool_use_id === selectedAgentId);
+                        return selectedAgent ? extractToolsFromAgent(selectedAgent as AgentNode) : [];
+                      })()
+                    : allTools;
+
+                  return displayTools.length === 0 ? (
+                    <div className="activity-empty">
+                      <div className="activity-empty-pulse" />
+                      <p className="activity-empty-title">Standby</p>
+                      <p className="activity-empty-sub">
+                        Tools appear here as Claude works
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="tree-root">
+                      {displayTools.map((node) => (
+                        <ToolRow
+                          key={node.tool_use_id}
+                          node={node}
+                          depth={0}
+                          onSelect={handleNodeSelect}
+                          currentTime={currentTime}
+                          workspacePath={workspacePath}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
