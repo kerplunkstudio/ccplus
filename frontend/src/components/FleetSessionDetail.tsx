@@ -25,6 +25,7 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
     messages,
     activityTree,
     usageStats,
+    contextTokens,
     isRestoringSession,
     connected,
   } = useTabSocket(sessionId);
@@ -68,7 +69,7 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
       </div>
 
       <div className="fleet-session-detail-activity">
-        <ActivityTree tree={activityTree} usageStats={usageStats} variant="split" />
+        <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} variant="split" />
       </div>
 
       <button className="fleet-session-detail-open-btn" onClick={handleOpenAsTab}>
