@@ -39,6 +39,24 @@
   flex-shrink: 0;
 }
 
+.fleet-session-detail-project {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.fleet-session-detail-project-name {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
 .fleet-session-detail-id {
   font-size: 10px;
   font-family: var(--font-mono);

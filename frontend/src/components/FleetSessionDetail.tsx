@@ -10,6 +10,11 @@ interface FleetSessionDetailProps {
   onOpenAsTab: (sessionId: string, workspace: string) => void;
 }
 
+const getProjectName = (path: string): string => {
+  const parts = path.split('/').filter(Boolean);
+  return parts.at(-1) ?? path;
+};
+
 export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
   sessionId,
   workspace,
@@ -29,6 +34,8 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
     return firstUser?.content ?? null;
   }, [messages]);
 
+  const projectName = getProjectName(workspace);
+
   const handleOpenAsTab = () => {
     onOpenAsTab(sessionId, workspace);
   };
@@ -42,7 +49,10 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
           </svg>
           Back to Fleet
         </button>
-        <div className="fleet-session-detail-id">{sessionId}</div>
+        <div className="fleet-session-detail-project">
+          <span className="fleet-session-detail-project-name" title={workspace}>{projectName}</span>
+          <span className="fleet-session-detail-id">{sessionId}</span>
+        </div>
       </div>
 
       <div className="fleet-session-detail-prompt">
