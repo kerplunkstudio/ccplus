@@ -128,6 +128,20 @@ export function updateTokens(sessionId: string, input: number, output: number): 
   }
 }
 
+export function updateSessionTokens(sessionId: string, inputTokens: number, outputTokens: number): void {
+  const session = sessions.get(sessionId);
+  if (session) {
+    const updated: FleetSessionInfo = {
+      ...session,
+      inputTokens,
+      outputTokens,
+      lastActivity: new Date().toISOString(),
+    };
+    sessions.set(sessionId, updated);
+    emitFleetUpdate();
+  }
+}
+
 export function addFileTouched(sessionId: string, filePath: string): void {
   const session = sessions.get(sessionId);
   if (session) {
