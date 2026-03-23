@@ -90,28 +90,6 @@ export function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
         </div>
       </div>
 
-      <div className="settings-row">
-        <div className="settings-row-label-group">
-          <div className="settings-row-label">Memory Distillation Model</div>
-          <div className="settings-row-description">
-            Lightweight model for processing and distilling memory
-          </div>
-        </div>
-        <div className="settings-row-control">
-          <select
-            className="settings-select"
-            value={config.memoryModel}
-            onChange={(e) => onUpdate('models.memoryModel', e.target.value)}
-          >
-            {AVAILABLE_MODELS.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       <h3 className="settings-section-header">Per-Agent Overrides</h3>
 
       {AGENT_TYPES.map((agent) => (

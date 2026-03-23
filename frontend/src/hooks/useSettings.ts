@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 export interface ModelsConfig {
   defaultModel: string;
   captainModel: string;
-  memoryModel: string;
   agent_overrides: Record<string, string>;
 }
 
@@ -62,7 +61,6 @@ const DEFAULT_CONFIG: AppConfig = {
   models: {
     defaultModel: 'claude-sonnet-4.5-20250929',
     captainModel: 'claude-sonnet-4.5-20250929',
-    memoryModel: 'claude-haiku-4.5-20250815',
     agent_overrides: {
       code_agent: 'inherit',
       explore: 'inherit',

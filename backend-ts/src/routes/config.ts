@@ -4,7 +4,6 @@ const DEFAULT_CONFIG = {
   models: {
     defaultModel: 'claude-sonnet-4.5-20250929',
     captainModel: 'claude-sonnet-4.5-20250929',
-    memoryModel: 'claude-haiku-4.5-20250815',
     agent_overrides: {
       code_agent: 'inherit',
       explore: 'inherit',

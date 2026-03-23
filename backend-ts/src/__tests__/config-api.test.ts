@@ -229,16 +229,6 @@ describe("Settings Persistence", () => {
       expect(config.getCaptainModel()).toBe("claude-sonnet-4-6");
     });
 
-    it("getMemoryDistillModel returns correct value", () => {
-      config.saveSettings({
-        models: {
-          memory_distill_model: "claude-haiku-4-5-20251001",
-        },
-      });
-
-      expect(config.getMemoryDistillModel()).toBe("claude-haiku-4-5-20251001");
-    });
-
     it("getAgentOverride returns 'inherit' when not set", () => {
       expect(config.getAgentOverride("code_agent")).toBe("inherit");
     });
@@ -350,7 +340,6 @@ describe("Config API Routes", () => {
 
       expect(data.models).toHaveProperty("sdk_model");
       expect(data.models).toHaveProperty("captain_model");
-      expect(data.models).toHaveProperty("memory_distill_model");
       expect(data.models).toHaveProperty("agent_overrides");
 
       expect(data.integrations.telegram).toHaveProperty("bot_token_set");
