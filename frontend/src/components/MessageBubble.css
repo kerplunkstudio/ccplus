@@ -147,6 +147,19 @@
   text-decoration: underline;
 }
 
+.message-markdown a.file-path-link {
+  font-family: var(--font-mono, monospace);
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+  cursor: pointer;
+}
+
+.message-markdown a.file-path-link:hover {
+  border-bottom-style: solid;
+  text-decoration: none;
+}
+
 .message-markdown blockquote {
   border-left: 3px solid var(--accent-dim);
   padding-left: 12px;
@@ -202,6 +215,19 @@
 
 .message-text a:hover {
   text-decoration: underline;
+}
+
+.message-text a.file-path-link {
+  font-family: var(--font-mono, monospace);
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+  cursor: pointer;
+}
+
+.message-text a.file-path-link:hover {
+  border-bottom-style: solid;
+  text-decoration: none;
 }
 
 .message-text blockquote {
