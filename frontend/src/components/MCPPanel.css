@@ -27,6 +27,16 @@
   justify-content: space-between;
 }
 
+.mcp-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.mcp-tab-bar {
+  margin-top: calc(-1 * clamp(1.5rem, 3vw, 2.5rem));
+}
+
 .mcp-title {
   font-family: var(--font-serif);
   font-size: 3rem;

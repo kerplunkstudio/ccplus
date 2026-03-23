@@ -3,6 +3,10 @@ import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig }
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from "../workflow-state.js";
 import { WORKFLOW_ENABLED } from "../config.js";
 import type { Server as SocketIOServer } from "socket.io";
+import { fetchDiscoveredServers } from '../mcp-discovery.js';
+
+// Exported for testing — prevents tests from duplicating (and potentially diverging from) production validation
+export const SAFE_PACKAGE_NAME_RE = /^@?[a-zA-Z0-9][a-zA-Z0-9._\-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._\-]*)?$/;
 
 export function createMiscRoutes(
   app: Express,
@@ -87,6 +91,81 @@ export function createMiscRoutes(
       } else {
         res.status(404).json({ error: `Server "${name}" not found in ${scope} scope` });
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // -- MCP Discovery --
+
+  app.get("/api/mcp/discover", async (req: Request, res: Response) => {
+    try {
+      const rawQuery = typeof req.query.query === 'string' ? req.query.query : '';
+      const query = rawQuery.slice(0, 200);
+      const rawOffset = parseInt(String(req.query.offset ?? '0'), 10);
+      const offset = isNaN(rawOffset) || rawOffset < 0 ? 0 : Math.min(rawOffset, 10_000);
+      const result = await fetchDiscoveredServers(query, offset);
+      res.json(result);
+    } catch (error) {
+      res.status(502).json({ error: 'Discovery service unavailable' });
+    }
+  });
+
+  app.post("/api/mcp/install", async (req: Request, res: Response) => {
+    try {
+      const { name, packageRegistry, packageName, sourceUrl, scope, projectPath } = req.body as {
+        name?: string;
+        packageRegistry?: string | null;
+        packageName?: string | null;
+        sourceUrl?: string | null;
+        scope?: string;
+        projectPath?: string;
+      };
+
+      if (!name || !name.trim()) {
+        res.status(400).json({ error: 'name is required' });
+        return;
+      }
+
+      if (!scope || !['user', 'project'].includes(scope)) {
+        res.status(400).json({ error: 'scope must be "user" or "project"' });
+        return;
+      }
+
+      if (scope === 'project' && !projectPath) {
+        res.status(400).json({ error: 'projectPath is required for project scope' });
+        return;
+      }
+
+      if (packageName && !SAFE_PACKAGE_NAME_RE.test(packageName)) {
+        res.status(400).json({ error: 'Invalid package name format' });
+        return;
+      }
+
+      let config: McpServerConfig;
+      if (packageRegistry === 'npm') {
+        if (!packageName) {
+          res.status(400).json({ error: 'packageName is required for npm registry' });
+          return;
+        }
+        config = { command: 'npx', args: ['-y', packageName] };
+      } else if (packageRegistry === 'pypi') {
+        if (!packageName) {
+          res.status(400).json({ error: 'packageName is required for pypi registry' });
+          return;
+        }
+        config = { command: 'uvx', args: [packageName] };
+      } else {
+        res.status(400).json({
+          error: 'Manual install required — no supported package registry',
+          manualUrl: sourceUrl ?? null,
+        });
+        return;
+      }
+
+      addMcpServer(name.trim(), config, scope as 'user' | 'project', projectPath);
+      res.status(201).json({ success: true, config });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(500).json({ error: message });

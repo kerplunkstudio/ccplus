@@ -72,26 +72,6 @@ export function getBypassPermissions(): boolean {
   return runtimeConfig.BYPASS_PERMISSIONS;
 }
 
-export function getMemoryEnabled(): boolean {
-  return runtimeConfig.MEMORY_ENABLED;
-}
-
-export function getDistillationEnabled(): boolean {
-  return runtimeConfig.MEMORY_DISTILL_ENABLED;
-}
-
-export function getDistillDebounceMs(): number {
-  return runtimeConfig.MEMORY_DISTILL_DEBOUNCE_MS;
-}
-
-export function getDistillMinMessages(): number {
-  return runtimeConfig.MEMORY_DISTILL_MIN_MESSAGES;
-}
-
-export function getWorktreeEnabled(): boolean {
-  return runtimeConfig.WORKTREE_ENABLED;
-}
-
 // Legacy exports for backward compatibility (deprecated, use getters)
 export const MAX_CONVERSATION_HISTORY = MAX_CONVERSATION_HISTORY_DEFAULT;
 export const MAX_ACTIVITY_EVENTS = MAX_ACTIVITY_EVENTS_DEFAULT;

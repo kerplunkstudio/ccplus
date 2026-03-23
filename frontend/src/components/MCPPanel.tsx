@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { MCPDiscovery } from './MCPDiscovery';
 import './MCPPanel.css';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
@@ -75,6 +76,7 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<AddFormState>(INITIAL_FORM);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'installed' | 'discover'>('installed');
 
   const fetchServers = useCallback(async () => {
     try {
@@ -114,9 +116,11 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
       });
       if (response.ok) {
         await fetchServers();
+      } else {
+        setError(`Failed to remove server: ${response.statusText}`);
       }
-    } catch {
-      // Silently fail, user can retry
+    } catch (err) {
+      setError(`Network error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setRemoving(null);
     }
@@ -200,9 +204,12 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
         setAddForm(INITIAL_FORM);
         setShowAddForm(false);
         await fetchServers();
+      } else {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        setError(`Failed to add server: ${data.error ?? response.statusText}`);
       }
-    } catch {
-      // Silently fail
+    } catch (err) {
+      setError(`Network error: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -225,28 +232,51 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
     <div className="mcp-panel">
       <div className="mcp-container">
         <div className="mcp-header">
-        <h1 className="mcp-title">MCP Servers</h1>
-        <button
-          className={`mcp-add-btn ${showAddForm ? 'active' : ''}`}
-          onClick={() => setShowAddForm(prev => !prev)}
-        >
-          {showAddForm ? '×' : '+'}
-        </button>
-      </div>
-
-      <div className="mcp-subtitle">
-        {servers.length} server{servers.length !== 1 ? 's' : ''} configured
-      </div>
-
-      {error && (
-        <div className="mcp-error-bar">
-          {error}
-          <button className="mcp-error-retry" onClick={fetchServers}>Retry</button>
+          <h1 className="mcp-title">MCP Servers</h1>
+          <div className="mcp-header-actions">
+            {activeTab === 'installed' && (
+              <button
+                className={`mcp-add-btn ${showAddForm ? 'active' : ''}`}
+                onClick={() => setShowAddForm(prev => !prev)}
+              >
+                {showAddForm ? '×' : '+'}
+              </button>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Add Server Form */}
-      {showAddForm && (
+        <div className="mcp-tab-bar">
+          <div className="mcp-type-toggle">
+            <button
+              className={`mcp-type-btn ${activeTab === 'installed' ? 'active' : ''}`}
+              onClick={() => setActiveTab('installed')}
+            >
+              Installed
+            </button>
+            <button
+              className={`mcp-type-btn ${activeTab === 'discover' ? 'active' : ''}`}
+              onClick={() => setActiveTab('discover')}
+            >
+              Discover
+            </button>
+          </div>
+        </div>
+
+        {activeTab === 'installed' && (
+          <>
+            <div className="mcp-subtitle">
+              {servers.length} server{servers.length !== 1 ? 's' : ''} configured
+            </div>
+
+            {error && (
+              <div className="mcp-error-bar">
+                {error}
+                <button className="mcp-error-retry" onClick={fetchServers}>Retry</button>
+              </div>
+            )}
+
+            {/* Add Server Form */}
+            {showAddForm && (
         <div className="mcp-add-form">
           <div className="mcp-form-section-label">NEW SERVER</div>
 
@@ -393,21 +423,21 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
             </button>
           </div>
         </div>
-      )}
+            )}
 
-      {/* Server List */}
-      {servers.length === 0 && !showAddForm ? (
-        <div className="mcp-empty">
-          <div className="mcp-empty-text">No MCP servers configured</div>
-          <div className="mcp-empty-hint">
-            Add servers to extend Claude's capabilities with external tools
-          </div>
-          <button className="mcp-empty-cta" onClick={() => setShowAddForm(true)}>
-            + Add your first server
-          </button>
-        </div>
-      ) : (
-        <div className="mcp-server-list">
+            {/* Server List */}
+            {servers.length === 0 && !showAddForm ? (
+              <div className="mcp-empty">
+                <div className="mcp-empty-text">No MCP servers configured</div>
+                <div className="mcp-empty-hint">
+                  Add servers to extend Claude's capabilities with external tools
+                </div>
+                <button className="mcp-empty-cta" onClick={() => setShowAddForm(true)}>
+                  + Add your first server
+                </button>
+              </div>
+            ) : (
+              <div className="mcp-server-list">
           {servers.map(server => {
             const isExpanded = expandedServer === server.name;
             const serverType = getServerType(server.config);
@@ -490,8 +520,14 @@ export const MCPPanel: React.FC<MCPPanelProps> = ({ projectPath }) => {
               </div>
             );
           })}
-        </div>
-      )}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'discover' && (
+          <MCPDiscovery projectPath={projectPath} onInstallSuccess={fetchServers} />
+        )}
       </div>
     </div>
   );

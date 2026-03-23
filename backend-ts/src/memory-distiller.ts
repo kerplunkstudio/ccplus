@@ -29,7 +29,7 @@ export function shouldDistill(sessionId: string): boolean {
   }
 
   const timeSinceLastDistill = now - lastDistilled;
-  return timeSinceLastDistill >= config.getDistillDebounceMs();
+  return timeSinceLastDistill >= config.getMemoryDistillDebounceMs();
 }
 
 /**
@@ -157,7 +157,7 @@ export async function distillSession(
     const toolEvents = database.getToolEvents(sessionId, 1000);
 
     // Skip if too few messages
-    if (conversations.length < config.getDistillMinMessages()) {
+    if (conversations.length < config.getMemoryDistillMinMessages()) {
       log.debug("Skipping distillation (too few messages)", {
         sessionId,
         messageCount: conversations.length,
