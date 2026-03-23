@@ -77,6 +77,7 @@ const io = new SocketIOServer(httpServer, {
 
 // Wire fleet monitor to Socket.IO
 fleetMonitor.setIOInstance(io);
+fleetMonitor.loadSessionsFromDb();
 
 const upload = multer({ storage: multer.memoryStorage() });
 

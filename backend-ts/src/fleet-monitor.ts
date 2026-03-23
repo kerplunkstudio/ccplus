@@ -1,4 +1,5 @@
 import type { Server as SocketIOServer } from "socket.io";
+import { upsertFleetSession, getAllFleetSessions } from "./database.js";
 
 // ---- Types ----
 
@@ -39,6 +40,13 @@ let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // ---- Public API ----
 
+export function loadSessionsFromDb(): void {
+  const dbSessions = getAllFleetSessions();
+  for (const session of dbSessions) {
+    sessions.set(session.sessionId, session);
+  }
+}
+
 export function registerSession(sessionId: string, workspace: string, requestedBy?: { source: string; sourceId: string }): void {
   const existing = sessions.get(sessionId);
   if (!existing) {
@@ -58,6 +66,7 @@ export function registerSession(sessionId: string, workspace: string, requestedB
       requestedBy,
     };
     sessions.set(sessionId, info);
+    upsertFleetSession(info);
   }
 }
 
@@ -70,6 +79,7 @@ export function updateSessionStatus(sessionId: string, status: FleetSessionInfo[
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     const isTerminal = status === 'completed' || status === 'failed';
     emitFleetUpdate(isTerminal);
   }
@@ -84,6 +94,7 @@ export function incrementToolCount(sessionId: string): void {
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -97,6 +108,7 @@ export function incrementAgentCount(sessionId: string): void {
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -110,6 +122,7 @@ export function decrementAgentCount(sessionId: string): void {
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -124,6 +137,7 @@ export function updateTokens(sessionId: string, input: number, output: number): 
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -138,6 +152,7 @@ export function updateSessionTokens(sessionId: string, inputTokens: number, outp
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -155,6 +170,7 @@ export function addFileTouched(sessionId: string, filePath: string): void {
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }
@@ -167,6 +183,7 @@ export function setLabel(sessionId: string, label: string): void {
       label,
     };
     sessions.set(sessionId, updated);
+    upsertFleetSession(updated);
     emitFleetUpdate();
   }
 }

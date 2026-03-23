@@ -236,6 +236,29 @@ CREATE INDEX IF NOT EXISTS idx_distillations_session ON memory_distillations(ses
 CREATE INDEX IF NOT EXISTS idx_distillations_created ON memory_distillations(created_at);
 `,
   },
+  {
+    version: 10,
+    sql: `
+-- Migration v10: Fleet sessions persistence
+CREATE TABLE IF NOT EXISTS fleet_sessions (
+  session_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'idle',
+  workspace TEXT NOT NULL,
+  tool_count INTEGER DEFAULT 0,
+  active_agents INTEGER DEFAULT 0,
+  input_tokens INTEGER DEFAULT 0,
+  output_tokens INTEGER DEFAULT 0,
+  duration_ms INTEGER DEFAULT 0,
+  started_at TEXT NOT NULL,
+  last_activity TEXT NOT NULL,
+  label TEXT DEFAULT '',
+  files_touched TEXT DEFAULT '[]',
+  requested_by_source TEXT,
+  requested_by_source_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_fleet_sessions_started ON fleet_sessions(started_at);
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

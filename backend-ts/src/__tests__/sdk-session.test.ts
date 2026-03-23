@@ -15,6 +15,8 @@ const { mockQuery, mockDatabase, mockExecFileSync } = vi.hoisted(() => {
     getLastSdkSessionId: vi.fn(() => null),
     getImage: vi.fn(() => null),
     getSessionMetadata: vi.fn(() => null),
+    upsertFleetSession: vi.fn(),
+    getAllFleetSessions: vi.fn(() => []),
   };
   const mockExecFileSync = vi.fn(() => "[]");
   return { mockQuery, mockDatabase, mockExecFileSync };
