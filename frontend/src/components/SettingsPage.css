@@ -1,0 +1,21 @@
+@import './settings/settings-shared.css';
+
+/* Additional SettingsPage-specific styles if needed */
+
+.settings-restart-toast {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  background: #b45309;
+  color: white;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  z-index: 1000;
+}
+
+[data-theme="dark"] .settings-restart-toast {
+  background: #fbbf24;
+  color: #1a1814;
+}
