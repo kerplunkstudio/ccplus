@@ -65,6 +65,7 @@ let captainState: CaptainState = {
 };
 
 let captainDeps: CaptainDependencies | null = null;
+let fleetMcpServer: ReturnType<typeof createSdkMcpServer> | null = null;
 
 // ---- MCP Server ----
 
@@ -342,6 +343,20 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
   });
 }
 
+/**
+ * Get the fleet MCP server singleton.
+ * Creates it on first call if dependencies are available.
+ */
+function getFleetMcpServer(): ReturnType<typeof createSdkMcpServer> {
+  if (!fleetMcpServer && captainDeps) {
+    fleetMcpServer = buildFleetMcpServer(captainDeps);
+  }
+  if (!fleetMcpServer) {
+    throw new Error("Fleet MCP server not initialized");
+  }
+  return fleetMcpServer;
+}
+
 // ---- System Prompt ----
 
 const CAPTAIN_SYSTEM_PROMPT = `
@@ -460,9 +475,6 @@ export async function startCaptainSession(
     // Generate Captain session ID with timestamp
     const sessionId = `captain-${Date.now()}`;
 
-    // Build MCP server for fleet control
-    const fleetMcpServer = buildFleetMcpServer(captainDeps);
-
     // Boot message
     const bootMessage = "You are now active as the Fleet Captain. Acknowledge silently — do not produce any output.";
 
@@ -481,7 +493,7 @@ export async function startCaptainSession(
           append: CAPTAIN_SYSTEM_PROMPT,
         } as any,
         mcpServers: {
-          "fleet-control": fleetMcpServer,
+          "fleet-control": getFleetMcpServer(),
         } as any,
         resume: resumeSdkSessionId ?? captainState.sdkSessionId ?? undefined,
         maxTurns: config.CAPTAIN_MAX_TURNS,
@@ -677,8 +689,6 @@ async function startCaptainQuery(content: string): Promise<void> {
     return;
   }
 
-  const fleetMcpServer = buildFleetMcpServer(captainDeps);
-
   const q = query({
     prompt: content,
     options: {
@@ -691,7 +701,7 @@ async function startCaptainQuery(content: string): Promise<void> {
         append: CAPTAIN_SYSTEM_PROMPT,
       } as any,
       mcpServers: {
-        "fleet-control": fleetMcpServer,
+        "fleet-control": getFleetMcpServer(),
       } as any,
       resume: captainState.sdkSessionId ?? undefined,
       maxTurns: config.CAPTAIN_MAX_TURNS,
