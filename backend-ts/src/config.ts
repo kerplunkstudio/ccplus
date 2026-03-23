@@ -57,7 +57,7 @@ export const MAX_ACTIVITY_EVENTS_DEFAULT = 200;
 
 // Export getters for hot-reloadable values
 export function getSDKModel(): string {
-  return runtimeConfig.SDK_MODEL;
+  return settingsData.models?.sdk_model ?? DEFAULT_SETTINGS.models!.sdk_model!;
 }
 
 export function getMaxConversationHistory(): number {
@@ -172,7 +172,6 @@ interface Settings {
   models?: {
     sdk_model?: string;
     captain_model?: string;
-    memory_distill_model?: string;
     agent_overrides?: {
       [agentName: string]: string;
     };
@@ -226,7 +225,6 @@ const DEFAULT_SETTINGS: Settings = {
   models: {
     sdk_model: "claude-sonnet-4-6",
     captain_model: "claude-opus-4-6",
-    memory_distill_model: "claude-haiku-4-5-20251001",
     agent_overrides: {},
   },
   sessions: {
@@ -398,7 +396,6 @@ export function getResolvedConfig(): object {
     models: {
       sdk_model: settingsData.models?.sdk_model ?? DEFAULT_SETTINGS.models!.sdk_model,
       captain_model: settingsData.models?.captain_model ?? DEFAULT_SETTINGS.models!.captain_model,
-      memory_distill_model: settingsData.models?.memory_distill_model ?? DEFAULT_SETTINGS.models!.memory_distill_model,
       agent_overrides: settingsData.models?.agent_overrides ?? {},
     },
     sessions: {
@@ -447,10 +444,6 @@ export function getResolvedConfig(): object {
 
 export function getCaptainModel(): string {
   return settingsData.models?.captain_model ?? DEFAULT_SETTINGS.models!.captain_model!;
-}
-
-export function getMemoryDistillModel(): string {
-  return settingsData.models?.memory_distill_model ?? DEFAULT_SETTINGS.models!.memory_distill_model!;
 }
 
 export function getAgentOverride(agent: string): string {
