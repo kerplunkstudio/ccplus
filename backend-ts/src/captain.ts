@@ -704,6 +704,21 @@ async function startCaptainQuery(content: string): Promise<void> {
     return;
   }
 
+  // Interrupt active query so the MCP server singleton is freed
+  if (captainState.activeQuery) {
+    log.info("Captain: interrupting active query for new message");
+    try {
+      await captainState.activeQuery.interrupt();
+    } catch (error) {
+      log.error("Captain: failed to interrupt active query", { error: String(error) });
+    }
+    // Wait for processQueryResponse to clear activeQuery (up to 5s)
+    const start = Date.now();
+    while (captainState.activeQuery && Date.now() - start < 5000) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
   const q = query({
     prompt: content,
     options: {
