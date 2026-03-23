@@ -1,189 +1,21 @@
-.settings-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
+@import './settings/settings-shared.css';
 
-/* Header */
+/* Additional SettingsPage-specific styles if needed */
 
-.settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.settings-title {
-  font-family: var(--font-sans);
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  letter-spacing: -0.01em;
-}
-
-.settings-close-button {
-  background: transparent;
-  border: none;
-  padding: var(--space-xs) var(--space-sm);
-  cursor: pointer;
-  font-size: 24px;
-  color: var(--text-tertiary);
-  transition: color 0.15s ease;
-  line-height: 1;
-}
-
-.settings-close-button:hover {
-  color: var(--accent);
-}
-
-/* Banners */
-
-.settings-restart-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
-  background: rgba(234, 179, 8, 0.1);
-  border-bottom: 1px solid rgba(234, 179, 8, 0.3);
-  color: #eab308;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  flex-shrink: 0;
-}
-
-.settings-restart-icon {
-  font-size: var(--text-base);
-  line-height: 1;
-}
-
-.settings-error-banner {
-  display: flex;
-  align-items: center;
-  padding: var(--space-sm) var(--space-lg);
-  background: rgba(239, 68, 68, 0.1);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  flex-shrink: 0;
-}
-
-/* Content layout */
-
-.settings-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* Sidebar */
-
-.settings-sidebar {
-  width: 180px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.settings-category-nav {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-sm) 0;
-}
-
-.settings-category-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+.settings-restart-toast {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  background: #b45309;
+  color: white;
   padding: var(--space-sm) var(--space-md);
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  border-left: 2px solid transparent;
+  z-index: 1000;
 }
 
-.settings-category-item:hover {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.settings-category-item.active {
-  background: var(--bg-primary);
-  color: var(--accent);
-  border-left-color: var(--accent);
-}
-
-.settings-category-bullet {
-  font-size: var(--text-xs);
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.settings-category-label {
-  flex: 1;
-}
-
-/* Panel area */
-
-.settings-panel-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-lg);
-}
-
-.settings-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-tertiary);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-}
-
-/* Generic panel styling for stub components */
-
-.settings-panel {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.settings-panel h2 {
-  font-family: var(--font-sans);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 var(--space-md) 0;
-  letter-spacing: -0.01em;
-}
-
-.settings-panel p {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.6;
-}
-
-/* Responsive adjustments */
-
-@media (max-width: 768px) {
-  .settings-sidebar {
-    width: 140px;
-  }
-
-  .settings-panel-area {
-    padding: var(--space-md);
-  }
+[data-theme="dark"] .settings-restart-toast {
+  background: #fbbf24;
+  color: #1a1814;
 }

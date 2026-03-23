@@ -1,169 +1,155 @@
-import './settings-shared.css'
-import './MemoryPanel.css'
+import React from 'react';
+import { MemoryConfig } from '../../hooks/useSettings';
+import { SettingsToggleRow } from './SettingsToggleRow';
 
 interface MemoryPanelProps {
-  config: {
-    enabled: boolean
-    distillation_enabled: boolean
-    max_inject_tokens: number
-    max_search_results: number
-    search_timeout_ms: number
-    distill_debounce_ms: number
-    distill_min_messages: number
-  } | null
-  onUpdate: (key: string, value: string | boolean | number) => void
+  config: MemoryConfig | null;
+  onUpdate: (key: string, value: unknown) => void;
 }
 
-interface NumberRowProps {
-  label: string
-  description: string
-  value: number
-  configKey: string
-  disabled: boolean
-  onUpdate: (key: string, value: string | boolean | number) => void
-}
-
-function NumberRow({ label, description, value, configKey, disabled, onUpdate }: NumberRowProps) {
-  return (
-    <div className={`settings-row ${disabled ? 'settings-row--disabled' : ''}`}>
-      <div className="settings-row-label">
-        <span className="settings-row-name">{label}</span>
-        <span className="settings-row-desc">{description}</span>
-      </div>
-      <div className="settings-row-control">
-        <div className="settings-number-input">
-          <button
-            type="button"
-            aria-label={`Decrease ${label}`}
-            className="settings-number-btn"
-            disabled={disabled}
-            onClick={() => onUpdate(configKey, Math.max(0, value - 1))}
-          >
-            −
-          </button>
-          <input
-            type="number"
-            aria-label={label}
-            className="settings-number-field"
-            value={value}
-            disabled={disabled}
-            onChange={(e) => onUpdate(configKey, Number(e.target.value))}
-          />
-          <button
-            type="button"
-            aria-label={`Increase ${label}`}
-            className="settings-number-btn"
-            disabled={disabled}
-            onClick={() => onUpdate(configKey, value + 1)}
-          >
-            +
-          </button>
+export function MemoryPanel({ config, onUpdate }: MemoryPanelProps) {
+  if (!config) {
+    return (
+      <div className="settings-panel">
+        <div className="settings-panel-header">
+          <h2 className="settings-panel-title">Memory</h2>
+          <p className="settings-panel-description">
+            Configure memory system for cross-session context persistence
+          </p>
+        </div>
+        <div className="settings-row">
+          <div className="settings-skeleton" style={{ width: '200px' }} />
         </div>
       </div>
-    </div>
-  )
-}
-
-export default function MemoryPanel({ config, onUpdate }: MemoryPanelProps) {
-  const enabled = config?.enabled ?? true
-  const distillationEnabled = config?.distillation_enabled ?? true
-  const maxInjectTokens = config?.max_inject_tokens ?? 4096
-  const maxSearchResults = config?.max_search_results ?? 5
-  const searchTimeoutMs = config?.search_timeout_ms ?? 5000
-  const distillDebounceMs = config?.distill_debounce_ms ?? 60000
-  const distillMinMessages = config?.distill_min_messages ?? 3
-
-  const dependentDisabled = !enabled
+    );
+  }
 
   return (
     <div className="settings-panel">
       <div className="settings-panel-header">
         <h2 className="settings-panel-title">Memory</h2>
-        <p className="settings-panel-description">Session memory system for knowledge persistence across sessions.</p>
+        <p className="settings-panel-description">
+          Configure memory system for cross-session context persistence
+        </p>
       </div>
 
-      <div className="settings-rows">
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <span className="settings-row-name">Memory Enabled</span>
-            <span className="settings-row-desc">Master switch. When off, no memory is searched or stored.</span>
-          </div>
-          <div className="settings-row-control">
-            <button
-              type="button"
-              aria-label="Memory Enabled"
-              className={`settings-toggle ${enabled ? 'settings-toggle--on' : ''}`}
-              onClick={() => onUpdate('enabled', !enabled)}
-              aria-checked={enabled}
-              role="switch"
-            >
-              <span className="settings-toggle-thumb" />
-            </button>
+      <SettingsToggleRow
+        label="Memory Enabled"
+        description="Enable persistent memory across sessions"
+        checked={config.enabled}
+        onChange={(checked) => onUpdate('memory.enabled', checked)}
+      />
+
+      <SettingsToggleRow
+        label="Distillation Enabled"
+        description="Automatically distill conversations into memory"
+        checked={config.distillationEnabled}
+        onChange={(checked) => onUpdate('memory.distillationEnabled', checked)}
+        disabled={!config.enabled}
+      />
+
+      <div className={`settings-row ${!config.enabled ? 'disabled' : ''}`}>
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Max Inject Tokens</div>
+          <div className="settings-row-description">
+            Maximum tokens to inject from memory
           </div>
         </div>
+        <div className="settings-row-control">
+          <input
+            type="number"
+            className="settings-number-input"
+            value={config.maxInjectTokens}
+            onChange={(e) => onUpdate('memory.maxInjectTokens', Number(e.target.value))}
+            min={1000}
+            max={10000}
+            step={100}
+            disabled={!config.enabled}
+          />
+        </div>
+      </div>
 
-        <div className={`settings-row ${dependentDisabled ? 'settings-row--disabled' : ''}`}>
-          <div className="settings-row-label">
-            <span className="settings-row-name">Distillation Enabled</span>
-            <span className="settings-row-desc">Auto-distill sessions to memory after completion. Requires Memory Enabled.</span>
-          </div>
-          <div className="settings-row-control">
-            <button
-              type="button"
-              aria-label="Distillation Enabled"
-              className={`settings-toggle ${distillationEnabled && !dependentDisabled ? 'settings-toggle--on' : ''}`}
-              onClick={() => !dependentDisabled && onUpdate('distillation_enabled', !distillationEnabled)}
-              aria-checked={distillationEnabled && !dependentDisabled}
-              aria-disabled={dependentDisabled}
-              role="switch"
-              disabled={dependentDisabled}
-            >
-              <span className="settings-toggle-thumb" />
-            </button>
+      <div className={`settings-row ${!config.enabled ? 'disabled' : ''}`}>
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Max Search Results</div>
+          <div className="settings-row-description">
+            Maximum number of memory search results
           </div>
         </div>
+        <div className="settings-row-control">
+          <input
+            type="number"
+            className="settings-number-input"
+            value={config.maxSearchResults}
+            onChange={(e) => onUpdate('memory.maxSearchResults', Number(e.target.value))}
+            min={1}
+            max={50}
+            disabled={!config.enabled}
+          />
+        </div>
+      </div>
 
-        <NumberRow
-          label="Max Inject Tokens"
-          description="Maximum tokens of memory context injected into each session"
-          value={maxInjectTokens}
-          configKey="max_inject_tokens"
-          disabled={dependentDisabled}
-          onUpdate={onUpdate}
-        />
-        <NumberRow
-          label="Max Search Results"
-          description="Memory entries retrieved per search query"
-          value={maxSearchResults}
-          configKey="max_search_results"
-          disabled={dependentDisabled}
-          onUpdate={onUpdate}
-        />
-        <NumberRow
-          label="Search Timeout (ms)"
-          description="How long to wait for memory server response"
-          value={searchTimeoutMs}
-          configKey="search_timeout_ms"
-          disabled={dependentDisabled}
-          onUpdate={onUpdate}
-        />
-        <NumberRow
-          label="Distillation Debounce (ms)"
-          description="Minimum time between distillation runs for the same session"
-          value={distillDebounceMs}
-          configKey="distill_debounce_ms"
-          disabled={dependentDisabled}
-          onUpdate={onUpdate}
-        />
-        <NumberRow
-          label="Min Messages for Distillation"
-          description="Sessions with fewer messages are skipped during distillation"
-          value={distillMinMessages}
-          configKey="distill_min_messages"
-          disabled={dependentDisabled}
-          onUpdate={onUpdate}
-        />
+      <div className={`settings-row ${!config.enabled ? 'disabled' : ''}`}>
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Search Timeout</div>
+          <div className="settings-row-description">
+            Memory search timeout in milliseconds
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <input
+            type="number"
+            className="settings-number-input"
+            value={config.searchTimeout}
+            onChange={(e) => onUpdate('memory.searchTimeout', Number(e.target.value))}
+            min={1000}
+            max={30000}
+            step={1000}
+            disabled={!config.enabled}
+          />
+        </div>
+      </div>
+
+      <div className={`settings-row ${!config.enabled ? 'disabled' : ''}`}>
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Distill Debounce</div>
+          <div className="settings-row-description">
+            Delay before distilling after conversation pauses (ms)
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <input
+            type="number"
+            className="settings-number-input"
+            value={config.distillDebounce}
+            onChange={(e) => onUpdate('memory.distillDebounce', Number(e.target.value))}
+            min={5000}
+            max={120000}
+            step={5000}
+            disabled={!config.enabled}
+          />
+        </div>
+      </div>
+
+      <div className={`settings-row ${!config.enabled ? 'disabled' : ''}`}>
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Min Messages</div>
+          <div className="settings-row-description">
+            Minimum messages before distillation triggers
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <input
+            type="number"
+            className="settings-number-input"
+            value={config.minMessages}
+            onChange={(e) => onUpdate('memory.minMessages', Number(e.target.value))}
+            min={1}
+            max={20}
+            disabled={!config.enabled}
+          />
+        </div>
       </div>
     </div>
-  )
+  );
 }

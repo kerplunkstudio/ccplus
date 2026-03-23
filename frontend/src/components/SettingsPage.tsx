@@ -1,108 +1,175 @@
 import React, { useState } from 'react';
 import { useSettings } from '../hooks/useSettings';
-import ModelsPanel from './settings/ModelsPanel';
-import SessionsPanel from './settings/SessionsPanel';
-import MemoryPanel from './settings/MemoryPanel';
-import WorkflowPanel from './settings/WorkflowPanel';
-import CaptainPanel from './settings/CaptainPanel';
-import IntegrationsPanel from './settings/IntegrationsPanel';
+import { ModelsPanel } from './settings/ModelsPanel';
+import { SessionsPanel } from './settings/SessionsPanel';
+import { MemoryPanel } from './settings/MemoryPanel';
+import { WorkflowPanel } from './settings/WorkflowPanel';
+import { CaptainPanel } from './settings/CaptainPanel';
+import { IntegrationsPanel } from './settings/IntegrationsPanel';
 import './SettingsPage.css';
 
-type SettingsCategory = 'models' | 'sessions' | 'memory' | 'workflow' | 'captain' | 'integrations';
+type SettingsCategory =
+  | 'models'
+  | 'sessions'
+  | 'memory'
+  | 'workflow'
+  | 'captain'
+  | 'integrations';
 
-interface Category {
-  id: SettingsCategory;
-  label: string;
-  component: React.ComponentType<any>;
-}
-
-const CATEGORIES: Category[] = [
-  { id: 'models', label: 'Models', component: ModelsPanel },
-  { id: 'sessions', label: 'Sessions', component: SessionsPanel },
-  { id: 'memory', label: 'Memory', component: MemoryPanel },
-  { id: 'workflow', label: 'Workflow', component: WorkflowPanel },
-  { id: 'captain', label: 'Captain', component: CaptainPanel },
-  { id: 'integrations', label: 'Integrations', component: IntegrationsPanel },
-];
-
-interface SettingsPageProps {
-  onClose: () => void;
-}
-
-export const SettingsPage: React.FC<SettingsPageProps> = ({ onClose }) => {
+export function SettingsPage() {
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('models');
-  const { config, loading, error, restartRequired, updateSetting } = useSettings();
+  const { config, loading, error, needsRestart, updateConfig } = useSettings();
 
-  const handleCategoryClick = (categoryId: SettingsCategory) => {
-    setActiveCategory(categoryId);
+  const renderPanel = () => {
+    if (loading) {
+      return (
+        <div className="settings-panel">
+          <div className="settings-panel-header">
+            <h2 className="settings-panel-title">Loading...</h2>
+          </div>
+          <div className="settings-row">
+            <div className="settings-skeleton" style={{ width: '300px' }} />
+          </div>
+          <div className="settings-row">
+            <div className="settings-skeleton" style={{ width: '250px' }} />
+          </div>
+          <div className="settings-row">
+            <div className="settings-skeleton" style={{ width: '280px' }} />
+          </div>
+        </div>
+      );
+    }
+
+    switch (activeCategory) {
+      case 'models':
+        return <ModelsPanel config={config.models} onUpdate={updateConfig} />;
+      case 'sessions':
+        return <SessionsPanel config={config.sessions} onUpdate={updateConfig} />;
+      case 'memory':
+        return <MemoryPanel config={config.memory} onUpdate={updateConfig} />;
+      case 'workflow':
+        return <WorkflowPanel config={config.workflow} onUpdate={updateConfig} />;
+      case 'captain':
+        return <CaptainPanel config={config.captain} onUpdate={updateConfig} />;
+      case 'integrations':
+        return <IntegrationsPanel config={config.integrations} onUpdate={updateConfig} />;
+      default:
+        return <ModelsPanel config={config.models} onUpdate={updateConfig} />;
+    }
   };
-
-  const handleCloseClick = () => {
-    onClose();
-  };
-
-  const ActivePanelComponent = CATEGORIES.find((cat) => cat.id === activeCategory)?.component || ModelsPanel;
-
-  const categoryConfig = config?.[activeCategory] || {};
 
   return (
-    <div className="settings-page">
-      <div className="settings-header">
-        <h1 className="settings-title">Settings</h1>
-        <button
-          className="settings-close-button"
-          onClick={handleCloseClick}
-          aria-label="Close settings"
-        >
-          ×
-        </button>
-      </div>
-
-      {restartRequired && (
-        <div className="settings-restart-banner" role="alert">
-          <span className="settings-restart-icon">⚠</span>
-          Some changes require a restart to take effect
-        </div>
-      )}
-
+    <div className="settings-container">
       {error && (
-        <div className="settings-error-banner" role="alert">
+        <div
+          style={{
+            position: 'fixed',
+            top: '12px',
+            right: '12px',
+            background: 'var(--error)',
+            color: 'white',
+            padding: 'var(--space-sm) var(--space-md)',
+            borderRadius: 'var(--radius-sm)',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 'var(--text-sm)',
+            zIndex: 1000,
+          }}
+        >
           {error}
         </div>
       )}
-
-      <div className="settings-content">
-        <aside className="settings-sidebar">
-          <nav className="settings-category-nav" aria-label="Settings categories">
-            {CATEGORIES.map((category) => (
-              <button
-                key={category.id}
-                className={`settings-category-item ${activeCategory === category.id ? 'active' : ''}`}
-                onClick={() => handleCategoryClick(category.id)}
-                aria-current={activeCategory === category.id ? 'page' : undefined}
-              >
-                <span className="settings-category-bullet">
-                  {activeCategory === category.id ? '●' : '○'}
-                </span>
-                <span className="settings-category-label">{category.label}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        <main className="settings-panel-area">
-          {loading ? (
-            <div className="settings-loading">
-              <p>Loading settings...</p>
-            </div>
-          ) : (
-            <ActivePanelComponent
-              config={categoryConfig}
-              onUpdate={(key: string, value: any) => updateSetting(activeCategory, key, value)}
-            />
-          )}
-        </main>
-      </div>
+      {needsRestart && (
+        <div
+          className="settings-restart-toast"
+        >
+          Restart required for changes to take effect
+        </div>
+      )}
+      <aside className="settings-sidebar">
+        <nav>
+          <ul className="settings-sidebar-list">
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'models' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('models')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('models');
+                }
+              }}
+            >
+              Models
+            </li>
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'sessions' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('sessions')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('sessions');
+                }
+              }}
+            >
+              Sessions
+            </li>
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'memory' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('memory')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('memory');
+                }
+              }}
+            >
+              Memory
+            </li>
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'workflow' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('workflow')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('workflow');
+                }
+              }}
+            >
+              Workflow
+            </li>
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'captain' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('captain')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('captain');
+                }
+              }}
+            >
+              Captain
+            </li>
+            <li
+              className={`settings-sidebar-item ${activeCategory === 'integrations' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('integrations')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  setActiveCategory('integrations');
+                }
+              }}
+            >
+              Integrations
+            </li>
+          </ul>
+        </nav>
+      </aside>
+      <main className="settings-main">{renderPanel()}</main>
     </div>
   );
-};
+}

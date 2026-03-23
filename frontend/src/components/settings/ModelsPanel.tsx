@@ -1,183 +1,140 @@
-import './settings-shared.css'
-import './ModelsPanel.css';
+import React from 'react';
+import { ModelsConfig } from '../../hooks/useSettings';
+
+const AVAILABLE_MODELS = [
+  'claude-sonnet-4.5-20250929',
+  'claude-sonnet-4-20250514',
+  'claude-haiku-4.5-20250815',
+  'claude-opus-4-20250514',
+];
+
+const AGENT_TYPES = [
+  { id: 'code_agent', label: 'code_agent' },
+  { id: 'explore', label: 'explore' },
+  { id: 'code-reviewer', label: 'code-reviewer' },
+  { id: 'orchestrator', label: 'orchestrator' },
+];
 
 interface ModelsPanelProps {
-  config: {
-    sdk_model: string;
-    captain_model: string;
-    memory_distill_model: string;
-    agent_overrides: {
-      code_agent: string;
-      explore: string;
-      code_reviewer: string;
-      orchestrator: string;
-    };
-  } | null;
-  onUpdate: (key: string, value: string) => void;
+  config: ModelsConfig | null;
+  onUpdate: (key: string, value: unknown) => void;
 }
 
-const MAIN_MODELS = [
-  { id: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { id: 'claude-sonnet-4-5-20250929', label: 'Sonnet 4.5' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-];
-
-const OVERRIDE_MODELS = [
-  { id: 'inherit', label: 'Inherit (Default SDK Model)' },
-  ...MAIN_MODELS,
-];
-
-interface SettingRowProps {
-  label: string;
-  description: string;
-  value: string;
-  options: { id: string; label: string }[];
-  configKey: string;
-  onUpdate: (key: string, value: string) => void;
-  inheritedModel?: string;
-}
-
-function SettingRow({ label, description, value, options, configKey, onUpdate, inheritedModel }: SettingRowProps) {
-  return (
-    <div className="model-row">
-      <div className="model-row-label">
-        <div className="model-row-name">{label}</div>
-        <div className="model-row-desc">{description}</div>
-      </div>
-      <div className="model-row-control">
-        {value === 'inherit' && inheritedModel && (
-          <span className="model-inherit-hint">→ {inheritedModel}</span>
-        )}
-        <select
-          className="model-select"
-          value={value}
-          onChange={(e) => onUpdate(configKey, e.target.value)}
-        >
-          {options.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
-}
-
-function SkeletonRows({ count }: { count: number }) {
-  return (
-    <>
-      {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="skeleton-row">
-          <div className="skeleton-block skeleton-label" />
-          <div className="skeleton-block skeleton-control" />
-        </div>
-      ))}
-    </>
-  );
-}
-
-export default function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
+export function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
   if (!config) {
     return (
-      <div className="models-skeleton">
-        <div className="skeleton-block skeleton-title" />
-        <SkeletonRows count={3} />
-        <div className="skeleton-block skeleton-subheader" />
-        <SkeletonRows count={4} />
+      <div className="settings-panel">
+        <div className="settings-panel-header">
+          <h2 className="settings-panel-title">Models</h2>
+          <p className="settings-panel-description">
+            Configure which Claude models are used for different operations
+          </p>
+        </div>
+        <div className="settings-row">
+          <div className="settings-skeleton" style={{ width: '200px' }} />
+        </div>
       </div>
     );
   }
 
-  const sdkModel = config.sdk_model ?? 'claude-sonnet-4-6';
-
-  const mainSettings: SettingRowProps[] = [
-    {
-      label: 'Default SDK Model',
-      description: 'Used by all agents unless overridden below.',
-      value: sdkModel,
-      options: MAIN_MODELS,
-      configKey: 'sdk_model',
-      onUpdate,
-    },
-    {
-      label: 'Captain Model',
-      description: 'Model used by the Captain orchestrator.',
-      value: config.captain_model ?? 'claude-opus-4-6',
-      options: MAIN_MODELS,
-      configKey: 'captain_model',
-      onUpdate,
-    },
-    {
-      label: 'Memory Distillation Model',
-      description: 'Model used to distill and summarize memory.',
-      value: config.memory_distill_model ?? 'claude-haiku-4-5-20251001',
-      options: MAIN_MODELS,
-      configKey: 'memory_distill_model',
-      onUpdate,
-    },
-  ];
-
-  const agentOverrides: SettingRowProps[] = [
-    {
-      label: 'code_agent',
-      description: 'Executes code modifications and file operations.',
-      value: config.agent_overrides?.code_agent ?? 'inherit',
-      options: OVERRIDE_MODELS,
-      configKey: 'agent_overrides.code_agent',
-      onUpdate,
-      inheritedModel: sdkModel,
-    },
-    {
-      label: 'explore',
-      description: 'Fast codebase exploration and search agent.',
-      value: config.agent_overrides?.explore ?? 'inherit',
-      options: OVERRIDE_MODELS,
-      configKey: 'agent_overrides.explore',
-      onUpdate,
-      inheritedModel: sdkModel,
-    },
-    {
-      label: 'code-reviewer',
-      description: 'Code quality, security, and maintainability review.',
-      value: config.agent_overrides?.code_reviewer ?? 'inherit',
-      options: OVERRIDE_MODELS,
-      configKey: 'agent_overrides.code_reviewer',
-      onUpdate,
-      inheritedModel: sdkModel,
-    },
-    {
-      label: 'orchestrator',
-      description: 'Coordinates multi-agent workflows.',
-      value: config.agent_overrides?.orchestrator ?? 'inherit',
-      options: OVERRIDE_MODELS,
-      configKey: 'agent_overrides.orchestrator',
-      onUpdate,
-      inheritedModel: sdkModel,
-    },
-  ];
-
   return (
-    <div className="models-panel">
-      <div className="models-panel-header">
-        <h2 className="models-panel-title">Models</h2>
-        <p className="models-panel-description">Which Claude model runs where. All changes apply immediately.</p>
+    <div className="settings-panel">
+      <div className="settings-panel-header">
+        <h2 className="settings-panel-title">Models</h2>
+        <p className="settings-panel-description">
+          Configure which Claude models are used for different operations
+        </p>
       </div>
 
-      <div className="models-section">
-        {mainSettings.map((setting) => (
-          <SettingRow key={setting.configKey} {...setting} />
-        ))}
-      </div>
-
-      <div className="models-section">
-        <div className="models-section-header">
-          <h3 className="models-section-title">Per-Agent Overrides</h3>
-          <p className="models-section-desc">Override the default model for specific agents. &apos;Inherit&apos; uses the Default SDK Model.</p>
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Default SDK Model</div>
+          <div className="settings-row-description">
+            Primary model for agent sessions and tools
+          </div>
         </div>
-        {agentOverrides.map((setting) => (
-          <SettingRow key={setting.configKey} {...setting} />
-        ))}
+        <div className="settings-row-control">
+          <select
+            className="settings-select"
+            value={config.defaultModel}
+            onChange={(e) => onUpdate('models.defaultModel', e.target.value)}
+          >
+            {AVAILABLE_MODELS.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Captain Model</div>
+          <div className="settings-row-description">
+            Model used for the autonomous Captain agent
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <select
+            className="settings-select"
+            value={config.captainModel}
+            onChange={(e) => onUpdate('models.captainModel', e.target.value)}
+          >
+            {AVAILABLE_MODELS.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Memory Distillation Model</div>
+          <div className="settings-row-description">
+            Lightweight model for processing and distilling memory
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <select
+            className="settings-select"
+            value={config.memoryModel}
+            onChange={(e) => onUpdate('models.memoryModel', e.target.value)}
+          >
+            {AVAILABLE_MODELS.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <h3 className="settings-section-header">Per-Agent Overrides</h3>
+
+      {AGENT_TYPES.map((agent) => (
+        <div className="settings-row" key={agent.id}>
+          <div className="settings-row-label-group">
+            <div className="settings-row-label">{agent.label}</div>
+          </div>
+          <div className="settings-row-control">
+            <select
+              className="settings-select"
+              value={config.agent_overrides[agent.id] || 'inherit'}
+              onChange={(e) => onUpdate(`models.agent_overrides.${agent.id}`, e.target.value)}
+            >
+              <option value="inherit">inherit</option>
+              {AVAILABLE_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

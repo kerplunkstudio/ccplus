@@ -1,100 +1,88 @@
-import './settings-shared.css'
-import './CaptainPanel.css'
-import SettingsToggleRow from './SettingsToggleRow'
+import React from 'react';
+import { CaptainConfig } from '../../hooks/useSettings';
+import { SettingsToggleRow } from './SettingsToggleRow';
 
 interface CaptainPanelProps {
-  config: {
-    auto_start: boolean
-    resume_on_startup: boolean
-    workspace_path: string
-    allow_edits: boolean
-    allow_bash: boolean
-  } | null
-  onUpdate: (key: string, value: unknown) => void
+  config: CaptainConfig | null;
+  onUpdate: (key: string, value: unknown) => void;
 }
 
-interface TextRowProps {
-  label: string
-  description: string
-  value: string
-  placeholder?: string
-  restartRequired?: boolean
-  onChange: (value: string) => void
-}
-
-function TextRow({ label, description, value, placeholder, restartRequired = false, onChange }: TextRowProps) {
-  return (
-    <div className="setting-row setting-row--column">
-      <div className="setting-info">
-        <span className="setting-label">
-          {label}
-          {restartRequired && <span className="restart-badge">(restart required)</span>}
-        </span>
-        <span className="setting-description">{description}</span>
+export function CaptainPanel({ config, onUpdate }: CaptainPanelProps) {
+  if (!config) {
+    return (
+      <div className="settings-panel">
+        <div className="settings-panel-header">
+          <h2 className="settings-panel-title">Captain</h2>
+          <p className="settings-panel-description">
+            Configure the autonomous Captain agent settings
+          </p>
+        </div>
+        <div className="settings-row">
+          <div className="settings-skeleton" style={{ width: '200px' }} />
+        </div>
       </div>
-      <input
-        type="text"
-        className="setting-input"
-        value={value}
-        placeholder={placeholder}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-      />
-    </div>
-  )
-}
-
-export default function CaptainPanel({ config, onUpdate }: CaptainPanelProps) {
-  const cfg = config ?? {
-    auto_start: true,
-    resume_on_startup: true,
-    workspace_path: '',
-    allow_edits: false,
-    allow_bash: true,
+    );
   }
 
   return (
     <div className="settings-panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Captain</h2>
-        <p className="panel-description">The persistent orchestrator session.</p>
+      <div className="settings-panel-header">
+        <h2 className="settings-panel-title">Captain</h2>
+        <p className="settings-panel-description">
+          Configure the autonomous Captain agent settings
+        </p>
       </div>
 
-      <div className="settings-list">
-        <SettingsToggleRow
-          label="Auto-start Captain"
-          description="Automatically start Captain when cc+ launches"
-          checked={cfg.auto_start}
-          restartRequired
-          onChange={(value) => onUpdate('auto_start', value)}
-        />
-        <SettingsToggleRow
-          label="Resume on Startup"
-          description="Resume previous Captain conversation on restart"
-          checked={cfg.resume_on_startup}
-          restartRequired
-          onChange={(value) => onUpdate('resume_on_startup', value)}
-        />
-        <TextRow
-          label="Captain Workspace"
-          description="Working directory for the Captain session"
-          value={cfg.workspace_path}
-          placeholder="Inherits from Sessions workspace"
-          restartRequired
-          onChange={(value) => onUpdate('workspace_path', value)}
-        />
-        <SettingsToggleRow
-          label="Allow Edits"
-          description="Allow Captain to use Edit and Write tools directly (not recommended)"
-          checked={cfg.allow_edits}
-          onChange={(value) => onUpdate('allow_edits', value)}
-        />
-        <SettingsToggleRow
-          label="Allow Bash"
-          description="Allow Captain to execute Bash commands"
-          checked={cfg.allow_bash}
-          onChange={(value) => onUpdate('allow_bash', value)}
-        />
+      <SettingsToggleRow
+        label="Auto-start"
+        description="Automatically start Captain when cc+ launches"
+        checked={config.autoStart}
+        onChange={(checked) => onUpdate('captain.autoStart', checked)}
+        requiresRestart
+      />
+
+      <SettingsToggleRow
+        label="Resume on Startup"
+        description="Resume previous Captain session on launch"
+        checked={config.resumeOnStartup}
+        onChange={(checked) => onUpdate('captain.resumeOnStartup', checked)}
+        requiresRestart
+      />
+
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Captain Workspace
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            Dedicated workspace directory for Captain operations
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <input
+            type="text"
+            className="settings-text-input"
+            value={config.captainWorkspace}
+            onChange={(e) => onUpdate('captain.captainWorkspace', e.target.value)}
+            placeholder="/path/to/captain/workspace"
+          />
+        </div>
       </div>
+
+      <SettingsToggleRow
+        label="Allow Edits"
+        description="Allow Captain to edit files directly"
+        checked={config.allowEdits}
+        onChange={(checked) => onUpdate('captain.allowEdits', checked)}
+      />
+
+      <SettingsToggleRow
+        label="Allow Bash"
+        description="Allow Captain to execute bash commands"
+        checked={config.allowBash}
+        onChange={(checked) => onUpdate('captain.allowBash', checked)}
+      />
     </div>
-  )
+  );
 }

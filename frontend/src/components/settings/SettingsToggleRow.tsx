@@ -1,41 +1,41 @@
-import './settings-shared.css'
+import React from 'react';
 
 interface SettingsToggleRowProps {
-  label: string
-  description: string
-  checked: boolean
-  disabled?: boolean
-  restartRequired?: boolean
-  onChange: (value: boolean) => void
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  requiresRestart?: boolean;
 }
 
-export default function SettingsToggleRow({
+export function SettingsToggleRow({
   label,
   description,
   checked,
-  disabled = false,
-  restartRequired = false,
   onChange,
+  disabled = false,
+  requiresRestart = false,
 }: SettingsToggleRowProps) {
   return (
-    <div className={`setting-row${disabled ? ' setting-row--disabled' : ''}`}>
-      <div className="setting-info">
-        <span className="setting-label">
+    <div className={`settings-row ${disabled ? 'disabled' : ''}`}>
+      <div className="settings-row-label-group">
+        <div className="settings-row-label">
           {label}
-          {restartRequired && <span className="restart-badge">(restart required)</span>}
-        </span>
-        <span className="setting-description">{description}</span>
+          {requiresRestart && <span className="settings-restart-badge">· restart required</span>}
+        </div>
+        {description && <div className="settings-row-description">{description}</div>}
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        className={`toggle${checked ? ' toggle--on' : ''}`}
-        onClick={() => onChange(!checked)}
-        disabled={disabled}
-      >
-        <span className="toggle-thumb" />
-      </button>
+      <div className="settings-row-control">
+        <button
+          className={`settings-toggle ${checked ? 'checked' : ''}`}
+          onClick={() => onChange(!checked)}
+          disabled={disabled}
+          role="switch"
+          aria-checked={checked}
+          aria-label={label}
+        />
+      </div>
     </div>
-  )
+  );
 }

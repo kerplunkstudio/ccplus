@@ -1,265 +1,226 @@
-import React, { useState, useRef, useEffect, useId, KeyboardEvent } from 'react';
-import './settings-shared.css';
-import './IntegrationsPanel.css';
+import React, { useState, KeyboardEvent } from 'react';
+import { IntegrationsConfig } from '../../hooks/useSettings';
 
 interface IntegrationsPanelProps {
-  config: {
-    telegram: {
-      bot_token_set: boolean;
-      allowed_users: string[];
-      typing_interval_ms: number;
-    };
-    discord: {
-      bot_token_set: boolean;
-      allowed_users: string[];
-    };
-  } | null;
+  config: IntegrationsConfig | null;
   onUpdate: (key: string, value: unknown) => void;
 }
 
-interface TokenFieldProps {
-  tokenSet: boolean;
-  onSave: (value: string) => void;
-  helperText?: string;
-  labelId?: string;
-}
+export function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) {
+  const [telegramTokenVisible, setTelegramTokenVisible] = useState(false);
+  const [telegramUserInput, setTelegramUserInput] = useState('');
+  const [discordTokenVisible, setDiscordTokenVisible] = useState(false);
+  const [discordUserInput, setDiscordUserInput] = useState('');
 
-function TokenField({ tokenSet, onSave, helperText, labelId }: TokenFieldProps) {
-  const [editing, setEditing] = useState(!tokenSet);
-  const [draft, setDraft] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const inputId = useId();
-
-  // Sync editing state when tokenSet prop changes (e.g. after successful save)
-  useEffect(() => {
-    if (tokenSet) setEditing(false);
-  }, [tokenSet]);
-
-  // Focus input when entering edit mode
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-
-  const handleChange = () => {
-    setEditing(true);
-    setDraft('');
-  };
-
-  const handleSave = () => {
-    if (draft.trim()) {
-      onSave(draft.trim());
-      setEditing(false);
-      setDraft('');
-    }
-  };
-
-  const handleCancel = () => {
-    setEditing(false);
-    setDraft('');
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSave();
-    }
-    if (e.key === 'Escape' && tokenSet) {
-      handleCancel();
-    }
-  };
-
-  if (!editing && tokenSet) {
+  if (!config) {
     return (
-      <div className="ip-token-masked-row">
-        <span className="ip-token-dots" aria-label="Token set">••••••••</span>
-        <button className="ip-btn-secondary" onClick={handleChange}>Change</button>
+      <div className="settings-panel">
+        <div className="settings-panel-header">
+          <h2 className="settings-panel-title">Integrations</h2>
+          <p className="settings-panel-description">
+            Configure third-party integrations for remote access
+          </p>
+        </div>
+        <div className="settings-row">
+          <div className="settings-skeleton" style={{ width: '200px' }} />
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="ip-token-edit-row">
-      <input
-        ref={inputRef}
-        id={labelId ?? inputId}
-        type="password"
-        className="ip-input"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={tokenSet ? 'Enter new token' : ''}
-        autoComplete="off"
-      />
-      {tokenSet ? (
-        <>
-          <button className="ip-btn-primary" onClick={handleSave}>Save</button>
-          <button className="ip-btn-secondary" onClick={handleCancel}>Cancel</button>
-        </>
-      ) : helperText ? (
-        <span className="ip-helper">{helperText}</span>
-      ) : null}
-    </div>
-  );
-}
-
-interface TagInputProps {
-  values: string[];
-  onChange: (values: string[]) => void;
-  inputId?: string;
-}
-
-function TagInput({ values, onChange, inputId }: TagInputProps) {
-  const [inputVal, setInputVal] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const addTag = (raw: string) => {
-    const trimmed = raw.trim().replace(/,$/, '').trim();
-    if (!trimmed || values.includes(trimmed)) return;
-    onChange([...values, trimmed]);
-    setInputVal('');
-  };
-
-  const removeTag = (tag: string) => {
-    onChange(values.filter((v) => v !== tag));
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTag(inputVal);
-    }
-    if (e.key === 'Backspace' && !inputVal && values.length > 0) {
-      onChange(values.slice(0, -1));
+  const handleTelegramUserAdd = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && telegramUserInput.trim()) {
+      const newUsers = [...config.telegram.allowedUsers, telegramUserInput.trim()];
+      onUpdate('integrations.telegram.allowedUsers', newUsers);
+      setTelegramUserInput('');
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val.endsWith(',')) {
-      addTag(val);
-    } else {
-      setInputVal(val);
+  const handleDiscordUserAdd = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && discordUserInput.trim()) {
+      const newUsers = [...config.discord.allowedUsers, discordUserInput.trim()];
+      onUpdate('integrations.discord.allowedUsers', newUsers);
+      setDiscordUserInput('');
     }
   };
 
-  return (
-    <div className="ip-tag-input" onClick={() => inputRef.current?.focus()}>
-      {values.map((tag) => (
-        <span key={tag} className="ip-tag">
-          {tag}
-          <button
-            className="ip-tag-remove"
-            onClick={(e) => { e.stopPropagation(); removeTag(tag); }}
-            aria-label={`Remove ${tag}`}
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </span>
-      ))}
-      <input
-        ref={inputRef}
-        id={inputId}
-        className="ip-tag-input-field"
-        value={inputVal}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        placeholder={values.length === 0 ? 'Add user ID or @username…' : ''}
-      />
-    </div>
-  );
-}
+  const removeTelegramUser = (user: string) => {
+    const newUsers = config.telegram.allowedUsers.filter((u) => u !== user);
+    onUpdate('integrations.telegram.allowedUsers', newUsers);
+  };
 
-export default function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) {
-  const telegram = config?.telegram ?? { bot_token_set: false, allowed_users: [], typing_interval_ms: 4000 };
-  const discord = config?.discord ?? { bot_token_set: false, allowed_users: [] };
-
-  const tgTokenLabelId = useId();
-  const tgUsersLabelId = useId();
-  const tgIntervalId = useId();
-  const dcTokenLabelId = useId();
-  const dcUsersLabelId = useId();
+  const removeDiscordUser = (user: string) => {
+    const newUsers = config.discord.allowedUsers.filter((u) => u !== user);
+    onUpdate('integrations.discord.allowedUsers', newUsers);
+  };
 
   return (
-    <div className="ip-panel">
-      <div className="ip-header">
-        <h2 className="ip-title">Integrations</h2>
-        <p className="ip-description">External services that connect to Captain.</p>
+    <div className="settings-panel">
+      <div className="settings-panel-header">
+        <h2 className="settings-panel-title">Integrations</h2>
+        <p className="settings-panel-description">
+          Configure third-party integrations for remote access
+        </p>
       </div>
 
-      <div className="ip-restart-banner" role="note">
-        All integration changes require a restart to take effect
+      <h3 className="settings-section-header">Telegram</h3>
+
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Bot Token
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            Telegram bot API token from @BotFather
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <div className="settings-password-wrapper">
+            <input
+              type={telegramTokenVisible ? 'text' : 'password'}
+              className="settings-password-input"
+              value={config.telegram.botToken}
+              onChange={(e) => onUpdate('integrations.telegram.botToken', e.target.value)}
+              placeholder="Enter token..."
+            />
+            <button
+              className="settings-password-toggle"
+              onClick={() => setTelegramTokenVisible(!telegramTokenVisible)}
+              aria-label={telegramTokenVisible ? 'Hide token' : 'Show token'}
+            >
+              {telegramTokenVisible ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Telegram */}
-      <section className="ip-section">
-        <h3 className="ip-section-title">Telegram</h3>
-
-        <div className="ip-field">
-          <label className="ip-label" htmlFor={tgTokenLabelId}>Bot Token</label>
-          <TokenField
-            tokenSet={telegram.bot_token_set}
-            onSave={(val) => onUpdate('telegram.bot_token', val)}
-            helperText="Get a token from @BotFather on Telegram"
-            labelId={tgTokenLabelId}
-          />
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Allowed Users
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            Telegram user IDs authorized to interact with the bot
+          </div>
         </div>
-
-        <div className="ip-field">
-          <label className="ip-label" htmlFor={tgUsersLabelId}>Allowed Users</label>
-          <p className="ip-description-small">
-            Telegram user IDs or @usernames that can interact with Captain. Empty = no restriction.
-          </p>
-          <TagInput
-            values={telegram.allowed_users}
-            onChange={(vals) => onUpdate('telegram.allowed_users', vals)}
-            inputId={tgUsersLabelId}
-          />
+        <div className="settings-row-control">
+          <div className="settings-tag-input-wrapper">
+            {config.telegram.allowedUsers.map((user) => (
+              <span key={user} className="settings-tag">
+                {user}
+                <button
+                  className="settings-tag-remove"
+                  onClick={() => removeTelegramUser(user)}
+                  aria-label={`Remove ${user}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              className="settings-tag-input"
+              value={telegramUserInput}
+              onChange={(e) => setTelegramUserInput(e.target.value)}
+              onKeyDown={handleTelegramUserAdd}
+              placeholder="Add user ID..."
+            />
+          </div>
         </div>
+      </div>
 
-        <div className="ip-field">
-          <label className="ip-label" htmlFor={tgIntervalId}>Typing Indicator Interval (ms)</label>
-          <p className="ip-description-small">How often to send typing indicator while Captain processes</p>
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Typing Indicator Interval
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            How often to send typing indicator (ms)
+          </div>
+        </div>
+        <div className="settings-row-control">
           <input
-            id={tgIntervalId}
             type="number"
-            className="ip-input ip-input-number"
-            value={telegram.typing_interval_ms}
-            min={500}
+            className="settings-number-input"
+            value={config.telegram.typingInterval}
+            onChange={(e) => onUpdate('integrations.telegram.typingInterval', Number(e.target.value))}
+            min={1000}
+            max={10000}
             step={500}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              if (!isNaN(val) && val >= 500) onUpdate('telegram.typing_interval_ms', val);
-            }}
           />
         </div>
-      </section>
+      </div>
 
-      <div className="ip-divider" />
+      <h3 className="settings-section-header">Discord</h3>
 
-      {/* Discord */}
-      <section className="ip-section">
-        <h3 className="ip-section-title">Discord</h3>
-
-        <div className="ip-field">
-          <label className="ip-label" htmlFor={dcTokenLabelId}>Bot Token</label>
-          <TokenField
-            tokenSet={discord.bot_token_set}
-            onSave={(val) => onUpdate('discord.bot_token', val)}
-            labelId={dcTokenLabelId}
-          />
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Bot Token
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            Discord bot token from Developer Portal
+          </div>
         </div>
-
-        <div className="ip-field">
-          <label className="ip-label" htmlFor={dcUsersLabelId}>Allowed Users</label>
-          <p className="ip-description-small">
-            Discord user IDs that can interact with Captain via the bot
-          </p>
-          <TagInput
-            values={discord.allowed_users}
-            onChange={(vals) => onUpdate('discord.allowed_users', vals)}
-            inputId={dcUsersLabelId}
-          />
+        <div className="settings-row-control">
+          <div className="settings-password-wrapper">
+            <input
+              type={discordTokenVisible ? 'text' : 'password'}
+              className="settings-password-input"
+              value={config.discord.botToken}
+              onChange={(e) => onUpdate('integrations.discord.botToken', e.target.value)}
+              placeholder="Enter token..."
+            />
+            <button
+              className="settings-password-toggle"
+              onClick={() => setDiscordTokenVisible(!discordTokenVisible)}
+              aria-label={discordTokenVisible ? 'Hide token' : 'Show token'}
+            >
+              {discordTokenVisible ? '👁️' : '👁️‍🗨️'}
+            </button>
+          </div>
         </div>
-      </section>
+      </div>
+
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">
+            Allowed Users
+            <span className="settings-restart-badge">· restart required</span>
+          </div>
+          <div className="settings-row-description">
+            Discord user IDs authorized to interact with the bot
+          </div>
+        </div>
+        <div className="settings-row-control">
+          <div className="settings-tag-input-wrapper">
+            {config.discord.allowedUsers.map((user) => (
+              <span key={user} className="settings-tag">
+                {user}
+                <button
+                  className="settings-tag-remove"
+                  onClick={() => removeDiscordUser(user)}
+                  aria-label={`Remove ${user}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              type="text"
+              className="settings-tag-input"
+              value={discordUserInput}
+              onChange={(e) => setDiscordUserInput(e.target.value)}
+              onKeyDown={handleDiscordUserAdd}
+              placeholder="Add user ID..."
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

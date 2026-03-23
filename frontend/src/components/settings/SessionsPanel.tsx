@@ -1,62 +1,62 @@
-import './settings-shared.css'
-import './SessionsPanel.css'
+import React from 'react';
+import { SessionsConfig } from '../../hooks/useSettings';
+import { SettingsToggleRow } from './SettingsToggleRow';
 
 interface SessionsPanelProps {
-  config: {
-    workspace_path: string
-    bypass_permissions: boolean
-  } | null
-  onUpdate: (key: string, value: string | boolean | number) => void
+  config: SessionsConfig | null;
+  onUpdate: (key: string, value: unknown) => void;
 }
 
-export default function SessionsPanel({ config, onUpdate }: SessionsPanelProps) {
-  const workspacePath = config?.workspace_path ?? '~/Workspace'
-  const bypassPermissions = config?.bypass_permissions ?? true
+export function SessionsPanel({ config, onUpdate }: SessionsPanelProps) {
+  if (!config) {
+    return (
+      <div className="settings-panel">
+        <div className="settings-panel-header">
+          <h2 className="settings-panel-title">Sessions</h2>
+          <p className="settings-panel-description">
+            Configure default session behavior and workspace settings
+          </p>
+        </div>
+        <div className="settings-row">
+          <div className="settings-skeleton" style={{ width: '200px' }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="settings-panel">
       <div className="settings-panel-header">
         <h2 className="settings-panel-title">Sessions</h2>
-        <p className="settings-panel-description">How SDK sessions behave.</p>
+        <p className="settings-panel-description">
+          Configure default session behavior and workspace settings
+        </p>
       </div>
 
-      <div className="settings-rows">
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <span className="settings-row-name">Default Workspace Path</span>
-            <span className="settings-row-desc">Default directory opened when starting a new session</span>
-          </div>
-          <div className="settings-row-control">
-            <input
-              type="text"
-              aria-label="Default Workspace Path"
-              className="settings-text-input"
-              value={workspacePath}
-              onChange={e => onUpdate('workspace_path', e.target.value)}
-              placeholder="~/Workspace"
-            />
+      <div className="settings-row">
+        <div className="settings-row-label-group">
+          <div className="settings-row-label">Default Workspace Path</div>
+          <div className="settings-row-description">
+            Default directory for new sessions
           </div>
         </div>
-
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <span className="settings-row-name">Bypass Permissions</span>
-            <span className="settings-row-desc">When on, the SDK runs without per-tool permission prompts</span>
-          </div>
-          <div className="settings-row-control">
-            <button
-              type="button"
-              aria-label="Bypass Permissions"
-              className={`settings-toggle ${bypassPermissions ? 'settings-toggle--on' : ''}`}
-              onClick={() => onUpdate('bypass_permissions', !bypassPermissions)}
-              aria-checked={bypassPermissions}
-              role="switch"
-            >
-              <span className="settings-toggle-thumb" />
-            </button>
-          </div>
+        <div className="settings-row-control">
+          <input
+            type="text"
+            className="settings-text-input"
+            value={config.workspacePath}
+            onChange={(e) => onUpdate('sessions.workspacePath', e.target.value)}
+            placeholder="/path/to/workspace"
+          />
         </div>
       </div>
+
+      <SettingsToggleRow
+        label="Bypass Permissions"
+        description="Skip permission prompts for file operations (use with caution)"
+        checked={config.bypassPermissions}
+        onChange={(checked) => onUpdate('sessions.bypassPermissions', checked)}
+      />
     </div>
-  )
+  );
 }
