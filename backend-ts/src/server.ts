@@ -30,6 +30,7 @@ import { createSessionRoutes } from "./routes/sessions.js";
 import { createWorkspaceRoutes } from "./routes/workspace.js";
 import { createImageRoutes } from "./routes/images.js";
 import { createMiscRoutes } from "./routes/misc.js";
+import { createDiffRoutes } from "./routes/diff.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 
 // Remove CLAUDECODE env var
@@ -129,6 +130,7 @@ createFilesystemRoutes(app);
 createSessionRoutes(app, { database, sdkSession, sessionWorkspaces, io, buildSocketCallbacks: buildSocketCallbacksWithDeps, log });
 createWorkspaceRoutes(app, { database });
 createImageRoutes(app, { database, upload });
+createDiffRoutes(app, { sessionWorkspaces, sdkSession, log });
 
 // Set workspace (requires mutation of server-level state)
 app.post("/api/set-workspace", (req: Request, res: Response) => {
