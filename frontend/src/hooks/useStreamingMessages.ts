@@ -203,7 +203,7 @@ export function useStreamingMessages({
         // Update model only if we have it
         setUsageStats(prev => ({
           ...prev,
-          model: data.model,
+          model: data.model || prev.model,
         }));
       }
 
