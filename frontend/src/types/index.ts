@@ -331,3 +331,4 @@ export interface CostDashboardData {
 }
 
 export * from './workspace';
+export * from './diff';

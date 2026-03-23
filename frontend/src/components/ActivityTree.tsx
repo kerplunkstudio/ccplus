@@ -5,6 +5,7 @@ import { ToolRow } from './ToolRow';
 import { NodeDetail } from './NodeDetail';
 import { UsageStatsBar } from './UsageStatsBar';
 import { TrustScore } from './TrustScore';
+import { DiffReviewPanel } from './DiffReviewPanel';
 import { useTrustScore } from '../hooks/useTrustScore';
 import './ActivityTree.css';
 
@@ -15,6 +16,7 @@ interface ActivityTreeProps {
   sessionId?: string;
   variant?: 'tabs' | 'split';
   workspacePath?: string;
+  streaming?: boolean;
 }
 
 interface TreeNodeProps {
@@ -148,7 +150,7 @@ const formatElapsed = (ms: number): string => {
   return `${minutes}m ${seconds}s`;
 };
 
-export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs', workspacePath }) => {
+export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, contextTokens, sessionId, variant = 'tabs', workspacePath, streaming = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const agentsContainerRef = useRef<HTMLDivElement>(null);
   const toolsContainerRef = useRef<HTMLDivElement>(null);
@@ -441,6 +443,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
         hasRunning={activityStats.hasRunning}
         contextTokens={contextTokens}
       />
+      {sessionId && <DiffReviewPanel sessionId={sessionId} streaming={streaming} />}
     </div>
   );
 };
