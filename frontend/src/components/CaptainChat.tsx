@@ -53,11 +53,17 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   onClear,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef(true);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedConvId, setExpandedConvId] = useState<string | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isInitialMount.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      isInitialMount.current = false;
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleToggleHistory = () => {
