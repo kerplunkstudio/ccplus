@@ -301,4 +301,33 @@ export interface TrustMetrics {
   flags: TrustFlag[];
 }
 
+export interface CostDashboardData {
+  hero: {
+    today: number;
+    this_week: number;
+    this_month: number;
+  };
+  top_sessions: Array<{
+    session_id: string;
+    label: string;
+    total_cost: number;
+    input_tokens: number;
+    output_tokens: number;
+    query_count: number;
+  }>;
+  by_model: Array<{
+    model: string;
+    queries: number;
+    total_cost: number;
+    input_tokens: number;
+    output_tokens: number;
+  }>;
+  daily_trend: Array<{
+    date: string;
+    cost: number;
+    input_tokens: number;
+    output_tokens: number;
+  }>;
+}
+
 export * from './workspace';

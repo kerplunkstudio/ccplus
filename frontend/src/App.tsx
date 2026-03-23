@@ -6,9 +6,9 @@ import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
+import { CostDashboard } from './components/CostDashboard';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { MCPPanel } from './components/MCPPanel';
-import { SettingsPage } from './components/SettingsPage';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
 import { TerminalTab } from './components/TerminalTab';
@@ -611,17 +611,17 @@ function AppContent() {
   const shouldShowChatPanel = activeProject && hasTabs && !showDashboard && !isBrowserTab;
   const shouldShowBrowserTab = activeProject && hasTabs && !showDashboard && !activePage && isBrowserTab;
   const shouldShowInsights = activePage === 'insights';
+  const shouldShowCosts = activePage === 'costs';
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
   const shouldShowCaptain = activePage === 'captain';
-  const shouldShowSettings = activePage === 'settings';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
+    : shouldShowCosts ? 'costs'
     : shouldShowProfile ? 'profile'
     : shouldShowMcp ? 'mcp'
     : shouldShowCaptain ? 'captain'
-    : shouldShowSettings ? 'settings'
     : shouldShowDashboard ? 'dashboard'
     : shouldShowBrowserTab ? 'browser'
     : shouldShowChatPanel ? 'chat'
@@ -708,7 +708,7 @@ function AppContent() {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowCosts || shouldShowProfile || shouldShowMcp || shouldShowCaptain || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -717,14 +717,14 @@ function AppContent() {
                 />
               ) : shouldShowInsights ? (
                 <InsightsPanel />
+              ) : shouldShowCosts ? (
+                <CostDashboard />
               ) : shouldShowProfile ? (
                 <ProfilePanel />
               ) : shouldShowMcp ? (
                 <MCPPanel projectPath={activeProject?.path} />
               ) : shouldShowCaptain ? (
                 <CaptainDashboard socket={socket} onSessionClick={handleFleetSessionClick} />
-              ) : shouldShowSettings ? (
-                <SettingsPage onClose={() => setActivePage(null)} />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard

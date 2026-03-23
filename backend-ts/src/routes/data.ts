@@ -107,4 +107,14 @@ export function createDataRoutes(
       res.status(500).json({ success: false, error: "Failed to search conversations" });
     }
   });
+
+  app.get("/api/stats/costs", (_req: Request, res: Response) => {
+    try {
+      const costData = database.getCostDashboard();
+      res.json(costData);
+    } catch (err) {
+      log.error("Failed to fetch cost dashboard", { error: String(err) });
+      res.status(500).json({ error: "Failed to load cost dashboard" });
+    }
+  });
 }
