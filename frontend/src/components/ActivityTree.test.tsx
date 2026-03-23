@@ -22,12 +22,18 @@ describe('ActivityTree', () => {
   });
 
   it('renders the tab headers', () => {
-    render(<ActivityTree tree={[]} usageStats={mockStats} />);
+    render(<ActivityTree tree={[]} usageStats={mockStats} sessionId="session-1" />);
     expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.getByText('Tools')).toBeInTheDocument();
+    expect(screen.getByText('Score')).toBeInTheDocument();
+    expect(screen.getByText('Review')).toBeInTheDocument();
   });
 
-  it('renders a tool node', () => {
+  it('does not render a Tools tab in tabs variant', () => {
+    render(<ActivityTree tree={[]} usageStats={mockStats} />);
+    expect(screen.queryByRole('tab', { name: 'Tools' })).not.toBeInTheDocument();
+  });
+
+  it('renders a tool node in split variant', () => {
     const tool: ToolNode = {
       tool_use_id: 'tool_1',
       tool_name: 'Read',
@@ -36,8 +42,8 @@ describe('ActivityTree', () => {
       duration_ms: 150,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
-    // Tool node appears in the Tools panel
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} variant="split" />);
+    // Tool node appears in the Tools panel in split variant
     expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.getByText('150ms')).toBeInTheDocument();
   });
@@ -110,28 +116,19 @@ describe('ActivityTree', () => {
     expect(wrapper).not.toHaveClass('expanded');
   });
 
-  it('shows tool nodes in tools tab', () => {
-    const nodes: ActivityNode[] = [
-      {
-        tool_use_id: 't1',
-        tool_name: 'Read',
-        timestamp: '2025-01-01T00:00:00Z',
-        status: 'completed',
-        parent_agent_id: null,
-      } as ToolNode,
-      {
-        tool_use_id: 't2',
-        tool_name: 'Write',
-        timestamp: '2025-01-01T00:00:01Z',
-        status: 'running',
-        parent_agent_id: null,
-      } as ToolNode,
-    ];
-    render(<ActivityTree tree={nodes} usageStats={mockStats} />);
-    const toolsTab = screen.getByRole('tab', { name: 'Tools' });
-    fireEvent.click(toolsTab);
-    expect(screen.getByText('Read')).toBeInTheDocument();
-    expect(screen.getByText('Write')).toBeInTheDocument();
+  it('shows agent nodes in agents tab', () => {
+    const agent: AgentNode = {
+      tool_use_id: 'a1',
+      agent_type: 'code_agent',
+      tool_name: 'dispatch_agent',
+      timestamp: '2025-01-01T00:00:00Z',
+      children: [],
+      status: 'completed',
+    };
+    render(<ActivityTree tree={[agent]} usageStats={mockStats} />);
+    const agentsTab = screen.getByRole('tab', { name: 'Agents' });
+    fireEvent.click(agentsTab);
+    expect(screen.getByText('code_agent')).toBeInTheDocument();
   });
 
   it('formats duration using formatDuration utility', () => {
@@ -143,7 +140,7 @@ describe('ActivityTree', () => {
       duration_ms: 2500,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} variant="split" />);
     // formatDuration(2500) = "2.5s"
     expect(screen.getByText('2.5s')).toBeInTheDocument();
   });
@@ -157,7 +154,7 @@ describe('ActivityTree', () => {
       duration_ms: 90000,
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} variant="split" />);
     // formatDuration(90000) = "1.5m"
     expect(screen.getByText('1.5m')).toBeInTheDocument();
   });
@@ -171,7 +168,7 @@ describe('ActivityTree', () => {
       error: 'Permission denied',
       parent_agent_id: null,
     };
-    render(<ActivityTree tree={[tool]} usageStats={mockStats} />);
+    render(<ActivityTree tree={[tool]} usageStats={mockStats} variant="split" />);
     // Error is shown in the detail panel when node is clicked
     const deployNode = screen.getByText('Deploy');
     fireEvent.click(deployNode);
@@ -202,7 +199,7 @@ describe('ActivityTree', () => {
         parent_agent_id: null,
       } as ToolNode,
     ];
-    const { container } = render(<ActivityTree tree={nodes} usageStats={mockStats} />);
+    const { container } = render(<ActivityTree tree={nodes} usageStats={mockStats} variant="split" />);
     expect(container.querySelector('.tool-status-running')).toBeInTheDocument();
     expect(container.querySelector('.tool-status-completed')).toBeInTheDocument();
     expect(container.querySelector('.tool-status-failed')).toBeInTheDocument();

@@ -155,7 +155,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
   const agentsContainerRef = useRef<HTMLDivElement>(null);
   const toolsContainerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'tools' | 'trust'>('agents');
+  const [activeTab, setActiveTab] = useState<'agents' | 'score' | 'review'>('agents');
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const userOverrideRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -163,7 +163,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
 
   const agentNodes = useMemo(() => tree.filter(isAgentNode), [tree]);
   const toolNodes = useMemo(() => tree.filter((n) => !isAgentNode(n)) as ToolNode[], [tree]);
-  const visibleNodes = activeTab === 'agents' ? agentNodes : toolNodes;
+  const visibleNodes = agentNodes;
 
   const activityStats = useMemo(() => {
     const totalTools = countTools(tree);
@@ -210,8 +210,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
       return;
     }
     if (userOverrideRef.current) return;
-    const lastNode = tree[tree.length - 1];
-    setActiveTab(isAgentNode(lastNode) ? 'agents' : 'tools');
+    setActiveTab('agents');
   }, [tree, variant]);
 
   useEffect(() => {
@@ -237,7 +236,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setShowTrustPanel(!showTrustPanel);
   };
 
-  const handleTabClick = (tab: 'agents' | 'tools' | 'trust') => {
+  const handleTabClick = (tab: 'agents' | 'score' | 'review') => {
     userOverrideRef.current = true;
     setActiveTab(tab);
   };
@@ -260,33 +259,35 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
               >
                 Agents
               </button>
-              <button
-                className={`activity-tab ${activeTab === 'tools' ? 'activity-tab-active' : ''}`}
-                onClick={() => handleTabClick('tools')}
-                role="tab"
-                aria-selected={activeTab === 'tools'}
-                aria-controls="activity-panel-tools"
-                id="tab-tools"
-              >
-                Tools
-              </button>
               {sessionId && (
                 <button
-                  className={`activity-tab ${activeTab === 'trust' ? 'activity-tab-active' : ''}`}
-                  onClick={() => handleTabClick('trust')}
+                  className={`activity-tab ${activeTab === 'score' ? 'activity-tab-active' : ''}`}
+                  onClick={() => handleTabClick('score')}
                   role="tab"
-                  aria-selected={activeTab === 'trust'}
-                  aria-controls="activity-panel-trust"
-                  id="tab-trust"
+                  aria-selected={activeTab === 'score'}
+                  aria-controls="activity-panel-score"
+                  id="tab-score"
                 >
-                  Trust
+                  Score
+                </button>
+              )}
+              {sessionId && (
+                <button
+                  className={`activity-tab ${activeTab === 'review' ? 'activity-tab-active' : ''}`}
+                  onClick={() => handleTabClick('review')}
+                  role="tab"
+                  aria-selected={activeTab === 'review'}
+                  aria-controls="activity-panel-review"
+                  id="tab-review"
+                >
+                  Review
                 </button>
               )}
             </div>
           </div>
 
           <div className="activity-content" ref={containerRef} role="tabpanel" id={`activity-panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
-            {activeTab === 'trust' ? (
+            {activeTab === 'score' ? (
               trustLoading || trustError || !trustScore ? (
                 <div className="activity-empty">
                   <div className="activity-empty-pulse" />
@@ -301,6 +302,10 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                   error={null}
                 />
               )
+            ) : activeTab === 'review' ? (
+              sessionId ? (
+                <DiffReviewPanel sessionId={sessionId} streaming={streaming} />
+              ) : null
             ) : visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-pulse" />
@@ -309,27 +314,16 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
               </div>
             ) : (
               <div className="tree-root">
-                {activeTab === 'agents'
-                  ? agentNodes.map((node) => (
-                      <TreeNode
-                        key={node.tool_use_id}
-                        node={node}
-                        depth={0}
-                        onNodeSelect={handleNodeSelect}
-                        currentTime={currentTime}
-                        workspacePath={workspacePath}
-                      />
-                    ))
-                  : toolNodes.map((node) => (
-                      <ToolRow
-                        key={node.tool_use_id}
-                        node={node}
-                        depth={0}
-                        onSelect={handleNodeSelect}
-                        currentTime={currentTime}
-                        workspacePath={workspacePath}
-                      />
-                    ))}
+                {agentNodes.map((node) => (
+                  <TreeNode
+                    key={node.tool_use_id}
+                    node={node}
+                    depth={0}
+                    onNodeSelect={handleNodeSelect}
+                    currentTime={currentTime}
+                    workspacePath={workspacePath}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -443,7 +437,6 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
         hasRunning={activityStats.hasRunning}
         contextTokens={contextTokens}
       />
-      {sessionId && <DiffReviewPanel sessionId={sessionId} streaming={streaming} />}
     </div>
   );
 };
