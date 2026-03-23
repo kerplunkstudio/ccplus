@@ -104,6 +104,7 @@ export function groupOrphanTools(nodes: ActivityNode[]): ActivityNode[] {
     tool_use_id: ORCHESTRATOR_ID,
     agent_type: 'orchestrator',
     tool_name: 'Agent',
+    description: 'Orchestrator',
     timestamp: orphanTools[0].timestamp, // first orphan tool's timestamp
     children: orphanTools,
     status: orchStatus,
@@ -152,6 +153,7 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
         tool_use_id: ORCHESTRATOR_ID,
         agent_type: 'orchestrator',
         tool_name: 'Agent',
+        description: 'Orchestrator',
         timestamp: action.event.timestamp,
         children: [newTool],
         status: 'running',
