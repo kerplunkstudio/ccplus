@@ -22,48 +22,61 @@ const formatTokens = (count: number): string => {
   return `${(count / 1000000).toFixed(1)}M`;
 };
 
-const shortenPath = (path: string): string => {
-  const parts = path.split('/');
-  if (parts.length <= 3) return path;
-  return `.../${parts.slice(-2).join('/')}`;
+const getProjectName = (path: string): string => {
+  const parts = path.split('/').filter(Boolean);
+  return parts.at(-1) ?? path;
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  running: 'running',
+  idle: 'idle',
+  completed: 'done',
+  failed: 'failed',
 };
 
 export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onClick }) => {
   const statusClass = `status-${session.status}`;
   const label = session.label || session.sessionId.slice(0, 12);
-  const truncatedLabel = label.length > 60 ? label.slice(0, 60) + '...' : label;
+  const truncatedLabel = label.length > 80 ? label.slice(0, 80) + '…' : label;
   const totalTokens = session.inputTokens + session.outputTokens;
+  const projectName = getProjectName(session.workspace);
+  const statusLabel = STATUS_LABELS[session.status] ?? session.status;
 
   return (
-    <div className="fleet-session-card" onClick={() => onClick(session.sessionId)}>
+    <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
       <div className="fleet-card-header">
-        <div className={`fleet-status-badge ${statusClass}`} />
-        <div className="fleet-card-label">{truncatedLabel}</div>
+        <div className="fleet-card-project" title={session.workspace}>
+          {projectName}
+        </div>
+        <div className={`fleet-status-pill ${statusClass}`}>
+          <span className="fleet-status-dot" />
+          {statusLabel}
+        </div>
       </div>
+
+      <div className="fleet-card-label">{truncatedLabel}</div>
+
+      <div className="fleet-card-divider" />
 
       <div className="fleet-card-stats">
         <div className="fleet-stat">
-          <span className="fleet-stat-label">tools</span>
           <span className="fleet-stat-value">{session.toolCount}</span>
+          <span className="fleet-stat-label">tools</span>
         </div>
         <div className="fleet-stat">
-          <span className="fleet-stat-label">agents</span>
           <span className="fleet-stat-value">{session.activeAgents}</span>
+          <span className="fleet-stat-label">agents</span>
         </div>
         <div className="fleet-stat">
-          <span className="fleet-stat-label">time</span>
           <span className="fleet-stat-value">{formatDuration(session.durationMs)}</span>
+          <span className="fleet-stat-label">elapsed</span>
         </div>
       </div>
 
       <div className="fleet-card-tokens">
-        {formatTokens(totalTokens)} tokens
-        <span className="fleet-token-detail">
-          ({formatTokens(session.inputTokens)} in / {formatTokens(session.outputTokens)} out)
-        </span>
+        <span className="fleet-token-total">{formatTokens(totalTokens)}</span>
+        <span className="fleet-token-detail">{formatTokens(session.inputTokens)} in · {formatTokens(session.outputTokens)} out</span>
       </div>
-
-      <div className="fleet-card-workspace">{shortenPath(session.workspace)}</div>
     </div>
   );
 };
