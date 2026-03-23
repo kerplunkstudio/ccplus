@@ -787,7 +787,7 @@ function AppContent() {
           </div>
           {shouldShowChatPanel && !activePage && (
             <div key={activeTab?.sessionId} className={`panel-activity ${mobileDrawer === 'activity' ? 'mobile-open' : ''}`}>
-              <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} sessionId={activeTab?.sessionId} workspacePath={activeProject?.path} />
+              <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} sessionId={activeTab?.sessionId} workspacePath={activeProject?.path} streaming={streaming} />
             </div>
           )}
           {/* Floating terminal panels — always mounted, visibility toggled */}
