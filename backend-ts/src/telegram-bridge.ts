@@ -73,10 +73,14 @@ export async function startTelegramBridge(): Promise<void> {
   // Set up handlers
   setupBotHandlers(bot);
 
-  // Start polling with error recovery
+  // Start polling with error recovery and auto-recovery on permanent failure
   startPollingWithRetry().catch((err) => {
-    log.error('Telegram polling permanently failed after retries', { error: String(err) });
+    log.error('Telegram polling failed, scheduling recovery in 60s', { error: String(err) });
     bot = null;
+    setTimeout(() => {
+      log.info('Attempting Telegram bridge auto-recovery');
+      startTelegramBridge().catch((e) => log.error('Telegram auto-recovery failed', { error: String(e) }));
+    }, 60_000);
   });
 }
 
@@ -114,6 +118,10 @@ export async function stopTelegramBridge(): Promise<void> {
 }
 
 export function isTelegramBridgeActive(): boolean {
+  return bot !== null;
+}
+
+export function isTelegramAlive(): boolean {
   return bot !== null;
 }
 
@@ -206,9 +214,9 @@ function setupBotHandlers(botInstance: Bot): void {
 }
 
 async function startPollingWithRetry(): Promise<void> {
-  const MAX_RETRIES = 5;
+  const MAX_RETRIES = 8;
   const BASE_DELAY_MS = 1000;
-  const MAX_DELAY_MS = 30000;
+  const MAX_DELAY_MS = 60000;
 
   // Invalidate any stale polling session from a previous unclean shutdown
   await bot!.api.deleteWebhook({ drop_pending_updates: false });
@@ -229,7 +237,8 @@ async function startPollingWithRetry(): Promise<void> {
         throw error;
       }
 
-      const delayMs = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+      const baseDelay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+      const delayMs = is409 ? Math.max(5000, baseDelay) : baseDelay;
       log.warn('Telegram polling error, retrying', {
         attempt: attempt + 1,
         maxRetries: MAX_RETRIES,
@@ -248,7 +257,9 @@ async function startPollingWithRetry(): Promise<void> {
         await delay(delayMs);
         bot = new Bot(config.TELEGRAM_BOT_TOKEN!);
         setupBotHandlers(bot);
-        await bot.api.deleteWebhook({ drop_pending_updates: false });
+        // On retry attempts, aggressively reclaim by dropping pending updates
+        const dropPending = attempt > 0;
+        await bot.api.deleteWebhook({ drop_pending_updates: dropPending });
       } else {
         await delay(delayMs);
       }
