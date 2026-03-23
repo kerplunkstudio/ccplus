@@ -25,7 +25,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return <span className={className}>{label}</span>;
 };
 
-const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
+export const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
   const toolCount = node.children.filter((child) => !isAgentNode(child)).length;
   const agentCount = node.children.filter((child) => isAgentNode(child)).length;
 

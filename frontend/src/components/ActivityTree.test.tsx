@@ -25,7 +25,6 @@ describe('ActivityTree', () => {
     render(<ActivityTree tree={[]} usageStats={mockStats} sessionId="session-1" />);
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Score')).toBeInTheDocument();
-    expect(screen.getByText('Review')).toBeInTheDocument();
   });
 
   it('does not render a Tools tab in tabs variant', () => {

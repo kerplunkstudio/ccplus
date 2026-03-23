@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { ActivityNode, isAgentNode, AgentNode, ToolNode, UsageStats } from '../types';
 import { AgentCard } from './AgentCard';
 import { ToolRow } from './ToolRow';
-import { NodeDetail } from './NodeDetail';
+import { NodeDetail, AgentDetail } from './NodeDetail';
 import { UsageStatsBar } from './UsageStatsBar';
 import { TrustScore } from './TrustScore';
-import { DiffReviewPanel } from './DiffReviewPanel';
 import { useTrustScore } from '../hooks/useTrustScore';
 import './ActivityTree.css';
 
@@ -179,7 +178,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
   const agentsContainerRef = useRef<HTMLDivElement>(null);
   const toolsContainerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<ActivityNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'agents' | 'score' | 'review'>('agents');
+  const [activeTab, setActiveTab] = useState<'agents' | 'score'>('agents');
   const [showTrustPanel, setShowTrustPanel] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const userOverrideRef = useRef(false);
@@ -263,7 +262,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
     setShowTrustPanel(!showTrustPanel);
   };
 
-  const handleTabClick = (tab: 'agents' | 'score' | 'review') => {
+  const handleTabClick = (tab: 'agents' | 'score') => {
     userOverrideRef.current = true;
     setActiveTab(tab);
   };
@@ -298,18 +297,6 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                   Score
                 </button>
               )}
-              {sessionId && (
-                <button
-                  className={`activity-tab ${activeTab === 'review' ? 'activity-tab-active' : ''}`}
-                  onClick={() => handleTabClick('review')}
-                  role="tab"
-                  aria-selected={activeTab === 'review'}
-                  aria-controls="activity-panel-review"
-                  id="tab-review"
-                >
-                  Review
-                </button>
-              )}
             </div>
           </div>
 
@@ -329,10 +316,6 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                   error={null}
                 />
               )
-            ) : activeTab === 'review' ? (
-              sessionId ? (
-                <DiffReviewPanel sessionId={sessionId} streaming={streaming} />
-              ) : null
             ) : visibleNodes.length === 0 ? (
               <div className="activity-empty">
                 <div className="activity-empty-pulse" />
@@ -428,16 +411,7 @@ export const ActivityTree: React.FC<ActivityTreeProps> = ({ tree, usageStats, co
                             depth={0}
                             onSelect={() => {}}
                           >
-                            {agentNode.children.map((child) => (
-                              <TreeNode
-                                key={child.tool_use_id}
-                                node={child}
-                                depth={0}
-                                onNodeSelect={() => {}}
-                                currentTime={currentTime}
-                                workspacePath={workspacePath}
-                              />
-                            ))}
+                            <AgentDetail node={agentNode} />
                           </AgentCard>
                         </div>
                       );

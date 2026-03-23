@@ -15,8 +15,8 @@ vi.mock("../memory-client.js", () => ({
 vi.mock("../config.js", () => ({
   MEMORY_DISTILL_DEBOUNCE_MS: 5000,
   MEMORY_DISTILL_MIN_MESSAGES: 5,
-  getDistillDebounceMs: vi.fn(() => 5000),
-  getDistillMinMessages: vi.fn(() => 5),
+  getMemoryDistillDebounceMs: vi.fn(() => 5000),
+  getMemoryDistillMinMessages: vi.fn(() => 5),
 }));
 
 vi.mock("../logger.js", () => ({
