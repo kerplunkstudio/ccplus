@@ -1,0 +1,248 @@
+.diff-review-collapsed {
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.diff-summary-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+}
+
+.diff-summary-bar:hover {
+  background: var(--bg-tertiary);
+}
+
+.diff-chevron {
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+  user-select: none;
+}
+
+.diff-summary-text {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.diff-summary-stats {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.diff-review-panel {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  max-height: 500px;
+}
+
+.diff-review-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-collapse-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+  border-radius: var(--radius-md);
+}
+
+.diff-collapse-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.diff-refresh-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 16px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.diff-refresh-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.diff-review-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.diff-commit-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-commit-message {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  resize: vertical;
+  min-height: 44px;
+  transition: border-color 0.15s ease;
+}
+
+.diff-commit-message:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.diff-commit-message::placeholder {
+  color: var(--text-tertiary);
+}
+
+.diff-commit-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-commit-btn,
+.diff-discard-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diff-commit-btn {
+  flex: 1;
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+
+.diff-commit-btn:hover:not(:disabled) {
+  background: var(--accent-bright);
+}
+
+.diff-commit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.diff-discard-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.diff-discard-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.diff-discard-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.diff-commit-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(46, 160, 67, 0.1);
+  border-top: 1px solid rgba(46, 160, 67, 0.3);
+  color: #2ea043;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.diff-commit-success-icon {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.diff-commit-success-text {
+  flex: 1;
+}
+
+.diff-loading,
+.diff-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 12px;
+}
+
+.diff-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: diffSpin 0.8s linear infinite;
+}
+
+@keyframes diffSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.diff-loading p,
+.diff-error p {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.diff-error p {
+  color: var(--error);
+}

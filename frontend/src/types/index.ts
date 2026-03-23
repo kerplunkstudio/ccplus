@@ -302,3 +302,4 @@ export interface TrustMetrics {
 }
 
 export * from './workspace';
+export * from './diff';
