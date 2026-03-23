@@ -8,7 +8,20 @@ export function applyTheme(theme: Theme): void {
   // Base palette
   root.style.setProperty('--bg-primary', c.background)
   root.style.setProperty('--bg-secondary', c.hover)
+  root.style.setProperty('--sidebar-bg', c.sidebarBg ?? c.hover)
   root.style.setProperty('--bg-tertiary', adjustBrightness(c.background, isLight ? -10 : 10))
+
+  // Sidebar-specific tokens (auto-detects dark/light sidebarBg)
+  const sidebarBgColor = c.sidebarBg ?? c.hover
+  const sidebarIsLight = isLightTheme(sidebarBgColor)
+  const sidebarText = sidebarIsLight ? c.text : '#E8E4DF'
+  root.style.setProperty('--sidebar-text-primary', sidebarText)
+  root.style.setProperty('--sidebar-text-secondary', adjustBrightness(sidebarText, sidebarIsLight ? 40 : -40))
+  root.style.setProperty('--sidebar-text-tertiary', adjustBrightness(sidebarText, sidebarIsLight ? 70 : -70))
+  root.style.setProperty('--sidebar-border', withAlpha(sidebarText, sidebarIsLight ? 0.12 : 0.1))
+  root.style.setProperty('--sidebar-hover-bg', withAlpha(sidebarText, 0.05))
+  root.style.setProperty('--sidebar-accent-bg-active', withAlpha(c.accent, sidebarIsLight ? 0.1 : 0.15))
+  root.style.setProperty('--sidebar-surface', adjustBrightness(sidebarBgColor, sidebarIsLight ? -8 : 12))
   root.style.setProperty('--text-primary', c.text)
   root.style.setProperty('--text-secondary', adjustBrightness(c.text, isLight ? 40 : -40))
   root.style.setProperty('--accent', c.accent)

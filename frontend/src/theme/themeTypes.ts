@@ -6,6 +6,7 @@ export interface Theme {
     text: string
     border: string
     hover: string
+    sidebarBg?: string
     success: string
     warning: string
     error: string

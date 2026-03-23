@@ -16,6 +16,21 @@ export const THEMES: Theme[] = [
     },
   },
   {
+    name: 'Gilded',
+    presetId: 'gilded',
+    colors: {
+      background: '#F7F3ED',
+      accent: '#A05820',
+      text: '#3D3429',
+      border: '#E8DECE',
+      hover: '#EDE8DF',
+      sidebarBg: '#141316',
+      success: '#5E9E5E',
+      warning: '#C47F3A',
+      error: '#B85C4D',
+    },
+  },
+  {
     name: 'Electric Ember',
     presetId: 'electric-ember',
     colors: {
