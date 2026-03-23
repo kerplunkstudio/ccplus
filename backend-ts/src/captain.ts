@@ -407,7 +407,7 @@ export async function startCaptainSession(
     const q = query({
       prompt: bootMessage,
       options: {
-        model: config.CAPTAIN_MODEL,
+        model: config.getCaptainModel(),
         cwd: workspace,
         settingSources: ['user'],
         systemPrompt: {
@@ -660,7 +660,7 @@ async function startCaptainQuery(content: string): Promise<void> {
   const q = query({
     prompt: content,
     options: {
-      model: config.CAPTAIN_MODEL,
+      model: config.getCaptainModel(),
       cwd: captainState.workspace ?? config.CAPTAIN_WORKSPACE,
       settingSources: ['user'],
       systemPrompt: {
