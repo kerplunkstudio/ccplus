@@ -13,7 +13,14 @@ export function createWorkflowConfigRoutes(app: Express): void {
     try {
       const workspace = (req.query.workspace as string) || process.cwd();
       const workflowNames = listWorkflows(workspace);
-      const workflows = workflowNames.map(name => ({ name, builtin: ['default', 'feature', 'debug', 'tdd', 'hotfix'].includes(name) }));
+      const builtinNames = ['default', 'feature', 'debug', 'tdd', 'hotfix'];
+      const workflows = workflowNames
+        .map(name => {
+          const wf = getWorkflowByName(name, workspace);
+          if (!wf) return null;
+          return { ...wf, builtin: builtinNames.includes(name) };
+        })
+        .filter((wf): wf is WorkflowConfig & { builtin: boolean } => wf !== null);
       res.json({ workflows });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

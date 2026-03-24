@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useWorkflows, WorkflowConfig, WorkflowPhaseConfig, ToolRule, WorkflowTransition } from '../hooks/useWorkflows';
 import './WorkflowsPanel.css';
 
-// YAML serializer (simple, client-side only)
 function toYamlString(obj: unknown, indent = 0): string {
   const spaces = '  '.repeat(indent);
 
@@ -45,18 +44,28 @@ interface MiniPipelineProps {
 }
 
 function MiniPipeline({ phases }: MiniPipelineProps) {
-  const displayPhases = phases.slice(0, 5);
-  const hasMore = phases.length > 5;
+  const filtered = phases.filter(p => p.name.toLowerCase() !== 'idle');
+  if (filtered.length === 0) return null;
+
+  const showAll = filtered.length <= 6;
+  const displayPhases = showAll
+    ? filtered
+    : [...filtered.slice(0, 4), filtered[filtered.length - 1]];
 
   return (
     <div className="wf-mini-pipeline">
       {displayPhases.map((phase, idx) => (
         <React.Fragment key={idx}>
-          {idx > 0 && <span className="wf-mini-connector" />}
-          <span className="wf-mini-dot" title={phase.name} />
+          {idx > 0 && (
+            !showAll && idx === 4
+              ? <span className="wf-mini-ellipsis">...</span>
+              : <span className="wf-mini-sep">→</span>
+          )}
+          <div className="wf-mini-phase">
+            <span className="wf-mini-phase-name">{phase.name}</span>
+          </div>
         </React.Fragment>
       ))}
-      {hasMore && <span className="wf-mini-ellipsis">+{phases.length - 5}</span>}
     </div>
   );
 }
@@ -86,8 +95,8 @@ function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
     >
       <div className="wf-phase-node-name">{phase.name}</div>
       <div className="wf-phase-node-meta">
-        {agentCount > 0 && <span className="wf-phase-badge">{agentCount} agent{agentCount !== 1 ? 's' : ''}</span>}
-        {ruleCount > 0 && <span className="wf-phase-badge">{ruleCount} rule{ruleCount !== 1 ? 's' : ''}</span>}
+        {agentCount > 0 && <span>{agentCount} agent{agentCount !== 1 ? 's' : ''}</span>}
+        {ruleCount > 0 && <span>{ruleCount} rule{ruleCount !== 1 ? 's' : ''}</span>}
       </div>
     </div>
   );
@@ -130,7 +139,7 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
 
   return (
     <div className="wf-phase-editor">
-      <div className="wf-editor-row">
+      <div className="wf-editor-section">
         <label className="wf-editor-label">Phase Name</label>
         <input
           className="wf-editor-input"
@@ -141,7 +150,7 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
         />
       </div>
 
-      <div className="wf-editor-row">
+      <div className="wf-editor-section">
         <label className="wf-editor-label">Context</label>
         <textarea
           className="wf-editor-textarea"
@@ -152,7 +161,7 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
         />
       </div>
 
-      <div className="wf-editor-row">
+      <div className="wf-editor-section">
         <label className="wf-editor-label">Agent Hints</label>
         <div className="wf-agent-selector">
           <button
@@ -205,10 +214,10 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
         </div>
       </div>
 
-      <div className="wf-editor-row">
-        <div className="wf-editor-label-row">
+      <div className="wf-editor-section">
+        <div className="wf-editor-section-header">
           <label className="wf-editor-label">Tool Rules</label>
-          <button className="wf-add-rule-btn" onClick={addRule}>+ Add Rule</button>
+          <button className="wf-add-link" onClick={addRule}>+ add rule</button>
         </div>
         {rules.length > 0 && (
           <div className="wf-rules-list">
@@ -259,7 +268,7 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
 
       <div className="wf-editor-actions">
         <button className="wf-action-danger" onClick={onRemove}>
-          Remove Phase
+          remove phase
         </button>
       </div>
     </div>
@@ -294,9 +303,9 @@ function TransitionEditor({ phases, transitions, onUpdate }: TransitionEditorPro
 
   return (
     <div className="wf-transition-editor">
-      <div className="wf-editor-label-row">
+      <div className="wf-editor-section-header">
         <label className="wf-editor-label">Phase Transitions</label>
-        <button className="wf-add-rule-btn" onClick={addTransition}>+ Add Transition</button>
+        <button className="wf-add-link" onClick={addTransition}>+ add transition</button>
       </div>
       {transitions.length > 0 && (
         <div className="wf-transitions-list">
@@ -349,62 +358,61 @@ function WorkflowListView({ workflows, onOpenWorkflow, onCreateNew, onDuplicate 
   return (
     <div className="wf-list-view">
       <div className="wf-list-header">
-        <button className="wf-create-btn" onClick={onCreateNew}>
-          + New Workflow
+        <h2 className="wf-list-title">Workflows</h2>
+        <button className="wf-create-link" onClick={onCreateNew}>
+          + New
         </button>
       </div>
 
       {workflows.length === 0 ? (
         <div className="wf-empty">
-          <div className="wf-empty-text">No workflows configured</div>
+          <div className="wf-empty-text">No workflows yet</div>
           <div className="wf-empty-hint">
             Workflows define multi-phase agent orchestration with tool rules and context
           </div>
           <button className="wf-empty-cta" onClick={onCreateNew}>
-            + Create your first workflow
+            create your first workflow
           </button>
         </div>
       ) : (
-        <div className="wf-cards">
+        <div className="wf-list">
           {workflows.map((wf, idx) => (
             <div
               key={wf.name}
-              className="wf-card"
-              style={{ animationDelay: `${idx * 40}ms` }}
+              className="wf-list-item"
+              style={{ animationDelay: `${idx * 50}ms` }}
             >
-              <div className="wf-card-header">
-                <div className="wf-card-title-row">
-                  <span className="wf-card-name">{wf.name}</span>
+              <div className="wf-list-item-main">
+                <div className="wf-list-item-header">
+                  <h3 className="wf-list-item-name">{wf.name}</h3>
                   {wf.builtin && <span className="wf-builtin-badge">built-in</span>}
                 </div>
-                {wf.description && <p className="wf-card-desc">{wf.description}</p>}
+                {wf.description && <p className="wf-list-item-desc">{wf.description}</p>}
+                <MiniPipeline phases={wf.phases ?? []} />
               </div>
-
-              <div className="wf-card-body">
-                <div className="wf-card-meta">
-                  <span>{wf.phases.length} phase{wf.phases.length !== 1 ? 's' : ''}</span>
+              <div className="wf-list-item-side">
+                <div className="wf-list-item-meta">
+                  <span className="wf-meta-item">{(wf.phases ?? []).length} phase{(wf.phases ?? []).length !== 1 ? 's' : ''}</span>
                   {wf.transitions && wf.transitions.length > 0 && (
-                    <span>{wf.transitions.length} transition{wf.transitions.length !== 1 ? 's' : ''}</span>
+                    <span className="wf-meta-item">{wf.transitions.length} transition{wf.transitions.length !== 1 ? 's' : ''}</span>
                   )}
                 </div>
-                <MiniPipeline phases={wf.phases} />
-              </div>
-
-              <div className="wf-card-actions">
-                <button
-                  className="wf-card-action-btn"
-                  onClick={() => onOpenWorkflow(wf)}
-                >
-                  {wf.builtin ? 'View' : 'Edit'}
-                </button>
-                {!wf.builtin && (
+                <div className="wf-list-item-actions">
                   <button
-                    className="wf-card-action-btn wf-card-action-secondary"
-                    onClick={() => onDuplicate(wf)}
+                    className="wf-list-action-link"
+                    onClick={() => onOpenWorkflow(wf)}
                   >
-                    Duplicate
+                    {wf.builtin ? 'view' : 'edit'}
                   </button>
-                )}
+                  {!wf.builtin && (
+                    <button
+                      className="wf-list-action-link wf-list-action-secondary"
+                      onClick={() => onDuplicate(wf)}
+                    >
+                      duplicate
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -513,7 +521,7 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
   return (
     <div className="wf-detail-view">
       <div className="wf-detail-header">
-        <button className="wf-back-btn" onClick={onBack} aria-label="Back to list">
+        <button className="wf-back-link" onClick={onBack} aria-label="Back to list">
           ←
         </button>
         <div className="wf-detail-title-group">
@@ -532,18 +540,18 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
             className="wf-yaml-toggle"
             onClick={() => setShowYaml(!showYaml)}
           >
-            {showYaml ? 'Editor' : 'YAML'}
+            {showYaml ? 'editor' : 'yaml'}
           </button>
           {!workflow.builtin && (
             <>
               <button className="wf-action-primary" onClick={handleSave}>
-                Save
+                save
               </button>
               <button
                 className="wf-action-danger"
                 onClick={handleDelete}
               >
-                {deleteConfirm ? 'Confirm Delete?' : 'Delete'}
+                {deleteConfirm ? 'confirm delete?' : 'delete'}
               </button>
             </>
           )}
@@ -569,11 +577,13 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
           </div>
 
           <div className="wf-pipeline-section">
-            <div className="wf-pipeline-label">Phase Pipeline</div>
+            <label className="wf-pipeline-label">Phase Pipeline</label>
             <div className="wf-pipeline">
-              {workflow.phases.map((phase, idx) => (
+              {workflow.phases
+                .map((phase, idx) => ({ phase, idx }))
+                .filter(({ phase }) => phase.name.toLowerCase() !== 'idle')
+                .map(({ phase, idx }) => (
                 <React.Fragment key={idx}>
-                  {idx > 0 && <div className="wf-phase-connector" />}
                   <div
                     draggable={!workflow.builtin}
                     onDragStart={() => handleDragStart(idx)}
