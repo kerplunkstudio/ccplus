@@ -6,6 +6,7 @@ import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import { log } from "./logger.js";
 import * as config from "./config.js";
+import { loadWorkflow } from "./workflow-config.js";
 
 // ---- Constants ----
 
@@ -20,6 +21,7 @@ export interface StartSessionParams {
   sessionId?: string;
   requestedBy?: { source: string; sourceId: string };
   agentId?: string;
+  workflow?: string;
 }
 
 export interface StartSessionResult {
@@ -50,7 +52,7 @@ export function startSession(
   params: StartSessionParams,
   dependencies: SessionDependencies
 ): StartSessionResult {
-  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy, agentId } = params;
+  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy, agentId, workflow } = params;
   const { database: db, sdkSession: sdk, sessionWorkspaces, buildSocketCallbacks } = dependencies;
 
   // Validate required fields
@@ -102,7 +104,17 @@ export function startSession(
   }
 
   const uid = "local";
-  const trimmedPrompt = config.getWorktreeEnabled()
+
+  // Determine if worktree should be enabled
+  let worktreeEnabled = config.getWorktreeEnabled();
+  if (workflow) {
+    const workflowConfig = loadWorkflow(workflow, resolvedWorkspace);
+    if (workflowConfig.worktree !== undefined) {
+      worktreeEnabled = workflowConfig.worktree;
+    }
+  }
+
+  const trimmedPrompt = worktreeEnabled
     ? prompt.trim() + WORKTREE_RULES_FOOTER
     : prompt.trim();
 
@@ -143,7 +155,8 @@ export function startSession(
     model && typeof model === "string" ? model : undefined,
     undefined,
     requestedBy,
-    agentId
+    agentId,
+    workflow
   );
 
   return {

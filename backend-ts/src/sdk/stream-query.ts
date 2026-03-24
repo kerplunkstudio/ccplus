@@ -18,6 +18,7 @@ import { distillSession } from '../memory-distiller.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import * as captain from '../captain.js';
 import { getAgent, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
+import { loadWorkflow } from '../workflow-config.js';
 
 // ---- Internal streaming logic ----
 
@@ -144,6 +145,7 @@ export async function streamQuery(
   model?: string,
   imageIds?: string[],
   agentId?: string,
+  workflow?: string,
 ): Promise<void> {
   const resultText: string[] = [];
   let gotResult = false;
@@ -301,8 +303,17 @@ export async function streamQuery(
     const mcpServerEntries = getAllMcpServers(workspace);
     const userMcpServers = buildSdkMcpServers(mcpServerEntries);
 
+    // Determine if worktree should be enabled
+    let worktreeEnabled = config.getWorktreeEnabled();
+    if (workflow) {
+      const workflowConfig = loadWorkflow(workflow, workspace);
+      if (workflowConfig.worktree !== undefined) {
+        worktreeEnabled = workflowConfig.worktree;
+      }
+    }
+
     // Ensure workspace is on latest main before SDK creates worktree
-    if (config.getWorktreeEnabled() && !resumeId) {
+    if (worktreeEnabled && !resumeId) {
       await ensureWorkspaceUpToDate(workspace, sessionId);
     }
 
@@ -341,7 +352,7 @@ export async function streamQuery(
         maxTurns: effectiveMaxTurns,
         includePartialMessages: true,
         promptSuggestions: true,
-        ...(config.getWorktreeEnabled() && !resumeId && {
+        ...(worktreeEnabled && !resumeId && {
           extraArgs: { worktree: null },
           settings: {
             worktree: {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useWorkflows, WorkflowConfig, WorkflowPhaseConfig, ToolRule, WorkflowTransition } from '../hooks/useWorkflows';
+import { useWorkflows, WorkflowConfig, WorkflowPhaseConfig, ToolRule, AgentInfo } from '../hooks/useWorkflows';
+import { AGENT_ICONS } from '../constants/agentIcons';
 import './WorkflowsPanel.css';
 
 function toYamlString(obj: unknown, indent = 0): string {
@@ -44,7 +45,7 @@ interface MiniPipelineProps {
 }
 
 function MiniPipeline({ phases }: MiniPipelineProps) {
-  const filtered = phases.filter(p => p.name.toLowerCase() !== 'idle');
+  const filtered = phases.filter(p => p.name.toLowerCase() !== 'idle' && p.name.toLowerCase() !== 'complete');
   if (filtered.length === 0) return null;
 
   const showAll = filtered.length <= 6;
@@ -70,46 +71,200 @@ function MiniPipeline({ phases }: MiniPipelineProps) {
   );
 }
 
-interface PhaseNodeProps {
-  phase: WorkflowPhaseConfig;
-  selected: boolean;
-  onClick: () => void;
+function AgentIconSvg({ iconKey, size = 16 }: { iconKey?: string; size?: number }) {
+  const iconData = iconKey ? AGENT_ICONS[iconKey] : undefined;
+  if (!iconData) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={iconData.path} />
+    </svg>
+  );
 }
 
-function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
+interface AgentCardProps {
+  agentName: string;
+  iconKey?: string;
+  onRemove?: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+}
+
+function AgentCard({ agentName, iconKey, onRemove, draggable = false, onDragStart }: AgentCardProps) {
+  return (
+    <div
+      className="wf-agent-card"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="wf-agent-card-avatar">
+        {iconKey && AGENT_ICONS[iconKey]
+          ? <AgentIconSvg iconKey={iconKey} size={14} />
+          : agentName.charAt(0).toUpperCase()
+        }
+      </span>
+      <span className="wf-agent-card-name">{agentName}</span>
+      {onRemove && (
+        <button
+          className="wf-agent-card-remove"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          aria-label={`Remove ${agentName}`}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface PhaseCardProps {
+  phase: WorkflowPhaseConfig;
+  agents: AgentInfo[];
+  selected: boolean;
+  onClick: () => void;
+  onRemove?: () => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: () => void;
+  onAgentRemove?: (agentName: string) => void;
+  onAgentDragStart?: (agentName: string, e: React.DragEvent) => void;
+  dragOver?: boolean;
+}
+
+function PhaseCard({
+  phase,
+  agents,
+  selected,
+  onClick,
+  onRemove,
+  onDrop,
+  onDragOver,
+  onDragLeave,
+  onAgentRemove,
+  onAgentDragStart,
+  dragOver = false,
+}: PhaseCardProps) {
   const agentHints = phase.agentHints || [];
   const ruleCount = phase.toolRules?.length || 0;
 
+  const resolveAgent = (agentId: string): { displayName: string; icon?: string } => {
+    const agent = agents.find(a => a.id === agentId);
+    return {
+      displayName: agent?.name || agentId,
+      icon: agent?.icon,
+    };
+  };
+
   return (
     <div
-      className={`wf-phase-node ${selected ? 'selected' : ''}`}
+      className={`wf-phase-card ${selected ? 'selected' : ''} ${dragOver ? 'drag-over' : ''}`}
       onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
     >
-      <div className="wf-phase-node-name">{phase.name}</div>
-      <div className="wf-phase-node-meta">
-        {agentHints.length > 0 && (
-          <div className="wf-phase-agent-badges">
-            {agentHints.slice(0, 3).map(name => (
-              <span key={name} className="wf-phase-agent-badge" title={name}>
-                {name.charAt(0).toUpperCase()}
-              </span>
-            ))}
-            {agentHints.length > 3 && (
-              <span className="wf-phase-agent-badge wf-phase-agent-more" title={agentHints.slice(3).join(', ')}>
-                +{agentHints.length - 3}
-              </span>
-            )}
-          </div>
+      <div className="wf-phase-card-header">
+        <div className="wf-phase-card-name">{phase.name}</div>
+        <div className="wf-phase-card-header-right">
+          <div className="wf-phase-card-rule-count">{ruleCount} rule{ruleCount !== 1 ? 's' : ''}</div>
+          {onRemove && (
+            <button
+              className="wf-phase-card-remove"
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              aria-label={`Remove ${phase.name}`}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {agentHints.length === 0 && (
+        <div className="wf-phase-drop-hint">Drop agents here</div>
+      )}
+
+      {agentHints.length > 0 && (
+        <div className="wf-phase-agents">
+          {agentHints.map(agentId => {
+            const { displayName, icon } = resolveAgent(agentId);
+            return (
+              <AgentCard
+                key={agentId}
+                agentName={displayName}
+                iconKey={icon}
+                onRemove={() => onAgentRemove?.(agentId)}
+                draggable
+                onDragStart={(e) => onAgentDragStart?.(agentId, e)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface AgentLibraryProps {
+  agents: AgentInfo[];
+  onClose: () => void;
+  onAgentDragStart: (agentId: string, e: React.DragEvent) => void;
+}
+
+function AgentLibrary({ agents, onClose, onAgentDragStart }: AgentLibraryProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredAgents = agents.filter(agent =>
+    agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    agent.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="wf-agent-library">
+      <div className="wf-agent-library-header">
+        <span className="wf-agent-library-title">Agent Library</span>
+        <button
+          className="wf-agent-library-close"
+          onClick={onClose}
+          aria-label="Close agent library"
+        >
+          ×
+        </button>
+      </div>
+
+      <input
+        className="wf-agent-library-search"
+        type="text"
+        placeholder="Search agents..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+      />
+
+      <div className="wf-agent-library-list">
+        {filteredAgents.length === 0 ? (
+          <div className="wf-agent-library-empty">No agents found</div>
+        ) : (
+          filteredAgents.map((agent) => {
+            const hasIcon = agent.icon && AGENT_ICONS[agent.icon];
+            return (
+              <div
+                key={agent.id}
+                className="wf-agent-library-item"
+                draggable
+                onDragStart={(e) => onAgentDragStart(agent.id, e)}
+                title={agent.description}
+              >
+                <span className="wf-agent-library-handle">⋮⋮</span>
+                <span className="wf-agent-library-avatar">
+                  {hasIcon
+                    ? <AgentIconSvg iconKey={agent.icon} size={14} />
+                    : agent.name.charAt(0).toUpperCase()
+                  }
+                </span>
+                <span className="wf-agent-library-name">{agent.name}</span>
+              </div>
+            );
+          })
         )}
-        {ruleCount > 0 && <span>{ruleCount} rule{ruleCount !== 1 ? 's' : ''}</span>}
       </div>
     </div>
   );
@@ -117,21 +272,24 @@ function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
 
 interface PhaseEditorProps {
   phase: WorkflowPhaseConfig;
-  agents: Array<{ name: string; description: string; icon?: string }>;
   onUpdate: (updates: Partial<WorkflowPhaseConfig>) => void;
-  onRemove: () => void;
+  onClose: () => void;
 }
 
-function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
-  const selectedAgents = phase.agentHints || [];
+function PhaseEditor({ phase, onUpdate, onClose }: PhaseEditorProps) {
   const rules = phase.toolRules || [];
+  const overlayRef = React.useRef<HTMLDivElement>(null);
 
-  const toggleAgent = (agentName: string) => {
-    const newAgents = selectedAgents.includes(agentName)
-      ? selectedAgents.filter(a => a !== agentName)
-      : [...selectedAgents, agentName];
-    onUpdate({ agentHints: newAgents });
-  };
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose]);
 
   const addRule = () => {
     const newRules = [...rules, { tool: '', action: 'warn' as const, condition: '', message: '' }];
@@ -149,199 +307,99 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
   };
 
   return (
-    <div className="wf-phase-editor">
-      <div className="wf-editor-section">
-        <label className="wf-editor-label">Phase Name</label>
-        <input
-          className="wf-editor-input"
-          type="text"
-          value={phase.name}
-          onChange={(e) => onUpdate({ name: e.target.value })}
-          placeholder="Phase name"
-        />
-      </div>
-
-      <div className="wf-editor-section">
-        <label className="wf-editor-label">Context</label>
-        <textarea
-          className="wf-editor-textarea"
-          value={phase.context || ''}
-          onChange={(e) => onUpdate({ context: e.target.value })}
-          placeholder="Optional context for this phase"
-          rows={3}
-        />
-      </div>
-
-      <div className="wf-editor-section">
-        <label className="wf-editor-label">
-          Agent Hints
-          {selectedAgents.length > 0 && (
-            <span className="wf-agent-count"> — {selectedAgents.length} selected</span>
-          )}
-        </label>
-        <div className="wf-agent-picker">
-          {agents.length === 0 ? (
-            <div className="wf-agent-empty">No agents configured</div>
-          ) : (
-            agents.map((agent) => {
-              const isSelected = selectedAgents.includes(agent.name);
-              const avatar = agent.icon || agent.name.charAt(0).toUpperCase();
-              return (
-                <div
-                  key={agent.name}
-                  className={`wf-agent-chip ${isSelected ? 'selected' : ''}`}
-                  onClick={() => toggleAgent(agent.name)}
-                  role="button"
-                  tabIndex={0}
-                  title={agent.description}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      toggleAgent(agent.name);
-                    }
-                  }}
-                >
-                  <span className="wf-agent-avatar">{avatar}</span>
-                  {agent.name}
-                </div>
-              );
-            })
-          )}
+    <div className="wf-phase-overlay" ref={overlayRef} onClick={onClose}>
+      <div className="wf-phase-editor" onClick={(e) => e.stopPropagation()}>
+        <div className="wf-phase-editor-header">
+          <span className="wf-phase-editor-title">{phase.name}</span>
+          <button className="wf-phase-editor-close" onClick={onClose} aria-label="Close">×</button>
         </div>
-      </div>
 
-      <div className="wf-editor-section">
-        <div className="wf-editor-section-header">
-          <label className="wf-editor-label">Tool Rules</label>
-          <button className="wf-add-link" onClick={addRule}>+ add rule</button>
-        </div>
-        {rules.length > 0 && (
-          <div className="wf-rules-list">
-            {rules.map((rule, idx) => (
-              <div key={idx} className="wf-rule-row">
-                <input
-                  className="wf-rule-input wf-rule-tool"
-                  type="text"
-                  value={rule.tool}
-                  onChange={(e) => updateRule(idx, { tool: e.target.value })}
-                  placeholder="tool name"
-                />
-                <select
-                  className="wf-rule-select"
-                  value={rule.action}
-                  onChange={(e) => updateRule(idx, { action: e.target.value as 'allow' | 'warn' | 'block' })}
-                >
-                  <option value="allow">allow</option>
-                  <option value="warn">warn</option>
-                  <option value="block">block</option>
-                </select>
-                <input
-                  className="wf-rule-input wf-rule-condition"
-                  type="text"
-                  value={rule.condition || ''}
-                  onChange={(e) => updateRule(idx, { condition: e.target.value })}
-                  placeholder="condition (optional)"
-                />
-                <input
-                  className="wf-rule-input wf-rule-message"
-                  type="text"
-                  value={rule.message || ''}
-                  onChange={(e) => updateRule(idx, { message: e.target.value })}
-                  placeholder="message (optional)"
-                />
-                <button
-                  className="wf-rule-remove"
-                  onClick={() => removeRule(idx)}
-                  aria-label="Remove rule"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+        <div className="wf-phase-editor-body">
+          <div className="wf-editor-section">
+            <label className="wf-editor-label">Phase Name</label>
+            <input
+              className="wf-editor-input"
+              type="text"
+              value={phase.name}
+              onChange={(e) => onUpdate({ name: e.target.value })}
+              placeholder="Phase name"
+            />
           </div>
-        )}
-      </div>
 
-      <div className="wf-editor-actions">
-        <button className="wf-action-danger" onClick={onRemove}>
-          remove phase
-        </button>
-      </div>
-    </div>
-  );
-}
+          <div className="wf-editor-section">
+            <label className="wf-editor-label">Context</label>
+            <textarea
+              className="wf-editor-textarea"
+              value={phase.context || ''}
+              onChange={(e) => onUpdate({ context: e.target.value })}
+              placeholder="Optional context for this phase — injected into the agent system prompt"
+              rows={4}
+            />
+          </div>
 
-interface TransitionEditorProps {
-  phases: WorkflowPhaseConfig[];
-  transitions: WorkflowTransition[];
-  onUpdate: (transitions: WorkflowTransition[]) => void;
-}
-
-function TransitionEditor({ phases, transitions, onUpdate }: TransitionEditorProps) {
-  const phaseNames = phases.map(p => p.name);
-
-  const addTransition = () => {
-    const newTransitions = [...transitions, { from: '', to: '' }];
-    onUpdate(newTransitions);
-  };
-
-  const updateTransition = (idx: number, field: 'from' | 'to', value: string) => {
-    const newTransitions = transitions.map((t, i) =>
-      i === idx ? { ...t, [field]: value } : t
-    );
-    onUpdate(newTransitions);
-  };
-
-  const removeTransition = (idx: number) => {
-    const newTransitions = transitions.filter((_, i) => i !== idx);
-    onUpdate(newTransitions);
-  };
-
-  return (
-    <div className="wf-transition-editor">
-      <div className="wf-editor-section-header">
-        <label className="wf-editor-label">Phase Transitions</label>
-        <button className="wf-add-link" onClick={addTransition}>+ add transition</button>
-      </div>
-      {transitions.length > 0 && (
-        <div className="wf-transitions-list">
-          {transitions.map((t, idx) => (
-            <div key={idx} className="wf-transition-row">
-              <select
-                className="wf-transition-select"
-                value={t.from}
-                onChange={(e) => updateTransition(idx, 'from', e.target.value)}
-              >
-                <option value="">Select from phase...</option>
-                {phaseNames.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <span className="wf-transition-arrow">→</span>
-              <select
-                className="wf-transition-select"
-                value={t.to}
-                onChange={(e) => updateTransition(idx, 'to', e.target.value)}
-              >
-                <option value="">Select to phase...</option>
-                {phaseNames.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <button
-                className="wf-transition-remove"
-                onClick={() => removeTransition(idx)}
-                aria-label="Remove transition"
-              >
-                ×
-              </button>
+          <div className="wf-editor-section">
+            <div className="wf-editor-section-header">
+              <label className="wf-editor-label">Tool Rules</label>
+              <button className="wf-add-link" onClick={addRule}>+ add rule</button>
             </div>
-          ))}
+            {rules.length > 0 && (
+              <div className="wf-rules-list">
+                {rules.map((rule, idx) => (
+                  <div key={idx} className="wf-rule-row">
+                    <select
+                      className="wf-rule-select wf-rule-tool"
+                      value={rule.tool}
+                      onChange={(e) => updateRule(idx, { tool: e.target.value })}
+                    >
+                      <option value="">select tool</option>
+                      {['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob', 'Agent', 'WebSearch', 'WebFetch', 'NotebookEdit', 'EnterPlanMode'].map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="wf-rule-select"
+                      value={rule.action}
+                      onChange={(e) => updateRule(idx, { action: e.target.value as 'allow' | 'warn' | 'block' })}
+                    >
+                      <option value="allow">allow</option>
+                      <option value="warn">warn</option>
+                      <option value="block">block</option>
+                    </select>
+                    <input
+                      className="wf-rule-input wf-rule-condition"
+                      type="text"
+                      value={rule.condition || ''}
+                      onChange={(e) => updateRule(idx, { condition: e.target.value })}
+                      placeholder="condition"
+                    />
+                    <input
+                      className="wf-rule-input wf-rule-message"
+                      type="text"
+                      value={rule.message || ''}
+                      onChange={(e) => updateRule(idx, { message: e.target.value })}
+                      placeholder="message"
+                    />
+                    <button
+                      className="wf-rule-remove"
+                      onClick={() => removeRule(idx)}
+                      aria-label="Remove rule"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {rules.length === 0 && (
+              <div className="wf-rules-empty">No tool rules. Add rules to control which tools agents can use in this phase.</div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
+
 
 interface WorkflowListViewProps {
   workflows: WorkflowConfig[];
@@ -388,10 +446,7 @@ function WorkflowListView({ workflows, onOpenWorkflow, onCreateNew, onDuplicate 
               </div>
               <div className="wf-list-item-side">
                 <div className="wf-list-item-meta">
-                  <span className="wf-meta-item">{(wf.phases ?? []).length} phase{(wf.phases ?? []).length !== 1 ? 's' : ''}</span>
-                  {wf.transitions && wf.transitions.length > 0 && (
-                    <span className="wf-meta-item">{wf.transitions.length} transition{wf.transitions.length !== 1 ? 's' : ''}</span>
-                  )}
+                  <span className="wf-meta-item">{(wf.phases ?? []).filter(p => p.name.toLowerCase() !== 'idle' && p.name.toLowerCase() !== 'complete').length} phases</span>
                 </div>
                 <div className="wf-list-item-actions">
                   <button
@@ -420,7 +475,7 @@ function WorkflowListView({ workflows, onOpenWorkflow, onCreateNew, onDuplicate 
 
 interface WorkflowDetailViewProps {
   workflow: WorkflowConfig;
-  agents: Array<{ name: string; description: string; icon?: string }>;
+  agents: AgentInfo[];
   onBack: () => void;
   onSave: (wf: WorkflowConfig) => void;
   onDelete: (name: string) => void;
@@ -428,13 +483,11 @@ interface WorkflowDetailViewProps {
 }
 
 function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChange }: WorkflowDetailViewProps) {
-  const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number | null>(
-    workflow.phases.length > 0 ? 0 : null
-  );
+  const [selectedPhaseIndex, setSelectedPhaseIndex] = useState<number | null>(null);
   const [showYaml, setShowYaml] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [showAgentLibrary, setShowAgentLibrary] = useState(true);
+  const [dragOverPhaseIndex, setDragOverPhaseIndex] = useState<number | null>(null);
 
   const handleAddPhase = () => {
     const newPhase: WorkflowPhaseConfig = {
@@ -468,35 +521,97 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
     }
   };
 
-  const handleDragStart = (idx: number) => {
-    setDragIndex(idx);
+  const handleLibraryAgentDragStart = (agentName: string, e: React.DragEvent) => {
+    e.dataTransfer.setData('application/agent', JSON.stringify({ name: agentName, source: 'library' }));
   };
 
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
+  const handlePhaseAgentDragStart = (phaseIndex: number, agentName: string, e: React.DragEvent) => {
+    e.dataTransfer.setData('application/agent', JSON.stringify({
+      name: agentName,
+      source: 'phase',
+      sourcePhaseIndex: phaseIndex
+    }));
+    e.stopPropagation();
+  };
+
+  const handlePhaseDragOver = (e: React.DragEvent, phaseIndex: number) => {
     e.preventDefault();
-    setDragOverIndex(idx);
+    setDragOverPhaseIndex(phaseIndex);
   };
 
-  const handleDrop = () => {
-    if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
+  const handlePhaseDragLeave = () => {
+    setDragOverPhaseIndex(null);
+  };
+
+  const handlePhaseDrop = (e: React.DragEvent, phaseIndex: number) => {
+    e.preventDefault();
+    setDragOverPhaseIndex(null);
+
+    const dataString = e.dataTransfer.getData('application/agent');
+    if (!dataString) return;
+
+    try {
+      const data = JSON.parse(dataString) as {
+        name: string;
+        source: 'library' | 'phase';
+        sourcePhaseIndex?: number;
+      };
+
+      const targetPhase = workflow.phases[phaseIndex];
+      const currentAgents = targetPhase.agentHints || [];
+
+      // Prevent duplicates in target phase
+      if (currentAgents.includes(data.name)) {
+        return;
+      }
+
+      if (data.source === 'library') {
+        // Add agent from library to phase
+        const newPhases = workflow.phases.map((p, i) => {
+          if (i === phaseIndex) {
+            return {
+              ...p,
+              agentHints: [...currentAgents, data.name]
+            };
+          }
+          return p;
+        });
+        onChange({ ...workflow, phases: newPhases });
+      } else if (data.source === 'phase' && data.sourcePhaseIndex !== undefined) {
+        // Move agent from one phase to another
+        const newPhases = workflow.phases.map((p, i) => {
+          if (i === data.sourcePhaseIndex) {
+            return {
+              ...p,
+              agentHints: (p.agentHints || []).filter(a => a !== data.name)
+            };
+          }
+          if (i === phaseIndex) {
+            return {
+              ...p,
+              agentHints: [...currentAgents, data.name]
+            };
+          }
+          return p;
+        });
+        onChange({ ...workflow, phases: newPhases });
+      }
+    } catch (error) {
+      console.error('Failed to parse drag data:', error);
     }
-
-    const phases = workflow.phases;
-    const removed = phases[dragIndex];
-    const without = phases.filter((_, i) => i !== dragIndex);
-    const newPhases = [...without.slice(0, dragOverIndex), removed, ...without.slice(dragOverIndex)];
-
-    onChange({ ...workflow, phases: newPhases });
-    setSelectedPhaseIndex(dragOverIndex);
-    setDragIndex(null);
-    setDragOverIndex(null);
   };
 
-  const handleUpdateTransitions = (transitions: WorkflowTransition[]) => {
-    onChange({ ...workflow, transitions });
+  const handleAgentRemove = (phaseIndex: number, agentName: string) => {
+    const newPhases = workflow.phases.map((p, i) => {
+      if (i === phaseIndex) {
+        return {
+          ...p,
+          agentHints: (p.agentHints || []).filter(a => a !== agentName)
+        };
+      }
+      return p;
+    });
+    onChange({ ...workflow, phases: newPhases });
   };
 
   const handleSave = () => {
@@ -527,7 +642,6 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
             value={workflow.name}
             onChange={(e) => onChange({ ...workflow, name: e.target.value })}
             placeholder="Workflow name"
-            disabled={workflow.builtin}
           />
           {workflow.builtin && <span className="wf-builtin-badge">built-in</span>}
         </div>
@@ -538,18 +652,22 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
           >
             {showYaml ? 'editor' : 'yaml'}
           </button>
+          <button
+            className="wf-yaml-toggle"
+            onClick={() => setShowAgentLibrary(!showAgentLibrary)}
+          >
+            {showAgentLibrary ? 'hide library' : 'show library'}
+          </button>
+          <button className="wf-action-primary" onClick={handleSave}>
+            save
+          </button>
           {!workflow.builtin && (
-            <>
-              <button className="wf-action-primary" onClick={handleSave}>
-                save
-              </button>
-              <button
-                className="wf-action-danger"
-                onClick={handleDelete}
-              >
-                {deleteConfirm ? 'confirm delete?' : 'delete'}
-              </button>
-            </>
+            <button
+              className="wf-action-danger"
+              onClick={handleDelete}
+            >
+              {deleteConfirm ? 'confirm delete?' : 'delete'}
+            </button>
           )}
         </div>
       </div>
@@ -559,67 +677,66 @@ function WorkflowDetailView({ workflow, agents, onBack, onSave, onDelete, onChan
           <pre className="wf-yaml-block">{yamlContent}</pre>
         </div>
       ) : (
-        <>
-          <div className="wf-detail-meta">
-            <label className="wf-meta-label">Description</label>
-            <input
-              className="wf-meta-input"
-              type="text"
-              value={workflow.description || ''}
-              onChange={(e) => onChange({ ...workflow, description: e.target.value })}
-              placeholder="Optional description"
-              disabled={workflow.builtin}
-            />
-          </div>
-
-          <div className="wf-pipeline-section">
-            <label className="wf-pipeline-label">Phase Pipeline</label>
-            <div className="wf-pipeline">
-              {workflow.phases
-                .map((phase, idx) => ({ phase, idx }))
-                .filter(({ phase }) => phase.name.toLowerCase() !== 'idle')
-                .map(({ phase, idx }) => (
-                <React.Fragment key={idx}>
-                  <div
-                    draggable={!workflow.builtin}
-                    onDragStart={() => handleDragStart(idx)}
-                    onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={handleDrop}
-                    className={dragOverIndex === idx ? 'drag-over' : ''}
-                  >
-                    <PhaseNode
-                      phase={phase}
-                      selected={selectedPhaseIndex === idx}
-                      onClick={() => setSelectedPhaseIndex(idx)}
-                    />
-                  </div>
-                </React.Fragment>
-              ))}
-              {!workflow.builtin && (
-                <button className="wf-phase-add" onClick={handleAddPhase}>
-                  +
-                </button>
-              )}
+        <div className="wf-detail-layout">
+          <div className="wf-detail-main">
+            <div className="wf-detail-meta">
+              <label className="wf-meta-label">Description</label>
+              <input
+                className="wf-meta-input"
+                type="text"
+                value={workflow.description || ''}
+                onChange={(e) => onChange({ ...workflow, description: e.target.value })}
+                placeholder="Optional description"
+              />
             </div>
+
+            <div className="wf-pipeline-section">
+              <label className="wf-pipeline-label">Phase Pipeline</label>
+              <div className="wf-pipeline-cards">
+                {workflow.phases
+                  .map((phase, idx) => ({ phase, idx }))
+                  .filter(({ phase }) => phase.name.toLowerCase() !== 'idle' && phase.name.toLowerCase() !== 'complete')
+                  .map(({ phase, idx }) => (
+                    <PhaseCard
+                      key={idx}
+                      phase={phase}
+                      agents={agents}
+                      selected={selectedPhaseIndex === idx}
+                      onClick={() => setSelectedPhaseIndex(selectedPhaseIndex === idx ? null : idx)}
+                      onRemove={() => handleRemovePhase(idx)}
+                      onDrop={(e) => handlePhaseDrop(e, idx)}
+                      onDragOver={(e) => handlePhaseDragOver(e, idx)}
+                      onDragLeave={handlePhaseDragLeave}
+                      onAgentRemove={(agentName) => handleAgentRemove(idx, agentName)}
+                      onAgentDragStart={(agentName, e) => handlePhaseAgentDragStart(idx, agentName, e)}
+                      dragOver={dragOverPhaseIndex === idx}
+                    />
+                  ))}
+                <button className="wf-phase-add-card" onClick={handleAddPhase}>
+                  + Add Phase
+                </button>
+              </div>
+            </div>
+
+
           </div>
 
-          {selectedPhaseIndex !== null && workflow.phases[selectedPhaseIndex] && !workflow.builtin && (
-            <PhaseEditor
-              phase={workflow.phases[selectedPhaseIndex]}
+          {showAgentLibrary && (
+            <AgentLibrary
               agents={agents}
-              onUpdate={(updates) => handleUpdatePhase(selectedPhaseIndex, updates)}
-              onRemove={() => handleRemovePhase(selectedPhaseIndex)}
+              onClose={() => setShowAgentLibrary(false)}
+              onAgentDragStart={handleLibraryAgentDragStart}
             />
           )}
+        </div>
+      )}
 
-          {!workflow.builtin && (
-            <TransitionEditor
-              phases={workflow.phases}
-              transitions={workflow.transitions || []}
-              onUpdate={handleUpdateTransitions}
-            />
-          )}
-        </>
+      {selectedPhaseIndex !== null && workflow.phases[selectedPhaseIndex] && (
+        <PhaseEditor
+          phase={workflow.phases[selectedPhaseIndex]}
+          onUpdate={(updates) => handleUpdatePhase(selectedPhaseIndex, updates)}
+          onClose={() => setSelectedPhaseIndex(null)}
+        />
       )}
     </div>
   );

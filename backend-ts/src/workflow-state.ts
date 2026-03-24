@@ -121,10 +121,10 @@ function getStatePath(sessionId: string): string {
   return path.join(WORKFLOWS_DIR, sanitizeId(sessionId) + '.json');
 }
 
-function createDefaultState(sessionId: string): WorkflowState {
+function createDefaultState(sessionId: string, workflowName: string = 'default'): WorkflowState {
   return {
     phase: 'idle',
-    workflowName: 'default',
+    workflowName,
     transitions: [],
     sessionId,
     createdAt: new Date().toISOString(),
@@ -133,10 +133,10 @@ function createDefaultState(sessionId: string): WorkflowState {
 
 // ---- Public API ----
 
-export function getWorkflowState(sessionId: string): WorkflowState {
+export function getWorkflowState(sessionId: string, workflowName?: string): WorkflowState {
   const statePath = getStatePath(sessionId);
   if (!existsSync(statePath)) {
-    return createDefaultState(sessionId);
+    return createDefaultState(sessionId, workflowName);
   }
 
   try {
@@ -145,13 +145,13 @@ export function getWorkflowState(sessionId: string): WorkflowState {
 
     // Migration: add workflowName if missing
     if (!state.workflowName) {
-      state.workflowName = 'default';
+      state.workflowName = workflowName ?? 'default';
     }
 
     return state;
   } catch (error) {
     log.error('Failed to read workflow state', { sessionId, error: String(error) });
-    return createDefaultState(sessionId);
+    return createDefaultState(sessionId, workflowName);
   }
 }
 
@@ -409,8 +409,8 @@ function inferPhaseFromAgentFallback(agentType: string): WorkflowPhase | null {
   }
 }
 
-export function resetWorkflow(sessionId: string): WorkflowState | null {
-  const newState = createDefaultState(sessionId);
+export function resetWorkflow(sessionId: string, workflowName?: string): WorkflowState | null {
+  const newState = createDefaultState(sessionId, workflowName);
   try {
     writeFileSync(getStatePath(sessionId), JSON.stringify(newState, null, 2), 'utf-8');
     log.info('Workflow reset', { sessionId });

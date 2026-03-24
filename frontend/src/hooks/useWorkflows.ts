@@ -30,6 +30,7 @@ export interface WorkflowConfig {
 }
 
 export interface AgentInfo {
+  id: string;
   name: string;
   description: string;
   icon?: string;

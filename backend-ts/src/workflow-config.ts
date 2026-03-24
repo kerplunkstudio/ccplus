@@ -36,6 +36,7 @@ export interface WorkflowConfig {
   name: string;
   description?: string;
   builtin?: boolean;
+  worktree?: boolean;              // Whether this workflow runs in git worktrees
   phases: WorkflowPhaseConfig[];
   transitions: WorkflowTransition[];
 }
@@ -58,7 +59,7 @@ function sanitizeName(name: string): string {
 }
 
 function getWorkflowPath(name: string): string {
-  return path.join(WORKFLOW_CONFIGS_DIR, `${sanitizeName(name)}.json`);
+  return path.join(WORKFLOW_CONFIGS_DIR, sanitizeName(name), 'workflow.yaml');
 }
 
 // ---- Built-in Workflows ----
@@ -629,7 +630,7 @@ export function getWorkflowByName(name: string, workspace: string): WorkflowConf
 }
 
 /**
- * Save a user workflow to JSON format (for workflow builder)
+ * Save a user workflow to YAML format (for workflow builder)
  */
 export function saveWorkflow(workflow: WorkflowConfig): string {
   if (!workflow.name?.trim()) {
@@ -637,8 +638,26 @@ export function saveWorkflow(workflow: WorkflowConfig): string {
   }
   const safeName = sanitizeName(workflow.name);
   ensureDir();
+
+  // Create the workflow subdirectory
+  const workflowDir = path.join(WORKFLOW_CONFIGS_DIR, safeName);
+  mkdirSync(workflowDir, { recursive: true });
+
+  // Save as YAML
   const toSave: WorkflowConfig = { ...workflow, builtin: false, name: safeName };
-  writeFileSync(getWorkflowPath(safeName), JSON.stringify(toSave, null, 2), 'utf-8');
+  const yamlContent = yaml.dump(toSave);
+  writeFileSync(getWorkflowPath(safeName), yamlContent, 'utf-8');
+
+  // Clear cache so changes are picked up without restart
+  // Clear all cache entries for this workflow across all workspaces
+  const keysToDelete: string[] = [];
+  for (const key of workflowCache.keys()) {
+    if (key.endsWith(`:${safeName}`)) {
+      keysToDelete.push(key);
+    }
+  }
+  keysToDelete.forEach(key => workflowCache.delete(key));
+
   log.info('Saved workflow config', { name: safeName });
   return safeName;
 }
@@ -647,14 +666,26 @@ export function saveWorkflow(workflow: WorkflowConfig): string {
  * Delete a user workflow (cannot delete built-in workflows)
  */
 export function deleteWorkflow(name: string): boolean {
-  const wfPath = getWorkflowPath(name);
-  if (!existsSync(wfPath)) return false;
+  const safeName = sanitizeName(name);
+  const workflowDir = path.join(WORKFLOW_CONFIGS_DIR, safeName);
+  if (!existsSync(workflowDir)) return false;
   try {
-    rmSync(wfPath);
-    log.info('Deleted workflow config', { name });
+    // Delete the entire workflow directory
+    rmSync(workflowDir, { recursive: true });
+
+    // Clear cache entries for this workflow across all workspaces
+    const keysToDelete: string[] = [];
+    for (const key of workflowCache.keys()) {
+      if (key.endsWith(`:${safeName}`)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach(key => workflowCache.delete(key));
+
+    log.info('Deleted workflow config', { name: safeName });
     return true;
   } catch (error) {
-    log.error('Failed to delete workflow', { name, error: String(error) });
+    log.error('Failed to delete workflow', { name: safeName, error: String(error) });
     return false;
   }
 }

@@ -15,6 +15,7 @@ import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import { startSession } from "./session-api.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
+import { listWorkflows, getWorkflowByName } from './workflow-config.js';
 
 // ---- Types ----
 
@@ -121,6 +122,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
           prompt: z.string().describe("The task prompt for the session"),
           workspace: z.string().describe("Absolute path to the workspace/project directory"),
           session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
+          workflow: z.string().optional().describe("Workflow name to use for this session (e.g., 'default', 'tdd', 'hotfix'). Determines phase pipeline and tool rules."),
         },
         async (args) => {
           const result = startSession(
@@ -129,6 +131,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
               workspace: args.workspace,
               sessionId: args.session_id,
               requestedBy: getLastQuerySource() ?? undefined,
+              workflow: args.workflow,
             },
             dependencies
           );
@@ -359,7 +362,26 @@ function getFleetMcpServer(): ReturnType<typeof createSdkMcpServer> {
 
 // ---- System Prompt ----
 
-const CAPTAIN_SYSTEM_PROMPT = `
+/**
+ * Build the Captain system prompt with dynamic workflow list
+ */
+function buildCaptainSystemPrompt(workspace: string): string {
+  const workflowNames = listWorkflows(workspace);
+  const workflowDescriptions = workflowNames.map(name => {
+    const wf = getWorkflowByName(name, workspace);
+    if (!wf) return null;
+    const description = wf.description || `${name} workflow`;
+    return `- ${name}: ${description}`;
+  }).filter((s): s is string => s !== null);
+
+  const workflowSection = workflowDescriptions.length > 0
+    ? `\n## Available Workflows\nChoose the right workflow for each task:\n${workflowDescriptions.join('\n')}\n`
+    : '';
+
+  return CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection;
+}
+
+const CAPTAIN_SYSTEM_PROMPT_TEMPLATE = `
 You are Captain, the fleet orchestrator for cc+. Your job is to expand user requests and delegate to sessions — not to research or implement yourself.
 
 ## The Golden Rule
@@ -505,7 +527,7 @@ export async function startCaptainSession(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: CAPTAIN_SYSTEM_PROMPT,
+          append: buildCaptainSystemPrompt(workspace),
         } as any,
         mcpServers: {
           "fleet-control": getFleetMcpServer(),
@@ -728,7 +750,7 @@ async function startCaptainQuery(content: string): Promise<void> {
       systemPrompt: {
         type: "preset",
         preset: "claude_code",
-        append: CAPTAIN_SYSTEM_PROMPT,
+        append: buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE),
       } as any,
       mcpServers: {
         "fleet-control": getFleetMcpServer(),
