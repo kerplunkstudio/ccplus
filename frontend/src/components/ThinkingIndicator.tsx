@@ -18,14 +18,17 @@ const countRunningAgents = (nodes: ActivityNode[]): number => {
 interface ThinkingIndicatorProps {
   activityTree: ActivityNode[];
   signals?: SignalState;
+  isModelThinking?: boolean;
 }
 
 export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
   activityTree,
   signals,
+  isModelThinking,
 }) => {
   const statusText = signals?.status?.detail ||
-    (signals?.status?.phase ? signals.status.phase.charAt(0).toUpperCase() + signals.status.phase.slice(1) : (() => {
+    (signals?.status?.phase ? signals.status.phase.charAt(0).toUpperCase() + signals.status.phase.slice(1) :
+    (() => {
       const runningAgents = countRunningAgents(activityTree);
       if (runningAgents === 0) return 'Thinking...';
       if (runningAgents === 1) return 'Running 1 agent...';

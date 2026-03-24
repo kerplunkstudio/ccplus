@@ -6,6 +6,7 @@ export interface StreamState {
   streaming: boolean;
   backgroundProcessing: boolean;
   thinking: string;
+  isThinking: boolean;
   lastSeq: number;
   activeStreamId: string | null;
   streamingContent: string;
@@ -18,6 +19,7 @@ export const initialStreamState: StreamState = {
   streaming: false,
   backgroundProcessing: false,
   thinking: '',
+  isThinking: false,
   lastSeq: 0,
   activeStreamId: null,
   streamingContent: '',
@@ -47,6 +49,7 @@ export type StreamAction =
   | { type: 'ERROR'; message: string; seq: number }
   | { type: 'COMPACT_BOUNDARY'; seq: number }
   | { type: 'THINKING_DELTA'; text: string }
+  | { type: 'THINKING_STATUS'; isThinking: boolean }
   | { type: 'FINALIZE_STREAM' }
   | { type: 'SEND_MESSAGE'; message: Message }
   | { type: 'CANCEL_QUERY' }
@@ -178,6 +181,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
           streaming: false,
           backgroundProcessing: false,
           thinking: '',
+          isThinking: false,
           lastSeq: action.seq,
           activeStreamId: null,
           streamingContent: '',
@@ -230,6 +234,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
         messages: [...state.messages, errorMessage],
         streaming: false,
         backgroundProcessing: false,
+        isThinking: false,
         lastSeq: action.seq,
         activeStreamId: null,
         streamingContent: '',
@@ -266,6 +271,13 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       };
     }
 
+    case 'THINKING_STATUS': {
+      return {
+        ...state,
+        isThinking: action.isThinking,
+      };
+    }
+
     case 'FINALIZE_STREAM': {
       if (!state.activeStreamId || !state.streamingContent) {
         return state;
@@ -291,6 +303,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
         ...state,
         messages: [...state.messages, action.message],
         streaming: true,
+        isThinking: false,
         activeStreamId: null,
         streamingContent: '',
         messageIndex: 0,
@@ -312,6 +325,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
         messages: newMessages,
         streaming: false,
         backgroundProcessing: false,
+        isThinking: false,
         activeStreamId: null,
         streamingContent: '',
         intermediateCompletion: false,

@@ -33,6 +33,7 @@ interface MessageListProps {
   toolLog: ToolEvent[];
   activityTree?: ActivityNode[];
   signals?: SignalState;
+  isModelThinking?: boolean;
   todos?: TodoItem[];
   onClearTodos?: () => void;
 }
@@ -53,6 +54,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   toolLog,
   activityTree = [],
   signals,
+  isModelThinking,
   todos = [],
   onClearTodos,
 }) => {
@@ -182,7 +184,7 @@ export const MessageList: React.FC<MessageListProps> = ({
         <TodoProgress todos={todos} onDismiss={onClearTodos} />
       )}
       {streaming && !isRestoringSession && (
-        <ThinkingIndicator activityTree={activityTree} signals={signals} />
+        <ThinkingIndicator activityTree={activityTree} signals={signals} isModelThinking={isModelThinking} />
       )}
       <div ref={messagesEndRef} />
     </div>

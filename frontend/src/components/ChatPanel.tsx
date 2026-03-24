@@ -52,6 +52,7 @@ interface ChatPanelProps {
   promptSuggestions?: string[];
   rateLimitState?: { active: boolean; retryAfterMs: number } | null;
   activityTree?: ActivityNode[];
+  isModelThinking?: boolean;
   pendingInput?: string | null;
   onClearPendingInput?: () => void;
   todos?: TodoItem[];
@@ -90,6 +91,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   promptSuggestions = [],
   rateLimitState,
   activityTree = [],
+  isModelThinking,
   pendingInput = null,
   onClearPendingInput,
   todos = [],
@@ -142,6 +144,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           toolLog={toolLog}
           activityTree={activityTree}
           signals={signals}
+          isModelThinking={isModelThinking}
           todos={todos}
           onClearTodos={onClearTodos}
         />

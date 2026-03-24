@@ -165,6 +165,8 @@ export function buildSocketCallbacks(
         io.to(sessionId).emit("capture_screenshot", { session_id: sessionId });
       });
     },
-    // Thinking deltas intentionally not emitted to frontend
+    onThinkingStatus: (isThinking: boolean) => {
+      io.to(sessionId).emit("thinking_status", { isThinking, session_id: sessionId });
+    },
   };
 }

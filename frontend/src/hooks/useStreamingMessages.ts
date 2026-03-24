@@ -244,6 +244,11 @@ export function useStreamingMessages({
       dispatch({ type: 'STREAM_CONTENT_SYNC', content: data.content, seq: data.seq ?? 0 });
     });
 
+    socket.on('thinking_status', (data: { isThinking: boolean; session_id?: string }) => {
+      if (data.session_id && data.session_id !== currentSessionIdRef.current) return;
+      dispatch({ type: 'THINKING_STATUS', isThinking: data.isThinking });
+    });
+
     return () => {
       // Cancel pending rAF and mark as cancelled to prevent dispatch
       cancelledRef.current = true;
@@ -260,6 +265,7 @@ export function useStreamingMessages({
       socket.off('error');
       socket.off('compact_boundary');
       socket.off('stream_content_sync');
+      socket.off('thinking_status');
     };
   }, [socket, toolLogRef, activityTreeRef, hasRunningAgents, currentSessionIdRef]);
 
@@ -269,6 +275,7 @@ export function useStreamingMessages({
     streaming: state.streaming,
     backgroundProcessing: state.backgroundProcessing,
     thinking: state.thinking,
+    isThinking: state.isThinking,
     lastSeq: state.lastSeq,
     // Dispatch for other hooks
     streamDispatch: dispatch,

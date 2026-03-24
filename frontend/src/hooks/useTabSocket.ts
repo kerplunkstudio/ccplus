@@ -117,6 +117,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     streaming: streamingHook.streaming,
     backgroundProcessing: streamingHook.backgroundProcessing,
     thinking: streamingHook.thinking,
+    isModelThinking: streamingHook.isThinking,
     currentTool: toolEvents.currentTool,
     activityTree,
     usageStats: streamingHook.usageStats,

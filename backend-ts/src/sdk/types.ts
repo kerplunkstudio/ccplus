@@ -15,6 +15,7 @@ export interface SessionCallbacks {
   onError: (message: string) => void;
   onUserQuestion?: (data: Record<string, unknown>) => void;
   onThinkingDelta?: (text: string) => void;
+  onThinkingStatus?: (isThinking: boolean) => void;
   onSignal?: (signal: { type: string; data: Record<string, unknown> }) => void;
   onToolProgress?: (data: { tool_use_id: string; elapsed_seconds: number }) => void;
   onRateLimit?: (data: { retryAfterMs: number; rateLimitedAt: string }) => void;

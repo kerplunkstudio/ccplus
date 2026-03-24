@@ -54,6 +54,7 @@ export function useCaptainSocket(socket: Socket | null) {
   const [archivedConversations, setArchivedConversations] = useState<CaptainConversation[]>(loadArchive);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isModelThinking, setIsModelThinking] = useState(false);
   const currentSessionIdRef = useRef<string>('');
 
   // Initialize Captain session on mount
@@ -152,16 +153,22 @@ export function useCaptainSocket(socket: Socket | null) {
       setIsStreaming(false);
     };
 
+    const handleThinkingStatus = (data: { isThinking: boolean }) => {
+      setIsModelThinking(data.isThinking);
+    };
+
     socket.on('captain_thinking', handleCaptainThinking);
     socket.on('captain_text', handleCaptainText);
     socket.on('captain_complete', handleCaptainComplete);
     socket.on('captain_error', handleCaptainError);
+    socket.on('thinking_status', handleThinkingStatus);
 
     return () => {
       socket.off('captain_thinking', handleCaptainThinking);
       socket.off('captain_text', handleCaptainText);
       socket.off('captain_complete', handleCaptainComplete);
       socket.off('captain_error', handleCaptainError);
+      socket.off('thinking_status', handleThinkingStatus);
     };
   }, [socket, captainSessionId]);
 
@@ -216,6 +223,7 @@ export function useCaptainSocket(socket: Socket | null) {
     messages,
     isStreaming,
     isThinking,
+    isModelThinking,
     sendMessage,
     archivedConversations,
     clearHistory,

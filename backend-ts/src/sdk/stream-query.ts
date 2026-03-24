@@ -518,6 +518,13 @@ export async function streamQuery(
           } else if (delta.type === "thinking_delta" && delta.thinking) {
             callbacks.onThinkingDelta?.(delta.thinking);
           }
+        } else if (eventType === "content_block_start") {
+          const blockType = eventData.content_block?.type;
+          if (blockType === "thinking") {
+            callbacks.onThinkingStatus?.(true);
+          } else if (blockType === "text") {
+            callbacks.onThinkingStatus?.(false);
+          }
         } else if (eventType === "message_stop") {
           // Extract usage data from message_stop event and update fleet monitor
           const usage = eventData.message?.usage ?? eventData.usage;

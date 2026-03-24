@@ -94,6 +94,7 @@ function AppContent() {
     promptSuggestions,
     rateLimitState,
     contextTokens,
+    isModelThinking,
     todos,
     setTodos,
     scheduledTasks,
@@ -795,6 +796,7 @@ function AppContent() {
                     promptSuggestions={promptSuggestions}
                     rateLimitState={rateLimitState}
                     activityTree={activityTree}
+                    isModelThinking={isModelThinking}
                     pendingInput={pendingInput}
                     onClearPendingInput={handleClearPendingInput}
                     todos={todos}

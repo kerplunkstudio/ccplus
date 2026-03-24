@@ -16,6 +16,7 @@ interface CaptainChatProps {
   messages: Message[];
   isStreaming: boolean;
   isThinking: boolean;
+  isModelThinking?: boolean;
   onSendMessage: (content: string) => void;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
@@ -47,6 +48,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   messages,
   isStreaming,
   isThinking,
+  isModelThinking,
   onSendMessage,
   archivedConversations,
   onClearHistory,
@@ -165,7 +167,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {isThinking && <ThinkingIndicator activityTree={[]} />}
+            {isThinking && <ThinkingIndicator activityTree={[]} isModelThinking={isModelThinking} />}
             <div ref={messagesEndRef} />
           </>
         )}
