@@ -31,6 +31,11 @@ export const AgentConfigSchema = z.object({
   model: z.enum(['sonnet', 'opus', 'haiku']).optional(),
   maxTurns: z.number().int().min(1).max(10000).optional(),
   personality: z.string().optional(),
+  system_prompt: z.string().optional(),
+  tools: z.object({
+    allowed: z.array(z.string()).optional(),
+    blocked: z.array(z.string()).optional(),
+  }).optional(),
   security: SecurityConfigSchema.optional(),
   memory: MemoryConfigSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -93,7 +98,7 @@ export async function loadAgentsFromDir(dir: string): Promise<ResolvedAgent[]> {
       const soulPath = path.join(agentDir, 'SOUL.md');
       const soulContent = existsSync(soulPath)
         ? readFileSync(soulPath, 'utf-8')
-        : undefined;
+        : result.data.system_prompt;
 
       agents.push({
         ...result.data,
@@ -165,7 +170,7 @@ export async function getAgent(workspacePath: string, id: string): Promise<Resol
       }
 
       const soulPath = path.join(agentDir, 'SOUL.md');
-      const soulContent = existsSync(soulPath) ? readFileSync(soulPath, 'utf-8') : undefined;
+      const soulContent = existsSync(soulPath) ? readFileSync(soulPath, 'utf-8') : result.data.system_prompt;
 
       return { ...result.data, id, soulContent, dirPath: agentDir };
     } catch (err) {
