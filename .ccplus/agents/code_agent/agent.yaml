@@ -1,0 +1,4 @@
+name: Code Agent
+description: Primary coding agent for implementing features, fixing bugs, and executing code changes
+model: sonnet
+maxTurns: 200

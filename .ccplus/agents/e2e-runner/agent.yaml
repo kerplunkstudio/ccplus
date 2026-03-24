@@ -1,0 +1,4 @@
+name: E2E Runner
+description: End-to-end testing specialist using Playwright for generating, maintaining, and running E2E tests
+model: sonnet
+maxTurns: 100
