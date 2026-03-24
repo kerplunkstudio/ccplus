@@ -77,7 +77,7 @@ interface PhaseNodeProps {
 }
 
 function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
-  const agentCount = phase.agentHints?.length || 0;
+  const agentHints = phase.agentHints || [];
   const ruleCount = phase.toolRules?.length || 0;
 
   return (
@@ -95,7 +95,20 @@ function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
     >
       <div className="wf-phase-node-name">{phase.name}</div>
       <div className="wf-phase-node-meta">
-        {agentCount > 0 && <span>{agentCount} agent{agentCount !== 1 ? 's' : ''}</span>}
+        {agentHints.length > 0 && (
+          <div className="wf-phase-agent-badges">
+            {agentHints.slice(0, 3).map(name => (
+              <span key={name} className="wf-phase-agent-badge" title={name}>
+                {name.charAt(0).toUpperCase()}
+              </span>
+            ))}
+            {agentHints.length > 3 && (
+              <span className="wf-phase-agent-badge wf-phase-agent-more" title={agentHints.slice(3).join(', ')}>
+                +{agentHints.length - 3}
+              </span>
+            )}
+          </div>
+        )}
         {ruleCount > 0 && <span>{ruleCount} rule{ruleCount !== 1 ? 's' : ''}</span>}
       </div>
     </div>
@@ -104,14 +117,12 @@ function PhaseNode({ phase, selected, onClick }: PhaseNodeProps) {
 
 interface PhaseEditorProps {
   phase: WorkflowPhaseConfig;
-  agents: Array<{ name: string; description: string }>;
+  agents: Array<{ name: string; description: string; icon?: string }>;
   onUpdate: (updates: Partial<WorkflowPhaseConfig>) => void;
   onRemove: () => void;
 }
 
 function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
-
   const selectedAgents = phase.agentHints || [];
   const rules = phase.toolRules || [];
 
@@ -162,20 +173,23 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
       </div>
 
       <div className="wf-editor-section">
-        <label className="wf-editor-label">Agent Hints</label>
-        <div className="wf-agent-selector">
-          <button
-            className="wf-agent-picker-toggle"
-            onClick={() => setShowAgentPicker(!showAgentPicker)}
-          >
-            {selectedAgents.length > 0 ? `${selectedAgents.length} selected` : 'Select agents...'}
-          </button>
-          {showAgentPicker && (
-            <div className="wf-agent-picker">
-              {agents.map((agent) => (
+        <label className="wf-editor-label">
+          Agent Hints
+          {selectedAgents.length > 0 && (
+            <span className="wf-agent-count"> — {selectedAgents.length} selected</span>
+          )}
+        </label>
+        <div className="wf-agent-picker">
+          {agents.length === 0 ? (
+            <div className="wf-agent-empty">No agents configured</div>
+          ) : (
+            agents.map((agent) => {
+              const isSelected = selectedAgents.includes(agent.name);
+              const avatar = agent.icon || agent.name.charAt(0).toUpperCase();
+              return (
                 <div
                   key={agent.name}
-                  className={`wf-agent-chip ${selectedAgents.includes(agent.name) ? 'selected' : ''}`}
+                  className={`wf-agent-chip ${isSelected ? 'selected' : ''}`}
                   onClick={() => toggleAgent(agent.name)}
                   role="button"
                   tabIndex={0}
@@ -187,29 +201,11 @@ function PhaseEditor({ phase, agents, onUpdate, onRemove }: PhaseEditorProps) {
                     }
                   }}
                 >
+                  <span className="wf-agent-avatar">{avatar}</span>
                   {agent.name}
                 </div>
-              ))}
-            </div>
-          )}
-          {selectedAgents.length > 0 && !showAgentPicker && (
-            <div className="wf-agent-chips">
-              {selectedAgents.map((agentName) => (
-                <span key={agentName} className="wf-agent-chip selected">
-                  {agentName}
-                  <button
-                    className="wf-agent-chip-remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleAgent(agentName);
-                    }}
-                    aria-label={`Remove ${agentName}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -424,7 +420,7 @@ function WorkflowListView({ workflows, onOpenWorkflow, onCreateNew, onDuplicate 
 
 interface WorkflowDetailViewProps {
   workflow: WorkflowConfig;
-  agents: Array<{ name: string; description: string }>;
+  agents: Array<{ name: string; description: string; icon?: string }>;
   onBack: () => void;
   onSave: (wf: WorkflowConfig) => void;
   onDelete: (name: string) => void;

@@ -32,6 +32,7 @@ export interface WorkflowConfig {
 export interface AgentInfo {
   name: string;
   description: string;
+  icon?: string;
 }
 
 export function useWorkflows() {
