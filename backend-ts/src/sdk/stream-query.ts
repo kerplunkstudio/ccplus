@@ -24,8 +24,8 @@ import { getAgent, resolveAgentModel, type ResolvedAgent } from '../agent-config
 const execAsync = promisify(exec);
 
 /**
- * Ensure workspace is on the latest commit before creating a worktree.
- * Only runs when: git repo, clean working tree, on main/master branch.
+ * Ensure workspace is checked out to the tip of the local main/master branch before creating a worktree.
+ * No remote operations (fetch, pull) are performed.
  * Non-fatal: logs warning and continues if anything fails.
  */
 async function ensureWorkspaceUpToDate(workspace: string, sessionId: string): Promise<void> {
@@ -33,27 +33,54 @@ async function ensureWorkspaceUpToDate(workspace: string, sessionId: string): Pr
     // Verify this is a git repo
     await execAsync('git rev-parse --git-dir', { cwd: workspace });
 
-    // Skip if working tree is dirty (uncommitted changes)
+    // Detect the default branch (main or master)
+    let defaultBranch: string | null = null;
+    try {
+      await execAsync('git rev-parse --verify main', { cwd: workspace });
+      defaultBranch = 'main';
+    } catch {
+      try {
+        await execAsync('git rev-parse --verify master', { cwd: workspace });
+        defaultBranch = 'master';
+      } catch {
+        log.debug('No main or master branch found, skipping workspace sync', { sessionId });
+        return;
+      }
+    }
+
+    // Check if HEAD already points to the tip of the default branch
+    const { stdout: headCommit } = await execAsync('git rev-parse HEAD', { cwd: workspace });
+    const { stdout: branchCommit } = await execAsync(`git rev-parse ${defaultBranch}`, { cwd: workspace });
+
+    if (headCommit.trim() === branchCommit.trim()) {
+      log.debug('Workspace already at tip of local branch, no checkout needed', {
+        sessionId,
+        branch: defaultBranch
+      });
+      return;
+    }
+
+    // HEAD doesn't match branch tip - check if working tree is clean
     const { stdout: statusOut } = await execAsync('git status --porcelain', { cwd: workspace });
     if (statusOut.trim()) {
-      log.debug('Workspace has uncommitted changes, skipping pre-worktree pull', { sessionId });
+      log.warn('Workspace has uncommitted changes and is not at tip of local branch. Worktree will be created from stale commit.', {
+        sessionId,
+        branch: defaultBranch,
+        headCommit: headCommit.trim().slice(0, 7),
+        branchCommit: branchCommit.trim().slice(0, 7),
+      });
       return;
     }
 
-    // Skip if not on main/master
-    const { stdout: branchOut } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: workspace });
-    const branch = branchOut.trim();
-    if (branch !== 'main' && branch !== 'master') {
-      log.debug('Not on main/master, skipping pre-worktree pull', { sessionId, branch });
-      return;
-    }
-
-    // Fetch and fast-forward only (safe for concurrent sessions)
-    await execAsync('git fetch origin', { cwd: workspace, timeout: 15000 });
-    await execAsync(`git pull --ff-only origin ${branch}`, { cwd: workspace, timeout: 15000 });
-    log.info('Workspace updated to latest main before worktree creation', { sessionId, branch });
+    // Working tree is clean - checkout the local branch tip
+    await execAsync(`git checkout ${defaultBranch}`, { cwd: workspace });
+    log.info('Workspace checked out to local branch tip', {
+      sessionId,
+      branch: defaultBranch,
+      commit: branchCommit.trim().slice(0, 7),
+    });
   } catch (error) {
-    log.warn('Failed to update workspace before worktree creation (non-fatal)', {
+    log.warn('Failed to sync workspace to local branch before worktree creation (non-fatal)', {
       sessionId,
       error: String(error),
     });
