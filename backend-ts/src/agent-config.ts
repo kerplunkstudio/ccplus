@@ -27,6 +27,7 @@ export const MemoryConfigSchema = z.object({
 export const AgentConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
+  icon: z.string().optional(),
   model: z.enum(['sonnet', 'opus', 'haiku']).optional(),
   maxTurns: z.number().int().min(1).max(10000).optional(),
   personality: z.string().optional(),

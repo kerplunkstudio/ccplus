@@ -11,6 +11,7 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
+  icon?: string;
   model?: string;
   maxTurns?: number;
   personality?: string;
