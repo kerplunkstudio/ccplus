@@ -44,7 +44,7 @@ export function useAgents(): UseAgentsReturn {
       }
 
       const data = await response.json();
-      setAgents(data.data?.agents || []);
+      setAgents(data.agents || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(`Failed to load agents: ${message}`);
