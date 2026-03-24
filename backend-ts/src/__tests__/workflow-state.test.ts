@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdirSync, rmSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, readdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 
@@ -138,84 +138,84 @@ describe('workflow-state', () => {
 
   describe('evaluatePreToolUse', () => {
     it('warns in design phase when using Edit', () => {
-      const result = evaluatePreToolUse('design', 'Edit', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('design', 'Edit', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Design phase');
     });
 
     it('allows Read in design phase', () => {
-      const result = evaluatePreToolUse('design', 'Read', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('design', 'Read', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('allows all tools in execute phase', () => {
-      const result = evaluatePreToolUse('execute', 'Edit', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('execute', 'Edit', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('blocks git commit in review phase', () => {
-      const result = evaluatePreToolUse('review', 'Bash', { command: 'git commit -m "test"' });
+      const result = evaluatePreToolUse('review', 'Bash', { command: 'git commit -m "test"' }, null);
       expect(result.action).toBe('block');
       expect(result.message).toContain('Cannot commit during review');
     });
 
     it('allows npm test in review phase', () => {
-      const result = evaluatePreToolUse('review', 'Bash', { command: 'npm test' });
+      const result = evaluatePreToolUse('review', 'Bash', { command: 'npm test' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('allows editing test files in test phase', () => {
-      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/__tests__/app.test.ts' });
+      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/__tests__/app.test.ts' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('warns when editing non-test files in test phase', () => {
-      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Test phase');
     });
 
     it('allows editing plan files in plan phase', () => {
-      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'docs/plan.md' });
+      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'docs/plan.md' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('warns when editing non-plan files in plan phase', () => {
-      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Plan phase');
     });
 
     it('blocks editing source files in idle phase', () => {
-      const result = evaluatePreToolUse('idle', 'Edit', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('idle', 'Edit', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('block');
       expect(result.message).toContain('Idle phase');
       expect(result.message).toContain('planner agent');
     });
 
     it('allows editing plan/doc files in idle phase', () => {
-      const result1 = evaluatePreToolUse('idle', 'Write', { file_path: 'docs/plan.md' });
+      const result1 = evaluatePreToolUse('idle', 'Write', { file_path: 'docs/plan.md' }, null);
       expect(result1.action).toBe('allow');
 
-      const result2 = evaluatePreToolUse('idle', 'Write', { file_path: 'README.md' });
+      const result2 = evaluatePreToolUse('idle', 'Write', { file_path: 'README.md' }, null);
       expect(result2.action).toBe('allow');
 
-      const result3 = evaluatePreToolUse('idle', 'Edit', { file_path: '.env' });
+      const result3 = evaluatePreToolUse('idle', 'Edit', { file_path: '.env' }, null);
       expect(result3.action).toBe('allow');
 
-      const result4 = evaluatePreToolUse('idle', 'Edit', { file_path: 'config.json' });
+      const result4 = evaluatePreToolUse('idle', 'Edit', { file_path: 'config.json' }, null);
       expect(result4.action).toBe('allow');
     });
 
     it('allows Read tool in idle phase', () => {
-      const result = evaluatePreToolUse('idle', 'Read', { file_path: 'src/app.ts' });
+      const result = evaluatePreToolUse('idle', 'Read', { file_path: 'src/app.ts' }, null);
       expect(result.action).toBe('allow');
     });
 
     it('blocks EnterPlanMode in all phases', () => {
       const phases: WorkflowPhase[] = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];
       for (const phase of phases) {
-        const result = evaluatePreToolUse(phase, 'EnterPlanMode', {});
+        const result = evaluatePreToolUse(phase, 'EnterPlanMode', {}, null);
         expect(result.action).toBe('block');
         expect(result.message).toContain('planner');
       }
@@ -224,19 +224,19 @@ describe('workflow-state', () => {
 
   describe('getPhaseContext', () => {
     it('returns string for design phase', () => {
-      const context = getPhaseContext('design');
+      const context = getPhaseContext('design', null);
       expect(context).toBeDefined();
       expect(context).toContain('WORKFLOW PHASE: DESIGN');
       expect(context).toContain('Do NOT write implementation code');
     });
 
     it('returns null for idle phase', () => {
-      const context = getPhaseContext('idle');
+      const context = getPhaseContext('idle', null);
       expect(context).toBeNull();
     });
 
     it('returns string for execute phase', () => {
-      const context = getPhaseContext('execute');
+      const context = getPhaseContext('execute', null);
       expect(context).toBeDefined();
       expect(context).toContain('WORKFLOW PHASE: EXECUTE');
     });
@@ -244,37 +244,37 @@ describe('workflow-state', () => {
 
   describe('inferPhaseFromAgent', () => {
     it('infers execute for code_agent', () => {
-      const phase = inferPhaseFromAgent('code_agent');
+      const phase = inferPhaseFromAgent('code_agent', null);
       expect(phase).toBe('execute');
     });
 
     it('infers plan for planner', () => {
-      const phase = inferPhaseFromAgent('planner');
+      const phase = inferPhaseFromAgent('planner', null);
       expect(phase).toBe('plan');
     });
 
     it('infers test for tdd-guide', () => {
-      const phase = inferPhaseFromAgent('tdd-guide');
+      const phase = inferPhaseFromAgent('tdd-guide', null);
       expect(phase).toBe('test');
     });
 
     it('infers review for code-reviewer', () => {
-      const phase = inferPhaseFromAgent('code-reviewer');
+      const phase = inferPhaseFromAgent('code-reviewer', null);
       expect(phase).toBe('review');
     });
 
     it('returns null for unknown agent', () => {
-      const phase = inferPhaseFromAgent('unknown-agent');
+      const phase = inferPhaseFromAgent('unknown-agent', null);
       expect(phase).toBeNull();
     });
 
     it('infers execute for frontend-agent', () => {
-      const phase = inferPhaseFromAgent('frontend-agent');
+      const phase = inferPhaseFromAgent('frontend-agent', null);
       expect(phase).toBe('execute');
     });
 
     it('infers plan for architect', () => {
-      const phase = inferPhaseFromAgent('architect');
+      const phase = inferPhaseFromAgent('architect', null);
       expect(phase).toBe('plan');
     });
   });
@@ -345,4 +345,26 @@ describe('workflow-state', () => {
       expect(filesAfter[0]).toMatch(/^testsession123special\.json$/);
     });
   });
+
+  describe('migration', () => {
+    it('adds workflowName to state without it', () => {
+      const sessionId = 'migration-test';
+      const statePath = path.join(TEST_WORKFLOWS_DIR, `${sessionId}.json`);
+
+      // Write old state format (without workflowName)
+      const oldState = {
+        phase: 'execute',
+        transitions: [],
+        sessionId,
+        createdAt: new Date().toISOString(),
+      };
+      writeFileSync(statePath, JSON.stringify(oldState, null, 2), 'utf-8');
+
+      // Read it back - should add workflowName
+      const state = getWorkflowState(sessionId);
+      expect(state.workflowName).toBe('default');
+      expect(state.phase).toBe('execute');
+    });
+  });
 });
+

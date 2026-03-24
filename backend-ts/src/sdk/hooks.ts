@@ -22,7 +22,7 @@ export function safeParams(params: Record<string, unknown>): Record<string, unkn
   return cleaned;
 }
 
-export function buildHooks(sessionId: string): Record<string, HookCallbackMatcher[]> {
+export function buildHooks(sessionId: string, workspace: string = process.cwd()): Record<string, HookCallbackMatcher[]> {
   const toolTimers = new Map<string, number>();
   const agentIdToToolUseId = new Map<string, string>();
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
@@ -165,7 +165,9 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     // Workflow phase enforcement
     if (WORKFLOW_ENABLED) {
       const wfState = getWorkflowState(sessionId);
-      const enforcement = evaluatePreToolUse(wfState.phase, toolName, (input.tool_input as Record<string, unknown>) ?? {});
+      const { loadWorkflow } = await import('../workflow-config.js');
+      const workflow = loadWorkflow(wfState.workflowName, workspace);
+      const enforcement = evaluatePreToolUse(wfState.phase, toolName, (input.tool_input as Record<string, unknown>) ?? {}, workflow);
       if (enforcement.action === 'block') {
         return {
           hookSpecificOutput: {
@@ -432,7 +434,10 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     // Auto-transition workflow phase based on agent type
     if (WORKFLOW_ENABLED) {
       const agentType = (input as { agent_type?: string }).agent_type ?? '';
-      const inferredPhase = inferPhaseFromAgent(agentType);
+      const wfState = getWorkflowState(sessionId);
+      const { loadWorkflow } = await import('../workflow-config.js');
+      const workflow = loadWorkflow(wfState.workflowName, workspace);
+      const inferredPhase = inferPhaseFromAgent(agentType, workflow);
       log.info('Workflow: SubagentStart', { sessionId, agentType, inferredPhase: inferredPhase ?? 'none' });
       if (inferredPhase) {
         const currentState = getWorkflowState(sessionId);
@@ -458,7 +463,10 @@ export function buildHooks(sessionId: string): Record<string, HookCallbackMatche
     // Build additional context (workflow + memory)
     let workflowContext = '';
     if (WORKFLOW_ENABLED) {
-      const phaseCtx = getPhaseContext(getWorkflowState(sessionId).phase);
+      const wfState = getWorkflowState(sessionId);
+      const { loadWorkflow } = await import('../workflow-config.js');
+      const workflow = loadWorkflow(wfState.workflowName, workspace);
+      const phaseCtx = getPhaseContext(wfState.phase, workflow);
       if (phaseCtx) workflowContext = phaseCtx + '\n\n';
     }
 

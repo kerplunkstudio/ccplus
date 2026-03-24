@@ -2,20 +2,22 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { WORKFLOWS_DIR } from './config.js';
 import { log } from './logger.js';
+import type { WorkflowConfig } from './workflow-config.js';
 
 // ---- Types ----
 
 export type WorkflowPhase = 'idle' | 'design' | 'plan' | 'execute' | 'test' | 'review' | 'complete';
 
 export interface TransitionRecord {
-  from: WorkflowPhase;
-  to: WorkflowPhase;
+  from: string;
+  to: string;
   timestamp: string;
   trigger: string;
 }
 
 export interface WorkflowState {
-  phase: WorkflowPhase;
+  phase: string;
+  workflowName: string;
   transitions: TransitionRecord[];
   sessionId: string;
   createdAt: string;
@@ -122,6 +124,7 @@ function getStatePath(sessionId: string): string {
 function createDefaultState(sessionId: string): WorkflowState {
   return {
     phase: 'idle',
+    workflowName: 'default',
     transitions: [],
     sessionId,
     createdAt: new Date().toISOString(),
@@ -138,7 +141,14 @@ export function getWorkflowState(sessionId: string): WorkflowState {
 
   try {
     const content = readFileSync(statePath, 'utf-8');
-    return JSON.parse(content) as WorkflowState;
+    const state = JSON.parse(content) as WorkflowState;
+
+    // Migration: add workflowName if missing
+    if (!state.workflowName) {
+      state.workflowName = 'default';
+    }
+
+    return state;
   } catch (error) {
     log.error('Failed to read workflow state', { sessionId, error: String(error) });
     return createDefaultState(sessionId);
@@ -147,13 +157,13 @@ export function getWorkflowState(sessionId: string): WorkflowState {
 
 export function transitionPhase(
   sessionId: string,
-  toPhase: WorkflowPhase,
+  toPhase: string,
   trigger: string
 ): WorkflowState | null {
   const currentState = getWorkflowState(sessionId);
-  const validTargets = VALID_TRANSITIONS[currentState.phase];
+  const validTargets = VALID_TRANSITIONS[currentState.phase as WorkflowPhase] ?? [];
 
-  if (!validTargets.includes(toPhase)) {
+  if (!validTargets.includes(toPhase as WorkflowPhase)) {
     log.warn('Invalid workflow transition', {
       sessionId,
       from: currentState.phase,
@@ -191,7 +201,7 @@ export function transitionPhase(
   }
 }
 
-export function skipToPhase(sessionId: string, toPhase: WorkflowPhase): WorkflowState | null {
+export function skipToPhase(sessionId: string, toPhase: string): WorkflowState | null {
   const currentState = getWorkflowState(sessionId);
 
   const newTransition: TransitionRecord = {
@@ -222,6 +232,40 @@ export function skipToPhase(sessionId: string, toPhase: WorkflowPhase): Workflow
 }
 
 export function evaluatePreToolUse(
+  phase: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  workflow: WorkflowConfig | null = null
+): PhaseEnforcementResult {
+  // Use workflow-based evaluation if workflow is provided
+  if (workflow) {
+    const phaseConfig = workflow.phases.find(p => p.name === phase);
+    if (!phaseConfig || !phaseConfig.tool_rules) {
+      return { action: 'allow' };
+    }
+
+    // Evaluate rules in order - first matching rule wins
+    for (const rule of phaseConfig.tool_rules) {
+      if (rule.tool_name === toolName) {
+        const { evaluateToolRule } = require('./workflow-config.js');
+        const ruleMatches = evaluateToolRule(rule, toolInput);
+        if (ruleMatches) {
+          return {
+            action: rule.action,
+            message: rule.message,
+          };
+        }
+      }
+    }
+
+    return { action: 'allow' };
+  }
+
+  // Fallback to hardcoded logic for backward compatibility
+  return evaluatePreToolUseFallback(phase as WorkflowPhase, toolName, toolInput);
+}
+
+function evaluatePreToolUseFallback(
   phase: WorkflowPhase,
   toolName: string,
   toolInput: Record<string, unknown>
@@ -314,11 +358,33 @@ export function evaluatePreToolUse(
   return { action: 'allow' };
 }
 
-export function getPhaseContext(phase: WorkflowPhase): string | null {
-  return PHASE_CONTEXT[phase];
+export function getPhaseContext(phase: string, workflow: WorkflowConfig | null = null): string | null {
+  // Use workflow-based context if workflow is provided
+  if (workflow) {
+    const phaseConfig = workflow.phases.find(p => p.name === phase);
+    return phaseConfig?.context ?? null;
+  }
+
+  // Fallback to hardcoded context
+  return PHASE_CONTEXT[phase as WorkflowPhase] ?? null;
 }
 
-export function inferPhaseFromAgent(agentType: string): WorkflowPhase | null {
+export function inferPhaseFromAgent(agentType: string, workflow: WorkflowConfig | null = null): string | null {
+  // Use workflow-based inference if workflow is provided
+  if (workflow) {
+    for (const phase of workflow.phases) {
+      if (phase.agent_hints?.includes(agentType)) {
+        return phase.name;
+      }
+    }
+    return null;
+  }
+
+  // Fallback to hardcoded inference
+  return inferPhaseFromAgentFallback(agentType);
+}
+
+function inferPhaseFromAgentFallback(agentType: string): WorkflowPhase | null {
   switch (agentType) {
     case 'planner':
     case 'architect':

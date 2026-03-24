@@ -197,7 +197,7 @@ export async function streamQuery(
     }
 
     // Build hooks
-    const hooks = buildHooks(sessionId);
+    const hooks = buildHooks(sessionId, workspace);
 
     // Settings
     const sdkSettingsPath = getSdkSettingsPath();
