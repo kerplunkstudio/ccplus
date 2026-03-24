@@ -8,9 +8,10 @@ import { log } from './logger.js';
 // ---- TypeScript Interfaces ----
 
 export interface ToolRule {
-  tool: string;
+  tool_name: string;
   action: 'allow' | 'warn' | 'block';
   conditions: string[];
+  message?: string;
 }
 
 export interface WorkflowPhaseConfig {
@@ -31,6 +32,7 @@ export interface WorkflowConfig {
   default_phase: string;
   phases: WorkflowPhaseConfig[];
   transitions: WorkflowTransition[];
+  worktree?: boolean;
 }
 
 // ---- Helper Functions ----
@@ -95,7 +97,7 @@ function findWorkflowYaml(workflowName: string): string | null {
 
 // ---- Public API ----
 
-export function loadWorkflow(workflowName: string): WorkflowConfig {
+export function loadWorkflow(workflowName: string, _workspace?: string): WorkflowConfig {
   const yamlPath = findWorkflowYaml(workflowName);
 
   if (!yamlPath) {
@@ -126,7 +128,15 @@ function loadWorkflowFromPath(yamlPath: string): WorkflowConfig {
   }
 }
 
-export function listWorkflows(): string[] {
+export function getWorkflowByName(workflowName: string, _workspace?: string): WorkflowConfig | null {
+  try {
+    return loadWorkflow(workflowName, _workspace);
+  } catch {
+    return null;
+  }
+}
+
+export function listWorkflows(_workspace?: string): string[] {
   const workflows = new Set<string>();
 
   // List project-local workflows
