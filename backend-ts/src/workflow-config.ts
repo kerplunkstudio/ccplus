@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import path from 'path';
 import { homedir } from 'os';
 import yaml from 'js-yaml';
@@ -12,28 +12,55 @@ export interface ToolRuleCondition {
 }
 
 export interface ToolRule {
-  tool_name: string;              // Tool name to match (e.g., 'Edit', 'Write', 'Bash')
+  tool_name?: string;             // Tool name to match (e.g., 'Edit', 'Write', 'Bash') - HEAD version
+  tool?: string;                  // Tool name (cherry-pick version, for compatibility)
   action: 'allow' | 'warn' | 'block';
+  condition?: string;             // Cherry-pick version condition string
   message?: string;               // Message to show when rule triggers
-  conditions?: ToolRuleCondition; // Additional conditions to check
+  conditions?: ToolRuleCondition; // Additional conditions to check (HEAD version)
 }
 
 export interface WorkflowPhaseConfig {
   name: string;
   context?: string;               // Phase context injected into system prompt
-  tool_rules?: ToolRule[];        // Tool enforcement rules for this phase
-  agent_hints?: string[];         // Agent types that should trigger this phase
+  tool_rules?: ToolRule[];        // Tool enforcement rules (HEAD version)
+  toolRules?: ToolRule[];         // Tool enforcement rules (cherry-pick version, for compatibility)
+  agent_hints?: string[];         // Agent types (HEAD version)
+  agentHints?: string[];          // Agent types (cherry-pick version, for compatibility)
 }
 
 export interface WorkflowTransition {
   from: string;
-  to: string[];                   // Valid target phases
+  to: string[] | string;          // Valid target phases - support both array and string
 }
 
 export interface WorkflowConfig {
   name: string;
+  description?: string;
+  builtin?: boolean;
   phases: WorkflowPhaseConfig[];
   transitions: WorkflowTransition[];
+}
+
+// ---- Storage ----
+
+// User-level workflow config directory: ~/.ccplus/workflows/
+const WORKFLOW_CONFIGS_DIR = path.join(homedir(), '.ccplus', 'workflows');
+
+function ensureDir(): void {
+  if (!existsSync(WORKFLOW_CONFIGS_DIR)) {
+    mkdirSync(WORKFLOW_CONFIGS_DIR, { recursive: true });
+  }
+}
+
+function sanitizeName(name: string): string {
+  const safe = name.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safe) throw new Error(`Workflow name "${name}" contains no valid characters`);
+  return safe;
+}
+
+function getWorkflowPath(name: string): string {
+  return path.join(WORKFLOW_CONFIGS_DIR, `${sanitizeName(name)}.json`);
 }
 
 // ---- Built-in Workflows ----
@@ -491,7 +518,9 @@ export function listWorkflows(workspace: string): string[] {
  */
 export function getValidTransitions(workflow: WorkflowConfig, fromPhase: string): string[] {
   const transition = workflow.transitions.find(t => t.from === fromPhase);
-  return transition?.to ?? [];
+  if (!transition) return [];
+  // Handle both array and string format for compatibility
+  return Array.isArray(transition.to) ? transition.to : [transition.to];
 }
 
 /**
@@ -571,13 +600,13 @@ function loadWorkflowFromFile(filePath: string): WorkflowConfig {
 
 function readDirectoryWorkflows(dir: string): string[] {
   try {
-    const { readdirSync, statSync } = require('fs');
     const entries = readdirSync(dir);
     const workflows: string[] = [];
 
     for (const entry of entries) {
       const entryPath = path.join(dir, entry);
-      if (statSync(entryPath).isDirectory()) {
+      const stats = require('fs').statSync(entryPath);
+      if (stats.isDirectory()) {
         const yamlPath = path.join(entryPath, 'workflow.yaml');
         if (existsSync(yamlPath)) {
           workflows.push(entry);
@@ -588,5 +617,82 @@ function readDirectoryWorkflows(dir: string): string[] {
     return workflows;
   } catch (error) {
     return [];
+  }
+}
+
+// ---- Additional API for workflow builder (cherry-pick additions) ----
+
+/**
+ * Get workflow by name (supports both built-in and user workflows)
+ */
+export function getWorkflowByName(name: string, workspace: string): WorkflowConfig | null {
+  const workflow = loadWorkflow(name, workspace);
+  return workflow;
+}
+
+/**
+ * Save a user workflow to JSON format (for workflow builder)
+ */
+export function saveWorkflow(workflow: WorkflowConfig): string {
+  if (!workflow.name?.trim()) {
+    throw new Error('Workflow name is required');
+  }
+  const safeName = sanitizeName(workflow.name);
+  ensureDir();
+  const toSave: WorkflowConfig = { ...workflow, builtin: false, name: safeName };
+  writeFileSync(getWorkflowPath(safeName), JSON.stringify(toSave, null, 2), 'utf-8');
+  log.info('Saved workflow config', { name: safeName });
+  return safeName;
+}
+
+/**
+ * Delete a user workflow (cannot delete built-in workflows)
+ */
+export function deleteWorkflow(name: string): boolean {
+  const wfPath = getWorkflowPath(name);
+  if (!existsSync(wfPath)) return false;
+  try {
+    rmSync(wfPath);
+    log.info('Deleted workflow config', { name });
+    return true;
+  } catch (error) {
+    log.error('Failed to delete workflow', { name, error: String(error) });
+    return false;
+  }
+}
+
+/**
+ * Load user workflows from JSON files
+ */
+function loadUserWorkflows(): WorkflowConfig[] {
+  ensureDir();
+  try {
+    return readdirSync(WORKFLOW_CONFIGS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        try {
+          const content = readFileSync(path.join(WORKFLOW_CONFIGS_DIR, f), 'utf-8');
+          return JSON.parse(content) as WorkflowConfig;
+        } catch {
+          return null;
+        }
+      })
+      .filter((w): w is WorkflowConfig => w !== null && typeof w.name === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Load a single user workflow from JSON
+ */
+function loadUserWorkflow(name: string): WorkflowConfig | null {
+  const wfPath = getWorkflowPath(name);
+  if (!existsSync(wfPath)) return null;
+  try {
+    const content = readFileSync(wfPath, 'utf-8');
+    return JSON.parse(content) as WorkflowConfig;
+  } catch {
+    return null;
   }
 }

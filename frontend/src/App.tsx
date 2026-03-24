@@ -9,6 +9,7 @@ import { InsightsPanel } from './components/InsightsPanel';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { MCPPanel } from './components/MCPPanel';
 import { AgentsPanel } from './components/AgentsPanel';
+import { WorkflowsPanel } from './components/WorkflowsPanel';
 import { SettingsPage } from './components/SettingsPage';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { BrowserTab } from './components/BrowserTab';
@@ -630,6 +631,7 @@ function AppContent() {
   const shouldShowProfile = activePage === 'profile';
   const shouldShowMcp = activePage === 'mcp';
   const shouldShowAgents = activePage === 'agents';
+  const shouldShowWorkflows = activePage === 'workflows';
   const shouldShowCaptain = activePage === 'captain';
   const shouldShowSettings = activePage === 'settings';
 
@@ -638,6 +640,7 @@ function AppContent() {
     : shouldShowProfile ? 'profile'
     : shouldShowMcp ? 'mcp'
     : shouldShowAgents ? 'agents'
+    : shouldShowWorkflows ? 'workflows'
     : shouldShowCaptain ? 'captain'
     : shouldShowSettings ? 'settings'
     : shouldShowDashboard ? 'dashboard'
@@ -726,7 +729,7 @@ function AppContent() {
           />
         )}
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowAgents || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowAgents || shouldShowWorkflows || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
@@ -741,6 +744,8 @@ function AppContent() {
                 <MCPPanel projectPath={activeProject?.path} />
               ) : shouldShowAgents ? (
                 <AgentsPanel />
+              ) : shouldShowWorkflows ? (
+                <WorkflowsPanel />
               ) : shouldShowCaptain ? (
                 <CaptainDashboard socket={socket} onSessionClick={handleFleetSessionClick} />
               ) : shouldShowSettings ? (

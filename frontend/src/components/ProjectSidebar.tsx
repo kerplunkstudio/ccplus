@@ -831,6 +831,22 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <span className="footer-nav-label">MCP</span>
           </button>
           <button
+            className={`footer-nav-item ${activePage === 'workflows' ? 'active' : ''}`}
+            onClick={() => onNavigate('workflows')}
+            aria-label="Workflows"
+          >
+            <span className="footer-nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="3" cy="8" r="2"/>
+                <circle cx="13" cy="4" r="2"/>
+                <circle cx="13" cy="12" r="2"/>
+                <line x1="5" y1="7.3" x2="11" y2="4.7"/>
+                <line x1="5" y1="8.7" x2="11" y2="11.3"/>
+              </svg>
+            </span>
+            <span className="footer-nav-label">Flows</span>
+          </button>
+          <button
             className={`footer-nav-item ${activePage === 'insights' ? 'active' : ''}`}
             onClick={() => onNavigate('insights')}
             aria-label="Insights"
