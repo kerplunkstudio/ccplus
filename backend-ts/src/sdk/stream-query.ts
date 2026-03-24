@@ -15,6 +15,7 @@ import { log } from "../logger.js";
 import { distillSession } from '../memory-distiller.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import * as captain from '../captain.js';
+import { getAgent, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
 
 // ---- Internal streaming logic ----
 
@@ -74,6 +75,7 @@ export async function streamQuery(
   workspace: string,
   model?: string,
   imageIds?: string[],
+  agentId?: string,
 ): Promise<void> {
   const resultText: string[] = [];
   let gotResult = false;
@@ -90,6 +92,19 @@ export async function streamQuery(
 
   // Reset streaming content at the start of each query
   session.streamingContent = '';
+
+  // Load agent config if agentId provided
+  let agentConfig: ResolvedAgent | null = null;
+  if (agentId) {
+    try {
+      agentConfig = await getAgent(workspace, agentId);
+      if (!agentConfig) {
+        log.warn('Agent not found, proceeding without agent config', { sessionId, agentId });
+      }
+    } catch (err) {
+      log.warn('Failed to load agent config, proceeding without it', { sessionId, agentId, error: String(err) });
+    }
+  }
 
   try {
     // Look up previous SDK session ID for resume
@@ -218,10 +233,17 @@ export async function streamQuery(
     const mcpServerEntries = getAllMcpServers(workspace);
     const userMcpServers = buildSdkMcpServers(mcpServerEntries);
 
+    // Apply agent model if provided and no explicit model override
+    let effectiveModel = model ?? config.getSDKModel();
+    if (agentConfig?.model && !model) {
+      effectiveModel = resolveAgentModel(agentConfig.model);
+    }
+    const effectiveMaxTurns = agentConfig?.maxTurns ?? 50;
+
     const q = query({
       prompt: queryContent as string,
       options: {
-        model: model ?? config.getSDKModel(),
+        model: effectiveModel,
         cwd: workspace,
         settingSources: ['user', 'project'],
         permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
@@ -240,10 +262,10 @@ export async function streamQuery(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: await buildSystemPrompt(workspace, prompt, sessionId),
+          append: await buildSystemPrompt(workspace, prompt, sessionId, agentConfig ?? undefined),
         } as any,
         canUseTool: canUseTool as any,
-        maxTurns: 50,
+        maxTurns: effectiveMaxTurns,
         includePartialMessages: true,
         promptSuggestions: true,
         ...(config.getWorktreeEnabled() && !resumeId && {

@@ -19,6 +19,7 @@ export interface StartSessionParams {
   model?: string;
   sessionId?: string;
   requestedBy?: { source: string; sourceId: string };
+  agentId?: string;
 }
 
 export interface StartSessionResult {
@@ -49,7 +50,7 @@ export function startSession(
   params: StartSessionParams,
   dependencies: SessionDependencies
 ): StartSessionResult {
-  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy } = params;
+  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy, agentId } = params;
   const { database: db, sdkSession: sdk, sessionWorkspaces, buildSocketCallbacks } = dependencies;
 
   // Validate required fields
@@ -141,7 +142,8 @@ export function startSession(
     buildSocketCallbacks(sessionId, resolvedWorkspace) as any,
     model && typeof model === "string" ? model : undefined,
     undefined,
-    requestedBy
+    requestedBy,
+    agentId
   );
 
   return {

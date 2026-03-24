@@ -4,6 +4,7 @@ import * as config from "../config.js";
 import { searchMemories } from '../memory-client.js';
 import { log } from "../logger.js";
 import * as database from '../database.js';
+import type { ResolvedAgent } from '../agent-config.js';
 
 // System prompt appended to every SDK session
 const CCPLUS_SYSTEM_PROMPT_BASE = `
@@ -61,7 +62,7 @@ Exceptions (you may skip review):
 - Test-only changes
 `.trim();
 
-export async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sessionId?: string): Promise<string> {
+export async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sessionId?: string, agent?: ResolvedAgent): Promise<string> {
   const skills = discoverSkills(projectPath);
   let prompt = CCPLUS_SYSTEM_PROMPT_BASE;
 
@@ -103,6 +104,14 @@ export async function buildSystemPrompt(projectPath?: string, userPrompt?: strin
       } catch { /* never throw from observability */ }
       log.warn('Failed to inject memories into system prompt', { error: String(error) });
     }
+  }
+
+  if (agent?.personality) {
+    prompt += `\n\n## Agent Personality\n${agent.personality}`;
+  }
+
+  if (agent?.soulContent) {
+    prompt += `\n\n${agent.soulContent}`;
   }
 
   return prompt;

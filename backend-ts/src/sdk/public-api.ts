@@ -16,6 +16,7 @@ export function submitQuery(
   model?: string,
   imageIds?: string[],
   requestedBy?: { source: string; sourceId: string },
+  agentId?: string,
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
 
@@ -41,7 +42,7 @@ export function submitQuery(
   session.cancelRequested = false;
 
   // Run query in background (don't await)
-  streamQuery(session, prompt, workspace, model, imageIds).catch((err) => {
+  streamQuery(session, prompt, workspace, model, imageIds, agentId).catch((err) => {
     log.error("Stream query error", { sessionId, error: String(err) });
     callbacks.onError(String(err));
   });

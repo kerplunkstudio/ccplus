@@ -230,6 +230,7 @@ describe('session-api', () => {
         expect.any(Object),
         'claude-opus-4',
         undefined,
+        undefined,
         undefined
       );
     });
