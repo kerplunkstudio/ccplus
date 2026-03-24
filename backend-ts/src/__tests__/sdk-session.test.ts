@@ -5,7 +5,7 @@ import { homedir } from "os";
 import path from "path";
 
 // Hoist mock functions to avoid initialization errors
-const { mockQuery, mockDatabase, mockExecFileSync } = vi.hoisted(() => {
+const { mockQuery, mockDatabase, mockExecFileSync, mockExecAsync } = vi.hoisted(() => {
   const mockQuery = vi.fn();
   const mockDatabase = {
     recordToolEvent: vi.fn(),
@@ -19,7 +19,10 @@ const { mockQuery, mockDatabase, mockExecFileSync } = vi.hoisted(() => {
     getAllFleetSessions: vi.fn(() => []),
   };
   const mockExecFileSync = vi.fn(() => "[]");
-  return { mockQuery, mockDatabase, mockExecFileSync };
+  // Mock execAsync to reject immediately (simulating non-git workspace)
+  // Use Promise.reject to ensure it's truly async
+  const mockExecAsync = vi.fn(() => Promise.reject(new Error('Not a git repository')));
+  return { mockQuery, mockDatabase, mockExecFileSync, mockExecAsync };
 });
 
 // Mock the SDK before importing sdk-session
@@ -37,10 +40,30 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 // Mock the database
 vi.mock("../database.js", () => mockDatabase);
 
-// Mock child_process to prevent actual Claude CLI execution
+// Mock child_process to prevent actual Claude CLI execution and git operations
 vi.mock("child_process", () => ({
   execFileSync: mockExecFileSync,
+  exec: vi.fn(),
+  spawn: vi.fn(() => ({
+    on: vi.fn(),
+    stdout: { on: vi.fn() },
+    stderr: { on: vi.fn() },
+    kill: vi.fn(),
+  })),
 }));
+
+// Mock util.promisify to return our hoisted mockExecAsync
+vi.mock("util", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("util")>();
+  return {
+    ...actual,
+    promisify: (fn: any) => {
+      // Always return mockExecAsync for any function passed to promisify in tests
+      // This is safe because the only use of promisify in stream-query.ts is for exec
+      return mockExecAsync;
+    },
+  };
+});
 
 import * as sdkSession from "../sdk-session.js";
 import * as database from "../database.js";

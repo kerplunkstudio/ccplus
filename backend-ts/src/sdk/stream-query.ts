@@ -2,6 +2,8 @@ import { query, type ModelUsage, type SDKUserMessage } from "@anthropic-ai/claud
 import { existsSync, readdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
+import { exec } from "child_process";
+import { promisify } from "util";
 import type { ActiveSession } from "./types.js";
 import { sessions, MAX_STREAMING_BUFFER, getSdkSettingsPath } from "./session-manager.js";
 import { buildHooks } from "./hooks.js";
@@ -18,6 +20,45 @@ import * as captain from '../captain.js';
 import { getAgent, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
 
 // ---- Internal streaming logic ----
+
+const execAsync = promisify(exec);
+
+/**
+ * Ensure workspace is on the latest commit before creating a worktree.
+ * Only runs when: git repo, clean working tree, on main/master branch.
+ * Non-fatal: logs warning and continues if anything fails.
+ */
+async function ensureWorkspaceUpToDate(workspace: string, sessionId: string): Promise<void> {
+  try {
+    // Verify this is a git repo
+    await execAsync('git rev-parse --git-dir', { cwd: workspace });
+
+    // Skip if working tree is dirty (uncommitted changes)
+    const { stdout: statusOut } = await execAsync('git status --porcelain', { cwd: workspace });
+    if (statusOut.trim()) {
+      log.debug('Workspace has uncommitted changes, skipping pre-worktree pull', { sessionId });
+      return;
+    }
+
+    // Skip if not on main/master
+    const { stdout: branchOut } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: workspace });
+    const branch = branchOut.trim();
+    if (branch !== 'main' && branch !== 'master') {
+      log.debug('Not on main/master, skipping pre-worktree pull', { sessionId, branch });
+      return;
+    }
+
+    // Fetch and fast-forward only (safe for concurrent sessions)
+    await execAsync('git fetch origin', { cwd: workspace, timeout: 15000 });
+    await execAsync(`git pull --ff-only origin ${branch}`, { cwd: workspace, timeout: 15000 });
+    log.info('Workspace updated to latest main before worktree creation', { sessionId, branch });
+  } catch (error) {
+    log.warn('Failed to update workspace before worktree creation (non-fatal)', {
+      sessionId,
+      error: String(error),
+    });
+  }
+}
 
 /**
  * Copy conversation file from worktree project dir to main project dir.
@@ -232,6 +273,11 @@ export async function streamQuery(
     // Load MCP servers from user and project configs
     const mcpServerEntries = getAllMcpServers(workspace);
     const userMcpServers = buildSdkMcpServers(mcpServerEntries);
+
+    // Ensure workspace is on latest main before SDK creates worktree
+    if (config.getWorktreeEnabled() && !resumeId) {
+      await ensureWorkspaceUpToDate(workspace, sessionId);
+    }
 
     // Apply agent model if provided and no explicit model override
     let effectiveModel = model ?? config.getSDKModel();
