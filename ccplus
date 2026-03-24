@@ -840,6 +840,25 @@ run_doctor() {
     fi
 
     echo ""
+    echo "${BOLD}Optional Dependencies (for voice transcription)${RESET}"
+    echo ""
+
+    # Check for ffmpeg (required for voice transcription)
+    if command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg_version=$(ffmpeg -version 2>&1 | head -1 | awk '{print $3}' || echo "unknown")
+        pass "ffmpeg ($ffmpeg_version)"
+    else
+        warn "ffmpeg not found (install with: brew install ffmpeg)"
+    fi
+
+    # Check for whisper-cli (required for voice transcription)
+    if command -v whisper-cli >/dev/null 2>&1; then
+        pass "whisper-cli (installed)"
+    else
+        warn "whisper-cli not found (install with: brew install whisper-cpp)"
+    fi
+
+    echo ""
     if [ $exit_code -eq 0 ]; then
         echo "${GREEN}${BOLD}All checks passed!${RESET}"
     else

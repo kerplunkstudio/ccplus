@@ -201,8 +201,15 @@ function setupBotHandlers(botInstance: Bot): void {
       log.info('Voice message transcribed', { chatId, fileId, length: transcription.length });
       await handleMessage(ctx, `[Voice] ${transcription.trim()}`);
     } catch (error) {
-      log.error('Telegram voice message error', { chatId, fileId, error: String(error) });
-      await ctx.reply('Could not transcribe voice message. Please try sending text instead.');
+      const errorMsg = String(error);
+      log.error('Telegram voice message error', { chatId, fileId, error: errorMsg });
+
+      // Send user-friendly error message
+      if (errorMsg.includes('whisper-cli not installed') || errorMsg.includes('ffmpeg not installed')) {
+        await ctx.reply(errorMsg);
+      } else {
+        await ctx.reply('Could not transcribe voice message. Please try sending text instead.');
+      }
     }
   });
 

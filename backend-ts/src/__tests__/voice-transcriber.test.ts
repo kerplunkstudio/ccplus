@@ -164,9 +164,11 @@ describe('voice-transcriber', () => {
       const audioBuffer = Buffer.from('mock audio data');
       const transcriptionText = 'Hello, this is a test transcription';
 
-      // Mock execFile for both ffmpeg and whisper-cli
+      // Mock execFile for binary checks + ffmpeg + whisper-cli
       mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg --version check
         .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg conversion
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // whisper-cli --version check
         .mockResolvedValueOnce({ stdout: transcriptionText + '\n', stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
@@ -178,10 +180,10 @@ describe('voice-transcriber', () => {
       expect(result).toBe(transcriptionText);
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);  // Clean up both OGG and WAV
-      expect(mockExecFile).toHaveBeenCalledTimes(2);  // ffmpeg + whisper-cli
+      expect(mockExecFile).toHaveBeenCalledTimes(4);  // ffmpeg --version + ffmpeg + whisper-cli --version + whisper-cli
 
-      // Verify ffmpeg was called with correct args
-      const ffmpegCall = mockExecFile.mock.calls[0];
+      // Verify ffmpeg was called with correct args (now at index 1, not 0)
+      const ffmpegCall = mockExecFile.mock.calls[1];
       expect(ffmpegCall[0]).toBe(process.env.FFMPEG_PATH || 'ffmpeg');
       expect(ffmpegCall[1]).toContain('-y');
       expect(ffmpegCall[1]).toContain('-ar');
@@ -191,8 +193,8 @@ describe('voice-transcriber', () => {
       expect(ffmpegCall[1]).toContain('-c:a');
       expect(ffmpegCall[1]).toContain('pcm_s16le');
 
-      // Verify whisper-cli was called
-      const whisperCall = mockExecFile.mock.calls[1];
+      // Verify whisper-cli was called (now at index 3, not 1)
+      const whisperCall = mockExecFile.mock.calls[3];
       expect(whisperCall[0]).toBe(process.env.WHISPER_CLI_PATH || 'whisper-cli');
       expect(whisperCall[1]).toContain('--no-timestamps');
       expect(whisperCall[1]).not.toContain('--output-txt');  // Should not have this flag
@@ -202,7 +204,9 @@ describe('voice-transcriber', () => {
       const audioBuffer = Buffer.from('mock audio data');
 
       mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg --version check
         .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // whisper-cli --version check
         .mockResolvedValueOnce({ stdout: '', stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
@@ -216,37 +220,37 @@ describe('voice-transcriber', () => {
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
-    it('should return empty string and log error on ffmpeg failure', async () => {
+    it('should throw error on ffmpeg binary missing', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
-      mockExecFile.mockRejectedValueOnce(new Error('ffmpeg conversion failed'));
+      // ffmpeg --version check fails (binary not found)
+      mockExecFile.mockRejectedValueOnce(new Error('Command failed'));
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
 
       const { transcribeAudio } = await import('../voice-transcriber.js');
-      const result = await transcribeAudio(audioBuffer);
 
-      expect(result).toBe('');
+      await expect(transcribeAudio(audioBuffer)).rejects.toThrow('ffmpeg not installed');
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
-      // File cleanup should still happen for both files
+      // File cleanup should still happen
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
-    it('should return empty string and log error on whisper failure', async () => {
+    it('should throw error on whisper-cli binary missing', async () => {
       const audioBuffer = Buffer.from('mock audio data');
 
       mockExecFile
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg --version check succeeds
         .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg succeeds
-        .mockRejectedValueOnce(new Error('Whisper CLI failed'));  // whisper fails
+        .mockRejectedValueOnce(new Error('Command failed'));  // whisper-cli --version check fails
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
 
       const { transcribeAudio } = await import('../voice-transcriber.js');
-      const result = await transcribeAudio(audioBuffer);
 
-      expect(result).toBe('');
+      await expect(transcribeAudio(audioBuffer)).rejects.toThrow('whisper-cli not installed');
       expect(mockWriteFileSync).toHaveBeenCalledOnce();
       // File cleanup should still happen
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
@@ -257,8 +261,10 @@ describe('voice-transcriber', () => {
       const transcriptionText = 'Test transcription';
 
       mockExecFile
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: transcriptionText, stderr: '' });
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg --version check
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // whisper-cli --version check
+        .mockResolvedValueOnce({ stdout: transcriptionText, stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync).mockImplementation(() => {
@@ -279,8 +285,10 @@ describe('voice-transcriber', () => {
       const transcriptionText = 'Test transcription';
 
       mockExecFile
-        .mockResolvedValueOnce({ stdout: '', stderr: '' })
-        .mockResolvedValueOnce({ stdout: `  ${transcriptionText}  \n`, stderr: '' });
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg --version check
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // ffmpeg
+        .mockResolvedValueOnce({ stdout: '', stderr: '' })  // whisper-cli --version check
+        .mockResolvedValueOnce({ stdout: `  ${transcriptionText}  \n`, stderr: '' });  // whisper-cli
 
       const mockWriteFileSync = vi.mocked(fs.writeFileSync);
       const mockUnlinkSync = vi.mocked(fs.unlinkSync);
