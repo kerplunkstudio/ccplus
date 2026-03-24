@@ -1,0 +1,44 @@
+name: bug-fix
+description: Systematic bug investigation and fix with regression testing.
+default_phase: execute
+phases:
+  - name: execute
+    context: |
+      Investigate the bug. Find the root cause (file:line). Implement the minimal fix.
+      Document the root cause before writing any code. Do NOT guess or patch symptoms.
+    agent_hints:
+      - debugger
+      - build-error-resolver
+      - code_agent
+    tool_rules: []
+  - name: test
+    context: |
+      Write a regression test that fails before the fix and passes after.
+      Verify no other tests broke. Run the full test suite.
+    agent_hints:
+      - tdd-guide
+    tool_rules: []
+  - name: review
+    context: |
+      Review the fix and regression test. Verify the root cause is properly addressed (not a workaround).
+      Check that the fix does not introduce new issues.
+    agent_hints:
+      - code-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+transitions:
+  - from: execute
+    to: test
+  - from: test
+    to: review
+  - from: review
+    to: complete
+  - from: test
+    to: execute
+  - from: review
+    to: execute

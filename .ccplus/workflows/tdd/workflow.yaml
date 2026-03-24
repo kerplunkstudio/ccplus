@@ -1,0 +1,62 @@
+name: tdd
+description: Test-driven development — write tests first, then implement to make them pass.
+default_phase: plan
+phases:
+  - name: plan
+    context: |
+      Define interfaces and contracts. Identify what needs to be built.
+      Do NOT write implementation code yet — only interfaces and type signatures.
+    agent_hints:
+      - planner
+    tool_rules: []
+  - name: test
+    context: |
+      Write failing tests first (RED phase). Cover unit, integration, and E2E as appropriate.
+      Tests must fail before implementation starts. Verify they fail for the right reason.
+    agent_hints:
+      - tdd-guide
+    tool_rules: []
+  - name: execute
+    context: |
+      Write the minimal implementation to make the tests pass (GREEN phase).
+      Do not add features beyond what the tests require. Keep code simple.
+    agent_hints:
+      - code_agent
+      - frontend-agent
+    tool_rules: []
+  - name: verify
+    context: |
+      Run the full test suite. Verify 80%+ coverage. Run E2E tests for user flows.
+      If coverage is insufficient, return to the test phase to add more tests.
+    agent_hints:
+      - tdd-guide
+      - e2e-runner
+    tool_rules: []
+  - name: review
+    context: |
+      Review the implementation and tests. Ensure the code is clean, readable, and maintainable.
+      Check that tests are meaningful and not just passing by coincidence.
+    agent_hints:
+      - code-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+transitions:
+  - from: plan
+    to: test
+  - from: test
+    to: execute
+  - from: execute
+    to: verify
+  - from: verify
+    to: review
+  - from: review
+    to: complete
+  - from: verify
+    to: test
+  - from: review
+    to: execute

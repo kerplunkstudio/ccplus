@@ -1,0 +1,77 @@
+name: feature
+description: Full feature development lifecycle with design, planning, implementation, testing, and review.
+default_phase: design
+phases:
+  - name: design
+    context: |
+      Understand requirements. Explore the codebase. Identify affected systems, risks, and dependencies.
+      Produce a clear implementation plan before any code is written.
+    agent_hints:
+      - architect
+      - planner
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+  - name: plan
+    context: |
+      Write a detailed step-by-step implementation plan. Include file paths, function signatures,
+      and test strategy. Get user confirmation before proceeding.
+    agent_hints:
+      - planner
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+  - name: execute
+    context: |
+      Implement the feature following the approved plan. Write clean, tested, production-ready code.
+      Follow TypeScript strict mode, immutable patterns, and project conventions.
+    agent_hints:
+      - code_agent
+      - frontend-agent
+      - build-error-resolver
+    tool_rules: []
+  - name: test
+    context: |
+      Write and run tests. Verify 80%+ coverage. Run E2E tests for critical user flows.
+      All tests must pass before proceeding.
+    agent_hints:
+      - tdd-guide
+      - e2e-runner
+    tool_rules: []
+  - name: review
+    context: |
+      Review the complete implementation for correctness, security, performance, and maintainability.
+      Check for edge cases, security vulnerabilities, and code quality issues.
+    agent_hints:
+      - code-reviewer
+      - security-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+transitions:
+  - from: design
+    to: plan
+  - from: plan
+    to: execute
+  - from: execute
+    to: test
+  - from: test
+    to: review
+  - from: review
+    to: complete
+  - from: review
+    to: execute
+  - from: test
+    to: execute

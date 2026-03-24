@@ -1,0 +1,33 @@
+name: default
+description: Minimal workflow for quick tasks and one-off changes.
+default_phase: execute
+phases:
+  - name: execute
+    context: |
+      Implement the requested change. Focus on correctness, minimal diff, and clean code.
+      Follow project conventions (TypeScript strict mode, immutable patterns, no console.log).
+    agent_hints:
+      - code_agent
+      - frontend-agent
+      - build-error-resolver
+    tool_rules: []
+  - name: review
+    context: |
+      Review the implementation for correctness, security, and code quality.
+      Check for edge cases, missing error handling, and adherence to project conventions.
+    agent_hints:
+      - code-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+transitions:
+  - from: execute
+    to: review
+  - from: review
+    to: complete
+  - from: review
+    to: execute

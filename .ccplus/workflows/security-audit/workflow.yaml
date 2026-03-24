@@ -1,0 +1,61 @@
+name: security-audit
+description: Security audit followed by remediation, testing, and sign-off.
+default_phase: audit
+phases:
+  - name: audit
+    context: |
+      Audit the codebase for security vulnerabilities (OWASP Top 10, injection, XSS, CSRF, secrets).
+      READ ONLY — do not write or modify any files. Document all findings with severity ratings.
+      Check: hardcoded secrets, SQL injection, XSS, authentication bypass, insecure crypto, SSRF.
+    agent_hints:
+      - security-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+      - tool: Bash
+        action: block
+        conditions: []
+  - name: execute
+    context: |
+      Remediate the security findings identified in the audit phase.
+      Address CRITICAL issues first, then HIGH, then MEDIUM. Document each fix.
+    agent_hints:
+      - code_agent
+      - frontend-agent
+    tool_rules: []
+  - name: test
+    context: |
+      Write security tests to verify the remediations work.
+      Test that the vulnerabilities are actually fixed, not just patched superficially.
+    agent_hints:
+      - tdd-guide
+    tool_rules: []
+  - name: signoff
+    context: |
+      Final security sign-off. Verify all critical and high findings are resolved.
+      Confirm no new vulnerabilities were introduced during remediation.
+    agent_hints:
+      - security-reviewer
+      - code-reviewer
+    tool_rules:
+      - tool: Edit
+        action: block
+        conditions: []
+      - tool: Write
+        action: block
+        conditions: []
+transitions:
+  - from: audit
+    to: execute
+  - from: execute
+    to: test
+  - from: test
+    to: signoff
+  - from: signoff
+    to: complete
+  - from: signoff
+    to: execute
