@@ -23,10 +23,8 @@ export interface ToolRule {
 export interface WorkflowPhaseConfig {
   name: string;
   context?: string;               // Phase context injected into system prompt
-  tool_rules?: ToolRule[];        // Tool enforcement rules (HEAD version)
-  toolRules?: ToolRule[];         // Tool enforcement rules (cherry-pick version, for compatibility)
-  agent_hints?: string[];         // Agent types (HEAD version)
-  agentHints?: string[];          // Agent types (cherry-pick version, for compatibility)
+  tool_rules?: ToolRule[];        // Tool enforcement rules (internal snake_case format)
+  agent_hints?: string[];         // Agent types (internal snake_case format)
 }
 
 export interface WorkflowTransition {

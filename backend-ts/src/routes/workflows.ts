@@ -7,6 +7,21 @@ import {
   type WorkflowConfig,
 } from '../workflow-config.js';
 
+/**
+ * Transform workflow phases from internal snake_case format to frontend camelCase format
+ */
+function transformWorkflowForFrontend(wf: WorkflowConfig): WorkflowConfig {
+  return {
+    ...wf,
+    phases: wf.phases.map(phase => ({
+      name: phase.name,
+      context: phase.context,
+      agentHints: phase.agent_hints,
+      toolRules: phase.tool_rules,
+    })),
+  };
+}
+
 export function createWorkflowConfigRoutes(app: Express): void {
   // GET /api/workflows — list all workflows (built-in + user)
   app.get('/api/workflows', (req: Request, res: Response) => {
@@ -18,7 +33,8 @@ export function createWorkflowConfigRoutes(app: Express): void {
         .map(name => {
           const wf = getWorkflowByName(name, workspace);
           if (!wf) return null;
-          return { ...wf, builtin: builtinNames.includes(name) };
+          const transformed = transformWorkflowForFrontend(wf);
+          return { ...transformed, builtin: builtinNames.includes(name) };
         })
         .filter((wf): wf is WorkflowConfig & { builtin: boolean } => wf !== null);
       res.json({ workflows });
@@ -37,7 +53,8 @@ export function createWorkflowConfigRoutes(app: Express): void {
         res.status(404).json({ error: `Workflow "${req.params.name}" not found` });
         return;
       }
-      res.json(workflow);
+      const transformed = transformWorkflowForFrontend(workflow);
+      res.json(transformed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(500).json({ error: message });
@@ -77,25 +94,5 @@ export function createWorkflowConfigRoutes(app: Express): void {
       const message = error instanceof Error ? error.message : String(error);
       res.status(500).json({ error: message });
     }
-  });
-
-  // GET /api/agents — list available agent types
-  app.get('/api/agents', (_req: Request, res: Response) => {
-    // Return the well-known agent types available in cc+
-    const agents = [
-      { name: 'code_agent', description: 'General code implementation' },
-      { name: 'frontend-agent', description: 'Frontend/UI changes' },
-      { name: 'planner', description: 'Implementation planning' },
-      { name: 'architect', description: 'System design decisions' },
-      { name: 'tdd-guide', description: 'Test-driven development' },
-      { name: 'code-reviewer', description: 'Code review' },
-      { name: 'security-reviewer', description: 'Security analysis' },
-      { name: 'build-error-resolver', description: 'Build/TypeScript error fixes' },
-      { name: 'debugger', description: 'Systematic debugging' },
-      { name: 'e2e-runner', description: 'E2E test generation' },
-      { name: 'refactor-cleaner', description: 'Dead code cleanup' },
-      { name: 'doc-updater', description: 'Documentation updates' },
-    ];
-    res.json({ agents });
   });
 }
