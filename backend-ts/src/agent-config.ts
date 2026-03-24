@@ -5,6 +5,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { z } from 'zod';
 import { log } from './logger.js';
+import { PROJECT_ROOT } from './config.js';
 
 export const FileAccessPolicySchema = z.object({
   allowedPaths: z.array(z.string()).optional(),
@@ -108,17 +109,22 @@ export async function loadAgentsFromDir(dir: string): Promise<ResolvedAgent[]> {
 }
 
 /**
- * Merge project (.ccplus/agents/) + global (~/.ccplus/agents/) agents.
- * Project wins on name collision.
+ * Merge built-in (.ccplus/agents/) + global (~/.ccplus/agents/) + project (.ccplus/agents/) agents.
+ * Priority: built-in < global < project (project wins on name collision).
  */
 export async function loadAllAgents(workspacePath: string): Promise<ResolvedAgent[]> {
-  const [globalAgents, projectAgents] = await Promise.all([
+  const builtInDir = path.join(PROJECT_ROOT, '.ccplus', 'agents');
+  const [builtInAgents, globalAgents, projectAgents] = await Promise.all([
+    loadAgentsFromDir(builtInDir),
     loadAgentsFromDir(getGlobalAgentsDir()),
     loadAgentsFromDir(getProjectAgentsDir(workspacePath)),
   ]);
 
-  // Build map by id — project overrides global on collision
+  // Build map by id — built-in < global < project priority
   const agentMap = new Map<string, ResolvedAgent>();
+  for (const agent of builtInAgents) {
+    agentMap.set(agent.id, agent);
+  }
   for (const agent of globalAgents) {
     agentMap.set(agent.id, agent);
   }
@@ -132,7 +138,7 @@ export async function loadAllAgents(workspacePath: string): Promise<ResolvedAgen
 export const SAFE_AGENT_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 /**
- * Get single agent by id (checks project dir first, then global)
+ * Get single agent by id (checks project dir first, then global, then built-in)
  */
 export async function getAgent(workspacePath: string, id: string): Promise<ResolvedAgent | null> {
   if (!SAFE_AGENT_ID_RE.test(id)) return null;
@@ -140,6 +146,7 @@ export async function getAgent(workspacePath: string, id: string): Promise<Resol
   const dirs = [
     getProjectAgentsDir(workspacePath),
     getGlobalAgentsDir(),
+    path.join(PROJECT_ROOT, '.ccplus', 'agents'),
   ];
 
   for (const baseDir of dirs) {
@@ -172,7 +179,11 @@ export async function getAgent(workspacePath: string, id: string): Promise<Resol
  * Watch agent directories for hot reload
  */
 export function watchAgentDirs(workspacePath: string, onChange: () => void): () => void {
-  const dirs = [getGlobalAgentsDir(), getProjectAgentsDir(workspacePath)];
+  const dirs = [
+    path.join(PROJECT_ROOT, '.ccplus', 'agents'),
+    getGlobalAgentsDir(),
+    getProjectAgentsDir(workspacePath),
+  ];
   const watchers: ReturnType<typeof watch>[] = [];
 
   for (const dir of dirs) {

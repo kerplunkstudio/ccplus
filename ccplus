@@ -447,6 +447,18 @@ run_setup() {
     # Build backend
     run_with_spinner "Building TypeScript backend..." "cd backend-ts && npm run build && cd '$SCRIPT_DIR'" || exit 1
 
+    # Install default agents to global config
+    info "Installing default agents to ~/.ccplus/agents/..."
+    mkdir -p "$HOME/.ccplus/agents"
+    for agent_dir in "$SCRIPT_DIR/.ccplus/agents"/*/; do
+        agent_name=$(basename "$agent_dir")
+        target="$HOME/.ccplus/agents/$agent_name"
+        if [ ! -d "$target" ]; then
+            cp -r "$agent_dir" "$target"
+        fi
+    done
+    ok "Default agents installed"
+
     # Setup .env file
     if [ ! -f ".env" ]; then
         interactive_env_setup

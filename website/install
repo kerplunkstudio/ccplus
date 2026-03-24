@@ -73,6 +73,32 @@ warn() {
     printf "${YELLOW}!${RESET} %s\n" "$1"
 }
 
+# Seed default agents to ~/.ccplus/agents/ (skip existing to preserve customizations)
+seed_agents() {
+    local source_dir="$1"
+    if [ ! -d "$source_dir" ]; then
+        return 1
+    fi
+
+    mkdir -p "$HOME/.ccplus/agents"
+    local count=0
+    for agent_dir in "$source_dir"/*/; do
+        [ -d "$agent_dir" ] || continue
+        local agent_name
+        agent_name="$(basename "$agent_dir")"
+        if [ ! -d "$HOME/.ccplus/agents/$agent_name" ]; then
+            cp -r "$agent_dir" "$HOME/.ccplus/agents/$agent_name"
+            count=$((count + 1))
+        fi
+    done
+
+    if [ "$count" -gt 0 ]; then
+        success "Installed $count default agent(s) to ~/.ccplus/agents/"
+    else
+        info "Default agents already installed"
+    fi
+}
+
 # ============================================================================
 # Error handling
 # ============================================================================
@@ -292,6 +318,11 @@ install_macos() {
                 # Rebuild native modules for local Node.js version
                 step "Rebuilding native modules..."
                 (cd /Applications/cc+.app/Contents/Resources/app.asar.unpacked/backend-ts && npm rebuild better-sqlite3 2>/dev/null) || warn "Could not rebuild native modules"
+                # Install default agents
+                step "Setting up default agents"
+                seed_agents "/Applications/cc+.app/Contents/Resources/app/.ccplus/agents" || \
+                seed_agents "/Applications/cc+.app/Contents/Resources/app.asar.unpacked/.ccplus/agents" || \
+                info "Default agents will be available after first launch"
             else
                 hdiutil detach "$mount_point" -quiet
                 die "No .app found in DMG"
@@ -316,6 +347,11 @@ install_macos() {
                 # Rebuild native modules for local Node.js version
                 step "Rebuilding native modules..."
                 (cd /Applications/cc+.app/Contents/Resources/app.asar.unpacked/backend-ts && npm rebuild better-sqlite3 2>/dev/null) || warn "Could not rebuild native modules"
+                # Install default agents
+                step "Setting up default agents"
+                seed_agents "/Applications/cc+.app/Contents/Resources/app/.ccplus/agents" || \
+                seed_agents "/Applications/cc+.app/Contents/Resources/app.asar.unpacked/.ccplus/agents" || \
+                info "Default agents will be available after first launch"
             else
                 die "No .app found in ZIP"
             fi
@@ -406,6 +442,10 @@ install_from_source() {
     (cd "$INSTALL_DIR" && ./ccplus) || die "Build failed"
 
     success "Build complete"
+
+    # Install default agents
+    step "Setting up default agents"
+    seed_agents "$INSTALL_DIR/.ccplus/agents" || info "Default agents will be available after first launch"
 
     # Create symlink
     step "Creating launcher"
