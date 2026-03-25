@@ -34,6 +34,17 @@ const STATUS_LABELS: Record<string, string> = {
   failed: 'failed',
 };
 
+const getStatusLabel = (session: FleetSession): string => {
+  if (session.status === 'running' && session.workflowPhase && session.workflowPhase !== 'idle') {
+    const phase = session.workflowPhase.charAt(0).toUpperCase() + session.workflowPhase.slice(1);
+    if (session.workflowName && session.workflowName !== 'default') {
+      return `${phase} · ${session.workflowName}`;
+    }
+    return phase;
+  }
+  return STATUS_LABELS[session.status] ?? session.status;
+};
+
 export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onClick }) => {
   const [elapsed, setElapsed] = useState(0);
 
@@ -54,7 +65,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   const truncatedLabel = label.length > 80 ? label.slice(0, 80) + '…' : label;
   const totalTokens = session.inputTokens + session.outputTokens;
   const projectName = getProjectName(session.workspace);
-  const statusLabel = STATUS_LABELS[session.status] ?? session.status;
+  const statusLabel = getStatusLabel(session);
 
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>

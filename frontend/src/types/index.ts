@@ -249,6 +249,8 @@ export interface FleetSession {
   lastActivity: string;
   label: string;
   filesTouched: string[];
+  workflowPhase?: string;
+  workflowName?: string;
 }
 
 export interface FleetAggregateStats {

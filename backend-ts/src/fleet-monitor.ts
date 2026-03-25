@@ -1,5 +1,6 @@
 import type { Server as SocketIOServer } from "socket.io";
 import { upsertFleetSession, getAllFleetSessions } from "./database.js";
+import { getWorkflowState } from "./workflow-state.js";
 
 // ---- Types ----
 
@@ -201,6 +202,18 @@ export function setLabel(sessionId: string, label: string): void {
 export function getFleetState(): FleetState {
   const sessionList = Array.from(sessions.values());
 
+  const enrichedSessions = sessionList.map(session => {
+    if (session.status === 'running') {
+      const workflowState = getWorkflowState(session.sessionId);
+      return {
+        ...session,
+        workflowPhase: workflowState.phase,
+        workflowName: workflowState.workflowName,
+      };
+    }
+    return session;
+  });
+
   const aggregate = {
     totalSessions: sessionList.length,
     activeSessions: sessionList.filter(s => s.status === 'running').length,
@@ -210,7 +223,7 @@ export function getFleetState(): FleetState {
   };
 
   return {
-    sessions: sessionList,
+    sessions: enrichedSessions,
     aggregate,
   };
 }
