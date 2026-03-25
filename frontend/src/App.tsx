@@ -672,7 +672,7 @@ function AppContent() {
       <div className="panel-main">
         <TabBar
           tabs={allTabs}
-          activeTabId={activePage === 'captain' ? '' : (activeTab?.sessionId || '')}
+          activeTabId={activePage ? '' : (activeTab?.sessionId || '')}
           isCaptainActive={activePage === 'captain'}
           onCaptainClick={() => setActivePage('captain')}
           onSelectTab={(sessionId) => {
