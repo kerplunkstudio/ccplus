@@ -111,7 +111,7 @@ describe('workflow-config', () => {
       expect(reviewPhase).toBeDefined();
       expect(reviewPhase!.tool_rules.length).toBeGreaterThan(0);
 
-      const editRule = reviewPhase!.tool_rules.find(r => r.tool === 'Edit');
+      const editRule = reviewPhase!.tool_rules.find(r => r.tool_name === 'Edit');
       expect(editRule).toBeDefined();
       expect(editRule!.action).toBe('block');
     });

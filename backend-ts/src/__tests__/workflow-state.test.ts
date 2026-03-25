@@ -42,9 +42,10 @@ describe('workflow-state', () => {
   });
 
   describe('getWorkflowState', () => {
-    it('returns idle state for nonexistent session', () => {
+    it('returns default workflow state for nonexistent session', () => {
       const state = getWorkflowState('new-session-123');
-      expect(state.phase).toBe('idle');
+      // Default workflow has default_phase 'execute'
+      expect(state.phase).toBe('execute');
       expect(state.transitions).toEqual([]);
       expect(state.sessionId).toBe('new-session-123');
       expect(state.createdAt).toBeDefined();
@@ -52,46 +53,30 @@ describe('workflow-state', () => {
 
     it('returns persisted state if file exists', () => {
       const sessionId = 'test-session-456';
-      // Create a state first
-      const state1 = transitionPhase(sessionId, 'design', 'test');
-      expect(state1).toBeDefined();
+      // Create a state first - skip to review since default workflow starts at execute
+      skipToPhase(sessionId, 'review');
 
       // Read it back
       const state2 = getWorkflowState(sessionId);
-      expect(state2.phase).toBe('design');
+      expect(state2.phase).toBe('review');
       expect(state2.transitions.length).toBe(1);
     });
   });
 
   describe('transitionPhase', () => {
-    it('succeeds for valid transition: idle -> design', () => {
-      const state = transitionPhase('session-1', 'design', 'user_request');
+    it('succeeds for valid transition: execute -> review', () => {
+      const state = transitionPhase('session-1', 'review', 'user_request');
       expect(state).not.toBeNull();
-      expect(state!.phase).toBe('design');
+      expect(state!.phase).toBe('review');
       expect(state!.transitions.length).toBe(1);
-      expect(state!.transitions[0].from).toBe('idle');
-      expect(state!.transitions[0].to).toBe('design');
+      expect(state!.transitions[0].from).toBe('execute');
+      expect(state!.transitions[0].to).toBe('review');
       expect(state!.transitions[0].trigger).toBe('user_request');
     });
 
-    it('succeeds for valid transition: idle -> plan', () => {
-      const state = transitionPhase('session-1a', 'plan', 'user_request');
-      expect(state).not.toBeNull();
-      expect(state!.phase).toBe('plan');
-      expect(state!.transitions.length).toBe(1);
-      expect(state!.transitions[0].from).toBe('idle');
-      expect(state!.transitions[0].to).toBe('plan');
-    });
-
-    it('fails for invalid transition: idle -> review', () => {
-      const state = transitionPhase('session-2', 'review', 'invalid');
+    it('fails for invalid transition: execute -> design', () => {
+      const state = transitionPhase('session-2', 'design', 'invalid');
       expect(state).toBeNull();
-    });
-
-    it('succeeds for valid transition: idle -> execute (small fixes skip planning)', () => {
-      const state = transitionPhase('session-2a', 'execute', 'agent:code_agent');
-      expect(state).not.toBeNull();
-      expect(state?.phase).toBe('execute');
     });
 
     it('succeeds for valid transition: execute -> test', () => {
@@ -131,7 +116,8 @@ describe('workflow-state', () => {
       expect(state!.phase).toBe('review');
       expect(state!.transitions.length).toBe(1);
       expect(state!.transitions[0].trigger).toBe('manual_skip');
-      expect(state!.transitions[0].from).toBe('idle');
+      // Default workflow starts at 'execute'
+      expect(state!.transitions[0].from).toBe('execute');
       expect(state!.transitions[0].to).toBe('review');
     });
   });
@@ -280,15 +266,16 @@ describe('workflow-state', () => {
   });
 
   describe('resetWorkflow', () => {
-    it('returns idle state', () => {
+    it('returns default workflow state', () => {
       const sessionId = 'reset-session';
       // First transition to another state
-      skipToPhase(sessionId, 'execute');
+      skipToPhase(sessionId, 'review');
 
       // Reset
       const state = resetWorkflow(sessionId);
       expect(state).not.toBeNull();
-      expect(state!.phase).toBe('idle');
+      // Default workflow has default_phase 'execute'
+      expect(state!.phase).toBe('execute');
       expect(state!.transitions).toEqual([]);
     });
   });
@@ -296,15 +283,15 @@ describe('workflow-state', () => {
   describe('state persistence', () => {
     it('writes and reads state correctly', () => {
       const sessionId = 'persist-test';
-      const state1 = transitionPhase(sessionId, 'design', 'test_trigger');
+      const state1 = transitionPhase(sessionId, 'review', 'test_trigger');
       expect(state1).not.toBeNull();
 
       // Read it back
       const state2 = getWorkflowState(sessionId);
-      expect(state2.phase).toBe('design');
+      expect(state2.phase).toBe('review');
       expect(state2.transitions.length).toBe(1);
-      expect(state2.transitions[0].from).toBe('idle');
-      expect(state2.transitions[0].to).toBe('design');
+      expect(state2.transitions[0].from).toBe('execute');
+      expect(state2.transitions[0].to).toBe('review');
       expect(state2.transitions[0].trigger).toBe('test_trigger');
     });
 
@@ -327,19 +314,21 @@ describe('workflow-state', () => {
     it('handles session IDs with special characters', () => {
       const sessionId = 'test/session:123@special';
       const state = getWorkflowState(sessionId);
-      expect(state.phase).toBe('idle');
+      // Default workflow has default_phase 'execute'
+      expect(state.phase).toBe('execute');
       expect(state.sessionId).toBe(sessionId);
 
-      // Should create a file with sanitized name
+      // File is now created immediately when getWorkflowState is called (Bug Fix #3)
       const files = readdirSync(TEST_WORKFLOWS_DIR);
-      expect(files.length).toBe(0); // No file created until first write
+      expect(files.length).toBe(1);
+      expect(files[0]).toMatch(/^testsession123special\.json$/);
 
-      // Now write
-      const newState = skipToPhase(sessionId, 'design');
+      // Now write to a different phase
+      const newState = skipToPhase(sessionId, 'review');
       expect(newState).not.toBeNull();
-      expect(newState!.phase).toBe('design');
+      expect(newState!.phase).toBe('review');
 
-      // Check file was created with sanitized name
+      // File should still exist with the same sanitized name
       const filesAfter = readdirSync(TEST_WORKFLOWS_DIR);
       expect(filesAfter.length).toBe(1);
       expect(filesAfter[0]).toMatch(/^testsession123special\.json$/);
@@ -364,6 +353,32 @@ describe('workflow-state', () => {
       const state = getWorkflowState(sessionId);
       expect(state.workflowName).toBe('default');
       expect(state.phase).toBe('execute');
+    });
+  });
+
+  describe('workflow default_phase initialization (Bug Fix #2)', () => {
+    it('creates state with default_phase from workflow config when workflow is feature', () => {
+      const sessionId = 'feature-workflow-test';
+      // Get state with workflow name 'feature' - should initialize with design phase
+      const state = getWorkflowState(sessionId, 'feature');
+      expect(state.phase).toBe('design');
+      expect(state.workflowName).toBe('feature');
+    });
+
+    it('creates state with execute phase for default workflow', () => {
+      const sessionId = 'default-workflow-test';
+      const state = getWorkflowState(sessionId, 'default');
+      // Default workflow has default_phase 'execute'
+      expect(state.phase).toBe('execute');
+      expect(state.workflowName).toBe('default');
+    });
+
+    it('creates state with execute phase when no workflow specified', () => {
+      const sessionId = 'no-workflow-test';
+      const state = getWorkflowState(sessionId);
+      // Default workflow has default_phase 'execute'
+      expect(state.phase).toBe('execute');
+      expect(state.workflowName).toBe('default');
     });
   });
 });

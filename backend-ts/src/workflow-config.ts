@@ -42,17 +42,25 @@ function parseYamlWorkflow(yamlContent: string): WorkflowConfig {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid workflow YAML: file is empty or not a mapping');
   }
-  const parsed = raw as Partial<WorkflowConfig>;
+  const parsed = raw as any;
 
   // Validate required fields
   if (!parsed.name || !parsed.description || !parsed.default_phase || !parsed.phases || !parsed.transitions) {
     throw new Error('Invalid workflow YAML: missing required fields (name, description, default_phase, phases, transitions)');
   }
 
-  // Validate phases have required fields
+  // Validate and transform phases
   for (const phase of parsed.phases) {
     if (!phase.name || !phase.context || !phase.agent_hints || !phase.tool_rules) {
       throw new Error(`Invalid phase in workflow: missing required fields (name, context, agent_hints, tool_rules)`);
+    }
+
+    // Transform tool_rules: convert 'tool' field to 'tool_name'
+    for (const rule of phase.tool_rules) {
+      if (rule.tool && !rule.tool_name) {
+        rule.tool_name = rule.tool;
+        delete rule.tool;
+      }
     }
   }
 
@@ -176,4 +184,19 @@ export function listWorkflows(_workspace?: string): string[] {
   }
 
   return Array.from(workflows).sort();
+}
+
+/**
+ * Evaluate if a tool rule matches based on its conditions.
+ * Returns true if the rule should be applied (all conditions match).
+ */
+export function evaluateToolRule(rule: ToolRule, _toolInput: Record<string, unknown>): boolean {
+  // If conditions array is empty, rule always matches
+  if (!rule.conditions || rule.conditions.length === 0) {
+    return true;
+  }
+
+  // Future: implement condition evaluation logic here
+  // For now, if conditions exist but we don't know how to evaluate them, don't match
+  return false;
 }

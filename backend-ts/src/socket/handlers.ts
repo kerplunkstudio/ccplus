@@ -127,6 +127,7 @@ export function setupSocketHandlers(
       const model = (data?.model as string) || undefined;
       const imageIdsData = (data?.image_ids as string[]) ?? [];
       const projectPathData = (data?.workspace as string) ?? "";
+      const workflow = (data?.workflow as string) || undefined;
 
       if (!content && !imageIdsData.length) return;
 
@@ -168,6 +169,8 @@ export function setupSocketHandlers(
                 model,
                 imageIdsData.length ? imageIdsData : undefined,
                 undefined,
+                undefined,
+                workflow,
               );
             }
           })
@@ -181,6 +184,8 @@ export function setupSocketHandlers(
               model,
               imageIdsData.length ? imageIdsData : undefined,
               undefined,
+              undefined,
+              workflow,
             );
           });
       } else {
@@ -192,6 +197,8 @@ export function setupSocketHandlers(
           model,
           imageIdsData.length ? imageIdsData : undefined,
           undefined,
+          undefined,
+          workflow,
         );
       }
     });

@@ -3,6 +3,7 @@ import path from 'path';
 import { WORKFLOWS_DIR } from './config.js';
 import { log } from './logger.js';
 import type { WorkflowConfig } from './workflow-config.js';
+import { loadWorkflow, evaluateToolRule } from './workflow-config.js';
 
 // ---- Types ----
 
@@ -122,8 +123,25 @@ function getStatePath(sessionId: string): string {
 }
 
 function createDefaultState(sessionId: string, workflowName: string = 'default'): WorkflowState {
+  // Load workflow config to get default_phase
+  let defaultPhase = 'idle';
+  if (workflowName) {
+    try {
+      const workflowConfig = loadWorkflow(workflowName);
+      if (workflowConfig?.default_phase) {
+        defaultPhase = workflowConfig.default_phase;
+      }
+    } catch (error) {
+      log.warn('Failed to load workflow config for default phase, using idle', {
+        sessionId,
+        workflowName,
+        error: String(error)
+      });
+    }
+  }
+
   return {
-    phase: 'idle',
+    phase: defaultPhase,
     workflowName,
     transitions: [],
     sessionId,
@@ -136,7 +154,19 @@ function createDefaultState(sessionId: string, workflowName: string = 'default')
 export function getWorkflowState(sessionId: string, workflowName?: string): WorkflowState {
   const statePath = getStatePath(sessionId);
   if (!existsSync(statePath)) {
-    return createDefaultState(sessionId, workflowName);
+    const newState = createDefaultState(sessionId, workflowName);
+    // Persist the initial state
+    try {
+      writeFileSync(statePath, JSON.stringify(newState, null, 2), 'utf-8');
+      log.debug('Initial workflow state created', {
+        sessionId,
+        workflowName: newState.workflowName,
+        phase: newState.phase
+      });
+    } catch (error) {
+      log.warn('Failed to persist initial workflow state', { sessionId, error: String(error) });
+    }
+    return newState;
   }
 
   try {
@@ -247,7 +277,6 @@ export function evaluatePreToolUse(
     // Evaluate rules in order - first matching rule wins
     for (const rule of phaseConfig.tool_rules) {
       if (rule.tool_name === toolName) {
-        const { evaluateToolRule } = require('./workflow-config.js');
         const ruleMatches = evaluateToolRule(rule, toolInput);
         if (ruleMatches) {
           return {

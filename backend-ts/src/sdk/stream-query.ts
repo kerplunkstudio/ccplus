@@ -163,6 +163,14 @@ export async function streamQuery(
   // Reset streaming content at the start of each query
   session.streamingContent = '';
 
+  // Initialize workflow state if workflow parameter is provided
+  if (workflow) {
+    const { getWorkflowState } = await import('../workflow-state.js');
+    const currentState = getWorkflowState(sessionId, workflow);
+    // State is now initialized with the correct workflow and default_phase
+    log.debug('Workflow state initialized', { sessionId, workflow, phase: currentState.phase });
+  }
+
   // Load agent config if agentId provided
   let agentConfig: ResolvedAgent | null = null;
   if (agentId) {
