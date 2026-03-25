@@ -1,8 +1,8 @@
 import { useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { WorkspaceState, WorkspaceAction, ProjectEntry, TabState } from '../types';
 import { ensureMruOrder } from '../utils/tabs';
+import { SOCKET_URL } from '../config';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
 const STORAGE_KEY = 'ccplus_workspace';
 const MAX_CLOSED_TABS = 10;
 

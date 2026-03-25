@@ -36,11 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const getStatusLabel = (session: FleetSession): string => {
   if (session.status === 'running' && session.workflowPhase && session.workflowPhase !== 'idle') {
-    const phase = session.workflowPhase.charAt(0).toUpperCase() + session.workflowPhase.slice(1);
-    if (session.workflowName && session.workflowName !== 'default') {
-      return `${phase} · ${session.workflowName}`;
-    }
-    return phase;
+    return session.workflowPhase.charAt(0).toUpperCase() + session.workflowPhase.slice(1);
   }
   return STATUS_LABELS[session.status] ?? session.status;
 };
@@ -66,6 +62,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   const totalTokens = session.inputTokens + session.outputTokens;
   const projectName = getProjectName(session.workspace);
   const statusLabel = getStatusLabel(session);
+  const showWorkflow = session.workflowName && session.workflowName !== 'default';
 
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
@@ -80,6 +77,10 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
       </div>
 
       <div className="fleet-card-label">{truncatedLabel}</div>
+
+      {showWorkflow && (
+        <div className="fleet-card-workflow">{session.workflowName}</div>
+      )}
 
       <div className="fleet-card-divider" />
 

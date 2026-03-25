@@ -128,6 +128,16 @@
   margin-bottom: var(--space-sm);
 }
 
+/* Workflow */
+
+.fleet-card-workflow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-sm);
+}
+
 /* Divider */
 
 .fleet-card-divider {
