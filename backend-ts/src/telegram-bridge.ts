@@ -4,7 +4,7 @@
  * Voice messages are transcribed locally using whisper-cli.
  */
 
-import { Bot, Context } from 'grammy';
+import { Bot, Context, InlineKeyboard, Keyboard } from 'grammy';
 import * as config from './config.js';
 import * as captain from './captain.js';
 import { formatForTelegram, escapeMarkdownV2 } from './telegram-format.js';
@@ -19,6 +19,7 @@ interface ChatState {
   readonly pendingText: string;
   readonly typingInterval: ReturnType<typeof setInterval> | null;
   readonly ackMessageId: number | null;
+  readonly pendingOptions: readonly string[];
 }
 
 // ---- State ----
@@ -28,6 +29,100 @@ const chatStates = new Map<number, ChatState>();
 
 // Typing indicator interval
 const TYPING_INTERVAL_MS = 4000;
+
+// ---- Button text → Captain command mapping ----
+
+const REPLY_KEYBOARD_COMMANDS: Record<string, string> = {
+  '📋 Fleet Status': 'What is the current fleet status? List all sessions.',
+  '🚀 New Session': 'Start a new session',
+  '📊 Sessions List': 'List all active sessions with their status.',
+};
+
+// ---- Keyboard builders ----
+
+function buildIdleKeyboard(): Keyboard {
+  return new Keyboard()
+    .text('📋 Fleet Status').text('🚀 New Session').row()
+    .text('📊 Sessions List')
+    .resized()
+    .persistent();
+}
+
+function buildRunningInlineKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('❌ Cancel', 'cancel')
+    .text('📊 Status', 'status');
+}
+
+function buildCompletedInlineKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('🔀 Cherry-pick', 'cherry-pick')
+    .text('🆕 New Session', 'new-session');
+}
+
+function buildApprovalInlineKeyboard(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('✅ Approve', 'approve')
+    .text('❌ Reject', 'reject');
+}
+
+function buildNumberedOptionsKeyboard(options: string[]): InlineKeyboard {
+  return options.slice(0, 5).reduce(
+    (kb, _, i) => kb.text(`${i + 1}`, `option:${i + 1}`).row(),
+    new InlineKeyboard()
+  );
+}
+
+// ---- Response analysis ----
+
+// Exported for testing
+export function detectApprovalPattern(text: string): boolean {
+  const lines = text.trim().split('\n').filter((l) => l.trim());
+  const lastLine = lines[lines.length - 1] ?? '';
+  const lower = lastLine.toLowerCase();
+  return (
+    lower.startsWith('want me to') ||
+    lower.startsWith('should i') ||
+    lower.startsWith('would you like') ||
+    lower.startsWith('shall i') ||
+    (lastLine.endsWith('?') &&
+      (lower.includes('want') || lower.includes('should') || lower.includes('proceed') || lower.includes('approve')))
+  );
+}
+
+// Exported for testing
+export function extractNumberedOptions(text: string): string[] {
+  const lines = text.split('\n');
+  const options: string[] = [];
+  for (const line of lines) {
+    const match = line.match(/^(\d+)[.)]\s+(.+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num === options.length + 1 && num <= 5) {
+        options.push(match[2].trim());
+      }
+    }
+  }
+  return options.length >= 2 ? options : [];
+}
+
+// ---- Callback data resolver ----
+
+// Exported for testing
+export function resolveCallbackCommand(data: string, pendingOptions: readonly string[]): string | null {
+  if (data === 'cancel') return 'Cancel the current running session.';
+  if (data === 'status') return 'What is the current fleet status? List all sessions.';
+  if (data === 'cherry-pick') return 'Cherry-pick the changes from the completed session.';
+  if (data === 'new-session') return 'Start a new session.';
+  if (data === 'approve') return 'Yes, please proceed.';
+  if (data === 'reject') return 'No, please stop.';
+  if (data.startsWith('option:')) {
+    const idx = parseInt(data.slice(7), 10) - 1;
+    const option = pendingOptions[idx];
+    return option ?? null;
+  }
+  return null;
+}
 
 // ---- Public API ----
 
@@ -137,7 +232,7 @@ function setupBotHandlers(botInstance: Bot): void {
     }
     await ctx.reply(
       escapeMarkdownV2('cc+ Captain — Fleet orchestrator.\n\nSend a message to interact. Captain can start sessions, monitor progress, and manage your coding agents.'),
-      { parse_mode: 'MarkdownV2' }
+      { parse_mode: 'MarkdownV2', reply_markup: buildIdleKeyboard() }
     );
   });
 
@@ -167,9 +262,9 @@ function setupBotHandlers(botInstance: Bot): void {
       return;
     }
 
-    const text = ctx.message.text;
-    if (!text || text.startsWith('/')) return;
-
+    const rawText = ctx.message.text;
+    if (!rawText || rawText.startsWith('/')) return;
+    const text = REPLY_KEYBOARD_COMMANDS[rawText] ?? rawText;
     await handleMessage(ctx, text);
   });
 
@@ -210,6 +305,30 @@ function setupBotHandlers(botInstance: Bot): void {
       } else {
         await ctx.reply('Could not transcribe voice message. Please try sending text instead.');
       }
+    }
+  });
+
+  // -- Callback query handler --
+
+  botInstance.on('callback_query:data', async (ctx) => {
+    if (!isAllowed(ctx)) {
+      await ctx.answerCallbackQuery('Access denied.');
+      return;
+    }
+
+    const data = ctx.callbackQuery.data;
+    const chatId = ctx.callbackQuery.message?.chat?.id;
+    if (!chatId) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+
+    const state = chatStates.get(chatId);
+    const command = resolveCallbackCommand(data, state?.pendingOptions ?? []);
+    if (command) {
+      await handleMessageById(chatId, ctx, command);
     }
   });
 
@@ -287,14 +406,17 @@ function isAllowed(ctx: Context): boolean {
 async function handleMessage(ctx: Context, text: string): Promise<void> {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
+  await handleMessageById(chatId, ctx, text);
+}
 
+async function handleMessageById(chatId: number, ctx: Context, text: string): Promise<void> {
   if (!captain.isCaptainAlive()) {
-    await ctx.reply('Captain is not active. Start cc+ first.');
+    await ctx.api.sendMessage(chatId, 'Captain is not active. Start cc+ first.');
     return;
   }
 
   // Send typing indicator
-  await ctx.replyWithChatAction('typing');
+  await ctx.api.sendChatAction(chatId, 'typing');
 
   // Set up typing interval
   const existingState = chatStates.get(chatId);
@@ -317,6 +439,7 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
     pendingText: '',
     typingInterval,
     ackMessageId: null,
+    pendingOptions: [],
   };
   chatStates.set(chatId, newState);
 
@@ -343,9 +466,11 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
     },
   });
 
-  // Send immediate acknowledgment
+  // Send immediate acknowledgment with running keyboard
   if (bot) {
-    const ackMsg = await bot.api.sendMessage(chatId, '⏳');
+    const ackMsg = await bot.api.sendMessage(chatId, '⏳', {
+      reply_markup: buildRunningInlineKeyboard(),
+    });
     const currentState = chatStates.get(chatId);
     if (currentState) {
       chatStates.set(chatId, { ...currentState, ackMessageId: ackMsg.message_id });
@@ -357,7 +482,7 @@ async function handleMessage(ctx: Context, text: string): Promise<void> {
     captain.sendCaptainMessage(text, 'telegram', String(chatId));
   } catch (error) {
     cleanupChatState(chatId);
-    await ctx.reply(`Error: ${String(error)}`);
+    await ctx.api.sendMessage(chatId, `Error: ${String(error)}`);
   }
 }
 
@@ -389,17 +514,46 @@ async function handleComplete(chatId: number): Promise<void> {
     }
 
     if (state.pendingText) {
+      // Analyze response to determine appropriate keyboard
+      const numberedOptions = extractNumberedOptions(state.pendingText);
+      const isApproval = numberedOptions.length === 0 && detectApprovalPattern(state.pendingText);
+
+      let lastChunkKeyboard: InlineKeyboard;
+      let resolvedOptions: readonly string[] = [];
+
+      if (numberedOptions.length > 0) {
+        lastChunkKeyboard = buildNumberedOptionsKeyboard(numberedOptions);
+        resolvedOptions = numberedOptions;
+      } else if (isApproval) {
+        lastChunkKeyboard = buildApprovalInlineKeyboard();
+      } else {
+        lastChunkKeyboard = buildCompletedInlineKeyboard();
+      }
+
       // Format and send final version with markdown
       const chunks = formatForTelegram(state.pendingText);
 
-      for (const chunk of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
+        const isLast = i === chunks.length - 1;
+        const replyMarkup = isLast ? lastChunkKeyboard : undefined;
         try {
-          await bot.api.sendMessage(chatId, chunk, { parse_mode: 'MarkdownV2' });
+          await bot.api.sendMessage(chatId, chunks[i], {
+            parse_mode: 'MarkdownV2',
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          });
         } catch {
           // Fallback: send without formatting
-          await bot.api.sendMessage(chatId, chunk);
+          await bot.api.sendMessage(chatId, chunks[i], {
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          });
         }
         await delay(100);
+      }
+
+      // Store resolved options for callback handler
+      const currentState = chatStates.get(chatId);
+      if (currentState) {
+        chatStates.set(chatId, { ...currentState, pendingOptions: resolvedOptions });
       }
     }
   } catch (error) {
@@ -441,6 +595,7 @@ function cleanupChatState(chatId: number): void {
     clearInterval(state.typingInterval);
   }
   // Don't unregister callback — keep it for future messages in this chat
+  // Preserve pendingOptions so callback handler can still resolve them
   chatStates.set(chatId, {
     ...state,
     pendingText: '',

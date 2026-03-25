@@ -16,7 +16,21 @@ vi.mock('grammy', () => {
     };
   });
 
-  return { Bot: MockBot };
+  const MockInlineKeyboard = vi.fn(function (this: any) {
+    this.text = vi.fn().mockReturnThis();
+    this.row = vi.fn().mockReturnThis();
+    return this;
+  });
+
+  const MockKeyboard = vi.fn(function (this: any) {
+    this.text = vi.fn().mockReturnThis();
+    this.row = vi.fn().mockReturnThis();
+    this.resized = vi.fn().mockReturnThis();
+    this.persistent = vi.fn().mockReturnThis();
+    return this;
+  });
+
+  return { Bot: MockBot, InlineKeyboard: MockInlineKeyboard, Keyboard: MockKeyboard };
 });
 
 vi.mock('../config.js', () => ({
@@ -64,6 +78,9 @@ import {
   startTelegramBridge,
   stopTelegramBridge,
   isTelegramBridgeActive,
+  detectApprovalPattern,
+  extractNumberedOptions,
+  resolveCallbackCommand,
 } from '../telegram-bridge.js';
 
 describe('TelegramBridge', () => {
@@ -400,6 +417,107 @@ describe('TelegramBridge', () => {
       }
 
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe('detectApprovalPattern', () => {
+    it('detects "want me to" pattern', () => {
+      expect(detectApprovalPattern('Want me to proceed?')).toBe(true);
+    });
+
+    it('detects "should i" pattern', () => {
+      expect(detectApprovalPattern('Should I continue?')).toBe(true);
+    });
+
+    it('detects "would you like" pattern', () => {
+      expect(detectApprovalPattern('Would you like me to proceed?')).toBe(true);
+    });
+
+    it('detects "shall i" pattern', () => {
+      expect(detectApprovalPattern('Shall I continue?')).toBe(true);
+    });
+
+    it('returns false for regular statements', () => {
+      expect(detectApprovalPattern('The task is complete.')).toBe(false);
+    });
+
+    it('checks last line only', () => {
+      expect(detectApprovalPattern('Done.\nShould I also fix the tests?')).toBe(true);
+      expect(detectApprovalPattern('Should I start?\nDone.')).toBe(false);
+    });
+
+    it('detects question with keywords', () => {
+      expect(detectApprovalPattern('Do you want me to proceed?')).toBe(true);
+      expect(detectApprovalPattern('Can I approve this change?')).toBe(true);
+    });
+  });
+
+  describe('extractNumberedOptions', () => {
+    it('extracts consecutive numbered options', () => {
+      const text = '1. Option A\n2. Option B\n3. Option C';
+      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B', 'Option C']);
+    });
+
+    it('handles parentheses numbering', () => {
+      const text = '1) Option A\n2) Option B\n3) Option C';
+      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B', 'Option C']);
+    });
+
+    it('returns empty for single option', () => {
+      expect(extractNumberedOptions('1. Only one')).toEqual([]);
+    });
+
+    it('returns empty for non-consecutive numbers', () => {
+      expect(extractNumberedOptions('1. A\n3. B')).toEqual([]);
+    });
+
+    it('caps at 5 options', () => {
+      const text = '1. A\n2. B\n3. C\n4. D\n5. E\n6. F';
+      expect(extractNumberedOptions(text)).toHaveLength(5);
+    });
+
+    it('trims whitespace from options', () => {
+      const text = '1.   Option A   \n2.   Option B   ';
+      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B']);
+    });
+
+    it('returns empty for no numbered options', () => {
+      expect(extractNumberedOptions('Just some text\nNo numbers here')).toEqual([]);
+    });
+  });
+
+  describe('resolveCallbackCommand', () => {
+    it('resolves named commands', () => {
+      expect(resolveCallbackCommand('cancel', [])).toBe('Cancel the current running session.');
+      expect(resolveCallbackCommand('approve', [])).toBe('Yes, please proceed.');
+      expect(resolveCallbackCommand('reject', [])).toBe('No, please stop.');
+      expect(resolveCallbackCommand('status', [])).toBe('What is the current fleet status? List all sessions.');
+      expect(resolveCallbackCommand('cherry-pick', [])).toBe('Cherry-pick the changes from the completed session.');
+      expect(resolveCallbackCommand('new-session', [])).toBe('Start a new session.');
+    });
+
+    it('resolves option by text', () => {
+      expect(resolveCallbackCommand('option:1', ['Fix the bug', 'Add tests'])).toBe('Fix the bug');
+      expect(resolveCallbackCommand('option:2', ['Fix the bug', 'Add tests'])).toBe('Add tests');
+    });
+
+    it('returns null for out-of-range option', () => {
+      expect(resolveCallbackCommand('option:3', ['A', 'B'])).toBeNull();
+    });
+
+    it('returns null for unknown command', () => {
+      expect(resolveCallbackCommand('unknown', [])).toBeNull();
+    });
+
+    it('handles empty options array', () => {
+      expect(resolveCallbackCommand('option:1', [])).toBeNull();
+    });
+
+    it('resolves multiple options correctly', () => {
+      const options = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+      expect(resolveCallbackCommand('option:1', options)).toBe('First');
+      expect(resolveCallbackCommand('option:3', options)).toBe('Third');
+      expect(resolveCallbackCommand('option:5', options)).toBe('Fifth');
     });
   });
 });
