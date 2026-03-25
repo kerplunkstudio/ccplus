@@ -35,6 +35,7 @@ import { createDiffRoutes } from "./routes/diff.js";
 import { createAgentRoutes } from "./routes/agents.js";
 import workflowsRouter from "./routes/workflows.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
+import { seedWorkflows } from './workflow-config.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -350,6 +351,9 @@ setInterval(() => {
 }, 5000); // Check every 5 seconds
 
 httpServer.listen(config.PORT, config.HOST, () => {
+  // Seed workflows from YAML files into database (on server start)
+  seedWorkflows();
+
   console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
   scheduler.start();
 

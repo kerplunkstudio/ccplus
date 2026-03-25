@@ -259,6 +259,23 @@ CREATE TABLE IF NOT EXISTS fleet_sessions (
 CREATE INDEX IF NOT EXISTS idx_fleet_sessions_started ON fleet_sessions(started_at);
 `,
   },
+  {
+    version: 11,
+    sql: `
+-- Migration v11: Workflow storage
+CREATE TABLE IF NOT EXISTS workflows (
+  name TEXT PRIMARY KEY,
+  description TEXT NOT NULL DEFAULT '',
+  default_phase TEXT NOT NULL DEFAULT '',
+  phases TEXT NOT NULL DEFAULT '[]',
+  transitions TEXT NOT NULL DEFAULT '[]',
+  worktree INTEGER,
+  builtin INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

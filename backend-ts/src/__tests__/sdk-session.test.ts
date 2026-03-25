@@ -40,6 +40,31 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 // Mock the database
 vi.mock("../database.js", () => mockDatabase);
 
+// Mock the workflow database module
+vi.mock("../db/workflows.js", () => ({
+  getAllWorkflows: () => [],
+  getWorkflowByName: (name: string) => {
+    if (name === "default") {
+      return {
+        name: "default",
+        description: "Default workflow",
+        default_phase: "execute",
+        phases: [{
+          name: "execute",
+          context: "Execute phase",
+          agent_hints: [],
+          tool_rules: [],
+        }],
+        transitions: [],
+      };
+    }
+    return null;
+  },
+  upsertWorkflow: () => {},
+  deleteWorkflow: () => false,
+  workflowExists: () => false,
+}));
+
 // Mock child_process to prevent actual Claude CLI execution and git operations
 vi.mock("child_process", () => ({
   execFileSync: mockExecFileSync,

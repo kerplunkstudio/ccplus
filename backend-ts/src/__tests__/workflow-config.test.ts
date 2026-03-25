@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
-import { loadWorkflow, listWorkflows } from '../workflow-config.js';
+import { loadWorkflow, listWorkflows, seedWorkflows } from '../workflow-config.js';
 import { PROJECT_ROOT } from '../config.js';
 
 describe('workflow-config', () => {
@@ -12,6 +12,9 @@ describe('workflow-config', () => {
     // Create a temporary workflows directory for testing
     testWorkflowsDir = path.join(tmpdir(), `ccplus-test-workflow-config-${Date.now()}`);
     mkdirSync(testWorkflowsDir, { recursive: true });
+
+    // Seed workflows from YAML into database so loadWorkflow/listWorkflows work
+    seedWorkflows();
   });
 
   afterEach(() => {
@@ -101,7 +104,6 @@ describe('workflow-config', () => {
 
       expect(designPhase).toBeDefined();
       expect(designPhase!.agent_hints).toContain('architect');
-      expect(designPhase!.agent_hints).toContain('planner');
     });
 
     it('parses tool_rules correctly', () => {

@@ -4,6 +4,7 @@ import { homedir } from 'os';
 import yaml from 'js-yaml';
 import { PROJECT_ROOT } from './config.js';
 import { log } from './logger.js';
+import * as workflowDb from './db/workflows.js';
 
 // ---- TypeScript Interfaces ----
 
@@ -33,6 +34,7 @@ export interface WorkflowConfig {
   phases: WorkflowPhaseConfig[];
   transitions: WorkflowTransition[];
   worktree?: boolean;
+  builtin?: boolean;
 }
 
 // ---- Helper Functions ----
@@ -42,25 +44,17 @@ function parseYamlWorkflow(yamlContent: string): WorkflowConfig {
   if (!raw || typeof raw !== 'object') {
     throw new Error('Invalid workflow YAML: file is empty or not a mapping');
   }
-  const parsed = raw as any;
+  const parsed = raw as Partial<WorkflowConfig>;
 
   // Validate required fields
   if (!parsed.name || !parsed.description || !parsed.default_phase || !parsed.phases || !parsed.transitions) {
     throw new Error('Invalid workflow YAML: missing required fields (name, description, default_phase, phases, transitions)');
   }
 
-  // Validate and transform phases
+  // Validate phases have required fields
   for (const phase of parsed.phases) {
     if (!phase.name || !phase.context || !phase.agent_hints || !phase.tool_rules) {
       throw new Error(`Invalid phase in workflow: missing required fields (name, context, agent_hints, tool_rules)`);
-    }
-
-    // Transform tool_rules: convert 'tool' field to 'tool_name'
-    for (const rule of phase.tool_rules) {
-      if (rule.tool && !rule.tool_name) {
-        rule.tool_name = rule.tool;
-        delete rule.tool;
-      }
     }
   }
 
@@ -103,21 +97,12 @@ function findWorkflowYaml(workflowName: string): string | null {
   return null;
 }
 
-// ---- Public API ----
+// ---- Private Filesystem API (for seeding) ----
 
-export function loadWorkflow(workflowName: string, _workspace?: string): WorkflowConfig {
+function loadWorkflowFromYaml(workflowName: string): WorkflowConfig {
   const yamlPath = findWorkflowYaml(workflowName);
 
   if (!yamlPath) {
-    // If workflow not found by name, try to load 'default' as fallback
-    if (workflowName !== 'default') {
-      log.warn('Workflow not found, falling back to default', { workflowName });
-      const defaultPath = findWorkflowYaml('default');
-      if (!defaultPath) {
-        throw new Error('Default workflow not found. Expected workflow.yaml in .ccplus/workflows/default/ or ~/.ccplus/workflows/default/');
-      }
-      return loadWorkflowFromPath(defaultPath);
-    }
     throw new Error(`Workflow not found: ${workflowName}. Expected workflow.yaml in .ccplus/workflows/${workflowName}/ or ~/.ccplus/workflows/${workflowName}/`);
   }
 
@@ -128,7 +113,7 @@ function loadWorkflowFromPath(yamlPath: string): WorkflowConfig {
   try {
     const yamlContent = readFileSync(yamlPath, 'utf-8');
     const workflow = parseYamlWorkflow(yamlContent);
-    log.info('Loaded workflow', { name: workflow.name, path: yamlPath });
+    log.info('Loaded workflow from YAML', { name: workflow.name, path: yamlPath });
     return workflow;
   } catch (error) {
     log.error('Failed to load workflow', { path: yamlPath, error: String(error) });
@@ -136,15 +121,7 @@ function loadWorkflowFromPath(yamlPath: string): WorkflowConfig {
   }
 }
 
-export function getWorkflowByName(workflowName: string, _workspace?: string): WorkflowConfig | null {
-  try {
-    return loadWorkflow(workflowName, _workspace);
-  } catch {
-    return null;
-  }
-}
-
-export function listWorkflows(_workspace?: string): string[] {
+function listWorkflowsFromYaml(): string[] {
   const workflows = new Set<string>();
 
   // List project-local workflows
@@ -184,6 +161,67 @@ export function listWorkflows(_workspace?: string): string[] {
   }
 
   return Array.from(workflows).sort();
+}
+
+// ---- Public DB-backed API ----
+
+export function seedWorkflows(): void {
+  try {
+    const yamlWorkflowNames = listWorkflowsFromYaml();
+    let seededCount = 0;
+
+    for (const name of yamlWorkflowNames) {
+      try {
+        // Skip if already in database
+        if (workflowDb.workflowExists(name)) {
+          continue;
+        }
+
+        // Load from YAML and insert
+        const workflow = loadWorkflowFromYaml(name);
+        workflowDb.upsertWorkflow(workflow, true);
+        seededCount++;
+        log.info('Seeded workflow from YAML', { name });
+      } catch (error) {
+        log.error('Failed to seed workflow', { name, error: String(error) });
+      }
+    }
+
+    if (seededCount > 0) {
+      log.info('Seeded workflows from YAML files', { count: seededCount });
+    }
+  } catch (error) {
+    // Gracefully handle seeding failures (e.g., in test environments with mocked database)
+    log.warn('Failed to seed workflows', { error: String(error) });
+  }
+}
+
+export function loadWorkflow(workflowName: string, _workspace?: string): WorkflowConfig {
+  const workflow = workflowDb.getWorkflowByName(workflowName);
+
+  if (!workflow) {
+    // If workflow not found by name, try to load 'default' as fallback
+    if (workflowName !== 'default') {
+      log.warn('Workflow not found, falling back to default', { workflowName });
+      const defaultWorkflow = workflowDb.getWorkflowByName('default');
+      if (!defaultWorkflow) {
+        throw new Error('Default workflow not found in database');
+      }
+      return defaultWorkflow;
+    }
+    throw new Error(`Workflow not found: ${workflowName}`);
+  }
+
+  return workflow;
+}
+
+export function getWorkflowByName(workflowName: string, _workspace?: string): WorkflowConfig | null {
+  return workflowDb.getWorkflowByName(workflowName);
+}
+
+export function listWorkflows(_workspace?: string): string[] {
+  const workflows = workflowDb.getAllWorkflows();
+  return workflows.map((w) => w.name).sort();
 }
 
 /**

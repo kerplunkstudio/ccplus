@@ -14,3 +14,4 @@ export * from "./trust.js";
 export * from "./utility.js";
 export * from "./memory-observability.js";
 export * from "./fleet-sessions.js";
+export * from "./workflows.js";
