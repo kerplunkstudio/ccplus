@@ -9,6 +9,14 @@ import {
 } from '../agent-config.js';
 import { log } from '../logger.js';
 
+function normalizeAgent(agent: Awaited<ReturnType<typeof getAgent>>) {
+  if (!agent) return agent;
+  return {
+    ...agent,
+    personality: agent.soulContent || agent.personality || '',
+  };
+}
+
 export function createAgentRoutes(
   app: Express,
   deps: { getWorkspaceForSession: (sessionId?: string) => string },
@@ -20,7 +28,7 @@ export function createAgentRoutes(
     try {
       const workspace = getWorkspaceForSession(req.query.session_id as string | undefined);
       const agents = await loadAllAgents(workspace);
-      res.json({ agents });
+      res.json({ agents: agents.map(normalizeAgent) });
     } catch (err) {
       log.error('Failed to load agents', { error: String(err) });
       res.status(500).json({ error: 'Failed to load agents' });
@@ -40,7 +48,7 @@ export function createAgentRoutes(
         res.status(404).json({ error: 'Agent not found' });
         return;
       }
-      res.json({ agent });
+      res.json({ agent: normalizeAgent(agent) });
     } catch (err) {
       log.error('Failed to get agent', { agentId: req.params.id, error: String(err) });
       res.status(500).json({ error: 'Failed to get agent' });
@@ -72,7 +80,7 @@ export function createAgentRoutes(
         scope === 'global' ? 'global' : 'project',
       );
 
-      res.json({ agent });
+      res.json({ agent: normalizeAgent(agent) });
     } catch (err) {
       log.error('Failed to write agent', { error: String(err) });
       res.status(500).json({ error: 'Failed to write agent' });
