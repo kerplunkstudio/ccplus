@@ -354,7 +354,7 @@ export async function streamQuery(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: await buildSystemPrompt(workspace, prompt, sessionId, agentConfig ?? undefined),
+          append: await buildSystemPrompt(workspace, prompt, sessionId, agentConfig ?? undefined, workflow),
         } as any,
         canUseTool: canUseTool as any,
         maxTurns: effectiveMaxTurns,

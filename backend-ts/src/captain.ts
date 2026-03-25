@@ -6,16 +6,15 @@
  * to the SDK's AsyncIterable prompt interface.
  */
 
-import { query, createSdkMcpServer, tool, type Query } from "@anthropic-ai/claude-agent-sdk";
-import { z } from "zod";
+import { query, createSdkMcpServer, type Query } from "@anthropic-ai/claude-agent-sdk";
 import * as config from "./config.js";
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
-import { startSession } from "./session-api.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
-import { listWorkflows, getWorkflowByName } from './workflow-config.js';
+import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
+import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
 
 // ---- Types ----
 
@@ -74,276 +73,14 @@ let fleetMcpServer: ReturnType<typeof createSdkMcpServer> | null = null;
  * Create the fleet control MCP server with tools for session management.
  */
 function buildFleetMcpServer(dependencies: CaptainDependencies) {
+  const toolDeps: CaptainToolDependencies = {
+    ...dependencies,
+    getLastQuerySource,
+  };
   return createSdkMcpServer({
     name: "fleet-control",
     version: "1.0.0",
-    tools: [
-      // list_sessions - Get all sessions from fleet monitor
-      tool(
-        "list_sessions",
-        "List all active and recent sessions in the fleet with status, tool counts, duration, and workspace information",
-        {},
-        async () => {
-          const fleetState = fleetMonitor.getFleetState();
-          const sessions = fleetState.sessions.map((s: fleetMonitor.FleetSessionInfo) => ({
-            session_id: s.sessionId,
-            status: s.status,
-            workspace: s.workspace,
-            tool_count: s.toolCount,
-            active_agents: s.activeAgents,
-            input_tokens: s.inputTokens,
-            output_tokens: s.outputTokens,
-            duration_ms: s.durationMs,
-            started_at: s.startedAt,
-            last_activity: s.lastActivity,
-            label: s.label,
-            files_touched: s.filesTouched,
-          }));
-
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  sessions,
-                  aggregate: fleetState.aggregate,
-                }, null, 2),
-              },
-            ],
-          };
-        }
-      ),
-
-      // start_session - Start a new coding session
-      tool(
-        "start_session",
-        "Start a new coding session with a specific prompt and workspace. Returns the session_id.",
-        {
-          prompt: z.string().describe("The task prompt for the session"),
-          workspace: z.string().describe("Absolute path to the workspace/project directory"),
-          session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
-          workflow: z.string().describe("REQUIRED. Workflow to use: 'feature', 'bug-fix', 'tdd', 'security-audit', or 'default'. See Workflow Selection section."),
-        },
-        async (args) => {
-          const result = startSession(
-            {
-              prompt: args.prompt,
-              workspace: args.workspace,
-              sessionId: args.session_id,
-              requestedBy: getLastQuerySource() ?? undefined,
-              workflow: args.workflow,
-            },
-            dependencies
-          );
-
-          if (result.success) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: true,
-                    session_id: result.sessionId,
-                    message: `Session ${result.sessionId} started successfully`,
-                  }, null, 2),
-                },
-              ],
-            };
-          } else {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: false,
-                    error: result.error,
-                  }, null, 2),
-                },
-              ],
-            };
-          }
-        }
-      ),
-
-      // get_session_detail - Get conversation history and tool events for a session
-      tool(
-        "get_session_detail",
-        "Get detailed conversation history and tool events for a specific session",
-        {
-          session_id: z.string().describe("The session ID to query"),
-        },
-        async (args) => {
-          try {
-            const messages = dependencies.database.getConversationHistory(args.session_id, 100);
-            const toolEvents = dependencies.database.getToolEvents(args.session_id, 200);
-
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    session_id: args.session_id,
-                    messages: messages.map((m) => ({
-                      role: m.role,
-                      content: (m.content as string).slice(0, 500),
-                      timestamp: m.timestamp,
-                    })),
-                    tool_events: toolEvents.map((t) => ({
-                      tool_name: t.tool_name,
-                      success: t.success,
-                      duration_ms: t.duration_ms,
-                      timestamp: t.timestamp,
-                      agent_type: t.agent_type,
-                    })),
-                  }, null, 2),
-                },
-              ],
-            };
-          } catch (error) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    error: `Failed to get session detail: ${String(error)}`,
-                  }, null, 2),
-                },
-              ],
-            };
-          }
-        }
-      ),
-
-      // cancel_session - Cancel a running session
-      tool(
-        "cancel_session",
-        "Cancel an active session's running query",
-        {
-          session_id: z.string().describe("The session ID to cancel"),
-        },
-        async (args) => {
-          try {
-            dependencies.sdkSession.cancelQuery(args.session_id);
-            fleetMonitor.updateSessionStatus(args.session_id, 'cancelled');
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: true,
-                    message: `Session ${args.session_id} cancellation requested`,
-                  }, null, 2),
-                },
-              ],
-            };
-          } catch (error) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: false,
-                    error: String(error),
-                  }, null, 2),
-                },
-              ],
-            };
-          }
-        }
-      ),
-
-      // resume_session - Send a follow-up message to an existing session
-      tool(
-        "resume_session",
-        "Send a follow-up message to an existing session to continue its work. The session resumes with full conversation context.",
-        {
-          session_id: z.string().describe("The session ID to resume"),
-          prompt: z.string().describe("The follow-up message/instructions"),
-        },
-        async (args) => {
-          const sessionInfo = fleetMonitor.getSessionDetail(args.session_id);
-          if (!sessionInfo) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: false,
-                    error: "Session not found",
-                  }, null, 2),
-                },
-              ],
-            };
-          }
-
-          if (dependencies.sdkSession.isActive(args.session_id)) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: JSON.stringify({
-                    success: false,
-                    error: "Session already has an active query",
-                  }, null, 2),
-                },
-              ],
-            };
-          }
-
-          const callbacks = dependencies.buildSocketCallbacks(args.session_id, sessionInfo.workspace) as any;
-          dependencies.sdkSession.submitQuery(
-            args.session_id,
-            args.prompt,
-            sessionInfo.workspace,
-            callbacks,
-            undefined,
-            undefined,
-            getLastQuerySource() ?? undefined
-          );
-          fleetMonitor.updateSessionStatus(args.session_id, 'running');
-
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  success: true,
-                  session_id: args.session_id,
-                  message: "Session resumed",
-                }, null, 2),
-              },
-            ],
-          };
-        }
-      ),
-
-      // get_fleet_stats - Get aggregate statistics from fleet monitor + database
-      tool(
-        "get_fleet_stats",
-        "Get aggregate fleet statistics including historical data from the database",
-        {},
-        async () => {
-          const fleetState = fleetMonitor.getFleetState();
-          const dbStats = dependencies.database.getStats();
-
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  current_fleet: fleetState.aggregate,
-                  historical: {
-                    total_conversations: dbStats.total_conversations,
-                    total_tool_events: dbStats.total_tool_events,
-                    events_by_tool: dbStats.events_by_tool,
-                  },
-                }, null, 2),
-              },
-            ],
-          };
-        }
-      ),
-    ],
+    tools: buildFleetMcpTools(toolDeps),
   });
 }
 
@@ -361,164 +98,6 @@ function getFleetMcpServer(): ReturnType<typeof createSdkMcpServer> {
   return fleetMcpServer;
 }
 
-// ---- System Prompt ----
-
-/**
- * Build the Captain system prompt with dynamic workflow list
- */
-function buildCaptainSystemPrompt(workspace: string): string {
-  const workflowNames = listWorkflows(workspace);
-  const workflowDescriptions = workflowNames.map(name => {
-    const wf = getWorkflowByName(name, workspace);
-    if (!wf) return null;
-    const description = wf.description || `${name} workflow`;
-    const phases = wf.phases && wf.phases.length > 0
-      ? wf.phases.map(p => p.name).join(' → ')
-      : 'no phases';
-    return `- **${name}** (${description}): ${phases}`;
-  }).filter((s): s is string => s !== null);
-
-  const workflowSection = workflowDescriptions.length > 0
-    ? `\n## Available Workflows\n${workflowDescriptions.join('\n')}\n`
-    : '';
-
-  return CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection;
-}
-
-// ---- Idle Message Filtering ----
-
-/**
- * Patterns to detect idle/noise messages from Captain.
- * These are suppressed to avoid cluttering the chat with "nothing to do" messages.
- */
-const IDLE_MESSAGE_PATTERNS = [
-  /no pending work/i,
-  /what'?s next/i,
-  /no response requested/i,
-  /nothing to do/i,
-  /awaiting (?:your |further )?(?:instructions|input|requests)/i,
-  /standing by/i,
-  /ready for (?:your |the )?next/i,
-  /no (?:new )?tasks/i,
-  /waiting for (?:your |further )?(?:instructions|input|direction)/i,
-];
-
-/**
- * Check if a message is an idle/noise message that should be suppressed.
- * Only applies to short messages (< 120 chars) that match idle patterns.
- */
-function isIdleMessage(text: string): boolean {
-  if (text.length > 120) return false;
-  return IDLE_MESSAGE_PATTERNS.some(pattern => pattern.test(text));
-}
-
-const CAPTAIN_SYSTEM_PROMPT_TEMPLATE = `
-You are Captain, the fleet orchestrator for cc+. Your job is to expand user requests and delegate to sessions — not to research or implement yourself.
-
-## The Golden Rule
-NEVER edit or write files yourself. NEVER use Edit or Write tools directly.
-NEVER use the Agent tool to spawn subagents. You are NOT a coding agent.
-NEVER fix anything yourself — delegate ALL fixes to sessions.
-NEVER research or investigate yourself — delegate ALL research to sessions via start_session.
-ALL work must be delegated to sessions via start_session. No exceptions.
-You CAN use Read, Bash, Glob, and Grep ONLY for checking session output, git state, or fleet status.
-
-## Forbidden Actions (NEVER do these)
-- NEVER spawn Agent subagents — you are Captain, not a coding agent
-- NEVER use Edit, Write, or NotebookEdit tools
-- NEVER run code-modifying Bash commands (sed, awk, echo >, cat <<EOF, patch)
-- NEVER commit to main without explicit user approval first
-- NEVER push to any remote without being explicitly asked
-- NEVER merge branches or worktrees without user consent
-- NEVER fix bugs, type errors, or lint issues yourself — start a session
-- NEVER research code, read files for investigation, or grep for answers yourself — start a session for it
-- If you catch yourself about to do any of these: STOP, tell the user what you were about to do, and ask if they want a session for it
-
-## Your Workflow (always follow this)
-1. **Check memory** — call mcp__memory__memory_search for project context, past decisions, relevant files
-2. **Expand the query** — turn the user's request into a precise, detailed session prompt with:
-   - Exact files to modify (from memory or prior session context)
-   - Acceptance criteria (what "done" looks like)
-   - Constraints (what NOT to change)
-   - Context the session won't have (why this change matters)
-3. **Get approval** — present the session plan to the user and wait for confirmation before starting
-4. **Delegate** — call start_session with the expanded prompt
-5. **Monitor** — watch tool counts and file writes; intervene if stuck (>30 tools, no writes)
-6. **Report** — summarize what the session did when it completes
-
-## Starting Sessions
-- Session IDs must be specific and self-describing. Format: <type>-<component>-<what-changes>. Examples:
-  - "feat-telegram-bridge-voice-transcription"
-  - "fix-captain-ts-cancel-not-terminating"
-  - "refactor-config-ts-captain-model-default"
-  - "fix-fleet-monitor-session-status-update"
-  Bad: "fix-captain-routing-model", "feat-voice", "update-prompt"
-  Good: "fix-captain-ts-source-routing-callbacks", "feat-telegram-bridge-whisper-local"
-- Write precise, detailed prompts. Bad prompt = bad session. Include:
-  - Exact files to modify (paths, not vague references)
-  - Acceptance criteria (what "done" looks like)
-  - Constraints (don't touch X, must be backwards-compatible, etc.)
-  - Context the agent won't have (why this change matters, related recent changes)
-- See Parallelization section below — this is NOT optional
-
-## Workflow Selection (MANDATORY)
-Every session MUST specify a workflow. NEVER omit the workflow parameter. Pick the best match:
-- **feature**: New capabilities, multi-file features, design decisions needed → design → plan → execute → test → review
-- **bug-fix**: Fixing bugs, regressions, failing tests → execute → test → review
-- **tdd**: New functions, modules, APIs where tests should drive design → plan → test → execute → test → review
-- **refactor**: Code cleanup, dead code removal, pattern modernization → plan → test → execute → test → review (NOTE: if this workflow doesn't exist, use default)
-- **security-audit**: Security review, vulnerability remediation → review → execute → test → review
-- **default**: ONLY for trivial one-off tasks that don't fit any category above → execute → review
-
-Decision guide:
-- If user says "fix", "bug", "broken", "not working" → bug-fix
-- If user says "add", "implement", "build", "create" → feature
-- If user says "test first", "TDD" → tdd
-- If user says "security", "audit", "vulnerability" → security-audit
-- If user says "investigate", "research", "check why" → default (research only)
-- When in doubt between feature and bug-fix, pick feature (more phases = safer)
-
-## Parallelization (CRITICAL)
-Before writing a session prompt, decompose the task:
-1. List all subtasks
-2. Identify dependencies between them (does B need A's output?)
-3. If subtasks are independent — launch them as SEPARATE parallel sessions
-4. If subtasks have sequential dependencies — combine into ONE session
-
-Examples:
-- "Refactor database.ts, sdk-session.ts, and server.ts" → 3 sessions (independent files, barrel re-exports preserve API)
-- "Add new DB table then build API routes that query it" → 1 session (routes depend on table)
-- "Fix bug in auth + add feature to settings" → 2 sessions (unrelated)
-- "Update types.ts then update all consumers" → 1 session (consumers depend on type changes)
-
-Cost of under-parallelizing: slower execution, wasted context window
-Cost of over-parallelizing: merge conflicts on shared files
-
-Rule of thumb: if files don't import from each other, parallelize.
-
-## Monitoring & Intervention
-- Sessions with >30 tool calls but no file writes are likely stuck — cancel and retry
-- Sessions running >5 min on simple tasks need investigation
-- Multiple failures on the same task = change approach, not just retry
-- After completion: verify files_touched match what was expected
-
-## Memory
-- ALWAYS search memory before answering questions about projects, past work, or prior sessions
-- Memory is the source of truth for project context — never guess or assume
-
-## MCP Tool Failures
-MCP tools (fleet-control, memory) can fail transiently with "Stream closed", timeout, or connection errors — the server auto-respawns within seconds.
-- **Always retry silently first** — on any MCP tool failure, retry the exact same call once before doing anything else
-- **Do NOT tell the user** about the failure unless the retry also fails
-- **After 2 consecutive failures**: inform the user briefly (e.g. "Fleet control is temporarily unavailable, retrying…") — no panic, no asking them to restart
-- **Never say "crashed" or "dead"** — use neutral language: "temporarily unavailable", "reconnecting"
-
-## Response Style
-- Direct and concise — no filler
-- [TELEGRAM:...] or [DISCORD:...] messages: bullet points, 2-3 lines max, no code blocks unless asked
-- Lead with action or answer, not reasoning
-- When asked about fleet state, call list_sessions first
-`.trim();
 
 // ---- Public API ----
 
@@ -566,6 +145,7 @@ export async function startCaptainSession(
     log.info("Starting Captain session", { sessionId, workspace });
 
     // Start boot query
+    const captainPrompt = await buildCaptainSystemPrompt(workspace);
     const q = query({
       prompt: bootMessage,
       options: {
@@ -575,7 +155,7 @@ export async function startCaptainSession(
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: buildCaptainSystemPrompt(workspace),
+          append: captainPrompt,
         } as any,
         mcpServers: {
           "fleet-control": getFleetMcpServer(),
@@ -789,6 +369,7 @@ async function startCaptainQuery(content: string): Promise<void> {
     }
   }
 
+  const captainPrompt = await buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE);
   const q = query({
     prompt: content,
     options: {
@@ -798,7 +379,7 @@ async function startCaptainQuery(content: string): Promise<void> {
       systemPrompt: {
         type: "preset",
         preset: "claude_code",
-        append: buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE),
+        append: captainPrompt,
       } as any,
       mcpServers: {
         "fleet-control": getFleetMcpServer(),

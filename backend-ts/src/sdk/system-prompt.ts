@@ -5,6 +5,10 @@ import { searchMemories } from '../memory-client.js';
 import { log } from "../logger.js";
 import * as database from '../database.js';
 import type { ResolvedAgent } from '../agent-config.js';
+import { loadAllAgents } from '../agent-config.js';
+import { loadWorkflow } from '../workflow-config.js';
+import { getWorkflowState } from '../workflow-state.js';
+import { formatAgentCatalog, formatWorkflowContext } from '../agent-catalog.js';
 
 // System prompt appended to every SDK session
 const CCPLUS_SYSTEM_PROMPT_BASE = `
@@ -24,47 +28,55 @@ cc+ provides a custom tool for reporting your progress to the UI:
 
 This tool is lightweight and has no side effects. Use it to keep the user informed during longer tasks.
 
-## When to Delegate
-Consider spawning a subagent (Agent tool, typically with subagent_type "code_agent") when:
-- The task spans many files or modules
-- Parallel workstreams would help (e.g., implementing multiple features independently)
-- Verbose tool output would clutter the conversation (e.g., large refactors, build troubleshooting)
-- The work benefits from isolated context (e.g., exploring an unfamiliar codebase section)
+## Your Role
 
-Direct work often works better for:
-- Targeted single-file edits or quick fixes
-- Tasks where you need to see all tool output to guide next steps
-- Iterative refinement across multiple files where context matters
-- Work that requires tight feedback loops with the user
+You are an ORCHESTRATOR. Your primary job is to delegate work to specialized agents via the Agent tool.
 
-When delegating, provide clear autonomy: "You have full autonomy to complete this task. Explore the codebase, implement changes, test, and commit when done."
+For non-trivial tasks:
+1. Spawn the appropriate agent from the catalog below
+2. Provide clear instructions: exact files, acceptance criteria, constraints, and context
+3. Monitor agent output and coordinate follow-up work
 
-## Mandatory Workflow
-
-When starting a feature, refactor, or any non-trivial task, you MUST follow this sequence using superpowers skills:
-
-1. **Plan**: Spawn a planner agent (Agent tool with subagent_type "planner"). The planner MUST use the brainstorming and writing-plans skills.
-2. **Execute**: Spawn code_agent or frontend-agent. They MUST use the executing-plans and test-driven-development skills.
-3. **Review**: Spawn a code-reviewer agent (Agent tool with subagent_type "code-reviewer"). It MUST use the requesting-code-review skill.
-4. **Verify**: All agents MUST use the verification-before-completion skill before claiming work is done.
-
-Do NOT use the native EnterPlanMode tool — always use the planner agent with skills.
-Do NOT skip phases. If the user asks you to "just do it", still plan first.
-
-Exceptions (you may skip planning):
-- Bug fixes touching fewer than 3 files
-- Config-only changes (.env, settings)
-- Documentation-only changes
-
-Exceptions (you may skip review):
-- Config-only changes
-- Documentation-only changes
-- Test-only changes
+Direct work (without delegation) is acceptable ONLY for:
+- Single-file edits under 50 lines
+- Quick config changes
+- Answering questions about the codebase
 `.trim();
 
-export async function buildSystemPrompt(projectPath?: string, userPrompt?: string, sessionId?: string, agent?: ResolvedAgent): Promise<string> {
+export async function buildSystemPrompt(
+  projectPath?: string,
+  userPrompt?: string,
+  sessionId?: string,
+  agent?: ResolvedAgent,
+  workflow?: string
+): Promise<string> {
   const skills = discoverSkills(projectPath);
   let prompt = CCPLUS_SYSTEM_PROMPT_BASE;
+
+  // Inject dynamic agent catalog
+  try {
+    const agents = await loadAllAgents(projectPath ?? process.cwd());
+    const agentCatalog = formatAgentCatalog(agents);
+    if (agentCatalog) {
+      prompt += '\n\n' + agentCatalog;
+    }
+  } catch (error) {
+    log.warn('Failed to load agent catalog for system prompt', { error: String(error) });
+  }
+
+  // Inject workflow context if workflow specified
+  if (workflow && sessionId) {
+    try {
+      const workflowConfig = loadWorkflow(workflow);
+      const workflowState = getWorkflowState(sessionId, workflow);
+      const workflowContext = formatWorkflowContext(workflowConfig, workflowState.phase);
+      if (workflowContext) {
+        prompt += '\n\n' + workflowContext;
+      }
+    } catch (error) {
+      log.warn('Failed to load workflow context for system prompt', { error: String(error) });
+    }
+  }
 
   if (skills.length > 0) {
     const skillLines = skills.map(s => {

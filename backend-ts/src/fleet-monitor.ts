@@ -20,8 +20,13 @@ export interface FleetSessionInfo {
   requestedBy?: { source: string; sourceId: string };
 }
 
+export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
+  workflowPhase?: string;
+  workflowName?: string;
+}
+
 export interface FleetState {
-  sessions: FleetSessionInfo[];
+  sessions: EnrichedFleetSessionInfo[];
   aggregate: {
     totalSessions: number;
     activeSessions: number;
@@ -202,7 +207,7 @@ export function setLabel(sessionId: string, label: string): void {
 export function getFleetState(): FleetState {
   const sessionList = Array.from(sessions.values());
 
-  const enrichedSessions = sessionList.map(session => {
+  const enrichedSessions: EnrichedFleetSessionInfo[] = sessionList.map(session => {
     if (session.status === 'running') {
       const workflowState = getWorkflowState(session.sessionId);
       return {
