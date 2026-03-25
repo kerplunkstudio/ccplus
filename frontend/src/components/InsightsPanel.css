@@ -1368,7 +1368,6 @@
 
 /* === Loading and error states === */
 
-.insights-loading,
 .insights-error {
   display: flex;
   align-items: center;
@@ -1376,11 +1375,189 @@
   height: 100%;
   font-family: var(--font-sans);
   font-size: var(--text-base);
-  color: var(--text-secondary);
+  color: var(--error);
 }
 
-.insights-error {
-  color: var(--error);
+/* === Skeleton Loading States === */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.insights-skeleton-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  animation: fadeIn 0.3s var(--ease-default);
+}
+
+.insights-skeleton-hero-number {
+  height: 4rem;
+  width: 40%;
+  min-width: 200px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-radius: var(--radius-md);
+}
+
+.insights-skeleton-hero-label {
+  height: 1.5rem;
+  width: 60%;
+  min-width: 280px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  animation-delay: 0.1s;
+  border-radius: var(--radius-sm);
+}
+
+.insights-skeleton-hero-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+  animation: fadeIn 0.4s var(--ease-default);
+}
+
+.insights-skeleton-stat {
+  height: 1rem;
+  width: 120px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.insights-skeleton-stat:nth-child(1) {
+  animation-delay: 0.15s;
+}
+
+.insights-skeleton-stat:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.insights-skeleton-stat:nth-child(3) {
+  animation-delay: 0.25s;
+}
+
+.insights-skeleton-stat:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+.insights-skeleton-efficiency {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-xl);
+  animation: fadeIn 0.5s var(--ease-default);
+}
+
+.insights-skeleton-efficiency-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.insights-skeleton-efficiency-label {
+  height: 0.875rem;
+  width: 70%;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.insights-skeleton-efficiency-card:nth-child(1) .insights-skeleton-efficiency-label {
+  animation-delay: 0.35s;
+}
+
+.insights-skeleton-efficiency-card:nth-child(2) .insights-skeleton-efficiency-label {
+  animation-delay: 0.4s;
+}
+
+.insights-skeleton-efficiency-card:nth-child(3) .insights-skeleton-efficiency-label {
+  animation-delay: 0.45s;
+}
+
+.insights-skeleton-efficiency-value {
+  height: 2rem;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.insights-skeleton-efficiency-card:nth-child(1) .insights-skeleton-efficiency-value {
+  animation-delay: 0.4s;
+}
+
+.insights-skeleton-efficiency-card:nth-child(2) .insights-skeleton-efficiency-value {
+  animation-delay: 0.45s;
+}
+
+.insights-skeleton-efficiency-card:nth-child(3) .insights-skeleton-efficiency-value {
+  animation-delay: 0.5s;
+}
+
+.insights-skeleton-chart {
+  height: 320px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    #f0eeeb 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  animation-delay: 0.55s;
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-lg);
+}
+
+.insights-skeleton-chart-secondary {
+  animation-delay: 0.7s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* === Empty state === */

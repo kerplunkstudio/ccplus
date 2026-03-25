@@ -122,7 +122,9 @@ describe('InsightsPanel', () => {
 
     render(<InsightsPanel />);
 
-    expect(screen.getByText('Loading insights...')).toBeInTheDocument();
+    // Loading state shows skeleton with "Insights" title
+    expect(screen.getByText('Insights')).toBeInTheDocument();
+    expect(document.querySelector('.insights-skeleton-hero')).toBeInTheDocument();
   });
 
   it('renders insights data successfully', async () => {
@@ -134,8 +136,9 @@ describe('InsightsPanel', () => {
 
     render(<InsightsPanel />);
 
+    // Wait for data to load (skeleton should be gone)
     await waitFor(() => {
-      expect(screen.getByText('Insights')).toBeInTheDocument();
+      expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
     });
 
     expect(screen.getByText('1.3k')).toBeInTheDocument(); // total_queries formatted
@@ -358,8 +361,8 @@ describe('InsightsPanel', () => {
 
     render(<InsightsPanel />);
 
-    // Should show cached data immediately without loading state
-    expect(screen.queryByText('Loading insights...')).not.toBeInTheDocument();
+    // Should show cached data immediately without skeleton loading state
+    expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
     expect(screen.getByText('Insights')).toBeInTheDocument();
   });
 

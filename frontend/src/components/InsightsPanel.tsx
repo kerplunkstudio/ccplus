@@ -317,7 +317,46 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
     return (
       <div className="insights-panel">
         <div className="insights-container">
-          <div className="insights-loading">Loading insights...</div>
+          {/* Header with real title */}
+          <div className="insights-header">
+            <h1 className="insights-title">Insights</h1>
+          </div>
+
+          {/* Skeleton Hero Section */}
+          <div className="insights-skeleton-hero">
+            <div className="insights-skeleton-hero-number" />
+            <div className="insights-skeleton-hero-label" />
+          </div>
+
+          {/* Skeleton Hero Stats Row */}
+          <div className="insights-skeleton-hero-stats">
+            <div className="insights-skeleton-stat" />
+            <div className="insights-skeleton-stat" />
+            <div className="insights-skeleton-stat" />
+            <div className="insights-skeleton-stat" />
+          </div>
+
+          {/* Skeleton Efficiency Metrics */}
+          <div className="insights-skeleton-efficiency">
+            <div className="insights-skeleton-efficiency-card">
+              <div className="insights-skeleton-efficiency-label" />
+              <div className="insights-skeleton-efficiency-value" />
+            </div>
+            <div className="insights-skeleton-efficiency-card">
+              <div className="insights-skeleton-efficiency-label" />
+              <div className="insights-skeleton-efficiency-value" />
+            </div>
+            <div className="insights-skeleton-efficiency-card">
+              <div className="insights-skeleton-efficiency-label" />
+              <div className="insights-skeleton-efficiency-value" />
+            </div>
+          </div>
+
+          <div className="insights-divider" />
+
+          {/* Skeleton Charts */}
+          <div className="insights-skeleton-chart" />
+          <div className="insights-skeleton-chart insights-skeleton-chart-secondary" />
         </div>
       </div>
     );
