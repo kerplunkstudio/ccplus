@@ -131,7 +131,9 @@ function AppContent() {
   const [openPageTabs, setOpenPageTabs] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('ccplus_open_page_tabs');
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed.filter((x: unknown): x is string => typeof x === 'string') : [];
     } catch {
       return [];
     }
@@ -330,25 +332,46 @@ function AppContent() {
     setShowDashboard(false);
   }, [workspace]);
 
-  const handleCloseTabInActiveProject = useCallback((sessionId: string) => {
-    if (!activeProject) return;
-    const remainingTabs = activeProject.tabs.filter(t => t.sessionId !== sessionId);
-    workspace.closeTab(activeProject.path, sessionId);
-    // If no remaining session tabs and no page tabs are open, go to captain
-    if (remainingTabs.length === 0 && openPageTabs.length === 0) {
-      setActivePage('captain');
-    }
-  }, [workspace, activeProject, openPageTabs]);
+  // Select the tab to the left of a session tab being closed
+  const selectLeftOfSessionTab = useCallback((closedSessionId: string) => {
+    // Build the full visual tab order: captain → page tabs → session tabs
+    const sessionTabs = workspace.state.projects.flatMap(project =>
+      project.tabs.map(tab => ({ sessionId: tab.sessionId, projectPath: project.path }))
+    );
+    const idx = sessionTabs.findIndex(t => t.sessionId === closedSessionId);
 
-  const handleCloseTab = useCallback((projectPath: string, sessionId: string) => {
-    const project = workspace.state.projects.find(p => p.path === projectPath);
-    const remainingTabs = project ? project.tabs.filter(t => t.sessionId !== sessionId) : [];
-    workspace.closeTab(projectPath, sessionId);
-    // If no remaining session tabs and no page tabs are open, go to captain
-    if (remainingTabs.length === 0 && openPageTabs.length === 0) {
+    if (idx > 0) {
+      // Left neighbor is another session tab
+      const left = sessionTabs[idx - 1];
+      workspace.selectProject(left.projectPath);
+      workspace.selectTab(left.projectPath, left.sessionId);
+      setActivePage(null);
+      setShowDashboard(false);
+    } else if (openPageTabs.length > 0) {
+      // No session tab to the left — go to last page tab
+      setActivePage(openPageTabs[openPageTabs.length - 1]);
+    } else {
       setActivePage('captain');
     }
   }, [workspace, openPageTabs]);
+
+  const handleCloseTabInActiveProject = useCallback((sessionId: string) => {
+    if (!activeProject) return;
+    const isActive = activeProject.activeTabId === sessionId;
+    if (isActive) {
+      selectLeftOfSessionTab(sessionId);
+    }
+    workspace.closeTab(activeProject.path, sessionId);
+  }, [workspace, activeProject, selectLeftOfSessionTab]);
+
+  const handleCloseTab = useCallback((projectPath: string, sessionId: string) => {
+    const project = workspace.state.projects.find(p => p.path === projectPath);
+    const isActive = project?.activeTabId === sessionId && projectPath === workspace.state.activeProjectPath && !activePage;
+    if (isActive) {
+      selectLeftOfSessionTab(sessionId);
+    }
+    workspace.closeTab(projectPath, sessionId);
+  }, [workspace, activePage, selectLeftOfSessionTab]);
 
   const handleSelectTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
@@ -435,24 +458,30 @@ function AppContent() {
   }, [openPageTabs]);
 
   const handleNavigate = useCallback((page: string) => {
-    // Add page to openPageTabs if not already there
-    setOpenPageTabs(prev => {
-      if (!prev.includes(page)) {
-        return [...prev, page];
+    // If already active, close it and select tab to the left
+    setActivePage(prev => {
+      if (prev === page) {
+        const idx = openPageTabs.indexOf(page);
+        setOpenPageTabs(tabs => tabs.filter(p => p !== page));
+        return idx > 0 ? openPageTabs[idx - 1] : 'captain';
       }
-      return prev;
+      // Otherwise open it
+      setOpenPageTabs(tabs => tabs.includes(page) ? tabs : [...tabs, page]);
+      return page;
     });
-    // Set as active page
-    setActivePage(page);
     setShowDashboard(false);
-  }, []);
+  }, [openPageTabs]);
 
   const handleClosePageTab = useCallback((page: string) => {
-    // Remove from openPageTabs
+    setActivePage(prev => {
+      if (prev !== page) return prev;
+      // Select the tab to the left of this page tab
+      const idx = openPageTabs.indexOf(page);
+      if (idx > 0) return openPageTabs[idx - 1];
+      return 'captain';
+    });
     setOpenPageTabs(prev => prev.filter(p => p !== page));
-    // If it was the active page, switch to captain
-    setActivePage(prev => prev === page ? 'captain' : prev);
-  }, []);
+  }, [openPageTabs]);
 
   const handleSelectPageTab = useCallback((page: string) => {
     setActivePage(page);
@@ -698,7 +727,7 @@ function AppContent() {
               ) : shouldShowCaptain ? (
                 <CaptainDashboard socket={socket} captainState={captainState} onSessionClick={handleFleetSessionClick} />
               ) : shouldShowSettings ? (
-                <SettingsPage onClose={() => setActivePage(null)} />
+                <SettingsPage onClose={() => handleClosePageTab('settings')} />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard
