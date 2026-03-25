@@ -618,6 +618,15 @@ function AppContent() {
   }, [toggleDrawer]);
 
 
+  // Build flat list of all tabs across all projects, with project name as label
+  const allTabs = workspace.state.projects.flatMap(project =>
+    project.tabs.map(tab => ({
+      ...tab,
+      label: project.name,  // Use project name as tab label
+      projectPath: project.path,  // Ensure projectPath is set
+    }))
+  );
+
   const hasProjects = workspace.state.projects.length > 0;
   const shouldShowWelcome = isFirstRun && !hasProjects && !checkingFirstRun;
   const hasTabs = activeProject && activeProject.tabs.length > 0;
@@ -713,21 +722,35 @@ function AppContent() {
       </div>
 
       <div className="panel-main">
-        {activeProject && (
+        {workspace.state.projects.length > 0 && (
           <TabBar
-            tabs={activeProject.tabs}
-            activeTabId={activePage === 'captain' ? '' : activeProject.activeTabId}
+            tabs={allTabs}
+            activeTabId={activePage === 'captain' ? '' : (activeTab?.sessionId || '')}
             isCaptainActive={activePage === 'captain'}
             onCaptainClick={() => setActivePage('captain')}
             onSelectTab={(sessionId) => {
-              setActivePage(null);
-              handleSelectTabInActiveProject(sessionId);
+              // Find which project this tab belongs to
+              const tab = allTabs.find(t => t.sessionId === sessionId);
+              if (tab && tab.projectPath) {
+                setActivePage(null);
+                handleSelectTab(tab.projectPath, sessionId);
+              }
             }}
             onNewTab={handleNewTab}
             onNewTerminalTab={handleNewTerminalTab}
-            onCloseTab={handleCloseTabInActiveProject}
+            onCloseTab={(sessionId) => {
+              const tab = allTabs.find(t => t.sessionId === sessionId);
+              if (tab && tab.projectPath) {
+                handleCloseTab(tab.projectPath, sessionId);
+              }
+            }}
             onReopenTab={workspace.reopenTab}
-            onCloseOtherTabs={(sessionId) => workspace.closeOtherTabs(activeProject.path, sessionId)}
+            onCloseOtherTabs={(sessionId) => {
+              const tab = allTabs.find(t => t.sessionId === sessionId);
+              if (tab && tab.projectPath) {
+                workspace.closeOtherTabs(tab.projectPath, sessionId);
+              }
+            }}
             onDuplicateTab={handleDuplicateTab}
             onRenameTab={handleRenameTab}
             hasClosedTabs={workspace.hasClosedTabs}
