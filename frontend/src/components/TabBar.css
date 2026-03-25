@@ -37,6 +37,7 @@
   transition: color var(--transition-normal);
   border-bottom: 1px solid transparent;
   max-width: 180px;
+  user-select: none;
 }
 
 .tab-captain {
@@ -86,6 +87,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 140px;
+  user-select: none;
 }
 
 .tab-rename-input {

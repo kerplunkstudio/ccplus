@@ -167,7 +167,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           return {
             ...project,
             tabs: [],
-            activeTabId: '',
+            activeTabId: 'captain',
             tabMruOrder: [],
           };
         }

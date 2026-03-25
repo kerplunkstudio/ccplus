@@ -222,7 +222,7 @@ const TabBar: React.FC<TabBarProps> = ({
         {tabs.map((tab) => {
           const isActive = tab.sessionId === activeTabId;
           const showActivity = tab.isStreaming || tab.hasRunningAgent;
-          const showClose = !isActive || !isOnlyTab;
+          const showClose = true;
 
           const isBrowserTab = tab.type === 'browser';
           const isTerminalTab = tab.type === 'terminal';
