@@ -12,15 +12,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research the codebase.'
   - name: test
     context: |
       Write failing tests first (RED phase). Cover unit, integration, and E2E as appropriate.
@@ -54,11 +54,11 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'
 transitions:
   - from: plan
     to: test

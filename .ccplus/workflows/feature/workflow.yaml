@@ -31,15 +31,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Design phase: use Read, Grep, and Glob to explore. Present approach options to the user.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Design phase: use Read, Grep, and Glob to explore. Present approach options to the user.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: ''
+        message: 'Design phase: use Read, Grep, and Glob to explore the codebase.'
   - name: plan
     context: >
       Write a detailed step-by-step implementation plan. Include file paths,
@@ -52,15 +52,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: ''
+        message: 'Plan phase: use Read, Grep, and Glob to research the codebase.'
   - name: execute
     context: >
       Implement the feature following the approved plan. Write clean, tested,
@@ -96,8 +96,8 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'

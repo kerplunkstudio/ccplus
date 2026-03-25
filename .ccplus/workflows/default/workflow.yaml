@@ -21,11 +21,11 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Review phase: report findings with file:line references.'
 transitions:
   - from: execute
     to: review

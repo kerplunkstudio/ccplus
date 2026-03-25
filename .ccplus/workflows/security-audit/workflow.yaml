@@ -13,15 +13,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Audit phase: document vulnerabilities with severity ratings. Do not modify code.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Audit phase: document vulnerabilities with severity ratings. Do not modify code.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: ''
+        message: 'Audit phase: use Read, Grep, and Glob for investigation.'
   - name: execute
     context: |
       Remediate the security findings identified in the audit phase.
@@ -48,15 +48,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: ''
+        message: 'Signoff phase: verify remediations with Read, Grep, and Glob.'
       - tool_name: Write
         action: block
         conditions: []
-        message: ''
+        message: 'Signoff phase: verify remediations with Read, Grep, and Glob.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: ''
+        message: 'Signoff phase: use Read, Grep, and Glob to verify fixes.'
 transitions:
   - from: audit
     to: execute
