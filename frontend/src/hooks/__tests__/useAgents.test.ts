@@ -32,8 +32,7 @@ describe('useAgents', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        success: true,
-        data: { agents: mockAgents },
+        agents: mockAgents,
       }),
     });
 
@@ -94,8 +93,7 @@ describe('useAgents', () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => ({
-        success: true,
-        data: { agents: mockAgents },
+        agents: mockAgents,
       }),
     });
 
@@ -116,8 +114,7 @@ describe('useAgents', () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        success: true,
-        data: { agents: [] },
+        agents: [],
       }),
     });
 

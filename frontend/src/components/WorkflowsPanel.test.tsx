@@ -164,8 +164,8 @@ describe('WorkflowsPanel', () => {
 
     fireEvent.click(screen.getByText('view'));
 
-    // Should NOT show Agent Library
-    expect(screen.queryByText('Agent Library')).not.toBeInTheDocument();
+    // Agent Library should still be visible for builtin workflows
+    expect(screen.getByText('Agent Library')).toBeInTheDocument();
   });
 
   it('removes agent from phase when clicking remove button', () => {
@@ -246,7 +246,7 @@ describe('WorkflowsPanel', () => {
     expect(editorInput).toBeInTheDocument();
 
     // Should show context textarea
-    expect(screen.getByPlaceholderText('Optional context for this phase')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Optional context for this phase — injected into the agent system prompt')).toBeInTheDocument();
   });
 
   it('displays rule count in phase card header', () => {
