@@ -1,15 +1,11 @@
 import type { Express, Request, Response } from "express";
 import * as config from "../config.js";
 import { log } from "../logger.js";
+import type { RouteDependencies } from "./types.js";
 
-export function createDataRoutes(
-  app: Express,
-  deps: {
-    database: any;
-    sdkSession: any;
-  }
-): void {
+export function createDataRoutes(app: Express, deps: RouteDependencies): void {
   const { database, sdkSession } = deps;
+  if (!database || !sdkSession) throw new Error("Missing required dependencies");
 
   app.get("/api/history/:sessionId", (req: Request, res: Response) => {
     try {

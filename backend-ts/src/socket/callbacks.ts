@@ -1,5 +1,6 @@
 import type { Server as SocketIOServer } from "socket.io";
 import { eventLog } from "../event-log.js";
+import type { RouteDependencies } from "../routes/types.js";
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 // CRITICAL: All emissions MUST use io.to(sessionId).emit() (room-based, not socket-based)
@@ -9,13 +10,10 @@ import { eventLog } from "../event-log.js";
 export function buildSocketCallbacks(
   sessionId: string,
   projectPath: string | undefined,
-  deps: {
-    io: SocketIOServer;
-    database: any;
-    log: any;
-  }
+  deps: RouteDependencies
 ) {
   const { io, database, log } = deps;
+  if (!io || !database || !log) throw new Error("Missing required dependencies");
 
   return {
     onText: (text: string, messageIndex: number) => {

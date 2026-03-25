@@ -187,44 +187,50 @@ export function scanClaudeProjects(): ScannedProject[] {
     return [];
   }
 
-  const projects: ScannedProject[] = [];
   const folderNames = fs.readdirSync(claudeProjectsDir);
 
-  for (const folderName of folderNames) {
-    const folderPath = path.join(claudeProjectsDir, folderName);
-    const stat = fs.statSync(folderPath);
+  const projects = folderNames
+    .map((folderName) => {
+      const folderPath = path.join(claudeProjectsDir, folderName);
+      const stat = fs.statSync(folderPath);
 
-    if (!stat.isDirectory()) {
-      continue;
-    }
-
-    const projectPath = decodeFolderPath(folderName);
-    const sessions: Array<{ filePath: string; sessionId: string }> = [];
-
-    const files = fs.readdirSync(folderPath);
-    for (const file of files) {
-      const filePath = path.join(folderPath, file);
-      const fileStat = fs.statSync(filePath);
-
-      // Skip directories (including subagents/)
-      if (fileStat.isDirectory()) {
-        continue;
+      if (!stat.isDirectory()) {
+        return null;
       }
 
-      // Match UUID pattern before .jsonl
-      if (file.endsWith('.jsonl')) {
-        const sessionId = file.replace('.jsonl', '');
-        // Basic UUID validation (8-4-4-4-12 hex pattern)
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
-          sessions.push({ filePath, sessionId });
-        }
-      }
-    }
+      const projectPath = decodeFolderPath(folderName);
+      const files = fs.readdirSync(folderPath);
 
-    if (sessions.length > 0) {
-      projects.push({ folderName, projectPath, sessions });
-    }
-  }
+      const sessions = files
+        .map((file) => {
+          const filePath = path.join(folderPath, file);
+          const fileStat = fs.statSync(filePath);
+
+          // Skip directories (including subagents/)
+          if (fileStat.isDirectory()) {
+            return null;
+          }
+
+          // Match UUID pattern before .jsonl
+          if (file.endsWith('.jsonl')) {
+            const sessionId = file.replace('.jsonl', '');
+            // Basic UUID validation (8-4-4-4-12 hex pattern)
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)) {
+              return { filePath, sessionId };
+            }
+          }
+
+          return null;
+        })
+        .filter((session): session is { filePath: string; sessionId: string } => session !== null);
+
+      if (sessions.length > 0) {
+        return { folderName, projectPath, sessions };
+      }
+
+      return null;
+    })
+    .filter((project): project is ScannedProject => project !== null);
 
   return projects;
 }
@@ -261,9 +267,10 @@ export function importSessions(): ImportResult {
         // Check file size
         const stat = fs.statSync(session.filePath);
         if (stat.size > MAX_FILE_SIZE) {
-          result.errors.push(
+          result.errors = [
+            ...result.errors,
             `Skipped ${session.sessionId}: file size ${stat.size} exceeds 100MB limit`
-          );
+          ];
           result.sessionsSkipped++;
           continue;
         }
@@ -385,7 +392,10 @@ export function importSessions(): ImportResult {
       } catch (error) {
         const errorMsg =
           error instanceof Error ? error.message : 'Unknown error';
-        result.errors.push(`Failed to import ${session.sessionId}: ${errorMsg}`);
+        result.errors = [
+          ...result.errors,
+          `Failed to import ${session.sessionId}: ${errorMsg}`
+        ];
         result.sessionsSkipped++;
       }
     }

@@ -28,30 +28,32 @@ export function createFilesystemRoutes(app: Express): void {
     }
 
     const parentPath = currentPath !== homeDir ? path.dirname(currentPath) : null;
-    const entries: Record<string, unknown>[] = [];
 
     try {
-      for (const name of readdirSync(currentPath).sort()) {
-        if (name.startsWith(".")) continue;
-        const fullPath = path.join(currentPath, name);
-        try {
-          if (!statSync(fullPath).isDirectory()) continue;
-        } catch {
-          continue;
-        }
-        entries.push({
-          name,
-          path: fullPath,
-          is_dir: true,
-          is_git: existsSync(path.join(fullPath, ".git")),
-        });
-      }
+      const entries = readdirSync(currentPath)
+        .sort()
+        .filter((name) => !name.startsWith("."))
+        .map((name) => {
+          const fullPath = path.join(currentPath, name);
+          try {
+            if (!statSync(fullPath).isDirectory()) return null;
+            return {
+              name,
+              path: fullPath,
+              is_dir: true,
+              is_git: existsSync(path.join(fullPath, ".git")),
+            };
+          } catch {
+            return null;
+          }
+        })
+        .filter((entry): entry is { name: string; path: string; is_dir: boolean; is_git: boolean } => entry !== null);
+
+      res.json({ path: currentPath, parent: parentPath, entries });
     } catch {
       res.status(403).json({ error: "Permission denied" });
       return;
     }
-
-    res.json({ path: currentPath, parent: parentPath, entries });
   });
 
   app.get("/api/path-complete", (req: Request, res: Response) => {
@@ -119,48 +121,37 @@ export function createFilesystemRoutes(app: Express): void {
     }
 
     // Read directory entries
-    const entries: Array<{ name: string; path: string; isDir: boolean }> = [];
     try {
       const items = readdirSync(dirToList);
 
-      for (const name of items) {
-        // Skip hidden files by default
-        if (name.startsWith(".")) continue;
+      const entries = items
+        .filter((name) => !name.startsWith("."))
+        .filter((name) => !filePrefix || name.toLowerCase().startsWith(filePrefix.toLowerCase()))
+        .map((name) => {
+          const fullPath = path.join(dirToList, name);
+          try {
+            const stat = statSync(fullPath);
+            return {
+              name: stat.isDirectory() ? `${name}/` : name,
+              path: fullPath,
+              isDir: stat.isDirectory(),
+            };
+          } catch {
+            return null;
+          }
+        })
+        .filter((entry): entry is { name: string; path: string; isDir: boolean } => entry !== null)
+        .slice(0, 20)
+        .sort((a, b) => {
+          if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
 
-        // Filter by prefix
-        if (filePrefix && !name.toLowerCase().startsWith(filePrefix.toLowerCase())) {
-          continue;
-        }
-
-        const fullPath = path.join(dirToList, name);
-        try {
-          const stat = statSync(fullPath);
-          entries.push({
-            name: stat.isDirectory() ? `${name}/` : name,
-            path: fullPath,
-            isDir: stat.isDirectory(),
-          });
-
-          // Limit results
-          if (entries.length >= 20) break;
-        } catch {
-          // Skip inaccessible entries
-          continue;
-        }
-      }
-
-      // Sort: directories first, then alphabetically
-      entries.sort((a, b) => {
-        if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-
+      res.json({ entries, basePath: dirToList });
     } catch {
       // Permission denied or other error
       res.json({ entries: [], basePath: dirToList });
       return;
     }
-
-    res.json({ entries, basePath: dirToList });
   });
 }

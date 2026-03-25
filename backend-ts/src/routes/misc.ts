@@ -1,23 +1,16 @@
-import type { Express, Request, Response, Router } from "express";
+import type { Express, Request, Response } from "express";
 import { getAllMcpServers, addMcpServer, removeMcpServer, type McpServerConfig } from "../mcp-config.js";
 import { getWorkflowState, skipToPhase, type WorkflowPhase } from "../workflow-state.js";
 import { WORKFLOW_ENABLED } from "../config.js";
-import type { Server as SocketIOServer } from "socket.io";
 import { fetchDiscoveredServers } from '../mcp-discovery.js';
+import type { RouteDependencies } from "./types.js";
 
 // Exported for testing — prevents tests from duplicating (and potentially diverging from) production validation
 export const SAFE_PACKAGE_NAME_RE = /^@?[a-zA-Z0-9][a-zA-Z0-9._\-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._\-]*)?$/;
 
-export function createMiscRoutes(
-  app: Express,
-  deps: {
-    sdkSession: any;
-    io: SocketIOServer;
-    fleetMonitor: any;
-    captainRouter: Router;
-  }
-): void {
+export function createMiscRoutes(app: Express, deps: RouteDependencies): void {
   const { sdkSession, io, fleetMonitor, captainRouter } = deps;
+  if (!sdkSession || !io || !fleetMonitor || !captainRouter) throw new Error("Missing required dependencies");
 
   // -- Plugins (stub) --
 

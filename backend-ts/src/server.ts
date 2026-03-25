@@ -267,27 +267,27 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   // 2. Stop accepting new connections
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));
-  console.log("HTTP server closed");
+  log.info("HTTP server closed");
 
   // 3. Close all active Socket.IO connections
   await new Promise<void>((resolve) => io.close(() => resolve()));
-  console.log("Socket.IO server closed");
+  log.info("Socket.IO server closed");
 
   // 4. Close database connection
   database.close();
-  console.log("Database closed");
+  log.info("Database closed");
 
   // 5. Remove PID file
   removePidFile();
 
   // 6. Exit
-  console.log("Shutdown complete");
+  log.info("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
 }
 
 process.on("uncaughtException", (err) => {
-  console.error("[server] Uncaught exception (not crashing):", err);
+  log.error("Uncaught exception (not crashing)", { error: String(err) });
 });
 
 process.on("unhandledRejection", (reason) => {
@@ -295,7 +295,7 @@ process.on("unhandledRejection", (reason) => {
   if (reasonStr.includes("ProcessTransport is not ready for writing")) {
     return;
   }
-  console.error("[server] Unhandled rejection (not crashing):", reason);
+  log.error("Unhandled rejection (not crashing)", { reason: String(reason) });
 });
 
 process.on("SIGTERM", () => { gracefulShutdown("SIGTERM").catch((err) => { log.error("Shutdown error", { error: String(err) }); process.exit(1); }); });
@@ -355,7 +355,7 @@ httpServer.listen(config.PORT, config.HOST, () => {
   // Seed workflows from YAML files into database (on server start)
   seedWorkflows();
 
-  console.log(`ccplus server listening on http://${config.HOST}:${config.PORT}`);
+  log.info("Server ready", { url: `http://${config.HOST}:${config.PORT}` });
   scheduler.start();
 
   // Auto-start Captain if enabled

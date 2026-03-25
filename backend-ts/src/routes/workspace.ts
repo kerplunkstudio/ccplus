@@ -1,12 +1,9 @@
 import type { Express, Request, Response } from "express";
+import type { RouteDependencies } from "./types.js";
 
-export function createWorkspaceRoutes(
-  app: Express,
-  deps: {
-    database: any;
-  }
-): void {
+export function createWorkspaceRoutes(app: Express, deps: RouteDependencies): void {
   const { database } = deps;
+  if (!database) throw new Error("Missing required dependencies");
 
   app.get("/api/workspace", (_req: Request, res: Response) => {
     const state = database.getWorkspaceState("local");

@@ -1,23 +1,21 @@
 import type { Server as SocketIOServer, Socket } from "socket.io";
-import type { SessionCallbacks } from "../sdk-session.js";
 import { eventLog } from "../event-log.js";
 import { log } from "../logger.js";
 import { validateCronExpression, type Scheduler } from "../scheduler.js";
+import type { RouteDependencies } from "../routes/types.js";
+
 // Helper: Join a session room and sync state
 function joinSession(
   socket: Socket,
   sessionId: string,
   userId: string,
   lastSeq: number,
-  deps: {
-    connectedClients: Map<string, { session_id: string; sessions: Set<string> }>;
-    sdkSession: any;
-    database: any;
-    getWorkspaceForSession: (sessionId: string | undefined) => string;
-    buildSocketCallbacks: (sessionId: string, projectPath?: string) => SessionCallbacks;
-  }
+  deps: RouteDependencies
 ): void {
   const { connectedClients, sdkSession, database, getWorkspaceForSession, buildSocketCallbacks } = deps;
+  if (!connectedClients || !sdkSession || !database || !getWorkspaceForSession || !buildSocketCallbacks) {
+    throw new Error("Missing required dependencies");
+  }
 
   // Check if full reset is required (client is too far behind)
   if (lastSeq > 0 && eventLog.fullResetRequired(sessionId, lastSeq)) {
@@ -88,18 +86,16 @@ function joinSession(
 
 export function setupSocketHandlers(
   io: SocketIOServer,
-  deps: {
-    connectedClients: Map<string, { session_id: string; sessions: Set<string> }>;
-    database: any;
-    sdkSession: any;
+  deps: RouteDependencies & {
     ptyService: any;
     captain: any;
     scheduler: Scheduler;
-    getWorkspaceForSession: (sessionId: string | undefined) => string;
-    buildSocketCallbacks: (sessionId: string, projectPath?: string) => SessionCallbacks;
   }
 ): void {
   const { connectedClients, database, sdkSession, ptyService, captain, scheduler, getWorkspaceForSession, buildSocketCallbacks } = deps;
+  if (!connectedClients || !database || !sdkSession || !getWorkspaceForSession || !buildSocketCallbacks) {
+    throw new Error("Missing required dependencies");
+  }
 
   io.on("connection", (socket) => {
     const sessionId = (socket.handshake.auth.session_id as string) ?? "";

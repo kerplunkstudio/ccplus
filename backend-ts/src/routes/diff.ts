@@ -1,28 +1,27 @@
 import type { Express, Request, Response } from 'express';
 import { isGitRepo, getGitDiff, commitChanges, discardChanges } from '../git-operations.js';
 import { getFleetSession } from '../db/fleet-sessions.js';
+import type { RouteDependencies } from "./types.js";
 
-export function createDiffRoutes(
-  app: Express,
-  deps: {
-    sessionWorkspaces: Map<string, string>;
-    sdkSession: any;
-    log: any;
-  }
-): void {
+export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
   const { sessionWorkspaces, sdkSession, log } = deps;
+  if (!sessionWorkspaces || !sdkSession || !log) throw new Error("Missing required dependencies");
+
+  // Create local non-null references for closure capture
+  const workspaceMap = sessionWorkspaces;
+  const sessionManager = sdkSession;
 
   /**
    * Helper: Look up workspace for a session
    */
   function getWorkspace(sessionId: string): string | null {
     // First check in-memory sessionWorkspaces map
-    if (sessionWorkspaces.has(sessionId)) {
-      return sessionWorkspaces.get(sessionId)!;
+    if (workspaceMap.has(sessionId)) {
+      return workspaceMap.get(sessionId)!;
     }
 
     // Check active sessions
-    const activeSessions = sdkSession.getActiveSessions?.() ?? [];
+    const activeSessions = sessionManager.getActiveSessions?.() ?? [];
     const activeSession = activeSessions.find((s: any) => s.sessionId === sessionId);
     if (activeSession?.workspace) {
       return activeSession.workspace;

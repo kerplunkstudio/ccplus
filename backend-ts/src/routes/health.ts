@@ -1,17 +1,11 @@
 import type { Express, Request, Response } from "express";
 import { execFileSync } from "child_process";
 import * as config from "../config.js";
+import type { RouteDependencies } from "./types.js";
 
-export function createHealthRoutes(
-  app: Express,
-  deps: {
-    database: any;
-    sdkSession: any;
-    connectedClients: Map<string, { session_id: string; sessions: Set<string> }>;
-    START_TIME: number;
-  }
-): void {
+export function createHealthRoutes(app: Express, deps: RouteDependencies): void {
   const { database, sdkSession, connectedClients, START_TIME } = deps;
+  if (!database || !sdkSession || !connectedClients || START_TIME === undefined) throw new Error("Missing required dependencies");
 
   app.get("/health", (_req: Request, res: Response) => {
     let dbStats: Record<string, unknown> = {};

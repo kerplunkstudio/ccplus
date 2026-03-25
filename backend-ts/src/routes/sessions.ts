@@ -2,22 +2,14 @@ import type { Express, Request, Response } from "express";
 import { log } from "../logger.js";
 import { computeTrustScore } from "../trust-score.js";
 import { startSession as startSessionApi } from "../session-api.js";
-import type { Server as SocketIOServer } from "socket.io";
-import type { SessionCallbacks } from "../sdk-session.js";
 import * as fleetMonitor from "../fleet-monitor.js";
+import type { RouteDependencies } from "./types.js";
 
-export function createSessionRoutes(
-  app: Express,
-  deps: {
-    database: any;
-    sdkSession: any;
-    sessionWorkspaces: Map<string, string>;
-    io: SocketIOServer;
-    buildSocketCallbacks: (sessionId: string, projectPath?: string) => SessionCallbacks;
-    log: any;
+export function createSessionRoutes(app: Express, deps: RouteDependencies): void {
+  const { database, sdkSession, sessionWorkspaces, io, buildSocketCallbacks } = deps;
+  if (!database || !sdkSession || !sessionWorkspaces || !io || !buildSocketCallbacks) {
+    throw new Error("Missing required dependencies");
   }
-): void {
-  const { database, sdkSession, sessionWorkspaces, io, buildSocketCallbacks, log } = deps;
 
   app.get("/api/sessions", (req: Request, res: Response) => {
     try {

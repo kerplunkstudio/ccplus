@@ -1,15 +1,11 @@
-import type { Express, Request, Response, RequestHandler } from "express";
+import type { Express, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { log } from "../logger.js";
+import type { RouteDependencies } from "./types.js";
 
-export function createImageRoutes(
-  app: Express,
-  deps: {
-    database: any;
-    upload: { single: (fieldName: string) => RequestHandler };
-  }
-): void {
+export function createImageRoutes(app: Express, deps: RouteDependencies): void {
   const { database, upload } = deps;
+  if (!database || !upload) throw new Error("Missing required dependencies");
 
   app.post("/api/images/upload", upload.single("file"), (req: Request, res: Response) => {
     if (!req.file) {

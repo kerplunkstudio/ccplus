@@ -5,28 +5,25 @@ import path from "path";
 import process from "process";
 import { homedir } from "os";
 import { log } from "../logger.js";
+import type { RouteDependencies } from "./types.js";
 
-export function createProjectRoutes(
-  app: Express,
-  deps: {
-    database: any;
-    getWorkspaceForSession: (sessionId: string | undefined) => string;
-  }
-): void {
+export function createProjectRoutes(app: Express, deps: RouteDependencies): void {
   const { database, getWorkspaceForSession } = deps;
+  if (!database || !getWorkspaceForSession) throw new Error("Missing required dependencies");
 
   app.get("/api/projects", (req: Request, res: Response) => {
     try {
       const sessionId = (req.query.session_id as string) || undefined;
       const workspaceForSession = getWorkspaceForSession(sessionId);
       const ws = path.resolve(workspaceForSession);
-      const projects: { name: string; path: string }[] = [];
-      for (const name of readdirSync(ws).sort()) {
-        const fullPath = path.join(ws, name);
-        if (!name.startsWith(".") && statSync(fullPath).isDirectory()) {
-          projects.push({ name, path: fullPath });
-        }
-      }
+      const projects = readdirSync(ws)
+        .sort()
+        .filter((name) => !name.startsWith("."))
+        .map((name) => {
+          const fullPath = path.join(ws, name);
+          return statSync(fullPath).isDirectory() ? { name, path: fullPath } : null;
+        })
+        .filter((project): project is { name: string; path: string } => project !== null);
       res.json({ projects, workspace: workspaceForSession });
     } catch (err) {
       log.error("Failed to list projects", { error: String(err) });
@@ -72,14 +69,17 @@ export function createProjectRoutes(
       "Workspace", "Projects", "Developer", "Code", "repos", "Documents/GitHub", "src",
     ].map((d) => path.join(home, d));
 
-    const detectedProjects: { name: string; path: string }[] = [];
+    let detectedProjects: { name: string; path: string }[] = [];
     const maxResults = 50;
 
-    function scanDir(dir: string, depth: number): void {
-      if (detectedProjects.length >= maxResults || depth > 2) return;
+    function scanDir(dir: string, depth: number, currentProjects: { name: string; path: string }[]): { name: string; path: string }[] {
+      if (currentProjects.length >= maxResults || depth > 2) return currentProjects;
       try {
-        for (const name of readdirSync(dir)) {
-          if (detectedProjects.length >= maxResults) break;
+        const names = readdirSync(dir);
+        let projects = currentProjects;
+
+        for (const name of names) {
+          if (projects.length >= maxResults) break;
           if (name.startsWith(".")) continue;
           const fullPath = path.join(dir, name);
           try {
@@ -88,20 +88,22 @@ export function createProjectRoutes(
             continue;
           }
           if (existsSync(path.join(fullPath, ".git"))) {
-            detectedProjects.push({ name, path: fullPath });
+            projects = [...projects, { name, path: fullPath }];
             continue;
           }
-          scanDir(fullPath, depth + 1);
+          projects = scanDir(fullPath, depth + 1, projects);
         }
+        return projects;
       } catch {
         // skip inaccessible dirs
+        return currentProjects;
       }
     }
 
     for (const loc of commonLocations) {
       if (detectedProjects.length >= maxResults) break;
       if (existsSync(loc) && statSync(loc).isDirectory()) {
-        scanDir(loc, 0);
+        detectedProjects = scanDir(loc, 0, detectedProjects);
       }
     }
 
@@ -211,19 +213,19 @@ export function createProjectRoutes(
     // File tree (top-level)
     const ignorePatterns = new Set([".git", "node_modules", "__pycache__", "venv", ".env", "build", "dist", ".DS_Store", ".idea", ".vscode"]);
     try {
-      const entries: string[] = [];
-      const items = readdirSync(projectDir)
+      const entries = readdirSync(projectDir)
         .filter((n) => !n.startsWith(".") && !ignorePatterns.has(n))
         .sort((a, b) => {
           const aDir = statSync(path.join(projectDir, a)).isDirectory();
           const bDir = statSync(path.join(projectDir, b)).isDirectory();
           if (aDir !== bDir) return aDir ? -1 : 1;
           return a.localeCompare(b);
+        })
+        .slice(0, 30)
+        .map((name) => {
+          const isDir = statSync(path.join(projectDir, name)).isDirectory();
+          return name + (isDir ? "/" : "");
         });
-      for (const name of items.slice(0, 30)) {
-        const isDir = statSync(path.join(projectDir, name)).isDirectory();
-        entries.push(name + (isDir ? "/" : ""));
-      }
       result.file_tree = entries;
     } catch {
       result.file_tree = [];
@@ -287,25 +289,31 @@ export function createProjectRoutes(
     }
 
     // Tech stack
-    const techStack: string[] = [];
+    let techStack: string[] = [];
     const pkgJsonPath = path.join(projectDir, "package.json");
     if (existsSync(pkgJsonPath)) {
       try {
         const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
         const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if ("react" in deps) techStack.push("React");
-        if ("vue" in deps) techStack.push("Vue");
-        if ("next" in deps) techStack.push("Next.js");
-        if ("express" in deps) techStack.push("Express");
-        if ("typescript" in deps || existsSync(path.join(projectDir, "tsconfig.json"))) techStack.push("TypeScript");
+        const pkgTech = [
+          "react" in deps ? "React" : null,
+          "vue" in deps ? "Vue" : null,
+          "next" in deps ? "Next.js" : null,
+          "express" in deps ? "Express" : null,
+          ("typescript" in deps || existsSync(path.join(projectDir, "tsconfig.json"))) ? "TypeScript" : null,
+        ].filter((tech): tech is string => tech !== null);
+        techStack = [...techStack, ...pkgTech];
       } catch {
         // ignore
       }
     }
-    if (existsSync(path.join(projectDir, "requirements.txt")) || existsSync(path.join(projectDir, "pyproject.toml"))) techStack.push("Python");
-    if (existsSync(path.join(projectDir, "Cargo.toml"))) techStack.push("Rust");
-    if (existsSync(path.join(projectDir, "go.mod"))) techStack.push("Go");
-    if (existsSync(path.join(projectDir, "Dockerfile"))) techStack.push("Docker");
+    const additionalTech = [
+      (existsSync(path.join(projectDir, "requirements.txt")) || existsSync(path.join(projectDir, "pyproject.toml"))) ? "Python" : null,
+      existsSync(path.join(projectDir, "Cargo.toml")) ? "Rust" : null,
+      existsSync(path.join(projectDir, "go.mod")) ? "Go" : null,
+      existsSync(path.join(projectDir, "Dockerfile")) ? "Docker" : null,
+    ].filter((tech): tech is string => tech !== null);
+    techStack = [...techStack, ...additionalTech];
     result.tech_stack = techStack;
 
     // CLAUDE.md
