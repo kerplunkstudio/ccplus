@@ -172,12 +172,7 @@ export function seedWorkflows(): void {
 
     for (const name of yamlWorkflowNames) {
       try {
-        // Skip if already in database
-        if (workflowDb.workflowExists(name)) {
-          continue;
-        }
-
-        // Load from YAML and insert
+        // Load from YAML and upsert (always load from YAML)
         const workflow = loadWorkflowFromYaml(name);
         workflowDb.upsertWorkflow(workflow, true);
         seededCount++;
@@ -228,13 +223,44 @@ export function listWorkflows(_workspace?: string): string[] {
  * Evaluate if a tool rule matches based on its conditions.
  * Returns true if the rule should be applied (all conditions match).
  */
-export function evaluateToolRule(rule: ToolRule, _toolInput: Record<string, unknown>): boolean {
+export function evaluateToolRule(rule: ToolRule, toolInput: Record<string, unknown>): boolean {
   // If conditions array is empty, rule always matches
   if (!rule.conditions || rule.conditions.length === 0) {
     return true;
   }
 
-  // Future: implement condition evaluation logic here
-  // For now, if conditions exist but we don't know how to evaluate them, don't match
-  return false;
+  // All conditions must match (AND logic)
+  for (const condition of rule.conditions) {
+    if (condition.startsWith('command_contains:')) {
+      const pattern = condition.substring('command_contains:'.length);
+      const command = toolInput.command;
+      if (typeof command !== 'string' || !command.includes(pattern)) {
+        return false;
+      }
+    } else if (condition.startsWith('file_path_not_contains:')) {
+      const patternsStr = condition.substring('file_path_not_contains:'.length);
+      const patterns = patternsStr.split(',').map(p => p.trim());
+      const filePath = toolInput.file_path;
+
+      if (typeof filePath !== 'string') {
+        return false;
+      }
+
+      // Rule MATCHES (returns true) when file path does NOT contain any of the patterns
+      for (const pattern of patterns) {
+        if (filePath.includes(pattern)) {
+          return false;
+        }
+      }
+    } else {
+      // Unknown condition type - log warning and treat as non-matching
+      log.warn('Unknown condition type in tool rule', {
+        condition,
+        toolName: rule.tool_name
+      });
+      return false;
+    }
+  }
+
+  return true;
 }

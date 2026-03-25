@@ -247,7 +247,7 @@ describe("Workflow Database Operations", () => {
   });
 
   describe("seedWorkflows", () => {
-    it("is idempotent - does not overwrite existing workflows", () => {
+    it("always upserts from YAML - overwrites existing workflows", () => {
       // First seed
       seedWorkflows();
       const firstCount = getAllWorkflows().length;
@@ -255,16 +255,21 @@ describe("Workflow Database Operations", () => {
       // Modify a workflow if it exists
       const workflows = getAllWorkflows();
       if (workflows.length > 0) {
+        const originalDescription = workflows[0].description;
         const modified: WorkflowConfig = {
           ...workflows[0],
           description: "Modified description",
         };
         upsertWorkflow(modified, false);
 
-        // Second seed should not overwrite
-        seedWorkflows();
-        const retrieved = getWorkflowByName(workflows[0].name);
+        // Verify modification took effect
+        let retrieved = getWorkflowByName(workflows[0].name);
         expect(retrieved!.description).toBe("Modified description");
+
+        // Second seed SHOULD overwrite with YAML data
+        seedWorkflows();
+        retrieved = getWorkflowByName(workflows[0].name);
+        expect(retrieved!.description).toBe(originalDescription);
       }
 
       const secondCount = getAllWorkflows().length;

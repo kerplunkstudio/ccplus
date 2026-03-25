@@ -72,7 +72,11 @@ phases:
       - code_agent
       - frontend-agent
       - build-error-resolver
-    tool_rules: []
+    tool_rules:
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Execute phase: complete code review before committing. Transition to review phase first."
   - name: test
     context: >
       Write and run tests. Verify 80%+ coverage. Run E2E tests for critical user
@@ -82,7 +86,15 @@ phases:
     agent_hints:
       - tdd-guide
       - e2e-runner
-    tool_rules: []
+    tool_rules:
+      - tool_name: Edit
+        action: warn
+        conditions: ["file_path_not_contains:test,spec,__tests__"]
+        message: "Test phase: focus on writing tests, not implementation changes."
+      - tool_name: Write
+        action: warn
+        conditions: ["file_path_not_contains:test,spec,__tests__"]
+        message: "Test phase: focus on writing tests, not implementation changes."
   - name: review
     context: >
       Review the complete implementation for correctness, security, performance,
@@ -101,3 +113,7 @@ phases:
         action: block
         conditions: []
         message: 'Review phase: report findings with file:line references.'
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Review phase: commits are blocked until review completes."

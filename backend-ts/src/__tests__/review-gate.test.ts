@@ -1,295 +1,285 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { evaluatePreToolUse } from "../workflow-state.js";
+import type { WorkflowConfig } from "../workflow-config.js";
 
-// Hoist mock functions
-const { mockSessions, mockDatabase, mockFleetMonitor, mockWorkflow, mockMemory } = vi.hoisted(() => {
-  const mockSessions = new Map();
-  const mockDatabase = {
-    recordToolEvent: vi.fn(),
-    updateToolEvent: vi.fn(),
-  };
-  const mockFleetMonitor = {
-    incrementToolCount: vi.fn(),
-    incrementAgentCount: vi.fn(),
-    decrementAgentCount: vi.fn(),
-    addFileTouched: vi.fn(),
-  };
-  const mockWorkflow = {
-    evaluatePreToolUse: vi.fn(() => ({ action: 'allow' })),
-    getWorkflowState: vi.fn(() => ({ phase: 'idle' })),
-    getPhaseContext: vi.fn(() => null),
-    inferPhaseFromAgent: vi.fn(() => null),
-    transitionPhase: vi.fn(),
-  };
-  const mockMemory = {
-    searchMemories: vi.fn(() => Promise.resolve('')),
-  };
-  return { mockSessions, mockDatabase, mockFleetMonitor, mockWorkflow, mockMemory };
-});
-
-// Mock dependencies
-vi.mock("../session-manager.js", () => ({
-  sessions: mockSessions,
-}));
-
-vi.mock("../database.js", () => mockDatabase);
-
-vi.mock("../logger.js", () => ({
-  log: {
-    error: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
-vi.mock("../config.js", () => ({
-  WORKFLOW_ENABLED: false,
-  MEMORY_ENABLED: false,
-  MEMORY_HOOK_TIMEOUT_MS: 1000,
-  getMemoryEnabled: vi.fn(() => false),
-  getDistillationEnabled: vi.fn(() => false),
-}));
-
-vi.mock("../workflow-state.js", () => mockWorkflow);
-
-vi.mock("../fleet-monitor.js", () => mockFleetMonitor);
-
-vi.mock("../memory-client.js", () => mockMemory);
-
-import { buildHooks } from "../sdk/hooks.js";
-
-describe("Code Review Gate", () => {
-  const sessionId = "test-session";
-  let hooks: ReturnType<typeof buildHooks>;
-  let mockCallbacks: any;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockCallbacks = {
-      onToolEvent: vi.fn(),
-    };
-    mockSessions.clear();
-    mockSessions.set(sessionId, {
-      callbacks: mockCallbacks,
-      hadToolSinceLastText: false,
-    });
-    hooks = buildHooks(sessionId);
-  });
-
-  it("blocks git commit when writes occurred without code-reviewer", async () => {
-    // 1. Simulate Write tool
-    const writeHook = hooks.PreToolUse[0].hooks[0];
-    await writeHook(
+describe("Workflow-Based Commit Enforcement", () => {
+  // Mock workflow with execute, review, and complete phases
+  const mockWorkflow: WorkflowConfig = {
+    name: "test-workflow",
+    description: "Test workflow for commit enforcement",
+    default_phase: "execute",
+    phases: [
       {
-        tool_name: "Write",
-        tool_use_id: "tu_write_1",
-        tool_input: { file_path: "/test/file.ts", content: "code" },
+        name: "execute",
+        context: "Implementation phase",
+        agent_hints: ["code_agent"],
+        tool_rules: [
+          {
+            tool_name: "Bash",
+            action: "block",
+            conditions: ["command_contains:git commit"],
+            message: "Execute phase: complete code review before committing.",
+          },
+        ],
       },
-      "tu_write_1"
-    );
-
-    // 2. Attempt git commit without code-reviewer
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
       {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit -m "test"' },
+        name: "review",
+        context: "Code review phase",
+        agent_hints: ["code-reviewer"],
+        tool_rules: [
+          {
+            tool_name: "Bash",
+            action: "block",
+            conditions: ["command_contains:git commit"],
+            message: "Review phase: commits are blocked until review completes.",
+          },
+        ],
       },
-      "tu_bash_1"
-    );
-
-    // Should be blocked
-    expect(result).toHaveProperty("hookSpecificOutput");
-    expect(result.hookSpecificOutput).toMatchObject({
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: expect.stringContaining("Code review required"),
-    });
-  });
-
-  it("allows git commit when code-reviewer was invoked", async () => {
-    // 1. Simulate Write tool
-    const writeHook = hooks.PreToolUse[0].hooks[0];
-    await writeHook(
       {
-        tool_name: "Write",
-        tool_use_id: "tu_write_1",
-        tool_input: { file_path: "/test/file.ts", content: "code" },
+        name: "complete",
+        context: "Completion phase",
+        agent_hints: [],
+        tool_rules: [], // No rules - commits allowed
       },
-      "tu_write_1"
-    );
+    ],
+    transitions: [
+      { from: "execute", to: "review" },
+      { from: "review", to: "complete" },
+    ],
+  };
 
-    // 2. Simulate code-reviewer subagent
-    const subagentStartHook = hooks.SubagentStart[0].hooks[0];
-    await subagentStartHook({
-      agent_id: "agent_1",
-      agent_type: "code-reviewer",
-      tool_input: { description: "Review code" },
+  describe("Execute Phase", () => {
+    it("blocks git commit commands", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Bash",
+        { command: 'git commit -m "test"' },
+        mockWorkflow
+      );
+
+      expect(result).toEqual({
+        action: "block",
+        message: "Execute phase: complete code review before committing.",
+      });
     });
 
-    // 3. Attempt git commit
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit -m "test"' },
-      },
-      "tu_bash_1"
-    );
+    it("blocks git commit with --amend flag", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Bash",
+        { command: 'git commit --amend -m "updated"' },
+        mockWorkflow
+      );
 
-    // Should be allowed (not blocked)
-    expect(result).not.toHaveProperty("hookSpecificOutput");
-  });
+      expect(result).toEqual({
+        action: "block",
+        message: "Execute phase: complete code review before committing.",
+      });
+    });
 
-  it("allows git commit in read-only session (no Write/Edit)", async () => {
-    // No Write or Edit tools called
+    it("blocks git commit with --no-verify flag", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Bash",
+        { command: 'git commit --no-verify -m "bypass hooks"' },
+        mockWorkflow
+      );
 
-    // Attempt git commit directly
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit -m "test"' },
-      },
-      "tu_bash_1"
-    );
+      expect(result).toEqual({
+        action: "block",
+        message: "Execute phase: complete code review before committing.",
+      });
+    });
 
-    // Should be allowed (no writes, not blocked)
-    expect(result).not.toHaveProperty("hookSpecificOutput");
-  });
+    it("allows non-commit bash commands", () => {
+      const testCommands = [
+        "npm test",
+        "git status",
+        "git diff",
+        "git add file.ts",
+        "ls -la",
+        "echo 'not a commit'",
+      ];
 
-  it("allows non-commit bash commands with writes but no review", async () => {
-    // 1. Simulate Edit tool
-    const editHook = hooks.PreToolUse[0].hooks[0];
-    await editHook(
-      {
-        tool_name: "Edit",
-        tool_use_id: "tu_edit_1",
-        tool_input: {
-          file_path: "/test/file.ts",
-          old_string: "old",
-          new_string: "new",
-        },
-      },
-      "tu_edit_1"
-    );
+      testCommands.forEach((command) => {
+        const result = evaluatePreToolUse(
+          "execute",
+          "Bash",
+          { command },
+          mockWorkflow
+        );
 
-    // 2. Run non-commit bash command
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: "npm test" },
-      },
-      "tu_bash_1"
-    );
+        expect(result).toEqual({ action: "allow" });
+      });
+    });
 
-    // Should be allowed (not a commit, not blocked)
-    expect(result).not.toHaveProperty("hookSpecificOutput");
-  });
+    it("allows non-Bash tools", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Write",
+        { file_path: "/test/file.ts", content: "code" },
+        mockWorkflow
+      );
 
-  it("allows git commit when only .md files were written (no code-reviewer needed)", async () => {
-    const writeHook = hooks.PreToolUse[0].hooks[0];
-    await writeHook(
-      {
-        tool_name: "Write",
-        tool_use_id: "tu_write_1",
-        tool_input: { file_path: "/docs/plans/my-plan.md", content: "# Plan" },
-      },
-      "tu_write_1"
-    );
-    await writeHook(
-      {
-        tool_name: "Edit",
-        tool_use_id: "tu_edit_1",
-        tool_input: { file_path: "/docs/README.MD", old_string: "old", new_string: "new" },
-      },
-      "tu_edit_1"
-    );
-
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit -m "docs: update plan"' },
-      },
-      "tu_bash_1"
-    );
-
-    expect(result).not.toHaveProperty("hookSpecificOutput");
-  });
-
-  it("blocks git commit when .ts and .md files were written without code-reviewer", async () => {
-    const writeHook = hooks.PreToolUse[0].hooks[0];
-    await writeHook(
-      {
-        tool_name: "Write",
-        tool_use_id: "tu_write_1",
-        tool_input: { file_path: "/src/feature.ts", content: "code" },
-      },
-      "tu_write_1"
-    );
-    await writeHook(
-      {
-        tool_name: "Write",
-        tool_use_id: "tu_write_2",
-        tool_input: { file_path: "/docs/notes.md", content: "# Notes" },
-      },
-      "tu_write_2"
-    );
-
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit -m "feat: add feature"' },
-      },
-      "tu_bash_1"
-    );
-
-    expect(result).toHaveProperty("hookSpecificOutput");
-    expect(result.hookSpecificOutput).toMatchObject({
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: expect.stringContaining("Code review required"),
+      expect(result).toEqual({ action: "allow" });
     });
   });
 
-  it("blocks git commit --amend with writes but no review", async () => {
-    // 1. Simulate Write tool
-    const writeHook = hooks.PreToolUse[0].hooks[0];
-    await writeHook(
-      {
-        tool_name: "Write",
-        tool_use_id: "tu_write_1",
-        tool_input: { file_path: "/test/file.ts", content: "code" },
-      },
-      "tu_write_1"
-    );
+  describe("Review Phase", () => {
+    it("blocks git commit commands", () => {
+      const result = evaluatePreToolUse(
+        "review",
+        "Bash",
+        { command: 'git commit -m "test"' },
+        mockWorkflow
+      );
 
-    // 2. Attempt git commit --amend
-    const bashHook = hooks.PreToolUse[0].hooks[0];
-    const result = await bashHook(
-      {
-        tool_name: "Bash",
-        tool_use_id: "tu_bash_1",
-        tool_input: { command: 'git commit --amend -m "updated"' },
-      },
-      "tu_bash_1"
-    );
+      expect(result).toEqual({
+        action: "block",
+        message: "Review phase: commits are blocked until review completes.",
+      });
+    });
 
-    // Should be blocked (contains "git commit")
-    expect(result).toHaveProperty("hookSpecificOutput");
-    expect(result.hookSpecificOutput).toMatchObject({
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: expect.stringContaining("Code review required"),
+    it("blocks git commit --amend", () => {
+      const result = evaluatePreToolUse(
+        "review",
+        "Bash",
+        { command: 'git commit --amend --no-edit' },
+        mockWorkflow
+      );
+
+      expect(result).toEqual({
+        action: "block",
+        message: "Review phase: commits are blocked until review completes.",
+      });
+    });
+
+    it("allows non-commit bash commands", () => {
+      const result = evaluatePreToolUse(
+        "review",
+        "Bash",
+        { command: "git diff HEAD" },
+        mockWorkflow
+      );
+
+      expect(result).toEqual({ action: "allow" });
+    });
+  });
+
+  describe("Complete Phase", () => {
+    it("allows git commit commands (no rules)", () => {
+      const result = evaluatePreToolUse(
+        "complete",
+        "Bash",
+        { command: 'git commit -m "final commit"' },
+        mockWorkflow
+      );
+
+      expect(result).toEqual({ action: "allow" });
+    });
+
+    it("allows git commit --amend", () => {
+      const result = evaluatePreToolUse(
+        "complete",
+        "Bash",
+        { command: 'git commit --amend -m "updated"' },
+        mockWorkflow
+      );
+
+      expect(result).toEqual({ action: "allow" });
+    });
+
+    it("allows all bash commands", () => {
+      const testCommands = [
+        'git commit -m "feat: add feature"',
+        "npm test",
+        "git push",
+      ];
+
+      testCommands.forEach((command) => {
+        const result = evaluatePreToolUse(
+          "complete",
+          "Bash",
+          { command },
+          mockWorkflow
+        );
+
+        expect(result).toEqual({ action: "allow" });
+      });
+    });
+  });
+
+  describe("Command Matching", () => {
+    it("matches various git commit command formats", () => {
+      const commitCommands = [
+        'git commit -m "message"',
+        "git commit --amend",
+        'git commit --amend -m "msg"',
+        "git commit --no-verify",
+        'git commit -am "all changes"',
+        "git commit --allow-empty",
+        'git commit -m "msg" --no-gpg-sign',
+      ];
+
+      commitCommands.forEach((command) => {
+        const result = evaluatePreToolUse(
+          "execute",
+          "Bash",
+          { command },
+          mockWorkflow
+        );
+
+        expect(result.action).toBe("block");
+        expect(result.message).toContain("complete code review");
+      });
+    });
+
+    it("does not match non-commit git commands", () => {
+      const nonCommitCommands = [
+        "git status",
+        "git diff",
+        "git log",
+        "git add file.ts",
+        "git checkout branch",
+        "git push",
+        "git pull",
+        "git branch",
+      ];
+
+      nonCommitCommands.forEach((command) => {
+        const result = evaluatePreToolUse(
+          "execute",
+          "Bash",
+          { command },
+          mockWorkflow
+        );
+
+        expect(result).toEqual({ action: "allow" });
+      });
+    });
+  });
+
+  describe("No Workflow", () => {
+    it("allows all commands when workflow is null", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Bash",
+        { command: 'git commit -m "test"' },
+        null
+      );
+
+      expect(result).toEqual({ action: "allow" });
+    });
+
+    it("allows all tools when workflow is null", () => {
+      const result = evaluatePreToolUse(
+        "execute",
+        "Write",
+        { file_path: "/test/file.ts", content: "code" },
+        null
+      );
+
+      expect(result).toEqual({ action: "allow" });
     });
   });
 });

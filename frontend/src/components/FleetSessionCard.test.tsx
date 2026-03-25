@@ -62,15 +62,15 @@ describe('FleetSessionCard', () => {
   });
 
   describe('workflow visualization', () => {
-    it('does not show workflow track when workflowName is undefined', () => {
+    it('does not show workflow name when workflowName is undefined', () => {
       const { container } = render(
         <FleetSessionCard session={baseSession} onClick={mockOnClick} />
       );
-      const workflowTrack = container.querySelector('.fleet-workflow-track');
-      expect(workflowTrack).not.toBeInTheDocument();
+      const workflow = container.querySelector('.fleet-card-workflow');
+      expect(workflow).not.toBeInTheDocument();
     });
 
-    it('does not show workflow track when workflowName is "default"', () => {
+    it('does not show workflow name when workflowName is "default"', () => {
       const sessionWithDefault: FleetSession = {
         ...baseSession,
         workflowName: 'default',
@@ -79,24 +79,21 @@ describe('FleetSessionCard', () => {
       const { container } = render(
         <FleetSessionCard session={sessionWithDefault} onClick={mockOnClick} />
       );
-      const workflowTrack = container.querySelector('.fleet-workflow-track');
-      expect(workflowTrack).not.toBeInTheDocument();
+      const workflow = container.querySelector('.fleet-card-workflow');
+      expect(workflow).not.toBeInTheDocument();
     });
 
-    it('shows workflow track when workflowName exists and is not "default"', () => {
+    it('shows workflow name when workflowName exists and is not "default"', () => {
       const sessionWithWorkflow: FleetSession = {
         ...baseSession,
         workflowName: 'feature',
         workflowPhase: 'execute',
       };
-      const { container } = render(
-        <FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />
-      );
-      const workflowTrack = container.querySelector('.fleet-workflow-track');
-      expect(workflowTrack).toBeInTheDocument();
+      render(<FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />);
+      expect(screen.getByText('feature')).toBeInTheDocument();
     });
 
-    it('displays workflow name in the track', () => {
+    it('displays workflow name for bug-fix workflow', () => {
       const sessionWithWorkflow: FleetSession = {
         ...baseSession,
         workflowName: 'bug-fix',
@@ -104,86 +101,6 @@ describe('FleetSessionCard', () => {
       };
       render(<FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />);
       expect(screen.getByText('bug-fix')).toBeInTheDocument();
-    });
-
-    it('renders all phase segments', () => {
-      const sessionWithWorkflow: FleetSession = {
-        ...baseSession,
-        workflowName: 'feature',
-        workflowPhase: 'execute',
-      };
-      const { container } = render(
-        <FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />
-      );
-      const segments = container.querySelectorAll('.fleet-phase-segment');
-      expect(segments).toHaveLength(6); // design, plan, execute, test, review, complete
-    });
-
-    it('highlights current phase for running session', () => {
-      const sessionWithWorkflow: FleetSession = {
-        ...baseSession,
-        status: 'running',
-        workflowName: 'feature',
-        workflowPhase: 'execute',
-      };
-      const { container } = render(
-        <FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />
-      );
-      const segments = container.querySelectorAll('.fleet-phase-segment');
-
-      // design (past), plan (past), execute (current), test (future), review (future), complete (future)
-      expect(segments[0]).toHaveClass('phase-past'); // design
-      expect(segments[1]).toHaveClass('phase-past'); // plan
-      expect(segments[2]).toHaveClass('phase-current'); // execute
-      expect(segments[3]).toHaveClass('phase-future'); // test
-      expect(segments[4]).toHaveClass('phase-future'); // review
-      expect(segments[5]).toHaveClass('phase-future'); // complete
-    });
-
-    it('marks all phases as past for completed session', () => {
-      const sessionWithWorkflow: FleetSession = {
-        ...baseSession,
-        status: 'completed',
-        workflowName: 'feature',
-        workflowPhase: 'complete',
-      };
-      const { container } = render(
-        <FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />
-      );
-      const segments = container.querySelectorAll('.fleet-phase-segment');
-
-      // All phases up to complete should be past
-      expect(segments[0]).toHaveClass('phase-past'); // design
-      expect(segments[1]).toHaveClass('phase-past'); // plan
-      expect(segments[2]).toHaveClass('phase-past'); // execute
-      expect(segments[3]).toHaveClass('phase-past'); // test
-      expect(segments[4]).toHaveClass('phase-past'); // review
-      expect(segments[5]).toHaveClass('phase-past'); // complete
-    });
-
-    it('highlights failure phase for failed session', () => {
-      const sessionWithWorkflow: FleetSession = {
-        ...baseSession,
-        status: 'failed',
-        workflowName: 'feature',
-        workflowPhase: 'test',
-      };
-      const { container } = render(
-        <FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />
-      );
-      const segments = container.querySelectorAll('.fleet-phase-segment');
-
-      // Past phases before failure
-      expect(segments[0]).toHaveClass('phase-past'); // design
-      expect(segments[1]).toHaveClass('phase-past'); // plan
-      expect(segments[2]).toHaveClass('phase-past'); // execute
-
-      // Failed phase
-      expect(segments[3]).toHaveClass('phase-current'); // test (failed here)
-
-      // Future phases
-      expect(segments[4]).toHaveClass('phase-future'); // review
-      expect(segments[5]).toHaveClass('phase-future'); // complete
     });
   });
 
@@ -215,7 +132,7 @@ describe('FleetSessionCard', () => {
       expect(screen.getByText('idle')).toBeInTheDocument();
     });
 
-    it('does not include phase in status pill even when workflow exists', () => {
+    it('shows phase name in status pill for running session with workflow', () => {
       const sessionWithWorkflow: FleetSession = {
         ...baseSession,
         status: 'running',
@@ -223,11 +140,7 @@ describe('FleetSessionCard', () => {
         workflowPhase: 'execute',
       };
       render(<FleetSessionCard session={sessionWithWorkflow} onClick={mockOnClick} />);
-
-      // Status pill should only show "running", not "Execute · feature"
-      const statusText = screen.getByText('running');
-      expect(statusText).toBeInTheDocument();
-      expect(screen.queryByText(/Execute/)).not.toBeInTheDocument();
+      expect(screen.getByText('Execute')).toBeInTheDocument();
     });
   });
 

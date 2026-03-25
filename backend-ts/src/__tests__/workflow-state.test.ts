@@ -25,8 +25,72 @@ import {
   resetWorkflow,
   type WorkflowPhase,
 } from '../workflow-state.js';
+import type { WorkflowConfig } from '../workflow-config.js';
 
 describe('workflow-state', () => {
+  // Mock workflow for testing tool rules, context, and agent hints
+  const mockWorkflow: WorkflowConfig = {
+    name: 'test-workflow',
+    description: 'Test workflow for unit tests',
+    default_phase: 'design',
+    phases: [
+      {
+        name: 'design',
+        context: 'WORKFLOW PHASE: DESIGN\n\nYou are in the design phase. Focus on architecture and planning.\n\nDo NOT write implementation code yet.',
+        agent_hints: ['architect'],
+        tool_rules: [
+          { tool_name: 'Edit', action: 'warn', conditions: [], message: 'Design phase: consider finalizing your design before writing code' },
+          { tool_name: 'Write', action: 'warn', conditions: [], message: 'Design phase: consider finalizing your design before writing code' },
+        ],
+      },
+      {
+        name: 'plan',
+        context: 'WORKFLOW PHASE: PLAN\n\nYou are in the planning phase. Create detailed implementation plans.',
+        agent_hints: ['planner'],
+        tool_rules: [
+          { tool_name: 'Edit', action: 'warn', conditions: ['file_path_not_contains:plan,doc'], message: 'Plan phase: implementation should wait until planning is complete' },
+          { tool_name: 'Write', action: 'warn', conditions: ['file_path_not_contains:plan,doc'], message: 'Plan phase: implementation should wait until planning is complete' },
+        ],
+      },
+      {
+        name: 'execute',
+        context: 'WORKFLOW PHASE: EXECUTE\n\nYou are in the execution phase. Implement the planned features.',
+        agent_hints: ['code_agent', 'frontend-agent', 'build-error-resolver'],
+        tool_rules: [
+          { tool_name: 'Bash', action: 'block', conditions: ['command_contains:git commit'], message: 'Execute phase: complete code review before committing' },
+        ],
+      },
+      {
+        name: 'test',
+        context: 'WORKFLOW PHASE: TEST\n\nYou are in the testing phase. Write and run tests.',
+        agent_hints: ['tdd-guide', 'e2e-runner'],
+        tool_rules: [
+          { tool_name: 'Edit', action: 'warn', conditions: ['file_path_not_contains:test,spec,__tests__'], message: 'Test phase: focus on writing tests' },
+          { tool_name: 'Write', action: 'warn', conditions: ['file_path_not_contains:test,spec,__tests__'], message: 'Test phase: focus on writing tests' },
+        ],
+      },
+      {
+        name: 'review',
+        context: 'WORKFLOW PHASE: REVIEW\n\nYou are in the review phase. Review code and provide feedback.',
+        agent_hints: ['code-reviewer', 'security-reviewer'],
+        tool_rules: [
+          { tool_name: 'Edit', action: 'block', conditions: [], message: 'Review phase: report findings, do not edit code' },
+          { tool_name: 'Write', action: 'block', conditions: [], message: 'Review phase: report findings, do not edit code' },
+          { tool_name: 'Bash', action: 'block', conditions: ['command_contains:git commit'], message: 'Cannot commit during review phase' },
+        ],
+      },
+    ],
+    transitions: [
+      { from: 'design', to: 'plan' },
+      { from: 'plan', to: 'execute' },
+      { from: 'execute', to: 'test' },
+      { from: 'test', to: 'review' },
+      { from: 'review', to: 'complete' },
+      { from: 'test', to: 'execute' },
+      { from: 'review', to: 'execute' },
+    ],
+  };
+
   beforeEach(() => {
     // Create temp directory for test
     if (!existsSync(TEST_WORKFLOWS_DIR)) {
@@ -124,81 +188,67 @@ describe('workflow-state', () => {
 
   describe('evaluatePreToolUse', () => {
     it('warns in design phase when using Edit', () => {
-      const result = evaluatePreToolUse('design', 'Edit', { file_path: 'src/app.ts' }, null);
+      const result = evaluatePreToolUse('design', 'Edit', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Design phase');
     });
 
     it('allows Read in design phase', () => {
-      const result = evaluatePreToolUse('design', 'Read', { file_path: 'src/app.ts' }, null);
+      const result = evaluatePreToolUse('design', 'Read', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('allow');
     });
 
-    it('allows all tools in execute phase', () => {
-      const result = evaluatePreToolUse('execute', 'Edit', { file_path: 'src/app.ts' }, null);
+    it('allows Edit in execute phase without git commit', () => {
+      const result = evaluatePreToolUse('execute', 'Edit', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('allow');
+    });
+
+    it('blocks git commit in execute phase', () => {
+      const result = evaluatePreToolUse('execute', 'Bash', { command: 'git commit -m "test"' }, mockWorkflow);
+      expect(result.action).toBe('block');
+      expect(result.message).toContain('Execute phase');
     });
 
     it('blocks git commit in review phase', () => {
-      const result = evaluatePreToolUse('review', 'Bash', { command: 'git commit -m "test"' }, null);
+      const result = evaluatePreToolUse('review', 'Bash', { command: 'git commit -m "test"' }, mockWorkflow);
       expect(result.action).toBe('block');
       expect(result.message).toContain('Cannot commit during review');
     });
 
     it('allows npm test in review phase', () => {
-      const result = evaluatePreToolUse('review', 'Bash', { command: 'npm test' }, null);
+      const result = evaluatePreToolUse('review', 'Bash', { command: 'npm test' }, mockWorkflow);
       expect(result.action).toBe('allow');
     });
 
     it('allows editing test files in test phase', () => {
-      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/__tests__/app.test.ts' }, null);
+      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/__tests__/app.test.ts' }, mockWorkflow);
       expect(result.action).toBe('allow');
     });
 
     it('warns when editing non-test files in test phase', () => {
-      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/app.ts' }, null);
+      const result = evaluatePreToolUse('test', 'Edit', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Test phase');
     });
 
     it('allows editing plan files in plan phase', () => {
-      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'docs/plan.md' }, null);
+      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'docs/plan.md' }, mockWorkflow);
       expect(result.action).toBe('allow');
     });
 
     it('warns when editing non-plan files in plan phase', () => {
-      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'src/app.ts' }, null);
+      const result = evaluatePreToolUse('plan', 'Write', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('warn');
       expect(result.message).toContain('Plan phase');
     });
 
-    it('blocks editing source files in idle phase', () => {
-      const result = evaluatePreToolUse('idle', 'Edit', { file_path: 'src/app.ts' }, null);
+    it('blocks Edit in review phase', () => {
+      const result = evaluatePreToolUse('review', 'Edit', { file_path: 'src/app.ts' }, mockWorkflow);
       expect(result.action).toBe('block');
-      expect(result.message).toContain('Idle phase');
-      expect(result.message).toContain('planner agent');
+      expect(result.message).toContain('Review phase');
     });
 
-    it('allows editing plan/doc files in idle phase', () => {
-      const result1 = evaluatePreToolUse('idle', 'Write', { file_path: 'docs/plan.md' }, null);
-      expect(result1.action).toBe('allow');
-
-      const result2 = evaluatePreToolUse('idle', 'Write', { file_path: 'README.md' }, null);
-      expect(result2.action).toBe('allow');
-
-      const result3 = evaluatePreToolUse('idle', 'Edit', { file_path: '.env' }, null);
-      expect(result3.action).toBe('allow');
-
-      const result4 = evaluatePreToolUse('idle', 'Edit', { file_path: 'config.json' }, null);
-      expect(result4.action).toBe('allow');
-    });
-
-    it('allows Read tool in idle phase', () => {
-      const result = evaluatePreToolUse('idle', 'Read', { file_path: 'src/app.ts' }, null);
-      expect(result.action).toBe('allow');
-    });
-
-    it('blocks EnterPlanMode in all phases', () => {
+    it('blocks EnterPlanMode in all phases (platform-level rule)', () => {
       const phases: WorkflowPhase[] = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];
       for (const phase of phases) {
         const result = evaluatePreToolUse(phase, 'EnterPlanMode', {}, null);
@@ -210,19 +260,19 @@ describe('workflow-state', () => {
 
   describe('getPhaseContext', () => {
     it('returns string for design phase', () => {
-      const context = getPhaseContext('design', null);
+      const context = getPhaseContext('design', mockWorkflow);
       expect(context).toBeDefined();
       expect(context).toContain('WORKFLOW PHASE: DESIGN');
       expect(context).toContain('Do NOT write implementation code');
     });
 
     it('returns null for idle phase', () => {
-      const context = getPhaseContext('idle', null);
+      const context = getPhaseContext('idle', mockWorkflow);
       expect(context).toBeNull();
     });
 
     it('returns string for execute phase', () => {
-      const context = getPhaseContext('execute', null);
+      const context = getPhaseContext('execute', mockWorkflow);
       expect(context).toBeDefined();
       expect(context).toContain('WORKFLOW PHASE: EXECUTE');
     });
@@ -230,38 +280,38 @@ describe('workflow-state', () => {
 
   describe('inferPhaseFromAgent', () => {
     it('infers execute for code_agent', () => {
-      const phase = inferPhaseFromAgent('code_agent', null);
+      const phase = inferPhaseFromAgent('code_agent', mockWorkflow);
       expect(phase).toBe('execute');
     });
 
     it('infers plan for planner', () => {
-      const phase = inferPhaseFromAgent('planner', null);
+      const phase = inferPhaseFromAgent('planner', mockWorkflow);
       expect(phase).toBe('plan');
     });
 
     it('infers test for tdd-guide', () => {
-      const phase = inferPhaseFromAgent('tdd-guide', null);
+      const phase = inferPhaseFromAgent('tdd-guide', mockWorkflow);
       expect(phase).toBe('test');
     });
 
     it('infers review for code-reviewer', () => {
-      const phase = inferPhaseFromAgent('code-reviewer', null);
+      const phase = inferPhaseFromAgent('code-reviewer', mockWorkflow);
       expect(phase).toBe('review');
     });
 
     it('returns null for unknown agent', () => {
-      const phase = inferPhaseFromAgent('unknown-agent', null);
+      const phase = inferPhaseFromAgent('unknown-agent', mockWorkflow);
       expect(phase).toBeNull();
     });
 
     it('infers execute for frontend-agent', () => {
-      const phase = inferPhaseFromAgent('frontend-agent', null);
+      const phase = inferPhaseFromAgent('frontend-agent', mockWorkflow);
       expect(phase).toBe('execute');
     });
 
-    it('infers plan for architect', () => {
-      const phase = inferPhaseFromAgent('architect', null);
-      expect(phase).toBe('plan');
+    it('infers design for architect', () => {
+      const phase = inferPhaseFromAgent('architect', mockWorkflow);
+      expect(phase).toBe('design');
     });
   });
 

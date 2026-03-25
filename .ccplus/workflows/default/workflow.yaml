@@ -10,7 +10,11 @@ phases:
       - code_agent
       - frontend-agent
       - build-error-resolver
-    tool_rules: []
+    tool_rules:
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Execute phase: complete code review before committing. Transition to review phase first."
   - name: review
     context: |
       Review the implementation for correctness, security, and code quality.
@@ -26,6 +30,10 @@ phases:
         action: block
         conditions: []
         message: 'Review phase: report findings with file:line references.'
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Review phase: commits are blocked until review completes."
 transitions:
   - from: execute
     to: review

@@ -49,13 +49,30 @@ vi.mock("../db/workflows.js", () => ({
         name: "default",
         description: "Default workflow",
         default_phase: "execute",
-        phases: [{
-          name: "execute",
-          context: "Execute phase",
-          agent_hints: [],
-          tool_rules: [],
-        }],
-        transitions: [],
+        phases: [
+          {
+            name: "execute",
+            context: "Execute phase",
+            agent_hints: [],
+            tool_rules: [],
+          },
+          {
+            name: "review",
+            context: "Review phase",
+            agent_hints: ["code-reviewer", "security-reviewer"],
+            tool_rules: [],
+          },
+          {
+            name: "complete",
+            context: "Complete phase",
+            agent_hints: [],
+            tool_rules: [],
+          },
+        ],
+        transitions: [
+          { from: "execute", to: "review" },
+          { from: "review", to: "complete" },
+        ],
       };
     }
     return null;
