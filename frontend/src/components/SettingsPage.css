@@ -1,21 +1,251 @@
 @import './settings/settings-shared.css';
 
-/* Additional SettingsPage-specific styles if needed */
+/* === Panel Container === */
 
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg-primary);
+  animation: settingsPageIn 0.5s var(--ease-default);
+}
+
+@keyframes settingsPageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-container {
+  padding: clamp(2rem, 5vw, 4rem) clamp(2rem, 4vw, 3.5rem);
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+/* === Header === */
+
+.settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.settings-title {
+  font-family: var(--font-serif);
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  font-weight: 400;
+  line-height: 1;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.settings-subtitle {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 400;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* === Sticky Navigation Pills === */
+
+.settings-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-xl);
+}
+
+.settings-nav::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(to bottom, var(--bg-primary), transparent);
+  pointer-events: none;
+}
+
+.settings-nav-pill {
+  position: relative;
+  padding: var(--space-sm) var(--space-lg);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.settings-nav-pill:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.settings-nav-pill:active {
+  transform: translateY(0);
+}
+
+.settings-nav-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* === Sections Container === */
+
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(3rem, 5vw, 5rem);
+}
+
+/* === Loading State === */
+
+.settings-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-2xl) 0;
+}
+
+.settings-loading-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 0%,
+    var(--border) 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+  height: 120px;
+  width: 100%;
+}
+
+/* === Error & Restart Toasts === */
+
+.settings-error-toast,
 .settings-restart-toast {
   position: fixed;
   top: 12px;
   right: 12px;
-  background: #b45309;
-  color: white;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
+  font-weight: 500;
   z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: toastIn 0.3s var(--ease-out);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.settings-error-toast {
+  background: var(--error);
+  color: white;
+}
+
+.settings-restart-toast {
+  background: #b45309;
+  color: white;
 }
 
 [data-theme="dark"] .settings-restart-toast {
   background: #fbbf24;
   color: #1a1814;
+}
+
+/* === Responsive Adjustments === */
+
+@media (max-width: 900px) {
+  .settings-container {
+    padding: clamp(1.5rem, 4vw, 2rem) clamp(1rem, 3vw, 1.5rem);
+    gap: var(--space-xl);
+  }
+
+  .settings-title {
+    font-size: clamp(2rem, 6vw, 2.5rem);
+  }
+
+  .settings-subtitle {
+    font-size: var(--text-sm);
+  }
+
+  .settings-nav {
+    gap: var(--space-xs);
+  }
+
+  .settings-nav-pill {
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--text-xs);
+  }
+
+  .settings-sections {
+    gap: clamp(2rem, 4vw, 3rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-nav {
+    gap: 6px;
+  }
+
+  .settings-nav-pill {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}
+
+/* === Reduced Motion Support === */
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page,
+  .settings-nav-pill,
+  .settings-error-toast,
+  .settings-restart-toast,
+  .settings-loading-skeleton {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .settings-nav-pill:hover,
+  .settings-nav-pill:active {
+    transform: none !important;
+  }
 }

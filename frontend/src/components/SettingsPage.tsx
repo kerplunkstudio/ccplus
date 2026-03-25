@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { ModelsPanel } from './settings/ModelsPanel';
 import { SessionsPanel } from './settings/SessionsPanel';
@@ -16,171 +16,113 @@ type SettingsCategory =
   | 'captain'
   | 'integrations';
 
-interface SettingsPageProps {
-  onClose: () => void;
-}
+const CATEGORIES: Array<{ id: SettingsCategory; label: string }> = [
+  { id: 'models', label: 'Models' },
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'memory', label: 'Memory' },
+  { id: 'workflow', label: 'Workflow' },
+  { id: 'captain', label: 'Captain' },
+  { id: 'integrations', label: 'Integrations' },
+];
 
-export function SettingsPage({ onClose }: SettingsPageProps) {
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('models');
+export function SettingsPage() {
   const { config, loading, error, needsRestart, updateConfig } = useSettings();
 
-  const renderPanel = () => {
-    if (loading) {
-      return (
-        <div className="settings-panel">
-          <div className="settings-panel-header">
-            <h2 className="settings-panel-title">Loading...</h2>
-          </div>
-          <div className="settings-row">
-            <div className="settings-skeleton" style={{ width: '300px' }} />
-          </div>
-          <div className="settings-row">
-            <div className="settings-skeleton" style={{ width: '250px' }} />
-          </div>
-          <div className="settings-row">
-            <div className="settings-skeleton" style={{ width: '280px' }} />
-          </div>
-        </div>
-      );
-    }
+  // Refs for scroll navigation
+  const modelsRef = useRef<HTMLDivElement>(null);
+  const sessionsRef = useRef<HTMLDivElement>(null);
+  const memoryRef = useRef<HTMLDivElement>(null);
+  const workflowRef = useRef<HTMLDivElement>(null);
+  const captainRef = useRef<HTMLDivElement>(null);
+  const integrationsRef = useRef<HTMLDivElement>(null);
 
-    switch (activeCategory) {
-      case 'models':
-        return <ModelsPanel config={config.models} onUpdate={updateConfig} />;
-      case 'sessions':
-        return <SessionsPanel config={config.sessions} onUpdate={updateConfig} />;
-      case 'memory':
-        return <MemoryPanel config={config.memory} onUpdate={updateConfig} />;
-      case 'workflow':
-        return <WorkflowPanel config={config.workflow} onUpdate={updateConfig} />;
-      case 'captain':
-        return <CaptainPanel config={config.captain} onUpdate={updateConfig} />;
-      case 'integrations':
-        return <IntegrationsPanel config={config.integrations} onUpdate={updateConfig} />;
-      default:
-        return <ModelsPanel config={config.models} onUpdate={updateConfig} />;
+  const sectionRefs: Record<SettingsCategory, React.RefObject<HTMLDivElement | null>> = {
+    models: modelsRef,
+    sessions: sessionsRef,
+    memory: memoryRef,
+    workflow: workflowRef,
+    captain: captainRef,
+    integrations: integrationsRef,
+  };
+
+  const scrollToSection = (category: SettingsCategory) => {
+    const ref = sectionRefs[category];
+    if (ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
   return (
-    <div className="settings-container">
+    <div className="settings-page">
       {error && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '12px',
-            right: '12px',
-            background: 'var(--error)',
-            color: 'white',
-            padding: 'var(--space-sm) var(--space-md)',
-            borderRadius: 'var(--radius-sm)',
-            fontFamily: 'var(--font-sans)',
-            fontSize: 'var(--text-sm)',
-            zIndex: 1000,
-          }}
-        >
+        <div className="settings-error-toast">
           {error}
         </div>
       )}
       {needsRestart && (
-        <div
-          className="settings-restart-toast"
-        >
+        <div className="settings-restart-toast">
           Restart required for changes to take effect
         </div>
       )}
-      <aside className="settings-sidebar">
-        <button
-          onClick={onClose}
-          className="settings-close-btn"
-          aria-label="Close settings"
-        >
-          ×
-        </button>
-        <nav>
-          <ul className="settings-sidebar-list">
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'models' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('models')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('models');
-                }
-              }}
+
+      <div className="settings-container">
+        {/* Header */}
+        <header className="settings-header">
+          <h1 className="settings-title">Settings</h1>
+          <p className="settings-subtitle">
+            Configure models, sessions, memory, and workflow preferences
+          </p>
+        </header>
+
+        {/* Sticky Category Navigation */}
+        <nav className="settings-nav" role="navigation" aria-label="Settings categories">
+          {CATEGORIES.map((category) => (
+            <button
+              key={category.id}
+              className="settings-nav-pill"
+              onClick={() => scrollToSection(category.id)}
+              aria-label={`Scroll to ${category.label} settings`}
             >
-              Models
-            </li>
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'sessions' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('sessions')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('sessions');
-                }
-              }}
-            >
-              Sessions
-            </li>
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'memory' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('memory')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('memory');
-                }
-              }}
-            >
-              Memory
-            </li>
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'workflow' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('workflow')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('workflow');
-                }
-              }}
-            >
-              Workflow
-            </li>
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'captain' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('captain')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('captain');
-                }
-              }}
-            >
-              Captain
-            </li>
-            <li
-              className={`settings-sidebar-item ${activeCategory === 'integrations' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('integrations')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  setActiveCategory('integrations');
-                }
-              }}
-            >
-              Integrations
-            </li>
-          </ul>
+              {category.label}
+            </button>
+          ))}
         </nav>
-      </aside>
-      <main className="settings-main">{renderPanel()}</main>
+
+        {/* All Sections Rendered Vertically */}
+        {loading ? (
+          <div className="settings-loading">
+            <div className="settings-loading-skeleton" />
+            <div className="settings-loading-skeleton" />
+            <div className="settings-loading-skeleton" />
+          </div>
+        ) : (
+          <div className="settings-sections">
+            <section ref={modelsRef} className="settings-section" style={{ animationDelay: '0.05s' }}>
+              <ModelsPanel config={config.models} onUpdate={updateConfig} />
+            </section>
+
+            <section ref={sessionsRef} className="settings-section" style={{ animationDelay: '0.1s' }}>
+              <SessionsPanel config={config.sessions} onUpdate={updateConfig} />
+            </section>
+
+            <section ref={memoryRef} className="settings-section" style={{ animationDelay: '0.15s' }}>
+              <MemoryPanel config={config.memory} onUpdate={updateConfig} />
+            </section>
+
+            <section ref={workflowRef} className="settings-section" style={{ animationDelay: '0.2s' }}>
+              <WorkflowPanel config={config.workflow} onUpdate={updateConfig} />
+            </section>
+
+            <section ref={captainRef} className="settings-section" style={{ animationDelay: '0.25s' }}>
+              <CaptainPanel config={config.captain} onUpdate={updateConfig} />
+            </section>
+
+            <section ref={integrationsRef} className="settings-section" style={{ animationDelay: '0.3s' }}>
+              <IntegrationsPanel config={config.integrations} onUpdate={updateConfig} />
+            </section>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

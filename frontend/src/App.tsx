@@ -426,6 +426,17 @@ function AppContent() {
     workspace.setTabStreaming(activeProject.path, activeTab.sessionId, streaming);
   }, [streaming, activeProject, activeTab, workspace]);
 
+  const handleClosePageTab = useCallback((page: string) => {
+    setActivePage(prev => {
+      if (prev !== page) return prev;
+      // Select the tab to the left of this page tab
+      const idx = openPageTabs.indexOf(page);
+      if (idx > 0) return openPageTabs[idx - 1];
+      return 'captain';
+    });
+    setOpenPageTabs(prev => prev.filter(p => p !== page));
+  }, [openPageTabs]);
+
   // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Cmd+K command palette, Escape cancel, Ctrl+Tab MRU tab switching)
   useKeyboardShortcuts({
     activeProject,
@@ -436,6 +447,7 @@ function AppContent() {
     streaming,
     handleNewTab,
     handleCloseTabInActiveProject,
+    handleClosePageTab: handleClosePageTab,
     handleSelectTabInActiveProjectQuiet,
     handleSelectTabQuiet,
     setShowCommandPalette,
@@ -470,17 +482,6 @@ function AppContent() {
       return page;
     });
     setShowDashboard(false);
-  }, [openPageTabs]);
-
-  const handleClosePageTab = useCallback((page: string) => {
-    setActivePage(prev => {
-      if (prev !== page) return prev;
-      // Select the tab to the left of this page tab
-      const idx = openPageTabs.indexOf(page);
-      if (idx > 0) return openPageTabs[idx - 1];
-      return 'captain';
-    });
-    setOpenPageTabs(prev => prev.filter(p => p !== page));
   }, [openPageTabs]);
 
   const handleSelectPageTab = useCallback((page: string) => {
@@ -727,7 +728,7 @@ function AppContent() {
               ) : shouldShowCaptain ? (
                 <CaptainDashboard socket={socket} captainState={captainState} onSessionClick={handleFleetSessionClick} />
               ) : shouldShowSettings ? (
-                <SettingsPage onClose={() => handleClosePageTab('settings')} />
+                <SettingsPage />
               ) : activeProject ? (
                 shouldShowDashboard ? (
                   <ProjectDashboard

@@ -11,6 +11,7 @@ interface UseKeyboardShortcutsProps {
   streaming: boolean;
   handleNewTab: () => void;
   handleCloseTabInActiveProject: (sessionId: string) => void;
+  handleClosePageTab: (page: string) => void;
   handleSelectTabInActiveProjectQuiet: (sessionId: string) => void;
   handleSelectTabQuiet: (projectPath: string, sessionId: string) => void;
   setShowCommandPalette: (show: boolean) => void;
@@ -28,6 +29,7 @@ export function useKeyboardShortcuts({
   streaming,
   handleNewTab,
   handleCloseTabInActiveProject,
+  handleClosePageTab,
   handleSelectTabInActiveProjectQuiet,
   handleSelectTabQuiet,
   setShowCommandPalette,
@@ -58,10 +60,12 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Cmd+W / Ctrl+W: Close current tab
+      // Cmd+W / Ctrl+W: Close current tab or page tab
       if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault();
-        if (activeTab) {
+        if (activePage) {
+          handleClosePageTab(activePage);
+        } else if (activeTab) {
           handleCloseTabInActiveProject(activeTab.sessionId);
         }
         return;
@@ -169,8 +173,12 @@ export function useKeyboardShortcuts({
     const electronAPI = (window as WindowWithElectron).electronAPI;
     const handleMenuAction = (_event: unknown, action: string) => {
       if (action === 'new-tab') handleNewTab();
-      if (action === 'close-tab' && activeTab) {
-        handleCloseTabInActiveProject(activeTab.sessionId);
+      if (action === 'close-tab') {
+        if (activePage) {
+          handleClosePageTab(activePage);
+        } else if (activeTab) {
+          handleCloseTabInActiveProject(activeTab.sessionId);
+        }
       }
     };
     if (electronAPI?.onMenuAction) {
@@ -195,6 +203,7 @@ export function useKeyboardShortcuts({
     streaming,
     handleNewTab,
     handleCloseTabInActiveProject,
+    handleClosePageTab,
     handleSelectTabInActiveProjectQuiet,
     handleSelectTabQuiet,
     setShowCommandPalette,

@@ -46,22 +46,6 @@ export function WorkflowPanel({ config, onUpdate }: WorkflowPanelProps) {
         checked={config.worktreesEnabled}
         onChange={(checked) => onUpdate('workflow.worktreesEnabled', checked)}
       />
-
-      <SettingsToggleRow
-        label="Code Review Gate"
-        description="Require code review before commits"
-        checked={config.codeReviewGate}
-        onChange={(checked) => onUpdate('workflow.codeReviewGate', checked)}
-        disabled={!config.workflowEnforcement}
-      />
-
-      <SettingsToggleRow
-        label="Test Coverage Gate"
-        description="Require test coverage thresholds to pass"
-        checked={config.testCoverageGate}
-        onChange={(checked) => onUpdate('workflow.testCoverageGate', checked)}
-        disabled={!config.workflowEnforcement}
-      />
     </div>
   );
 }

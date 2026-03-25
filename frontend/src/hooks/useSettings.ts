@@ -24,8 +24,6 @@ export interface MemoryConfig {
 export interface WorkflowConfig {
   workflowEnforcement: boolean;
   worktreesEnabled: boolean;
-  codeReviewGate: boolean;
-  testCoverageGate: boolean;
 }
 
 export interface CaptainConfig {
@@ -84,8 +82,6 @@ const DEFAULT_CONFIG: AppConfig = {
   workflow: {
     workflowEnforcement: true,
     worktreesEnabled: true,
-    codeReviewGate: true,
-    testCoverageGate: false,
   },
   captain: {
     autoStart: false,

@@ -8,13 +8,6 @@ const AVAILABLE_MODELS = [
   'claude-opus-4-20250514',
 ];
 
-const AGENT_TYPES = [
-  { id: 'code_agent', label: 'code_agent' },
-  { id: 'explore', label: 'explore' },
-  { id: 'code-reviewer', label: 'code-reviewer' },
-  { id: 'orchestrator', label: 'orchestrator' },
-];
-
 interface ModelsPanelProps {
   config: ModelsConfig | null;
   onUpdate: (key: string, value: unknown) => void;
@@ -90,29 +83,6 @@ export function ModelsPanel({ config, onUpdate }: ModelsPanelProps) {
         </div>
       </div>
 
-      <h3 className="settings-section-header">Per-Agent Overrides</h3>
-
-      {AGENT_TYPES.map((agent) => (
-        <div className="settings-row" key={agent.id}>
-          <div className="settings-row-label-group">
-            <div className="settings-row-label">{agent.label}</div>
-          </div>
-          <div className="settings-row-control">
-            <select
-              className="settings-select"
-              value={config.agent_overrides[agent.id] || 'inherit'}
-              onChange={(e) => onUpdate(`models.agent_overrides.${agent.id}`, e.target.value)}
-            >
-              <option value="inherit">inherit</option>
-              {AVAILABLE_MODELS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

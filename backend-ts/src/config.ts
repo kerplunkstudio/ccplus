@@ -192,8 +192,6 @@ interface Settings {
   workflow?: {
     enforcement_enabled?: boolean;
     worktrees_enabled?: boolean;
-    code_review_gate?: boolean;
-    test_coverage_gate?: boolean;
   };
   captain?: {
     auto_start?: boolean;
@@ -243,8 +241,6 @@ const DEFAULT_SETTINGS: Settings = {
   workflow: {
     enforcement_enabled: false,
     worktrees_enabled: true,
-    code_review_gate: false,
-    test_coverage_gate: false,
   },
   captain: {
     auto_start: true,
@@ -414,8 +410,6 @@ export function getResolvedConfig(): object {
     workflow: {
       enforcement_enabled: settingsData.workflow?.enforcement_enabled ?? DEFAULT_SETTINGS.workflow!.enforcement_enabled,
       worktrees_enabled: settingsData.workflow?.worktrees_enabled ?? DEFAULT_SETTINGS.workflow!.worktrees_enabled,
-      code_review_gate: settingsData.workflow?.code_review_gate ?? DEFAULT_SETTINGS.workflow!.code_review_gate,
-      test_coverage_gate: settingsData.workflow?.test_coverage_gate ?? DEFAULT_SETTINGS.workflow!.test_coverage_gate,
     },
     captain: {
       auto_start: settingsData.captain?.auto_start ?? DEFAULT_SETTINGS.captain!.auto_start,
@@ -484,14 +478,6 @@ export function getWorkflowEnabled(): boolean {
 
 export function getWorktreeEnabled(): boolean {
   return settingsData.workflow?.worktrees_enabled ?? DEFAULT_SETTINGS.workflow!.worktrees_enabled!;
-}
-
-export function getCodeReviewGate(): boolean {
-  return settingsData.workflow?.code_review_gate ?? DEFAULT_SETTINGS.workflow!.code_review_gate!;
-}
-
-export function getTestCoverageGate(): boolean {
-  return settingsData.workflow?.test_coverage_gate ?? DEFAULT_SETTINGS.workflow!.test_coverage_gate!;
 }
 
 export function getCaptainAutoStart(): boolean {
