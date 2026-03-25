@@ -25,6 +25,16 @@ interface ToolLogItemProps {
   event: ToolEvent;
 }
 
+const getTooltipText = (event: ToolEvent): string => {
+  if (event.description) return event.description;
+  const params = event.parameters || {};
+  const filePath = params.file_path || params.path || params.pattern;
+  if (filePath) return String(filePath);
+  if (params.command) return String(params.command);
+  const duration = event.duration_ms != null ? ` (${(event.duration_ms / 1000).toFixed(1)}s)` : '';
+  return `${event.tool_name}${duration}`;
+};
+
 const ToolLogItem: React.FC<ToolLogItemProps> = ({ event }) => {
   const isWorkerRestart = event.error === 'Worker restarted';
   const isFailed = (event.success === false || event.error != null) && !isWorkerRestart;
@@ -78,7 +88,7 @@ const ToolLogItem: React.FC<ToolLogItemProps> = ({ event }) => {
   };
 
   return (
-    <div className={className}>
+    <div className={className} title={getTooltipText(event)}>
       <span className="tool-log-arrow">
         {'⏵'}
       </span>
