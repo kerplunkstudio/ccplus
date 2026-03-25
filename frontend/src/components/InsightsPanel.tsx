@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { SOCKET_URL } from '../config';
 import './InsightsPanel.css';
 import { InsightsTokenSections } from './InsightsTokenSections';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface InsightsPanelProps {
   projectPath?: string;
@@ -163,10 +162,6 @@ const loadFromCache = (projectPath: string | undefined, days: number): CachedDat
   }
 };
 
-const isCacheFresh = (cacheTimestamp: number): boolean => {
-  return Date.now() - cacheTimestamp < CACHE_TTL_MS;
-};
-
 type SourceFilter = 'all' | 'native' | 'imported';
 
 interface ImportStatus {
@@ -181,8 +176,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDays, setSelectedDays] = useState<number>(30);
-  const [showingStaleData, setShowingStaleData] = useState(false);
-  const [cacheTimestamp, setCacheTimestamp] = useState<number | null>(null);
   const [selectedSource, setSelectedSource] = useState<SourceFilter>('all');
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null);
   const [importing, setImporting] = useState(false);
@@ -210,7 +203,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
       if (!isBackgroundRefresh) {
         setLoading(true);
         setError(null);
-        setShowingStaleData(false);
       }
 
       try {
@@ -228,8 +220,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
         if (response.ok) {
           const data = await response.json();
           setInsights(data);
-          setCacheTimestamp(Date.now());
-          setShowingStaleData(false);
           setError(null);
           saveToCache(projectPath, selectedDays, data);
         } else {
@@ -246,8 +236,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
             const cached = loadFromCache(projectPath, selectedDays);
             if (cached) {
               setInsights(cached.insights);
-              setCacheTimestamp(cached.timestamp);
-              setShowingStaleData(true);
               setError(null);
             } else {
               setError(errorMessage);
@@ -262,8 +250,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
           const cached = loadFromCache(projectPath, selectedDays);
           if (cached) {
             setInsights(cached.insights);
-            setCacheTimestamp(cached.timestamp);
-            setShowingStaleData(true);
             setError(null);
           } else {
             setError(errorMessage);
@@ -276,22 +262,7 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
       }
     };
 
-    // Try to load from cache immediately
-    const cached = loadFromCache(projectPath, selectedDays);
-    if (cached) {
-      setInsights(cached.insights);
-      setCacheTimestamp(cached.timestamp);
-      setLoading(false);
-
-      if (!isCacheFresh(cached.timestamp)) {
-        setShowingStaleData(true);
-      }
-
-      // Fetch fresh data in background
-      fetchInsights(true);
-    } else {
-      fetchInsights(false);
-    }
+    fetchInsights(false);
   }, [projectPath, selectedDays, selectedSource]);
 
   const handleImport = async () => {
@@ -341,52 +312,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
     }
   };
 
-  const handleRetry = () => {
-    setLoading(true);
-    setError(null);
-    setShowingStaleData(false);
-
-    const fetchInsights = async () => {
-      try {
-        const params = new URLSearchParams({ days: String(selectedDays) });
-        if (projectPath) {
-          params.append('project', projectPath);
-        }
-        if (selectedSource !== 'all') {
-          params.append('source', selectedSource);
-        }
-
-        const url = `${SOCKET_URL}/api/insights?${params}`;
-        const response = await fetch(url);
-
-        if (response.ok) {
-          const data = await response.json();
-          setInsights(data);
-          setCacheTimestamp(Date.now());
-          setShowingStaleData(false);
-          setError(null);
-          saveToCache(projectPath, selectedDays, data);
-        } else {
-          const text = await response.text();
-          try {
-            const errorData = JSON.parse(text);
-            setError(errorData.error || `HTTP ${response.status}`);
-          } catch {
-            setError(`HTTP ${response.status}: ${text.substring(0, 100)}`);
-          }
-          setShowingStaleData(true);
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(`Network error: ${message}`);
-        setShowingStaleData(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInsights();
-  };
 
   if (loading) {
     return (
@@ -436,18 +361,6 @@ export const InsightsPanel: React.FC<InsightsPanelProps> = ({ projectPath, onClo
   return (
     <div className="insights-panel">
       <div className="insights-container">
-        {/* Stale data indicator */}
-        {showingStaleData && cacheTimestamp && (
-          <div className="insights-stale-indicator">
-            <span className="insights-stale-text">
-              Showing cached data · Last updated {new Date(cacheTimestamp).toLocaleTimeString()}
-            </span>
-            <button className="insights-stale-retry" onClick={handleRetry}>
-              Retry
-            </button>
-          </div>
-        )}
-
         {/* 1. HEADER */}
         <div className="insights-header">
           <h1 className="insights-title">Insights</h1>
