@@ -50,6 +50,8 @@
 .captain-messages {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
   padding: var(--space-md) var(--space-xl);
 }
 

@@ -2,6 +2,8 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 /* Enhanced organic message entrance animations */
@@ -53,6 +55,7 @@
   padding: 0;
   line-height: 1.5;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message-images {
@@ -275,6 +278,7 @@
   margin: 8px 0;
   border-radius: var(--radius-lg);
   overflow: hidden;
+  overflow-x: auto;
   border: 1px solid var(--border);
 }
 
