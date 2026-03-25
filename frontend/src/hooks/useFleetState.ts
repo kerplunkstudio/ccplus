@@ -1,8 +1,7 @@
 import { useReducer, useEffect, useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import { FleetState, FleetSession } from '../types';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 interface FleetStateAction {
   type: 'SET_FLEET_STATE';

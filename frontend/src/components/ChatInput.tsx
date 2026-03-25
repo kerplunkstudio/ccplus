@@ -10,6 +10,7 @@ import {
   filterSkills,
   getAllSuggestions,
 } from '../utils/slashCommands';
+import { SOCKET_URL } from '../config';
 import './ChatInput.css';
 
 const PATH_AUTOCOMPLETE_DEBOUNCE_MS = 200;
@@ -262,7 +263,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const uploadFiles = async (files: File[]) => {
     setUploading(true);
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
@@ -359,7 +359,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Fetch path completions
   const fetchPathCompletions = async (partialPath: string) => {
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
     try {
       let url = `${SOCKET_URL}/api/path-complete?partial=${encodeURIComponent(partialPath)}`;
       if (projectPath) {

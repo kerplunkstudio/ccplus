@@ -2,8 +2,7 @@ import { useState, useEffect, useReducer, MutableRefObject } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, UsageStats, ToolEvent, ActivityNode } from '../types';
 import { streamReducer, initialStreamState } from './streamReducer';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-sonnet-4-6': 1_000_000,

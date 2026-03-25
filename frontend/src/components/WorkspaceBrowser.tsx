@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { SOCKET_URL } from '../config';
 import './WorkspaceBrowser.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface DirectoryEntry {
   name: string;

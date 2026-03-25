@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, ImageAttachment } from '../types';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 const STORAGE_KEY = 'ccplus_captain_messages';
 const ARCHIVE_KEY = 'ccplus_captain_archive';
 const MAX_ARCHIVED = 20;

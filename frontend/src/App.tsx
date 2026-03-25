@@ -27,9 +27,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
 import { WindowWithElectron, ImageAttachment } from './types';
+import { SOCKET_URL } from './config';
 import './App.css';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 const DEFAULT_SIDEBAR_WIDTH = 260;
 

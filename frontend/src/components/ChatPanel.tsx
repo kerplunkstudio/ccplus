@@ -3,6 +3,7 @@ import { Socket } from 'socket.io-client';
 import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, ImageAttachment } from '../types';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
+import { SOCKET_URL } from '../config';
 import './ChatPanel.css';
 
 export interface ScheduledTask {
@@ -109,7 +110,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       setPastSessions([]);
       return;
     }
-    const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
     fetch(`${SOCKET_URL}/api/sessions?project=${encodeURIComponent(projectPath)}`)
       .then(res => res.ok ? res.json() : { sessions: [] })
       .then(data => setPastSessions(data.sessions || []))

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 export interface AgentSecurity {
   allowedTools?: string[];

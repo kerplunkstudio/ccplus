@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
+import { SOCKET_URL } from '../config';
 import './MCPDiscovery.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const isSafeUrl = (url: string): boolean =>
   url.startsWith('https://') || url.startsWith('http://');

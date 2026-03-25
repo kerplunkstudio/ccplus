@@ -1,11 +1,10 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WorkspaceBrowser } from './WorkspaceBrowser';
+import { SOCKET_URL } from '../config';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
-
-const SOCKET_URL = 'http://localhost:4000';
 
 describe('WorkspaceBrowser', () => {
   const mockOnSelectWorkspace = jest.fn();

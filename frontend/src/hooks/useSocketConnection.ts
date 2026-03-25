@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, MutableRefObject } from 'react';
 import { io, Socket } from 'socket.io-client';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 interface UseSocketConnectionProps {
   currentSessionIdRef: MutableRefObject<string>;

@@ -2,9 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../hooks/useAgents';
 import { AGENT_ICONS } from '../constants/agentIcons';
+import { SOCKET_URL } from '../config';
 import './AgentsPanel.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const MODEL_OPTIONS = ['sonnet', 'opus', 'haiku'] as const;
 

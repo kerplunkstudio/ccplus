@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TrustMetrics } from '../types/index';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 export function useTrustScore(sessionId: string | undefined) {
   const [trustScore, setTrustScore] = useState<TrustMetrics | null>(null);

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SkillSuggestion } from '../utils/slashCommands';
 import { SkillData } from '../types';
-
-const API_BASE = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 export function useSkills() {
   const [skills, setSkills] = useState<SkillSuggestion[]>([]);
@@ -13,7 +12,7 @@ export function useSkills() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/skills`);
+      const response = await fetch(`${SOCKET_URL}/api/skills`);
       if (!response.ok) {
         throw new Error('Failed to load skills');
       }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SOCKET_URL } from '../config';
 import './UpdateBanner.css';
 
 interface UpdateInfo {
@@ -7,8 +8,6 @@ interface UpdateInfo {
   latest_version: string;
   channel: string;
 }
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 const UpdateBanner: React.FC = () => {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);

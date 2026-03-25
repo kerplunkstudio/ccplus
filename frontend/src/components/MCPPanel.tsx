@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MCPDiscovery } from './MCPDiscovery';
+import { SOCKET_URL } from '../config';
 import './MCPPanel.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface McpStdioConfig {
   type?: 'stdio';

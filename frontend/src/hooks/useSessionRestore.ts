@@ -4,8 +4,7 @@ import { ToolEvent, ActivityNode, PendingQuestion, SignalState, UsageStats, DBMe
 import { TreeAction } from './useActivityTree';
 import { StreamAction } from './streamReducer';
 import { MODEL_CONTEXT_WINDOWS, DEFAULT_CONTEXT_WINDOW } from './useStreamingMessages';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 interface UseSessionRestoreProps {
   sessionId: string;

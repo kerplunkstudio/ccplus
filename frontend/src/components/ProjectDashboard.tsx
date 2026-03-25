@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { SOCKET_URL } from '../config';
 import './ProjectDashboard.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const LANGUAGE_COLORS: Record<string, string> = {

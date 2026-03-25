@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DiffResult } from '../types/index';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
+import { SOCKET_URL } from '../config';
 
 export function useDiffReview(sessionId: string | undefined, streaming: boolean) {
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);

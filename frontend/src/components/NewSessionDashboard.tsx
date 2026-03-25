@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UsageStats } from '../types';
 import { useProfile } from './ProfilePanel';
+import { SOCKET_URL } from '../config';
 import './NewSessionDashboard.css';
 
 interface GitContext {
@@ -122,8 +123,6 @@ export const NewSessionDashboard: React.FC<NewSessionDashboardProps> = ({
   // Fetch git context on mount / when projectPath changes
   useEffect(() => {
     if (!projectPath) return;
-    const SOCKET_URL =
-      process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
     fetch(
       `${SOCKET_URL}/api/git/context?project=${encodeURIComponent(projectPath)}`
     )

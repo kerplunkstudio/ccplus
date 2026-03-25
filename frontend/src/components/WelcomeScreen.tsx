@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { WorkspaceBrowser } from './WorkspaceBrowser';
 import { useToast } from '../contexts/ToastContext';
+import { SOCKET_URL } from '../config';
 import './WelcomeScreen.css';
-
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:4000';
 
 interface DetectedProject {
   name: string;
