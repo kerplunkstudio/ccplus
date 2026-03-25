@@ -26,8 +26,11 @@ describe('TabBar', () => {
   const defaultProps = {
     tabs: mockTabs,
     activeTabId: 'session1',
+    isCaptainActive: false,
+    onCaptainClick: jest.fn(),
     onSelectTab: jest.fn(),
     onNewTab: jest.fn(),
+    onNewTerminalTab: jest.fn(),
     onCloseTab: jest.fn(),
     onReopenTab: jest.fn(),
     onCloseOtherTabs: jest.fn(),
@@ -42,8 +45,36 @@ describe('TabBar', () => {
 
   it('renders without crashing', () => {
     render(<TabBar {...defaultProps} />);
+    expect(screen.getByText('Captain')).toBeInTheDocument();
     expect(screen.getByText('First Session')).toBeInTheDocument();
     expect(screen.getByText('Second Session')).toBeInTheDocument();
+  });
+
+  it('renders Captain tab as first tab', () => {
+    render(<TabBar {...defaultProps} />);
+    const tabs = screen.getAllByRole('button');
+    const captainTab = tabs.find(tab => tab.textContent?.includes('Captain'));
+    expect(captainTab).toBeInTheDocument();
+  });
+
+  it('calls onCaptainClick when Captain tab is clicked', () => {
+    render(<TabBar {...defaultProps} />);
+    const captainTab = screen.getByText('Captain');
+    fireEvent.click(captainTab);
+    expect(defaultProps.onCaptainClick).toHaveBeenCalled();
+  });
+
+  it('shows Captain tab as active when isCaptainActive is true', () => {
+    render(<TabBar {...defaultProps} isCaptainActive={true} />);
+    const captainTab = screen.getByText('Captain').closest('.tab-item');
+    expect(captainTab).toHaveClass('active');
+  });
+
+  it('Captain tab does not have a close button', () => {
+    render(<TabBar {...defaultProps} />);
+    const captainTab = screen.getByText('Captain').closest('.tab-item');
+    const closeButton = captainTab?.querySelector('.tab-item-close');
+    expect(closeButton).not.toBeInTheDocument();
   });
 
   it('calls onSelectTab on single click', () => {

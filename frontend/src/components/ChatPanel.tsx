@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, ImageAttachment } from '../types';
-import { ChatPanelHeader } from './ChatPanelHeader';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import './ChatPanel.css';
@@ -120,14 +119,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   return (
     <>
       <div className="chat-panel">
-        <ChatPanelHeader
-          connected={connected}
-          selectedModel={selectedModel}
-          onSelectModel={onSelectModel}
-          onToggleSessions={onToggleSessions}
-          onToggleActivity={onToggleActivity}
-        />
-
         <MessageList
           messages={messages}
           streaming={streaming}
