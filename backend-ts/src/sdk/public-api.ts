@@ -5,6 +5,7 @@ import { streamQuery } from "./stream-query.js";
 import { log } from "../logger.js";
 import { eventLog } from '../event-log.js';
 import * as fleetMonitor from '../fleet-monitor.js';
+import { getWorkflowState } from '../workflow-state.js';
 
 // ---- Public API ----
 
@@ -20,6 +21,12 @@ export function submitQuery(
   workflow?: string,
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
+
+  // Initialize workflow state BEFORE fleet monitor to prevent race condition
+  // Fleet monitor calls getWorkflowState() without workflow param during emit
+  if (workflow) {
+    getWorkflowState(sessionId, workflow);
+  }
 
   // Register session and mark as running
   fleetMonitor.registerSession(sessionId, workspace, requestedBy);
