@@ -76,6 +76,7 @@ For each error:
 - Add new features
 - Change logic flow (unless fixing error)
 - Optimize performance or style
+- Run git commit or git push (leave uncommitted for the orchestrator)
 
 ## Priority Levels
 

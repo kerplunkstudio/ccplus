@@ -36,6 +36,10 @@ phases:
         action: block
         conditions: []
         message: ''
+      - tool_name: Bash
+        action: block
+        conditions: []
+        message: ''
   - name: plan
     context: >
       Write a detailed step-by-step implementation plan. Include file paths,
@@ -50,6 +54,10 @@ phases:
         conditions: []
         message: ''
       - tool_name: Write
+        action: block
+        conditions: []
+        message: ''
+      - tool_name: Bash
         action: block
         conditions: []
         message: ''

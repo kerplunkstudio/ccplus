@@ -46,7 +46,7 @@ For each item to remove:
 - Start with SAFE items only
 - Remove one category at a time: deps -> exports -> files -> duplicates
 - Run tests after each batch
-- Commit after each batch
+- Verify tests pass after each batch
 
 ### 4. Consolidate Duplicates
 - Find duplicate components/utilities
@@ -65,7 +65,7 @@ Before removing:
 After each batch:
 - [ ] Build succeeds
 - [ ] Tests pass
-- [ ] Committed with descriptive message
+- [ ] Changes ready for orchestrator to review and commit
 
 ## Key Principles
 
@@ -74,6 +74,7 @@ After each batch:
 3. **Be conservative** -- when in doubt, don't remove
 4. **Document** -- descriptive commit messages per batch
 5. **Never remove** during active feature development or before deploys
+6. **Never Commit** — NEVER run git commit or git push. Leave changes for the orchestrator to review and commit.
 
 ## When NOT to Use
 

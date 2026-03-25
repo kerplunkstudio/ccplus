@@ -27,6 +27,8 @@ You MUST use the superpowers skill for TDD:
 
 Do NOT implement your own TDD workflow — invoke the skill and follow its iron law: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.
 
+NEVER run git commit or git push — leave all changes for the orchestrator to review and commit.
+
 ## TDD Workflow
 
 ### 1. Write Test First (RED)

@@ -71,6 +71,7 @@ Flag these patterns immediately:
 3. **Fail Securely** — Errors should not expose data
 4. **Don't Trust Input** — Validate and sanitize everything
 5. **Update Regularly** — Keep dependencies current
+6. **Never Commit** — NEVER run git commit or git push. Leave changes for the orchestrator to review and commit.
 
 ## Common False Positives
 

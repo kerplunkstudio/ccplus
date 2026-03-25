@@ -10,15 +10,18 @@ phases:
     agent_hints:
       - security-reviewer
     tool_rules:
-      - tool: Edit
+      - tool_name: Edit
         action: block
         conditions: []
-      - tool: Write
+        message: ''
+      - tool_name: Write
         action: block
         conditions: []
-      - tool: Bash
+        message: ''
+      - tool_name: Bash
         action: block
         conditions: []
+        message: ''
   - name: execute
     context: |
       Remediate the security findings identified in the audit phase.
@@ -42,12 +45,18 @@ phases:
       - security-reviewer
       - code-reviewer
     tool_rules:
-      - tool: Edit
+      - tool_name: Edit
         action: block
         conditions: []
-      - tool: Write
+        message: ''
+      - tool_name: Write
         action: block
         conditions: []
+        message: ''
+      - tool_name: Bash
+        action: block
+        conditions: []
+        message: ''
 transitions:
   - from: audit
     to: execute

@@ -18,12 +18,14 @@ phases:
     agent_hints:
       - code-reviewer
     tool_rules:
-      - tool: Edit
+      - tool_name: Edit
         action: block
         conditions: []
-      - tool: Write
+        message: ''
+      - tool_name: Write
         action: block
         conditions: []
+        message: ''
 transitions:
   - from: execute
     to: review

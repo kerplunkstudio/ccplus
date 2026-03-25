@@ -80,6 +80,7 @@ npx playwright show-report                 # View HTML report
 - **Isolate tests**: Each test should be independent; no shared state
 - **Fail fast**: Use `expect()` assertions at every key step
 - **Trace on retry**: Configure `trace: 'on-first-retry'` for debugging failures
+- **Never Commit** — NEVER run git commit or git push. Leave test files for the orchestrator to review and commit.
 
 ## Flaky Test Handling
 

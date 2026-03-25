@@ -85,6 +85,10 @@ psql -c "SELECT indexrelname, idx_scan, idx_tup_read FROM pg_stat_user_indexes O
 - [ ] EXPLAIN ANALYZE run on complex queries
 - [ ] Transactions kept short
 
+## Commit Policy
+
+NEVER run git commit or git push. Leave all changes (migrations, schema updates) for the orchestrator to review and commit.
+
 ## Reference
 
 For detailed index patterns, schema design examples, connection management, concurrency strategies, JSONB patterns, and full-text search, see skills: `postgres-patterns` and `database-migrations`.

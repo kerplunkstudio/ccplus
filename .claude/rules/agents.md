@@ -42,16 +42,23 @@ Agents have prerequisites — run them in order. Do NOT skip steps.
 |--------|-------------|------|
 | code_agent commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
 | frontend-agent commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| debugger commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| build-error-resolver commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| tdd-guide commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| refactor-cleaner commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| e2e-runner commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| security-reviewer commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
+| database-reviewer commits | code-reviewer must run on the diff | Verdict must NOT be BLOCK |
 | `/landpr` or PR creation | code-reviewer must have run | Verdict: READY or WARNING |
 | code_agent implements feature | planner must have run (if >1 file touched) | Plan approved by user |
 | debugger fixes bug | Must complete 4-phase protocol | Root cause documented |
 
 ### How it works
 
-1. **code_agent / frontend-agent** complete implementation but DO NOT commit
+1. **Any implementing agent** (code_agent, frontend-agent, debugger, build-error-resolver, tdd-guide, refactor-cleaner, e2e-runner, security-reviewer, database-reviewer) completes work but does NOT commit
 2. **Orchestrator** spawns **code-reviewer** on the uncommitted diff
-3. If verdict is **BLOCK**: orchestrator spawns code_agent again to fix issues
-4. If verdict is **READY** or **WARNING**: orchestrator tells code_agent to commit
+3. If verdict is **BLOCK**: orchestrator spawns the implementing agent again to fix issues
+4. If verdict is **READY** or **WARNING**: orchestrator tells the implementing agent to commit
 5. For PRs: review must have passed before `gh pr create`
 
 This is a prompt-level convention — the orchestrator enforces it by following this sequence. No agent skips its prerequisites.

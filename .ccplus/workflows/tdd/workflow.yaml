@@ -8,7 +8,19 @@ phases:
       Do NOT write implementation code yet — only interfaces and type signatures.
     agent_hints:
       - planner
-    tool_rules: []
+    tool_rules:
+      - tool_name: Edit
+        action: block
+        conditions: []
+        message: ''
+      - tool_name: Write
+        action: block
+        conditions: []
+        message: ''
+      - tool_name: Bash
+        action: block
+        conditions: []
+        message: ''
   - name: test
     context: |
       Write failing tests first (RED phase). Cover unit, integration, and E2E as appropriate.
@@ -39,12 +51,14 @@ phases:
     agent_hints:
       - code-reviewer
     tool_rules:
-      - tool: Edit
+      - tool_name: Edit
         action: block
         conditions: []
-      - tool: Write
+        message: ''
+      - tool_name: Write
         action: block
         conditions: []
+        message: ''
 transitions:
   - from: plan
     to: test
