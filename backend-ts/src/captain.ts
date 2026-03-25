@@ -385,6 +385,33 @@ function buildCaptainSystemPrompt(workspace: string): string {
   return CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection;
 }
 
+// ---- Idle Message Filtering ----
+
+/**
+ * Patterns to detect idle/noise messages from Captain.
+ * These are suppressed to avoid cluttering the chat with "nothing to do" messages.
+ */
+const IDLE_MESSAGE_PATTERNS = [
+  /no pending work/i,
+  /what'?s next/i,
+  /no response requested/i,
+  /nothing to do/i,
+  /awaiting (?:your |further )?(?:instructions|input|requests)/i,
+  /standing by/i,
+  /ready for (?:your |the )?next/i,
+  /no (?:new )?tasks/i,
+  /waiting for (?:your |further )?(?:instructions|input|direction)/i,
+];
+
+/**
+ * Check if a message is an idle/noise message that should be suppressed.
+ * Only applies to short messages (< 120 chars) that match idle patterns.
+ */
+function isIdleMessage(text: string): boolean {
+  if (text.length > 120) return false;
+  return IDLE_MESSAGE_PATTERNS.some(pattern => pattern.test(text));
+}
+
 const CAPTAIN_SYSTEM_PROMPT_TEMPLATE = `
 You are Captain, the fleet orchestrator for cc+. Your job is to expand user requests and delegate to sessions — not to research or implement yourself.
 
@@ -635,7 +662,7 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         }
 
         const fullText = textBlocks.join("");
-        if (fullText.length > 0) {
+        if (fullText.length > 0 && !isIdleMessage(fullText)) {
           // Send to target callback(s)
           for (const callback of getTargetCallbacks(routeToCallbackId)) {
             try {
