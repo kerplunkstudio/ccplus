@@ -231,6 +231,7 @@ describe('session-api', () => {
         'claude-opus-4',
         undefined,
         undefined,
+        undefined,
         undefined
       );
     });

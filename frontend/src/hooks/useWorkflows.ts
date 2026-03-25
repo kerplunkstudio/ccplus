@@ -47,7 +47,7 @@ export function useWorkflows() {
       const res = await fetch(`${SOCKET_URL}/api/workflows`);
       if (!res.ok) throw new Error('Failed to fetch workflows');
       const data = await res.json();
-      setWorkflows(data.workflows || []);
+      setWorkflows(data.data || []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

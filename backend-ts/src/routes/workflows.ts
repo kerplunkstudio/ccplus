@@ -1,13 +1,38 @@
 import { Router, type Request, type Response } from 'express';
-import { loadWorkflow, listWorkflows } from '../workflow-config.js';
+import { loadWorkflow, listWorkflows, type WorkflowConfig } from '../workflow-config.js';
 import { log } from '../logger.js';
 
 const router = Router();
 
+function transformWorkflowForFrontend(workflow: WorkflowConfig) {
+  return {
+    ...workflow,
+    phases: workflow.phases.map(phase => ({
+      name: phase.name,
+      context: phase.context,
+      agentHints: phase.agent_hints,
+      toolRules: phase.tool_rules.map(rule => ({
+        tool: rule.tool_name,
+        action: rule.action,
+        condition: rule.conditions.join(', '),
+        message: rule.message ?? '',
+      })),
+    })),
+  };
+}
+
 // GET /api/workflows - List all available workflows
 router.get('/', (_req: Request, res: Response) => {
   try {
-    const workflows = listWorkflows();
+    const names = listWorkflows();
+    const workflows = names.map(name => {
+      try {
+        return transformWorkflowForFrontend(loadWorkflow(name));
+      } catch (err) {
+        log.error('Failed to load workflow', { name, error: String(err) });
+        return null;
+      }
+    }).filter(Boolean);
     res.json({ success: true, data: workflows });
   } catch (error) {
     log.error('Failed to list workflows', { error: String(error) });
