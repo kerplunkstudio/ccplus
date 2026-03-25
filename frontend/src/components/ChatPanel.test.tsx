@@ -76,22 +76,18 @@ describe('ChatPanel', () => {
     expect(screen.getByTestId('new-session-dashboard')).toBeInTheDocument();
   });
 
-  it('renders the connection status indicator', () => {
-    const { container } = render(<ChatPanel {...defaultProps} />);
-    const status = container.querySelector('.connection-status');
-    expect(status).toBeInTheDocument();
+  it('shows normal placeholder when connected', () => {
+    render(<ChatPanel {...defaultProps} />);
+    const textarea = screen.getByPlaceholderText('Send a message or type / for commands...');
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).not.toBeDisabled();
   });
 
-  it('shows online connection status when connected', () => {
-    const { container } = render(<ChatPanel {...defaultProps} />);
-    const status = container.querySelector('.connection-status');
-    expect(status).toHaveClass('online');
-  });
-
-  it('shows offline connection status when disconnected', () => {
-    const { container } = render(<ChatPanel {...defaultProps} connected={false} />);
-    const status = container.querySelector('.connection-status');
-    expect(status).toHaveClass('offline');
+  it('shows reconnecting placeholder when disconnected', () => {
+    render(<ChatPanel {...defaultProps} connected={false} />);
+    const textarea = screen.getByPlaceholderText('Reconnecting — hang tight...');
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toBeDisabled();
   });
 
   it('renders messages when provided', () => {

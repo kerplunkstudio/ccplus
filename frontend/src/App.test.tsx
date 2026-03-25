@@ -146,6 +146,37 @@ jest.mock('./components/BrowserTab', () => ({
   BrowserTab: () => <div>Browser</div>,
 }));
 
+jest.mock('./components/TerminalTab', () => ({
+  __esModule: true,
+  default: () => <div>Terminal</div>,
+}));
+
+jest.mock('./components/CaptainDashboard', () => ({
+  CaptainDashboard: () => <div>Captain Dashboard</div>,
+}));
+
+jest.mock('./hooks/useFleetState', () => ({
+  useFleetState: () => ({
+    fleetState: {
+      agents: [],
+      sessions: [],
+      workspaces: [],
+    },
+  }),
+}));
+
+jest.mock('./hooks/useCaptainSocket', () => ({
+  useCaptainSocket: () => ({
+    messages: [],
+    isStreaming: false,
+    isThinking: false,
+    isModelThinking: false,
+    sendMessage: jest.fn(),
+    archivedConversations: [],
+    clearHistory: jest.fn(),
+  }),
+}));
+
 // Suppress fetch calls from NewSessionDashboard / first-run check
 beforeAll(() => {
   global.fetch = jest.fn().mockResolvedValue({
@@ -169,22 +200,25 @@ describe('App', () => {
     expect(screen.getByTestId('project-sidebar')).toBeInTheDocument();
   });
 
-  it('renders the two-panel layout', () => {
+  it('renders the default captain page view', () => {
     const { container } = render(<App />);
     expect(container.querySelector('.app-layout')).toBeInTheDocument();
     expect(container.querySelector('.panel-chat')).toBeInTheDocument();
-    expect(container.querySelector('.panel-activity')).toBeInTheDocument();
+    // Captain page is shown by default, so panel-activity is not rendered
+    expect(container.querySelector('.panel-activity')).not.toBeInTheDocument();
   });
 
-  it('renders the activity panel with tabs', () => {
+  it('does not render activity panel when captain page is active', () => {
     render(<App />);
-    expect(screen.getByText('Agents')).toBeInTheDocument();
-    expect(screen.getByText('Tool Logs')).toBeInTheDocument();
+    // Captain page is active by default, so activity panel tabs are not rendered
+    expect(screen.queryByText('Agents')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool Logs')).not.toBeInTheDocument();
   });
 
-  it('shows empty state in activity panel', () => {
+  it('does not show activity panel empty state when captain page is active', () => {
     render(<App />);
-    expect(screen.getByText('Standby')).toBeInTheDocument();
+    // Captain page is active by default, so activity panel is not rendered
+    expect(screen.queryByText('Standby')).not.toBeInTheDocument();
   });
 });
 
@@ -291,7 +325,7 @@ describe('App - Conditional Rendering', () => {
     });
   });
 
-  it('shows no-project state when no active project', () => {
+  it('shows captain dashboard when no active project', () => {
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [],
@@ -315,10 +349,11 @@ describe('App - Conditional Rendering', () => {
       setTabStreaming: jest.fn(),
     });
     render(<App />);
-    expect(screen.getByText('Open a project from the sidebar to get started')).toBeInTheDocument();
+    // Captain page is shown by default (activePage defaults to 'captain')
+    expect(screen.getByText('Captain Dashboard')).toBeInTheDocument();
   });
 
-  it('shows dashboard when project has no tabs', () => {
+  it('shows captain dashboard when project has no tabs', () => {
     jest.spyOn(require('./hooks/useWorkspace'), 'useWorkspace').mockReturnValue({
       state: {
         projects: [
@@ -354,7 +389,8 @@ describe('App - Conditional Rendering', () => {
       setTabStreaming: jest.fn(),
     });
     render(<App />);
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    // Captain page is shown by default (activePage defaults to 'captain')
+    expect(screen.getByText('Captain Dashboard')).toBeInTheDocument();
   });
 });
 

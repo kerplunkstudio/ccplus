@@ -277,6 +277,11 @@ describe('InsightsPanel', () => {
       expect(screen.getByText('Insights')).toBeInTheDocument();
     });
 
+    // Wait for skeleton to disappear (data loaded)
+    await waitFor(() => {
+      expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
+    });
+
     const select = screen.getByRole('combobox');
     fireEvent.change(select, { target: { value: '7' } });
 
@@ -327,31 +332,34 @@ describe('InsightsPanel', () => {
     expect(JSON.parse(cached!).insights.summary.total_queries).toBe(1250);
   });
 
-  it('loads from cache and shows stale indicator if cache is old', async () => {
-    const oldCacheData = {
+  it('loads from cache when fetch fails', async () => {
+    const cachedData = {
       insights: mockInsightsData,
-      timestamp: Date.now() - 10 * 60 * 1000, // 10 minutes ago (stale)
+      timestamp: Date.now() - 10 * 60 * 1000, // 10 minutes ago
     };
-    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(oldCacheData));
+    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(cachedData));
 
-    (global.fetch as jest.Mock).mockImplementation(() => new Promise(() => {})); // Never resolves
+    mockImportStatus();
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
     render(<InsightsPanel />);
 
+    // Should display cached data without error state
     await waitFor(() => {
       expect(screen.getByText('Insights')).toBeInTheDocument();
+      expect(screen.getByText('1.3k')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Showing cached data/)).toBeInTheDocument();
-    expect(screen.getByText('Retry')).toBeInTheDocument();
+    // No error message should be shown since cache was available
+    expect(screen.queryByText(/Network error/)).not.toBeInTheDocument();
   });
 
-  it('loads from cache immediately if fresh', async () => {
-    const freshCacheData = {
+  it('shows loading state even when cache exists', async () => {
+    const cachedData = {
       insights: mockInsightsData,
-      timestamp: Date.now() - 1 * 60 * 1000, // 1 minute ago (fresh)
+      timestamp: Date.now() - 1 * 60 * 1000, // 1 minute ago
     };
-    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(freshCacheData));
+    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(cachedData));
 
     mockImportStatus();
     (global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -361,9 +369,13 @@ describe('InsightsPanel', () => {
 
     render(<InsightsPanel />);
 
-    // Should show cached data immediately without skeleton loading state
-    expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
+    // Component always fetches fresh data, showing loading initially
     expect(screen.getByText('Insights')).toBeInTheDocument();
+
+    // Wait for data to load
+    await waitFor(() => {
+      expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
+    });
   });
 
   it('renders daily chart bars', async () => {
@@ -375,45 +387,34 @@ describe('InsightsPanel', () => {
 
     render(<InsightsPanel />);
 
+    // Wait for data to load (skeleton disappears)
     await waitFor(() => {
-      expect(screen.getByText('Insights')).toBeInTheDocument();
+      expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
     });
 
     const bars = document.querySelectorAll('.insights-bar');
     expect(bars.length).toBeGreaterThan(0);
   });
 
-  it('handles stale retry button click', async () => {
-    const oldCacheData = {
+  it('falls back to cache when network fails', async () => {
+    const cachedData = {
       insights: mockInsightsData,
-      timestamp: Date.now() - 10 * 60 * 1000, // 10 minutes ago (stale)
+      timestamp: Date.now() - 5 * 60 * 1000, // 5 minutes ago
     };
-    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(oldCacheData));
+    localStorage.setItem('ccplus_insights_global_30', JSON.stringify(cachedData));
 
-    // import/status fires 1st (consumed by first Once), background insights never resolves,
-    // retry click gets the second Once (resolves with data).
     mockImportStatus();
-    (global.fetch as jest.Mock)
-      .mockImplementation(() => new Promise(() => {})) // background insights never resolves
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockInsightsData,
-      }); // retry click gets this
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network failed'));
 
     render(<InsightsPanel />);
 
+    // Should load from cache when network fails
     await waitFor(() => {
-      expect(screen.getByText('Insights')).toBeInTheDocument();
-      expect(screen.getByText('Retry')).toBeInTheDocument();
+      expect(screen.getByText('1.3k')).toBeInTheDocument();
     });
 
-    const retryButton = screen.getByText('Retry');
-    fireEvent.click(retryButton);
-
-    // After retry, stale indicator should disappear
-    await waitFor(() => {
-      expect(screen.queryByText('Retry')).not.toBeInTheDocument();
-    });
+    // Verify cached data is displayed
+    expect(screen.getByText(/queries in the last 30 days/)).toBeInTheDocument();
   });
 
   it('renders success rate badges with correct classes', async () => {
@@ -490,8 +491,15 @@ describe('InsightsPanel', () => {
       expect(screen.getByText('Insights')).toBeInTheDocument();
     });
 
+    // Wait for data to load
+    await waitFor(() => {
+      expect(document.querySelector('.insights-skeleton-hero')).not.toBeInTheDocument();
+    });
+
     const yLabels = document.querySelectorAll('.insights-y-label');
-    expect(yLabels.length).toBe(10); // 5 for daily activity + 5 for daily token consumption
+    // Daily activity chart has 5 y-axis labels (max, 75%, 50%, 25%, 0)
+    // Token consumption chart also has 5 y-axis labels
+    expect(yLabels.length).toBe(10);
   });
 
   it('renders daily token consumption chart', async () => {
