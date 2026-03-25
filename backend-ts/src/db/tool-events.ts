@@ -62,11 +62,17 @@ export function updateToolEvent(
 
 export function getToolEvents(sessionId: string, limit: number = config.MAX_ACTIVITY_EVENTS_DEFAULT): Record<string, unknown>[] {
   const d = getDb();
+  // Retrieve the most-recent `limit` rows ordered newest-first, then reverse so
+  // the returned array is in chronological (ascending) order.  This ensures that
+  // when a session has more than `limit` tool events, callers see the LATEST
+  // activity instead of only the oldest events.
   const rows = d.prepare(`
-    SELECT * FROM tool_usage
-    WHERE session_id = ?
-    ORDER BY timestamp ASC
-    LIMIT ?
+    SELECT * FROM (
+      SELECT * FROM tool_usage
+      WHERE session_id = ?
+      ORDER BY timestamp DESC, id DESC
+      LIMIT ?
+    ) ORDER BY timestamp ASC, id ASC
   `).all(sessionId, limit) as Record<string, unknown>[];
 
   return rows.map((row) => {

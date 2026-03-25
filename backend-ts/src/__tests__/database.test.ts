@@ -254,6 +254,25 @@ describe("Database Tests", () => {
 
       expect(events).toHaveLength(5);
     });
+
+    it("should return most recent events when exceeding limit (regression: fleet dashboard tool count)", () => {
+      // Insert 205 tool events
+      for (let i = 0; i < 205; i++) {
+        db.recordToolEvent("sess1", "Read", `t${i}`);
+      }
+
+      // Request 200 events
+      const events = db.getToolEvents("sess1", 200);
+
+      // Should return exactly 200 rows
+      expect(events).toHaveLength(200);
+
+      // The returned rows should be the 205 MOST RECENT (not the oldest)
+      // First returned event should be t5 (since t0-t4 are the 5 oldest and should be excluded)
+      expect(events[0].tool_use_id).toBe("t5");
+      // Last returned event should be t204 (the most recent)
+      expect(events[199].tool_use_id).toBe("t204");
+    });
   });
 
   describe("getStats", () => {

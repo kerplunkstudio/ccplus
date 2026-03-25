@@ -63,6 +63,33 @@ describe('Fleet Monitor', () => {
       const detail = fleetMonitor.getSessionDetail('sess1');
       expect(detail?.toolCount).toBe(3);
     });
+
+    it('correctly counts beyond 128 tool calls (regression: no uint8 overflow)', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+
+      // Simulate 200 tool calls — well beyond the 128 threshold reported in the bug
+      for (let i = 0; i < 200; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.toolCount).toBe(200);
+    });
+
+    it('aggregate totalToolCalls reflects counts beyond 128', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.registerSession('sess2', '/workspace/project2');
+
+      for (let i = 0; i < 130; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+      for (let i = 0; i < 75; i++) {
+        fleetMonitor.incrementToolCount('sess2');
+      }
+
+      const state = fleetMonitor.getFleetState();
+      expect(state.aggregate.totalToolCalls).toBe(205);
+    });
   });
 
   describe('incrementAgentCount and decrementAgentCount', () => {
