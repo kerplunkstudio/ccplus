@@ -5,6 +5,8 @@ import './TabBar.css';
 interface TabBarProps {
   tabs: TabState[];
   activeTabId: string;
+  isCaptainActive: boolean;
+  onCaptainClick: () => void;
   onSelectTab: (sessionId: string) => void;
   onNewTab: () => void;
   onNewTerminalTab: () => void;
@@ -26,6 +28,8 @@ interface ContextMenuState {
 const TabBar: React.FC<TabBarProps> = ({
   tabs,
   activeTabId,
+  isCaptainActive,
+  onCaptainClick,
   onSelectTab,
   onNewTab,
   onNewTerminalTab,
@@ -197,6 +201,24 @@ const TabBar: React.FC<TabBarProps> = ({
   return (
     <div className="tab-bar">
       <div className="tab-list">
+        {/* Captain Tab - always first and permanent */}
+        <div
+          className={`tab-item tab-captain ${isCaptainActive ? 'active' : ''}`}
+          onClick={onCaptainClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onCaptainClick();
+            }
+          }}
+        >
+          <span className="tab-item-icon">⎈</span>
+          <span className="tab-item-label">Captain</span>
+        </div>
+
+        {/* Session Tabs */}
         {tabs.map((tab) => {
           const isActive = tab.sessionId === activeTabId;
           const showActivity = tab.isStreaming || tab.hasRunningAgent;

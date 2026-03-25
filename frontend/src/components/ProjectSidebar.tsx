@@ -807,14 +807,6 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
 
         <div className="sidebar-footer-nav">
           <button
-            className={`footer-nav-item ${activePage === 'captain' ? 'active' : ''}`}
-            onClick={() => onNavigate('captain')}
-            aria-label="Captain"
-          >
-            <span className="footer-nav-icon">⎈</span>
-            <span className="footer-nav-label">Captain</span>
-          </button>
-          <button
             className={`footer-nav-item ${activePage === 'agents' ? 'active' : ''}`}
             onClick={() => onNavigate('agents')}
             aria-label="Agents"

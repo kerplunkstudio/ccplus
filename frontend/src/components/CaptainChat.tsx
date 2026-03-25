@@ -81,27 +81,6 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
 
   return (
     <div className="captain-chat">
-      <div className="captain-header">
-        <div className="captain-title">
-          <span className="captain-icon">C</span>
-          Captain
-        </div>
-        <div className="captain-header-actions">
-          {hasArchive && (
-            <button
-              className={`captain-history-toggle ${showHistory ? 'active' : ''}`}
-              onClick={handleToggleHistory}
-              aria-label={showHistory ? 'Hide history' : 'Show history'}
-            >
-              {showHistory ? 'Close' : `${archivedConversations.length} past`}
-            </button>
-          )}
-          {messages.length > 0 && !isStreaming && (
-            <button className="captain-clear-btn" onClick={onClear}>Clear</button>
-          )}
-        </div>
-      </div>
-
       {showHistory && (
         <div className="captain-history">
           <div className="captain-history-header">

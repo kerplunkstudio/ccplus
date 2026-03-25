@@ -39,6 +39,23 @@
   max-width: 180px;
 }
 
+.tab-captain {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: 0 var(--space-xl);
+  color: var(--text-secondary);
+  max-width: none;
+}
+
+.tab-captain:hover {
+  color: var(--text-primary);
+}
+
+.tab-captain.active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .tab-item:hover {
   color: var(--text-secondary);
 }

@@ -713,11 +713,16 @@ function AppContent() {
       </div>
 
       <div className="panel-main">
-        {activeProject && !activePage && (
+        {activeProject && (
           <TabBar
             tabs={activeProject.tabs}
-            activeTabId={activeProject.activeTabId}
-            onSelectTab={handleSelectTabInActiveProject}
+            activeTabId={activePage === 'captain' ? '' : activeProject.activeTabId}
+            isCaptainActive={activePage === 'captain'}
+            onCaptainClick={() => setActivePage('captain')}
+            onSelectTab={(sessionId) => {
+              setActivePage(null);
+              handleSelectTabInActiveProject(sessionId);
+            }}
             onNewTab={handleNewTab}
             onNewTerminalTab={handleNewTerminalTab}
             onCloseTab={handleCloseTabInActiveProject}
