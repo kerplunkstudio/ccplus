@@ -1,6 +1,5 @@
 import React from 'react';
 import { ActivityNode, isAgentNode, AgentNode, ToolNode } from '../types';
-import { ToolIcon } from './ToolIcon';
 import { formatDuration } from '../utils/formatDuration';
 import './NodeDetail.css';
 
@@ -26,9 +25,6 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 };
 
 export const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
-  const toolCount = node.children.filter((child) => !isAgentNode(child)).length;
-  const agentCount = node.children.filter((child) => isAgentNode(child)).length;
-
   return (
     <div className="node-detail-content">
       <div className="detail-header">
@@ -72,45 +68,6 @@ export const AgentDetail: React.FC<{ node: AgentNode }> = ({ node }) => {
           </div>
         </div>
       </div>
-
-      {node.children.length > 0 && (
-        <div className="detail-section">
-          <div className="detail-section-title">Operations</div>
-          <div className="detail-section-content">
-            <div className="detail-ops-summary">
-              {node.children.length} operation{node.children.length !== 1 ? 's' : ''}
-              {toolCount > 0 && agentCount > 0 && ` · ${toolCount} tool${toolCount !== 1 ? 's' : ''}, ${agentCount} agent${agentCount !== 1 ? 's' : ''}`}
-            </div>
-
-            <div className="detail-timeline">
-              {node.children.map((child, index) => (
-                <div key={child.tool_use_id} className="detail-timeline-item">
-                  <div className="detail-timeline-marker">
-                    <span className="detail-timeline-dot" />
-                    {index < node.children.length - 1 && (
-                      <span className="detail-timeline-line" />
-                    )}
-                  </div>
-                  <div className="detail-timeline-content">
-                    <div className="detail-timeline-icon">
-                      <ToolIcon
-                        toolName={isAgentNode(child) ? 'Agent' : child.tool_name}
-                        size={12}
-                      />
-                    </div>
-                    <span className="detail-timeline-name">
-                      {isAgentNode(child) ? child.agent_type : child.tool_name}
-                    </span>
-                    <span className="detail-timeline-time">
-                      {formatTimestamp(child.timestamp)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {node.error && (
         <div className="detail-section">
