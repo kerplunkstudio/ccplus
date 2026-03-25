@@ -7,7 +7,7 @@ const STORAGE_KEY = 'ccplus_captain_messages';
 const ARCHIVE_KEY = 'ccplus_captain_archive';
 const MAX_ARCHIVED = 20;
 
-interface CaptainConversation {
+export interface CaptainConversation {
   id: string;
   messages: Message[];
   startedAt: number;
@@ -229,3 +229,5 @@ export function useCaptainSocket(socket: Socket | null) {
     clearHistory,
   };
 }
+
+export type CaptainSocketState = ReturnType<typeof useCaptainSocket>;

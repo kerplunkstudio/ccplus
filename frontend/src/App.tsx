@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTabSocket } from './hooks/useTabSocket';
+import { useCaptainSocket } from './hooks/useCaptainSocket';
 import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
@@ -104,6 +105,9 @@ function AppContent() {
     pauseScheduledTask,
     resumeScheduledTask,
   } = socketData;
+
+  // Lift Captain state to App level so it persists across page navigation
+  const captainState = useCaptainSocket(socket);
 
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem('ccplus_selected_model') || 'claude-sonnet-4-6';
@@ -775,7 +779,7 @@ function AppContent() {
               ) : shouldShowWorkflows ? (
                 <WorkflowsPanel />
               ) : shouldShowCaptain ? (
-                <CaptainDashboard socket={socket} onSessionClick={handleFleetSessionClick} />
+                <CaptainDashboard socket={socket} captainState={captainState} onSessionClick={handleFleetSessionClick} />
               ) : shouldShowSettings ? (
                 <SettingsPage onClose={() => setActivePage(null)} />
               ) : activeProject ? (

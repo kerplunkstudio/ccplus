@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
-import { useCaptainSocket } from '../hooks/useCaptainSocket';
 import { useFleetState } from '../hooks/useFleetState';
+import type { CaptainSocketState } from '../hooks/useCaptainSocket';
 import { CaptainChat } from './CaptainChat';
 import { FleetMonitor } from './FleetMonitor';
 import { FleetSessionDetail } from './FleetSessionDetail';
@@ -9,11 +9,12 @@ import './CaptainDashboard.css';
 
 interface CaptainDashboardProps {
   socket: Socket | null;
+  captainState: CaptainSocketState;
   onSessionClick?: (sessionId: string, workspace: string) => void;
 }
 
-export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, onSessionClick }) => {
-  const { messages, isStreaming, isThinking, isModelThinking, sendMessage, archivedConversations, clearHistory } = useCaptainSocket(socket);
+export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, captainState, onSessionClick }) => {
+  const { messages, isStreaming, isThinking, isModelThinking, sendMessage, archivedConversations, clearHistory } = captainState;
   const { fleetState } = useFleetState(socket);
   const [dividerPosition, setDividerPosition] = useState(50);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
