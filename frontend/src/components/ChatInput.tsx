@@ -12,6 +12,8 @@ import {
 } from '../utils/slashCommands';
 import './ChatInput.css';
 
+const PATH_AUTOCOMPLETE_DEBOUNCE_MS = 200;
+
 export interface ScheduledTask {
   id: string;
   prompt: string;
@@ -403,7 +405,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       pathDebounceRef.current = setTimeout(() => {
         fetchPathCompletions(pathToken.path);
-      }, 200);
+      }, PATH_AUTOCOMPLETE_DEBOUNCE_MS);
     } else {
       setShowPathAutocomplete(false);
       setPathSuggestions([]);

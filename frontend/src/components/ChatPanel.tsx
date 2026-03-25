@@ -113,7 +113,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     fetch(`${SOCKET_URL}/api/sessions?project=${encodeURIComponent(projectPath)}`)
       .then(res => res.ok ? res.json() : { sessions: [] })
       .then(data => setPastSessions(data.sessions || []))
-      .catch(() => setPastSessions([]));
+      .catch((error) => {
+        console.error('Failed to fetch past sessions:', error);
+        setPastSessions([]);
+      });
   }, [messages.length, projectPath]);
 
   return (

@@ -73,7 +73,7 @@ export function useScheduler({ socket, sessionId }: UseSchedulerProps) {
     const handleScheduleFired = (data: { id: string; prompt: string; timestamp: number }) => {
       // Optionally update UI to show a task just fired
       // For now, we'll just log it
-      console.log(`Task ${data.id} fired at ${new Date(data.timestamp).toISOString()}`);
+      console.info(`Task ${data.id} fired at ${new Date(data.timestamp).toISOString()}`);
     };
 
     const handleScheduleList = (data: { tasks: ScheduledTask[] }) => {

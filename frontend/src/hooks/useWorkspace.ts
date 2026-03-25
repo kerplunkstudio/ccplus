@@ -167,7 +167,7 @@ const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction): Works
           return {
             ...project,
             tabs: [],
-            activeTabId: 'captain',
+            activeTabId: '',
             tabMruOrder: [],
           };
         }
@@ -336,11 +336,14 @@ export function useWorkspace() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...persistable, savedAt: Date.now() }),
-          }).catch(() => {});
+          }).catch((error) => {
+            console.error('Failed to bootstrap workspace API:', error);
+          });
         }
         initializedRef.current = true;
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Failed to fetch workspace from API:', error);
         initializedRef.current = true;
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -398,8 +401,8 @@ export function useWorkspace() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withTimestamp),
-      }).catch(() => {
-        // Best-effort save, localStorage is the fallback
+      }).catch((error) => {
+        console.error('Failed to save workspace to API:', error);
       });
     }, 300);
 
