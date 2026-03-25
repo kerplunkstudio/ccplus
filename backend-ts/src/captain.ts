@@ -122,7 +122,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
           prompt: z.string().describe("The task prompt for the session"),
           workspace: z.string().describe("Absolute path to the workspace/project directory"),
           session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
-          workflow: z.string().optional().describe("Workflow name to use for this session (e.g., 'default', 'tdd', 'hotfix'). Determines phase pipeline and tool rules."),
+          workflow: z.string().describe("REQUIRED. Workflow to use: 'feature', 'bug-fix', 'tdd', 'security-audit', or 'default'. See Workflow Selection section."),
         },
         async (args) => {
           const result = startSession(
@@ -371,11 +371,14 @@ function buildCaptainSystemPrompt(workspace: string): string {
     const wf = getWorkflowByName(name, workspace);
     if (!wf) return null;
     const description = wf.description || `${name} workflow`;
-    return `- ${name}: ${description}`;
+    const phases = wf.phases && wf.phases.length > 0
+      ? wf.phases.map(p => p.name).join(' → ')
+      : 'no phases';
+    return `- **${name}** (${description}): ${phases}`;
   }).filter((s): s is string => s !== null);
 
   const workflowSection = workflowDescriptions.length > 0
-    ? `\n## Available Workflows\nChoose the right workflow for each task:\n${workflowDescriptions.join('\n')}\n`
+    ? `\n## Available Workflows\n${workflowDescriptions.join('\n')}\n`
     : '';
 
   return CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection;
@@ -429,6 +432,23 @@ You CAN use Read, Bash, Glob, and Grep ONLY for checking session output, git sta
   - Constraints (don't touch X, must be backwards-compatible, etc.)
   - Context the agent won't have (why this change matters, related recent changes)
 - See Parallelization section below — this is NOT optional
+
+## Workflow Selection (MANDATORY)
+Every session MUST specify a workflow. NEVER omit the workflow parameter. Pick the best match:
+- **feature**: New capabilities, multi-file features, design decisions needed → design → plan → execute → test → review
+- **bug-fix**: Fixing bugs, regressions, failing tests → execute → test → review
+- **tdd**: New functions, modules, APIs where tests should drive design → plan → test → execute → test → review
+- **refactor**: Code cleanup, dead code removal, pattern modernization → plan → test → execute → test → review (NOTE: if this workflow doesn't exist, use default)
+- **security-audit**: Security review, vulnerability remediation → review → execute → test → review
+- **default**: ONLY for trivial one-off tasks that don't fit any category above → execute → review
+
+Decision guide:
+- If user says "fix", "bug", "broken", "not working" → bug-fix
+- If user says "add", "implement", "build", "create" → feature
+- If user says "test first", "TDD" → tdd
+- If user says "security", "audit", "vulnerability" → security-audit
+- If user says "investigate", "research", "check why" → default (research only)
+- When in doubt between feature and bug-fix, pick feature (more phases = safer)
 
 ## Parallelization (CRITICAL)
 Before writing a session prompt, decompose the task:
