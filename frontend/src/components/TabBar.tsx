@@ -16,6 +16,10 @@ interface TabBarProps {
   onDuplicateTab: (sessionId: string) => void;
   onRenameTab: (sessionId: string, newLabel: string) => void;
   hasClosedTabs: boolean;
+  pageTabsOpen: string[];
+  activePageTab: string | null;
+  onSelectPageTab: (page: string) => void;
+  onClosePageTab: (page: string) => void;
 }
 
 interface ContextMenuState {
@@ -39,6 +43,10 @@ const TabBar: React.FC<TabBarProps> = ({
   onDuplicateTab,
   onRenameTab,
   hasClosedTabs,
+  pageTabsOpen,
+  activePageTab,
+  onSelectPageTab,
+  onClosePageTab,
 }) => {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
@@ -198,6 +206,57 @@ const TabBar: React.FC<TabBarProps> = ({
 
   const isOnlyTab = tabs.length === 1;
 
+  // Page tab icon/label mapping
+  const getPageTabInfo = (page: string): { icon: React.ReactNode; label: string } => {
+    switch (page) {
+      case 'agents':
+        return { icon: <span className="tab-item-icon">◉</span>, label: 'Agents' };
+      case 'mcp':
+        return { icon: <span className="tab-item-icon">⬡</span>, label: 'MCP' };
+      case 'workflows':
+        return {
+          icon: (
+            <svg
+              className="tab-item-icon"
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="3" cy="8" r="2"/>
+              <circle cx="13" cy="4" r="2"/>
+              <circle cx="13" cy="12" r="2"/>
+              <line x1="5" y1="7.3" x2="11" y2="4.7"/>
+              <line x1="5" y1="8.7" x2="11" y2="11.3"/>
+            </svg>
+          ),
+          label: 'Flows'
+        };
+      case 'insights':
+        return { icon: <span className="tab-item-icon">◈</span>, label: 'Insights' };
+      case 'settings':
+        return { icon: <span className="tab-item-icon">⚙</span>, label: 'Settings' };
+      case 'profile':
+        return { icon: <span className="tab-item-icon">◇</span>, label: 'Profile' };
+      default:
+        return { icon: <span className="tab-item-icon">◇</span>, label: page };
+    }
+  };
+
+  const handlePageTabClick = (e: React.MouseEvent, page: string) => {
+    e.stopPropagation();
+    onSelectPageTab(page);
+  };
+
+  const handlePageTabClose = (e: React.MouseEvent, page: string) => {
+    e.stopPropagation();
+    onClosePageTab(page);
+  };
+
   return (
     <div className="tab-bar">
       <div className="tab-list">
@@ -217,6 +276,49 @@ const TabBar: React.FC<TabBarProps> = ({
           <span className="tab-item-icon">⎈</span>
           <span className="tab-item-label">Captain</span>
         </div>
+
+        {/* Page Tabs (agents, mcp, flows, insights, settings, profile) */}
+        {pageTabsOpen.map((page) => {
+          const { icon, label } = getPageTabInfo(page);
+          const isActive = activePageTab === page;
+
+          return (
+            <div
+              key={page}
+              className={`tab-item tab-page ${isActive ? 'active' : ''}`}
+              onClick={(e) => handlePageTabClick(e, page)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectPageTab(page);
+                }
+              }}
+            >
+              {icon}
+              <span className="tab-item-label">{label}</span>
+              <button
+                className="tab-item-close"
+                onClick={(e) => handlePageTabClose(e, page)}
+                aria-label={`Close ${label}`}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
 
         {/* Session Tabs */}
         {tabs.map((tab) => {

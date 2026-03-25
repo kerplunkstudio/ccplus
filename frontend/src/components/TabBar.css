@@ -59,6 +59,16 @@
   font-weight: 600;
 }
 
+/* Page Tabs */
+.tab-page {
+  border-right: 1px solid var(--border);
+  max-width: none;
+}
+
+.tab-page .tab-item-close {
+  opacity: 1;
+}
+
 .tab-item:hover {
   color: var(--text-secondary);
 }

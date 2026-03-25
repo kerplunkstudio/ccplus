@@ -37,6 +37,10 @@ describe('TabBar', () => {
     onDuplicateTab: jest.fn(),
     onRenameTab: jest.fn(),
     hasClosedTabs: false,
+    pageTabsOpen: [] as string[],
+    activePageTab: null as string | null,
+    onSelectPageTab: jest.fn(),
+    onClosePageTab: jest.fn(),
   };
 
   beforeEach(() => {
@@ -275,6 +279,120 @@ describe('TabBar', () => {
     await waitFor(() => {
       const closeButtons = screen.queryAllByLabelText('Close tab');
       expect(closeButtons.length).toBe(1);
+    });
+  });
+
+  describe('Page Tabs', () => {
+    it('renders page tabs when pageTabsOpen is provided', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['agents', 'mcp']} />);
+
+      expect(screen.getByText('Agents')).toBeInTheDocument();
+      expect(screen.getByText('MCP')).toBeInTheDocument();
+    });
+
+    it('renders page tabs between Captain and session tabs', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['insights']} />);
+
+      const allTabs = screen.getAllByRole('button');
+      const tabTexts = allTabs.map(tab => tab.textContent);
+
+      // Captain should be first
+      expect(tabTexts[0]).toContain('Captain');
+      // Insights should come before session tabs
+      const insightsIndex = tabTexts.findIndex(text => text?.includes('Insights'));
+      const firstSessionIndex = tabTexts.findIndex(text => text?.includes('First Session'));
+      expect(insightsIndex).toBeGreaterThan(0);
+      expect(insightsIndex).toBeLessThan(firstSessionIndex);
+    });
+
+    it('shows active state for the currently active page tab', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['agents', 'mcp']} activePageTab="agents" />);
+
+      const agentsTab = screen.getByText('Agents').closest('.tab-item');
+      const mcpTab = screen.getByText('MCP').closest('.tab-item');
+
+      expect(agentsTab).toHaveClass('active');
+      expect(mcpTab).not.toHaveClass('active');
+    });
+
+    it('calls onSelectPageTab when page tab is clicked', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['settings']} />);
+
+      const settingsTab = screen.getByText('Settings');
+      fireEvent.click(settingsTab);
+
+      expect(defaultProps.onSelectPageTab).toHaveBeenCalledWith('settings');
+    });
+
+    it('calls onClosePageTab when page tab close button is clicked', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['workflows']} />);
+
+      const closeButton = screen.getByLabelText('Close Flows');
+      fireEvent.click(closeButton);
+
+      expect(defaultProps.onClosePageTab).toHaveBeenCalledWith('workflows');
+    });
+
+    it('renders correct icons and labels for all page types', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['agents', 'mcp', 'workflows', 'insights', 'settings', 'profile']} />);
+
+      expect(screen.getByText('Agents')).toBeInTheDocument();
+      expect(screen.getByText('MCP')).toBeInTheDocument();
+      expect(screen.getByText('Flows')).toBeInTheDocument();
+      expect(screen.getByText('Insights')).toBeInTheDocument();
+      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByText('Profile')).toBeInTheDocument();
+    });
+
+    it('page tabs always show close button (not hidden like session tabs)', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['agents']} />);
+
+      const closeButton = screen.getByLabelText('Close Agents');
+      expect(closeButton).toBeInTheDocument();
+      // Close button should be visible even without hover (CSS handles opacity)
+      expect(closeButton.className).toContain('tab-item-close');
+    });
+
+    it('does not show page tabs when pageTabsOpen is empty', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={[]} />);
+
+      // Only Captain and session tabs should be present
+      expect(screen.getByText('Captain')).toBeInTheDocument();
+      expect(screen.getByText('First Session')).toBeInTheDocument();
+      expect(screen.getByText('Second Session')).toBeInTheDocument();
+
+      // Page tab labels should not be present
+      expect(screen.queryByText('Agents')).not.toBeInTheDocument();
+      expect(screen.queryByText('MCP')).not.toBeInTheDocument();
+    });
+
+    it('supports keyboard navigation for page tabs', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['profile']} />);
+
+      const profileTab = screen.getByText('Profile').closest('.tab-item');
+      expect(profileTab).toBeInTheDocument();
+
+      fireEvent.keyDown(profileTab!, { key: 'Enter', code: 'Enter' });
+      expect(defaultProps.onSelectPageTab).toHaveBeenCalledWith('profile');
+
+      defaultProps.onSelectPageTab.mockClear();
+
+      fireEvent.keyDown(profileTab!, { key: ' ', code: 'Space' });
+      expect(defaultProps.onSelectPageTab).toHaveBeenCalledWith('profile');
+    });
+
+    it('page tab is not active when Captain is active', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['insights']} isCaptainActive={true} activePageTab={null} />);
+
+      const insightsTab = screen.getByText('Insights').closest('.tab-item');
+      expect(insightsTab).not.toHaveClass('active');
+    });
+
+    it('page tab is not active when a session tab is active', () => {
+      render(<TabBar {...defaultProps} pageTabsOpen={['mcp']} activePageTab={null} activeTabId="session1" />);
+
+      const mcpTab = screen.getByText('MCP').closest('.tab-item');
+      expect(mcpTab).not.toHaveClass('active');
     });
   });
 });

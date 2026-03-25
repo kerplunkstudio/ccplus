@@ -125,7 +125,17 @@ function AppContent() {
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
 
 
-  const [activePage, setActivePage] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState<string | null>('captain');
+
+  // Track which page tabs are open (agents, mcp, flows, insights, settings, profile)
+  const [openPageTabs, setOpenPageTabs] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('ccplus_open_page_tabs');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
 
@@ -264,7 +274,7 @@ function AppContent() {
     workspace.selectProject(projectPath);
     workspace.selectTab(projectPath, sessionId);
     setShowDashboard(false);
-    setActivePage(null);
+    setActivePage(null); // Deselect page tabs when session tab is selected
   }, [workspace]);
 
   const handleSelectTabQuiet = useCallback((projectPath: string, sessionId: string) => {
@@ -324,19 +334,21 @@ function AppContent() {
     if (!activeProject) return;
     const remainingTabs = activeProject.tabs.filter(t => t.sessionId !== sessionId);
     workspace.closeTab(activeProject.path, sessionId);
-    if (remainingTabs.length === 0) {
+    // If no remaining session tabs and no page tabs are open, go to captain
+    if (remainingTabs.length === 0 && openPageTabs.length === 0) {
       setActivePage('captain');
     }
-  }, [workspace, activeProject]);
+  }, [workspace, activeProject, openPageTabs]);
 
   const handleCloseTab = useCallback((projectPath: string, sessionId: string) => {
     const project = workspace.state.projects.find(p => p.path === projectPath);
     const remainingTabs = project ? project.tabs.filter(t => t.sessionId !== sessionId) : [];
     workspace.closeTab(projectPath, sessionId);
-    if (remainingTabs.length === 0) {
+    // If no remaining session tabs and no page tabs are open, go to captain
+    if (remainingTabs.length === 0 && openPageTabs.length === 0) {
       setActivePage('captain');
     }
-  }, [workspace]);
+  }, [workspace, openPageTabs]);
 
   const handleSelectTabInActiveProject = useCallback((sessionId: string) => {
     if (!activeProject) return;
@@ -417,8 +429,33 @@ function AppContent() {
     setMobileDrawer((prev) => (prev === drawer ? null : drawer));
   }, []);
 
+  // Persist openPageTabs to localStorage
+  useEffect(() => {
+    localStorage.setItem('ccplus_open_page_tabs', JSON.stringify(openPageTabs));
+  }, [openPageTabs]);
+
   const handleNavigate = useCallback((page: string) => {
-    setActivePage(prev => prev === page ? null : page);
+    // Add page to openPageTabs if not already there
+    setOpenPageTabs(prev => {
+      if (!prev.includes(page)) {
+        return [...prev, page];
+      }
+      return prev;
+    });
+    // Set as active page
+    setActivePage(page);
+    setShowDashboard(false);
+  }, []);
+
+  const handleClosePageTab = useCallback((page: string) => {
+    // Remove from openPageTabs
+    setOpenPageTabs(prev => prev.filter(p => p !== page));
+    // If it was the active page, switch to captain
+    setActivePage(prev => prev === page ? 'captain' : prev);
+  }, []);
+
+  const handleSelectPageTab = useCallback((page: string) => {
+    setActivePage(page);
     setShowDashboard(false);
   }, []);
 
@@ -604,40 +641,42 @@ function AppContent() {
       </div>
 
       <div className="panel-main">
-        {workspace.state.projects.length > 0 && (
-          <TabBar
-            tabs={allTabs}
-            activeTabId={activePage === 'captain' ? '' : (activeTab?.sessionId || '')}
-            isCaptainActive={activePage === 'captain'}
-            onCaptainClick={() => setActivePage('captain')}
-            onSelectTab={(sessionId) => {
-              // Find which project this tab belongs to
-              const tab = allTabs.find(t => t.sessionId === sessionId);
-              if (tab && tab.projectPath) {
-                setActivePage(null);
-                handleSelectTab(tab.projectPath, sessionId);
-              }
-            }}
-            onNewTab={handleNewTab}
-            onNewTerminalTab={handleNewTerminalTab}
-            onCloseTab={(sessionId) => {
-              const tab = allTabs.find(t => t.sessionId === sessionId);
-              if (tab && tab.projectPath) {
-                handleCloseTab(tab.projectPath, sessionId);
-              }
-            }}
-            onReopenTab={workspace.reopenTab}
-            onCloseOtherTabs={(sessionId) => {
-              const tab = allTabs.find(t => t.sessionId === sessionId);
-              if (tab && tab.projectPath) {
-                workspace.closeOtherTabs(tab.projectPath, sessionId);
-              }
-            }}
-            onDuplicateTab={handleDuplicateTab}
-            onRenameTab={handleRenameTab}
-            hasClosedTabs={workspace.hasClosedTabs}
-          />
-        )}
+        <TabBar
+          tabs={allTabs}
+          activeTabId={activePage === 'captain' ? '' : (activeTab?.sessionId || '')}
+          isCaptainActive={activePage === 'captain'}
+          onCaptainClick={() => setActivePage('captain')}
+          onSelectTab={(sessionId) => {
+            // Find which project this tab belongs to
+            const tab = allTabs.find(t => t.sessionId === sessionId);
+            if (tab && tab.projectPath) {
+              setActivePage(null);
+              handleSelectTab(tab.projectPath, sessionId);
+            }
+          }}
+          onNewTab={handleNewTab}
+          onNewTerminalTab={handleNewTerminalTab}
+          onCloseTab={(sessionId) => {
+            const tab = allTabs.find(t => t.sessionId === sessionId);
+            if (tab && tab.projectPath) {
+              handleCloseTab(tab.projectPath, sessionId);
+            }
+          }}
+          onReopenTab={workspace.reopenTab}
+          onCloseOtherTabs={(sessionId) => {
+            const tab = allTabs.find(t => t.sessionId === sessionId);
+            if (tab && tab.projectPath) {
+              workspace.closeOtherTabs(tab.projectPath, sessionId);
+            }
+          }}
+          onDuplicateTab={handleDuplicateTab}
+          onRenameTab={handleRenameTab}
+          hasClosedTabs={workspace.hasClosedTabs}
+          pageTabsOpen={openPageTabs}
+          activePageTab={activePage !== 'captain' && activePage !== null ? activePage : null}
+          onSelectPageTab={handleSelectPageTab}
+          onClosePageTab={handleClosePageTab}
+        />
         <div className="panel-content">
           <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowAgents || shouldShowWorkflows || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
