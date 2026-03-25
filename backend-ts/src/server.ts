@@ -81,6 +81,7 @@ const io = new SocketIOServer(httpServer, {
 // Wire fleet monitor to Socket.IO
 fleetMonitor.setIOInstance(io);
 fleetMonitor.loadSessionsFromDb();
+fleetMonitor.startZombieReaper();
 
 const upload = multer({ storage: multer.memoryStorage() });
 

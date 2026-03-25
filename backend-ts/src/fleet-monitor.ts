@@ -6,7 +6,7 @@ import { getWorkflowState } from "./workflow-state.js";
 
 export interface FleetSessionInfo {
   sessionId: string;
-  status: 'running' | 'idle' | 'completed' | 'failed';
+  status: 'running' | 'idle' | 'completed' | 'failed' | 'cancelled';
   workspace: string;
   toolCount: number;
   activeAgents: number;
@@ -78,7 +78,7 @@ export function updateSessionStatus(sessionId: string, status: FleetSessionInfo[
     let durationMs = session.durationMs;
 
     // Calculate duration when session reaches terminal state
-    if (status === 'completed' || status === 'failed') {
+    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
       const startTime = new Date(session.startedAt).getTime();
       durationMs = Date.now() - startTime;
     }
@@ -91,7 +91,7 @@ export function updateSessionStatus(sessionId: string, status: FleetSessionInfo[
     };
     sessions.set(sessionId, updated);
     upsertFleetSession(updated);
-    const isTerminal = status === 'completed' || status === 'failed';
+    const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled';
     emitFleetUpdate(isTerminal);
   }
 }
@@ -267,6 +267,47 @@ export function emitFleetUpdate(force = false): void {
   doEmit();
 }
 
+// ---- Zombie Reaper ----
+
+const ZOMBIE_REAPER_INTERVAL_MS = 60_000; // every minute
+const ZOMBIE_TIMEOUT_MS = 5 * 60_000; // 5 minutes
+
+let zombieReaperTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startZombieReaper(): void {
+  if (zombieReaperTimer) return; // already running
+  zombieReaperTimer = setInterval(reapZombieSessions, ZOMBIE_REAPER_INTERVAL_MS);
+}
+
+export function stopZombieReaper(): void {
+  if (zombieReaperTimer) {
+    clearInterval(zombieReaperTimer);
+    zombieReaperTimer = null;
+  }
+}
+
+function reapZombieSessions(): void {
+  const now = Date.now();
+  for (const session of sessions.values()) {
+    if (
+      session.status === 'running' &&
+      session.toolCount === 0 &&
+      now - new Date(session.lastActivity).getTime() > ZOMBIE_TIMEOUT_MS
+    ) {
+      const startTime = new Date(session.startedAt).getTime();
+      const updated: FleetSessionInfo = {
+        ...session,
+        status: 'failed',
+        durationMs: now - startTime,
+        lastActivity: new Date().toISOString(),
+      };
+      sessions.set(session.sessionId, updated);
+      upsertFleetSession(updated);
+      emitFleetUpdate(true);
+    }
+  }
+}
+
 // ---- Testing helpers ----
 
 export function _clearSessions(): void {
@@ -275,5 +316,13 @@ export function _clearSessions(): void {
   if (pendingTimeout) {
     clearTimeout(pendingTimeout);
     pendingTimeout = null;
+  }
+  stopZombieReaper();
+}
+
+export function _setSessionLastActivity(sessionId: string, lastActivity: string): void {
+  const session = sessions.get(sessionId);
+  if (session) {
+    sessions.set(sessionId, { ...session, lastActivity });
   }
 }

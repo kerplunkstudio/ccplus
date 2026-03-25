@@ -224,6 +224,7 @@ function buildFleetMcpServer(dependencies: CaptainDependencies) {
         async (args) => {
           try {
             dependencies.sdkSession.cancelQuery(args.session_id);
+            fleetMonitor.updateSessionStatus(args.session_id, 'cancelled');
             return {
               content: [
                 {
