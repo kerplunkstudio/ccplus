@@ -21,17 +21,11 @@ export function formatAgentCatalog(agents: ResolvedAgent[]): string {
 
   return `## Available Agents
 
-Use the Agent tool to delegate work to these specialized agents:
-
 | Agent | Description | Model | Tool Restrictions |
 |-------|-------------|-------|-------------------|
 ${rows.join('\n')}
 
-**Delegation rules:**
-- For non-trivial tasks (>1 file), ALWAYS delegate to the appropriate agent
-- You are a DELEGATOR — your primary tool is the Agent tool
-- Direct work is only for targeted single-file edits or quick fixes
-- When delegating, specify: exact files, acceptance criteria, constraints, and context`;
+Use the Agent tool to delegate to these specialists.`;
 }
 
 /**
