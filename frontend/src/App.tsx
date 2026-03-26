@@ -446,7 +446,6 @@ function AppContent() {
     activePage,
     openPageTabs,
     streaming,
-    pageTabsOpen: openPageTabs,
     handleNewTab,
     handleCloseTabInActiveProject,
     handleClosePageTab: handleClosePageTab,
@@ -454,7 +453,6 @@ function AppContent() {
     handleSelectTabQuiet,
     setShowCommandPalette,
     setActivePage,
-    onCaptainClick: () => setActivePage('captain'),
     cancelQuery,
     onSelectTab: handleSelectTab,
   });
