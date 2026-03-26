@@ -229,22 +229,6 @@ describe("Settings Persistence", () => {
       expect(config.getCaptainModel()).toBe("claude-sonnet-4-6");
     });
 
-    it("getAgentOverride returns 'inherit' when not set", () => {
-      expect(config.getAgentOverride("code_agent")).toBe("inherit");
-    });
-
-    it("getAgentOverride returns configured value when set", () => {
-      config.saveSettings({
-        models: {
-          agent_overrides: {
-            code_agent: "claude-opus-4-6",
-          },
-        },
-      });
-
-      expect(config.getAgentOverride("code_agent")).toBe("claude-opus-4-6");
-    });
-
     it("getMemoryEnabled returns correct value", () => {
       config.saveSettings({
         memory: {
@@ -340,7 +324,6 @@ describe("Config API Routes", () => {
 
       expect(data.models).toHaveProperty("defaultModel");
       expect(data.models).toHaveProperty("captainModel");
-      expect(data.models).toHaveProperty("agent_overrides");
 
       expect(data.integrations.telegram).toHaveProperty("botToken");
       expect(data.integrations.discord).toHaveProperty("botToken");

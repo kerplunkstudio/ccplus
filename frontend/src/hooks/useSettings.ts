@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 export interface ModelsConfig {
   defaultModel: string;
   captainModel: string;
-  agent_overrides: Record<string, string>;
 }
 
 export interface SessionsConfig {
@@ -59,12 +58,6 @@ const DEFAULT_CONFIG: AppConfig = {
   models: {
     defaultModel: 'claude-sonnet-4.5-20250929',
     captainModel: 'claude-sonnet-4.5-20250929',
-    agent_overrides: {
-      code_agent: 'inherit',
-      explore: 'inherit',
-      'code-reviewer': 'inherit',
-      orchestrator: 'inherit',
-    },
   },
   sessions: {
     workspacePath: '~/Workspace',

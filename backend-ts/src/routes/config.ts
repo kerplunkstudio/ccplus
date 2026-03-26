@@ -4,12 +4,6 @@ const DEFAULT_CONFIG = {
   models: {
     defaultModel: 'claude-sonnet-4.5-20250929',
     captainModel: 'claude-sonnet-4.5-20250929',
-    agent_overrides: {
-      code_agent: 'inherit',
-      explore: 'inherit',
-      'code-reviewer': 'inherit',
-      orchestrator: 'inherit',
-    },
   },
   sessions: {
     workspacePath: '~/Workspace',

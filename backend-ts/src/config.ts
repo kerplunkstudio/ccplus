@@ -172,9 +172,6 @@ interface Settings {
   models?: {
     sdk_model?: string;
     captain_model?: string;
-    agent_overrides?: {
-      [agentName: string]: string;
-    };
   };
   sessions?: {
     workspace_path?: string;
@@ -223,7 +220,6 @@ const DEFAULT_SETTINGS: Settings = {
   models: {
     sdk_model: "claude-sonnet-4-6",
     captain_model: "claude-opus-4-6",
-    agent_overrides: {},
   },
   sessions: {
     workspace_path: WORKSPACE_PATH,
@@ -392,7 +388,6 @@ export function getResolvedConfig(): object {
     models: {
       sdk_model: settingsData.models?.sdk_model ?? DEFAULT_SETTINGS.models!.sdk_model,
       captain_model: settingsData.models?.captain_model ?? DEFAULT_SETTINGS.models!.captain_model,
-      agent_overrides: settingsData.models?.agent_overrides ?? {},
     },
     sessions: {
       workspace_path: settingsData.sessions?.workspace_path ?? DEFAULT_SETTINGS.sessions!.workspace_path,
@@ -438,10 +433,6 @@ export function getResolvedConfig(): object {
 
 export function getCaptainModel(): string {
   return settingsData.models?.captain_model ?? DEFAULT_SETTINGS.models!.captain_model!;
-}
-
-export function getAgentOverride(agent: string): string {
-  return settingsData.models?.agent_overrides?.[agent] ?? 'inherit';
 }
 
 export function getMemoryEnabled(): boolean {

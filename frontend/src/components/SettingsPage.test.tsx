@@ -13,7 +13,6 @@ const createDefaultMockConfig = () => ({
     defaultModel: 'claude-sonnet-4.5-20250929',
     captainModel: 'claude-opus-4-20250514',
     agentModels: {},
-    agent_overrides: {},
   },
   sessions: {
     maxConversationHistory: 50,
