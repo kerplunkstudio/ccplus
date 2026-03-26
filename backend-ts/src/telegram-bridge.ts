@@ -22,10 +22,37 @@ interface ChatState {
   readonly pendingOptions: readonly string[];
 }
 
+// TODO: import from './interactive-message.js' when that module is created
+interface InteractiveAction {
+  readonly id: string;
+  readonly label: string;
+  readonly style: 'primary' | 'danger' | 'default';
+  readonly value?: string;
+}
+
+interface InteractiveMessage {
+  readonly id: string;
+  readonly type: 'confirmation' | 'options' | 'multi-select' | 'status-action';
+  readonly text: string;
+  readonly actions: readonly InteractiveAction[];
+  readonly responseState: 'pending' | 'responded' | 'expired' | 'cancelled';
+  readonly timeoutMs?: number;
+  readonly createdAt: number;
+}
+
 // ---- State ----
 
 let bot: Bot | null = null;
 const chatStates = new Map<number, ChatState>();
+
+interface PendingInteractiveMsg {
+  readonly telegramMsgId: number;
+  readonly chatId: number;
+  readonly message: InteractiveMessage;
+  readonly timeoutTimer: ReturnType<typeof setTimeout> | null;
+}
+
+const pendingInteractiveMsgs = new Map<string, PendingInteractiveMsg>();
 
 // Typing indicator interval
 const TYPING_INTERVAL_MS = 4000;
@@ -126,6 +153,63 @@ export function resolveCallbackCommand(data: string, pendingOptions: readonly st
 
 // ---- Public API ----
 
+export async function deliverInteractiveMessage(chatId: number, message: InteractiveMessage): Promise<void> {
+  if (!bot) {
+    log.warn('Telegram bridge not active, dropping interactive message', { messageId: message.id });
+    return;
+  }
+
+  // Build inline keyboard — use action index (i) not action id to keep callback_data under 64 bytes
+  // Format: {"m":"<36-char-uuid>","i":0} = ~49 chars, well within 64-byte limit
+  const inlineKeyboard = message.actions.map((action, i) => [{
+    text: action.label,
+    callback_data: JSON.stringify({ m: message.id, i }),
+  }]);
+
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    const sent = await bot.api.sendMessage(chatId, message.text, {
+      reply_markup: { inline_keyboard: inlineKeyboard },
+    });
+
+    // Schedule timeout cleanup if timeoutMs is set
+    if (message.timeoutMs && message.timeoutMs > 0) {
+      timeoutTimer = setTimeout(async () => {
+        await expireInteractiveMessage(message.id);
+      }, message.timeoutMs);
+    }
+
+    pendingInteractiveMsgs.set(message.id, {
+      telegramMsgId: sent.message_id,
+      chatId,
+      message,
+      timeoutTimer,
+    });
+
+    log.info('Interactive message sent to Telegram', { messageId: message.id, chatId, actions: message.actions.length });
+  } catch (error) {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    log.error('Failed to send interactive message to Telegram', { messageId: message.id, chatId, error: String(error) });
+    throw error;
+  }
+}
+
+async function expireInteractiveMessage(messageId: string): Promise<void> {
+  if (!bot) return;
+  const pending = pendingInteractiveMsgs.get(messageId);
+  if (!pending) return;
+
+  pendingInteractiveMsgs.delete(messageId);
+  if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+
+  try {
+    await bot.api.editMessageText(pending.chatId, pending.telegramMsgId, 'Expirado');
+  } catch (error) {
+    log.warn('Could not expire interactive message on Telegram', { messageId, error: String(error) });
+  }
+}
+
 async function cleanupOrphanedAckMessages(botInstance: Bot): Promise<void> {
   const state = loadTelegramState(config.TELEGRAM_STATE_PATH)
   if (!state || state.ackMessages.length === 0) return
@@ -193,6 +277,12 @@ export async function stopTelegramBridge(): Promise<void> {
     persistTelegramState(ackMessages, config.TELEGRAM_STATE_PATH)
     log.info('Telegram ack state saved', { count: ackMessages.length })
   }
+
+  // Clean up pending interactive messages
+  for (const [, pending] of pendingInteractiveMsgs.entries()) {
+    if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+  }
+  pendingInteractiveMsgs.clear();
 
   // Clean up all chat states
   for (const [chatId, state] of chatStates.entries()) {
@@ -323,6 +413,57 @@ function setupBotHandlers(botInstance: Bot): void {
       return;
     }
 
+    // Check if this is an interactive message callback (has JSON with m+i keys)
+    let parsed: { m?: string; i?: number } | null = null;
+    try {
+      const maybeJson = JSON.parse(data);
+      if (typeof maybeJson === 'object' && maybeJson !== null && 'm' in maybeJson && 'i' in maybeJson) {
+        parsed = maybeJson as { m: string; i: number };
+      }
+    } catch {
+      // Not JSON — fall through to legacy callback handling
+    }
+
+    if (parsed && typeof parsed.m === 'string' && typeof parsed.i === 'number') {
+      // Interactive message callback — defer answerCallbackQuery to each branch
+      const pending = pendingInteractiveMsgs.get(parsed.m);
+      if (!pending) {
+        await ctx.answerCallbackQuery({ text: 'This message has expired' });
+        return;
+      }
+
+      const selectedAction = pending.message.actions[parsed.i];
+      if (!selectedAction) {
+        await ctx.answerCallbackQuery();
+        log.warn('Interactive callback: action index out of range', { messageId: parsed.m, idx: parsed.i });
+        return;
+      }
+
+      await ctx.answerCallbackQuery();
+
+      // Clean up pending entry
+      pendingInteractiveMsgs.delete(parsed.m);
+      if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+
+      // Edit original message to show selection (removes keyboard)
+      try {
+        await bot!.api.editMessageText(
+          pending.chatId,
+          pending.telegramMsgId,
+          `${pending.message.text}\n\n✓ ${selectedAction.label}`
+        );
+      } catch (error) {
+        log.warn('Could not edit interactive message after selection', { messageId: parsed.m, error: String(error) });
+      }
+
+      // Route response back to Captain as a regular message
+      const responseText = selectedAction.value ?? selectedAction.label;
+      captain.sendCaptainMessage(responseText, 'telegram', String(chatId));
+      log.info('Interactive response routed to Captain', { messageId: parsed.m, actionId: selectedAction.id, chatId });
+      return;
+    }
+
+    // Legacy callback handling (existing logic)
     await ctx.answerCallbackQuery();
 
     const state = chatStates.get(chatId);
