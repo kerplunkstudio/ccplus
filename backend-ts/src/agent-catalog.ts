@@ -35,6 +35,39 @@ ${rows.join('\n')}
 }
 
 /**
+ * Formats a list of agents into a markdown catalog specifically for Captain.
+ * Captain does NOT use agents directly — sessions launched via start_session do.
+ * Returns empty string if agents array is empty.
+ */
+export function formatAgentCatalogForCaptain(agents: ResolvedAgent[]): string {
+  if (!agents || agents.length === 0) {
+    return '';
+  }
+
+  const rows = agents.map((agent) => {
+    const name = agent.name || 'unknown';
+    const description = agent.description || '';
+    const model = agent.model || 'default';
+    const toolRestrictions = formatToolRestrictions(agent);
+
+    return `| ${name} | ${description} | ${model} | ${toolRestrictions} |`;
+  });
+
+  return `## Agents Available to Sessions
+
+Sessions launched via start_session have access to these specialized agents. Reference them in your session prompts to guide delegation. You do NOT use these agents directly — sessions do.
+
+| Agent | Description | Model | Tool Restrictions |
+|-------|-------------|-------|-------------------|
+${rows.join('\n')}
+
+**When writing session prompts:**
+- Reference agents by name to guide the session orchestrator (e.g., "The frontend-agent should handle component changes")
+- Sessions will delegate to these agents based on the task
+- You remain the fleet orchestrator — sessions handle agent delegation`;
+}
+
+/**
  * Formats tool restrictions for a single agent.
  */
 function formatToolRestrictions(agent: ResolvedAgent): string {
