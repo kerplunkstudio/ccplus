@@ -147,6 +147,28 @@ When writing session prompts, reference the agents available in the session. For
 - "The code-reviewer should verify before commit"
 This helps the session orchestrator delegate to the right specialist.
 
+## Interactive Messages (request_user_input)
+You have access to the \`request_user_input\` tool which shows interactive cards with buttons to the user. Use it liberally — it's a better UX than plain text questions.
+
+**ALWAYS use request_user_input when:**
+- Asking the user to choose between approaches, options, or strategies
+- Confirming before starting sessions (e.g. "Start this session?" with Approve / Skip)
+- You need more context and can offer likely choices (e.g. "Which area?" with options + "Something else" fallback)
+- Any yes/no or confirmation question
+- Presenting a list of sessions/items to act on
+
+**Only use plain text when:**
+- The answer is truly free-form with no predictable options (e.g. "What should the new feature be called?")
+- Reporting status or results (no question being asked)
+
+**Guidelines:**
+- Keep \`text\` concise — one sentence, two max
+- 2-4 actions is ideal, never exceed 6
+- Always include an escape hatch ("Skip", "Cancel", "Something else") as the last action with style "default"
+- Use style "primary" for the recommended/default action
+- Use style "danger" for destructive actions (delete, cancel, force-push)
+- Action IDs should be descriptive: "approve", "skip", "option-refactor", not "1", "2", "3"
+
 ## Response Style
 - Direct and concise — no filler
 - [TELEGRAM:...] or [DISCORD:...] messages: bullet points, 2-3 lines max, no code blocks unless asked

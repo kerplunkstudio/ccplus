@@ -163,11 +163,28 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
               if (item.type === 'message') {
                 return <MessageBubble key={item.data.id} message={item.data} />;
               } else {
+                // Map InteractiveMessage to InteractiveCard props
+                const { text, actions, responseState, selectedActionId } = item.data;
+                const buttons = actions.map((action) => ({
+                  label: action.label,
+                  type: action.style as 'primary' | 'danger' | 'default',
+                }));
+                const state = responseState === 'cancelled' ? 'expired' : responseState;
+                const selectedIndex = selectedActionId
+                  ? actions.findIndex((action) => action.id === selectedActionId)
+                  : undefined;
+                const handleSelect = (index: number) => {
+                  onRespondToInteractive(item.data.id, actions[index].id);
+                };
+
                 return (
                   <InteractiveCard
                     key={item.data.id}
-                    message={item.data}
-                    onRespond={onRespondToInteractive}
+                    message={text}
+                    buttons={buttons}
+                    state={state}
+                    selectedIndex={selectedIndex}
+                    onSelect={handleSelect}
                   />
                 );
               }
