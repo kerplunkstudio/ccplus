@@ -1,17 +1,133 @@
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Entry animation */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Pending border pulse */
+@keyframes border-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .interactive-card {
-  animation: fadeIn 0.2s ease-out;
+  /* No background — breathes in the chat flow */
+  border-left: 2px solid var(--accent);
+  padding: var(--space-md) 0 var(--space-md) var(--space-xl);
+  margin: var(--space-lg) 0;
+  animation: card-enter 0.25s var(--ease-out) both;
 }
 
-@keyframes subtlePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+.interactive-card[data-state="pending"] {
+  animation: card-enter 0.25s var(--ease-out) both,
+             border-pulse 3s ease-in-out infinite;
 }
 
-.interactive-card-pending .interactive-card-btn-primary {
-  animation: subtlePulse 2s ease-in-out infinite;
+.interactive-card[data-state="expired"] {
+  border-left-color: var(--border);
+}
+
+.interactive-card-text {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: var(--space-lg);
+}
+
+.interactive-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.interactive-card-btn {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--transition-fast),
+              color var(--transition-fast),
+              border-color var(--transition-fast),
+              opacity var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.interactive-card-btn:disabled {
+  cursor: default;
+}
+
+/* Primary */
+.interactive-card-btn--primary {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+}
+
+.interactive-card-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Danger */
+.interactive-card-btn--danger {
+  background: transparent;
+  color: var(--error);
+  border-color: var(--error-border);
+}
+
+.interactive-card-btn--danger:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+
+/* Default */
+.interactive-card-btn--default {
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-color: var(--button-border);
+}
+
+.interactive-card-btn--default:hover:not(:disabled) {
+  background: var(--button-bg-hover);
+  color: var(--button-text-hover);
+  border-color: var(--button-border-hover);
+}
+
+/* Responded state */
+.interactive-card-btn--selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Fade non-selected buttons in responded state */
+.interactive-card[data-state="responded"] .interactive-card-btn:not(.interactive-card-btn--selected) {
+  opacity: 0.25;
+}
+
+/* Expired state */
+.interactive-card[data-state="expired"] .interactive-card-btn {
+  opacity: 0.2;
+}
+
+.interactive-card-expired {
+  display: block;
+  margin-top: var(--space-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
