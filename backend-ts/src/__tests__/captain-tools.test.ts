@@ -55,9 +55,9 @@ describe('captain-tools', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 8 tools', () => {
+    it('builds 9 tools', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(8);
+      expect(tools).toHaveLength(9);
     });
   });
 

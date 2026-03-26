@@ -14,6 +14,9 @@ import { startSession } from "./session-api.js";
 import { getWorkflowState, transitionPhase, skipToPhase } from "./workflow-state.js";
 import { loadWorkflow } from "./workflow-config.js";
 import { log } from "./logger.js";
+import * as captain from "./captain.js";
+import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
+import { randomUUID } from 'crypto';
 
 // ---- Types ----
 
@@ -503,6 +506,75 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             }],
           };
         }
+      }
+    ),
+
+    // request_user_input - Send interactive message and wait for response
+    tool(
+      "request_user_input",
+      "Send an interactive message to the user and wait for their response. Captain will block until the user responds or the timeout expires. Use for confirmations, option selection, or any decision that requires explicit user input.",
+      {
+        type: z.enum(['confirmation', 'options']).describe("Message type: confirmation (yes/no style) or options (pick from list)"),
+        text: z.string().describe("Message text shown to the user"),
+        actions: z.array(z.object({
+          id: z.string().describe("Action identifier (max 52 chars)"),
+          label: z.string().describe("Button label shown to user (max 64 chars)"),
+          style: z.enum(['primary', 'danger', 'default']).optional().describe("Visual style"),
+        })).describe("Available actions the user can pick"),
+        timeoutMs: z.number().optional().describe("Timeout in milliseconds (default: 120000)"),
+      },
+      async (args) => {
+        const { type, text, actions, timeoutMs = 120_000 } = args;
+        const messageId = randomUUID();
+        const createdAt = Date.now();
+        const expiresAt = createdAt + timeoutMs;
+
+        const interactiveActions = actions.map((a) => ({
+          id: a.id,
+          label: a.label,
+          style: (a.style ?? 'default') as ActionStyle,
+        }));
+
+        const message: InteractiveMessage = {
+          id: messageId,
+          type,
+          text,
+          actions: interactiveActions,
+          responseState: 'pending',
+          timeoutMs,
+          createdAt,
+          expiresAt,
+        };
+
+        return new Promise<InteractiveResponse>((resolve) => {
+          const timer = setTimeout(() => {
+            captain.respondToInteractiveMessage(messageId, {
+              messageId,
+              actionId: '__expired__',
+              respondedAt: Date.now(),
+              source: 'api',
+            });
+          }, timeoutMs);
+
+          captain.registerPendingInteractiveMessage(messageId, {
+            message,
+            resolve,
+            timer
+          });
+          captain.emitInteractiveMessage(message);
+        }).then((response) => {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                message_id: messageId,
+                action_id: response.actionId,
+                action_value: response.actionValue,
+                expired: response.actionId === '__expired__',
+              }, null, 2),
+            }],
+          };
+        });
       }
     ),
   ];

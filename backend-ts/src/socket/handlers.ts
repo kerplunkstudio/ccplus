@@ -3,6 +3,7 @@ import { eventLog } from "../event-log.js";
 import { log } from "../logger.js";
 import { validateCronExpression, type Scheduler } from "../scheduler.js";
 import type { RouteDependencies } from "../routes/types.js";
+import type { InteractiveMessage } from "../interactive-message.js";
 
 // Helper: Join a session room and sync state
 function joinSession(
@@ -467,6 +468,12 @@ export function setupSocketHandlers(
           socket.emit('captain_error', { message });
         },
       });
+
+      captain.registerInteractiveCallback(`socket:${socket.id}`, {
+        onInteractiveMessage: (message: InteractiveMessage) => {
+          socket.emit('captain_interactive', message);
+        },
+      });
     });
 
     socket.on('captain_message', (data: { content: string }) => {
@@ -478,6 +485,48 @@ export function setupSocketHandlers(
         captain.sendCaptainMessage(data.content, 'web', socket.id);
       } catch (error) {
         socket.emit('captain_error', { message: String(error) });
+      }
+    });
+
+    socket.on('captain_interactive_response', (data: { messageId: string; actionId: string; actionValue?: string }) => {
+      if (!captain.isCaptainAlive()) {
+        socket.emit('captain_error', { message: 'Captain is not active' });
+        return;
+      }
+
+      // Validate inputs
+      if (typeof data.messageId !== 'string' || !data.messageId.trim() ||
+          typeof data.actionId !== 'string' || !data.actionId.trim()) {
+        socket.emit('captain_error', { message: 'Invalid interactive response: messageId and actionId must be non-empty strings' });
+        return;
+      }
+
+      // Check if message is pending and validate actionId is a known action
+      const pendingMessage = captain.getPendingInteractiveMessage(data.messageId);
+      if (!pendingMessage) {
+        socket.emit('captain_error', { message: `No pending interactive message with id: ${data.messageId}` });
+        return;
+      }
+
+      // Validate actionId is one of the known action ids (prevent forgery)
+      const validActionIds = pendingMessage.actions.map((a: { id: string }) => a.id);
+      if (!validActionIds.includes(data.actionId)) {
+        socket.emit('captain_error', { message: `Invalid actionId: ${data.actionId}` });
+        return;
+      }
+
+      // All validations passed, respond
+      const responded = captain.respondToInteractiveMessage(data.messageId, {
+        messageId: data.messageId,
+        actionId: data.actionId,
+        actionValue: data.actionValue,
+        respondedAt: Date.now(),
+        source: 'web',
+        sourceId: socket.id,
+      });
+
+      if (!responded) {
+        socket.emit('captain_error', { message: `No pending interactive message with id: ${data.messageId}` });
       }
     });
 
@@ -496,8 +545,12 @@ export function setupSocketHandlers(
       }
       socketTerminals.clear();
 
-      // Cleanup Captain callback for this socket
+      // Cleanup Captain callbacks for this socket
       captain.unregisterResponseCallback(`socket:${socket.id}`);
+      captain.unregisterInteractiveCallback(`socket:${socket.id}`);
+
+      // Expire pending interactive messages immediately (prevents up to 2min wait)
+      captain.expirePendingInteractiveMessages('disconnected');
     });
   });
 }

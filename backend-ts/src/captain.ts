@@ -15,6 +15,7 @@ import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
+import type { InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 
 // ---- Types ----
 
@@ -25,6 +26,10 @@ export interface ResponseCallback {
   readonly onThinking: (thinking: string) => void;
   readonly onComplete: () => void;
   readonly onError: (message: string) => void;
+}
+
+export interface InteractiveMessageCallback {
+  readonly onInteractiveMessage: (message: InteractiveMessage) => void;
 }
 
 interface CaptainDependencies {
@@ -39,6 +44,16 @@ interface CaptainDependencies {
 // ---- State ----
 
 const responseCallbacks = new Map<string, ResponseCallback>();
+
+// Map of messageId -> { message, resolve, timer }
+const pendingInteractiveMessages = new Map<string, {
+  readonly message: InteractiveMessage
+  readonly resolve: (response: InteractiveResponse) => void
+  readonly timer: ReturnType<typeof setTimeout>
+}>();
+
+// Interactive message broadcast callbacks (web sockets register here)
+const interactiveCallbacks = new Map<string, InteractiveMessageCallback>();
 
 interface CaptainState {
   readonly sessionId: string | null;
@@ -416,6 +431,92 @@ export function registerResponseCallback(id: string, callback: ResponseCallback)
 export function unregisterResponseCallback(id: string): void {
   responseCallbacks.delete(id);
   log.info("Captain response callback unregistered", { id });
+}
+
+/**
+ * Register a callback for interactive messages.
+ */
+export function registerInteractiveCallback(id: string, callback: InteractiveMessageCallback): void {
+  interactiveCallbacks.set(id, callback);
+  log.info("Captain interactive callback registered", { id });
+}
+
+/**
+ * Unregister a callback for interactive messages.
+ */
+export function unregisterInteractiveCallback(id: string): void {
+  interactiveCallbacks.delete(id);
+  log.info("Captain interactive callback unregistered", { id });
+}
+
+/**
+ * Emit an interactive message to all registered callbacks.
+ */
+export function emitInteractiveMessage(message: InteractiveMessage): void {
+  for (const callback of interactiveCallbacks.values()) {
+    try {
+      callback.onInteractiveMessage(message);
+    } catch (error) {
+      log.error("Captain interactive callback error", { error: String(error) });
+    }
+  }
+}
+
+/**
+ * Register a pending interactive message that's waiting for user response.
+ */
+export function registerPendingInteractiveMessage(
+  messageId: string,
+  entry: {
+    readonly message: InteractiveMessage
+    readonly resolve: (response: InteractiveResponse) => void
+    readonly timer: ReturnType<typeof setTimeout>
+  }
+): void {
+  pendingInteractiveMessages.set(messageId, entry);
+}
+
+/**
+ * Respond to a pending interactive message.
+ * Returns true if the message was found and responded to, false otherwise.
+ */
+export function respondToInteractiveMessage(messageId: string, response: InteractiveResponse): boolean {
+  const pending = pendingInteractiveMessages.get(messageId);
+  if (!pending) {
+    log.warn("No pending interactive message found", { messageId });
+    return false;
+  }
+  clearTimeout(pending.timer);
+  pendingInteractiveMessages.delete(messageId);
+  pending.resolve(response);
+  log.info("Interactive message responded", { messageId, actionId: response.actionId });
+  return true;
+}
+
+/**
+ * Get a pending interactive message by ID for validation purposes.
+ * Returns the InteractiveMessage if pending, undefined otherwise.
+ */
+export function getPendingInteractiveMessage(messageId: string): InteractiveMessage | undefined {
+  return pendingInteractiveMessages.get(messageId)?.message;
+}
+
+/**
+ * Expire all pending interactive messages with a given reason.
+ * Used on socket disconnect or cancellation to prevent dangling promises.
+ */
+export function expirePendingInteractiveMessages(reason: 'disconnected' | 'cancelled' = 'disconnected'): void {
+  for (const [messageId, pending] of pendingInteractiveMessages.entries()) {
+    clearTimeout(pending.timer);
+    pendingInteractiveMessages.delete(messageId);
+    pending.resolve({
+      messageId,
+      actionId: `__${reason}__`,
+      respondedAt: Date.now(),
+      source: 'api',
+    });
+    log.info('Interactive message expired', { messageId, reason });
+  }
 }
 
 /**
