@@ -159,6 +159,9 @@ export function useCaptainSocket(socket: Socket | null) {
     };
 
     const handleCaptainInteractive = (data: InteractiveMessage) => {
+      setIsModelThinking(false);
+      setIsThinking(false);
+      setIsStreaming(false);
       const now = Date.now();
       const normalizedMessage = data.expiresAt && data.expiresAt <= now
         ? { ...data, responseState: 'expired' as const }
