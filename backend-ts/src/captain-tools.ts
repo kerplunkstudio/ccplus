@@ -463,10 +463,11 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       async (args) => {
         try {
           const currentState = getWorkflowState(args.session_id);
+          const workspace = deps.sessionWorkspaces.get(args.session_id);
 
           const result = args.mode === 'force'
             ? skipToPhase(args.session_id, args.to_phase)
-            : transitionPhase(args.session_id, args.to_phase, args.reason ?? 'captain_manual');
+            : transitionPhase(args.session_id, args.to_phase, args.reason ?? 'captain_manual', workspace);
 
           if (!result) {
             const validTransitions = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];

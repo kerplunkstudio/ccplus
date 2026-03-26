@@ -12,6 +12,75 @@ vi.mock('../config.js', async () => {
   };
 });
 
+// Mock workflow-config module to provide test workflows
+vi.mock('../workflow-config.js', async () => {
+  const actual = await vi.importActual('../workflow-config.js') as any;
+
+  const testDefaultWorkflow = {
+    name: 'default',
+    description: 'Test default workflow',
+    default_phase: 'execute',
+    transitions: [
+      { from: 'execute', to: 'review' },
+      { from: 'review', to: 'merge' },
+      { from: 'merge', to: 'complete' },
+      { from: 'review', to: 'execute' },
+    ],
+    phases: [
+      {
+        name: 'execute',
+        context: 'Execute phase',
+        agent_hints: [],
+        tool_rules: [
+          { tool_name: 'Bash', action: 'block', conditions: ['command_contains:git commit'], message: 'Execute phase: complete code review before committing' },
+        ],
+      },
+      {
+        name: 'review',
+        context: 'Review phase',
+        agent_hints: [],
+        tool_rules: [
+          { tool_name: 'Edit', action: 'block', conditions: [], message: 'Review phase: report findings, do not edit code' },
+          { tool_name: 'Write', action: 'block', conditions: [], message: 'Review phase: report findings, do not write new files' },
+        ],
+      },
+      { name: 'merge', context: 'Merge phase', agent_hints: [], tool_rules: [] },
+      { name: 'complete', context: 'Complete phase', agent_hints: [], tool_rules: [] },
+    ],
+  };
+
+  const testFeatureWorkflow = {
+    name: 'feature',
+    description: 'Test feature workflow',
+    default_phase: 'design',
+    transitions: [
+      { from: 'design', to: 'plan' },
+      { from: 'plan', to: 'execute' },
+      { from: 'execute', to: 'test' },
+      { from: 'test', to: 'review' },
+      { from: 'review', to: 'complete' },
+      { from: 'test', to: 'execute' },
+      { from: 'review', to: 'execute' },
+    ],
+    phases: [
+      { name: 'design', context: 'Design phase', agent_hints: [], tool_rules: [] },
+      { name: 'plan', context: 'Plan phase', agent_hints: [], tool_rules: [] },
+      { name: 'execute', context: 'Execute phase', agent_hints: [], tool_rules: [] },
+      { name: 'test', context: 'Test phase', agent_hints: [], tool_rules: [] },
+      { name: 'review', context: 'Review phase', agent_hints: [], tool_rules: [] },
+      { name: 'complete', context: 'Complete phase', agent_hints: [], tool_rules: [] },
+    ],
+  };
+
+  return {
+    ...actual,
+    loadWorkflow: (workflowName: string) => {
+      if (workflowName === 'feature') return testFeatureWorkflow;
+      return testDefaultWorkflow; // default for all others
+    },
+  };
+});
+
 import * as config from '../config.js';
 const TEST_WORKFLOWS_DIR = config.WORKFLOWS_DIR;
 
@@ -92,7 +161,7 @@ describe('workflow-state', () => {
   };
 
   beforeEach(() => {
-    // Create temp directory for test
+    // Create temp directory for test session state files
     if (!existsSync(TEST_WORKFLOWS_DIR)) {
       mkdirSync(TEST_WORKFLOWS_DIR, { recursive: true });
     }
@@ -143,22 +212,22 @@ describe('workflow-state', () => {
       expect(state).toBeNull();
     });
 
-    it('succeeds for valid transition: execute -> test', () => {
+    it('succeeds for valid transition: review -> merge', () => {
       const sessionId = 'session-3';
-      // Setup: transition to execute first
-      skipToPhase(sessionId, 'execute');
+      // Setup: skip to review phase first
+      skipToPhase(sessionId, 'review');
 
       // Now test the transition
-      const state = transitionPhase(sessionId, 'test', 'test_phase');
+      const state = transitionPhase(sessionId, 'merge', 'merge_ready');
       expect(state).not.toBeNull();
-      expect(state!.phase).toBe('test');
+      expect(state!.phase).toBe('merge');
     });
 
-    it('allows test -> execute transition (back to fix)', () => {
+    it('allows review -> execute transition (back to fix)', () => {
       const sessionId = 'session-4';
-      skipToPhase(sessionId, 'test');
+      skipToPhase(sessionId, 'review');
 
-      const state = transitionPhase(sessionId, 'execute', 'fix_failing_test');
+      const state = transitionPhase(sessionId, 'execute', 'fix_issues');
       expect(state).not.toBeNull();
       expect(state!.phase).toBe('execute');
     });

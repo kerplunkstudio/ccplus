@@ -35,13 +35,11 @@ describe('agent-catalog', () => {
       const result = formatAgentCatalog(agents);
 
       expect(result).toContain('## Available Agents');
-      expect(result).toContain('Use the Agent tool to delegate work');
+      expect(result).toContain('Use the Agent tool to delegate to these specialists.');
       expect(result).toContain('| Agent | Description | Model | Tool Restrictions |');
       expect(result).toContain('|-------|-------------|-------|-------------------|');
       expect(result).toContain('| code-agent | Backend code implementation | sonnet | All tools |');
       expect(result).toContain('| frontend-agent | React components and styling | haiku | All tools |');
-      expect(result).toContain('**Delegation rules:**');
-      expect(result).toContain('For non-trivial tasks (>1 file), ALWAYS delegate');
     });
 
     it('shows "All except: Edit, Write" for agent with blocked tools', () => {

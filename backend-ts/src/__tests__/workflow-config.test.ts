@@ -41,7 +41,7 @@ describe('workflow-config', () => {
       expect(workflow.name).toBe('feature');
       expect(workflow.description).toContain('Full feature development');
       expect(workflow.default_phase).toBe('design');
-      expect(workflow.phases.length).toBe(5);
+      expect(workflow.phases.length).toBe(6); // design, plan, execute, test, review, merge
 
       const phaseNames = workflow.phases.map(p => p.name);
       expect(phaseNames).toContain('design');
@@ -57,7 +57,7 @@ describe('workflow-config', () => {
       expect(workflow.name).toBe('bug-fix');
       expect(workflow.description).toContain('Systematic bug investigation');
       expect(workflow.default_phase).toBe('execute');
-      expect(workflow.phases.length).toBe(3);
+      expect(workflow.phases.length).toBe(4); // execute, test, review, merge
     });
 
     it('loads tdd workflow from project .ccplus/workflows/', () => {
@@ -128,10 +128,15 @@ describe('workflow-config', () => {
       );
       expect(designToPlan).toBeDefined();
 
-      const reviewToComplete = workflow.transitions.find(
-        t => t.from === 'review' && t.to === 'complete'
+      const reviewToMerge = workflow.transitions.find(
+        t => t.from === 'review' && t.to === 'merge'
       );
-      expect(reviewToComplete).toBeDefined();
+      expect(reviewToMerge).toBeDefined();
+
+      const mergeToComplete = workflow.transitions.find(
+        t => t.from === 'merge' && t.to === 'complete'
+      );
+      expect(mergeToComplete).toBeDefined();
     });
 
     it('falls back to default workflow for unknown workflow name', () => {

@@ -4,7 +4,7 @@ import { sessions } from "./session-manager.js";
 import * as database from "../database.js";
 import { log } from "../logger.js";
 import * as config from "../config.js";
-import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase } from '../workflow-state.js';
+import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase, getNextPhase } from '../workflow-state.js';
 import { WORKFLOW_ENABLED } from '../config.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import { searchMemories, storeMemory } from '../memory-client.js';
@@ -204,17 +204,20 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
         log.error("Database write failed (postToolUse agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
 
-      // Auto-transition workflow after review agents complete successfully
+      // Auto-transition workflow after agents complete successfully
       if (WORKFLOW_ENABLED) {
         const agentType = (toolParams.subagent_type as string) ?? 'agent';
         const wfState = getWorkflowState(sessionId);
         const { loadWorkflow } = await import('../workflow-config.js');
         const workflow = loadWorkflow(wfState.workflowName, workspace);
         const inferredPhase = inferPhaseFromAgent(agentType, workflow);
-        if (inferredPhase === 'review') {
+        if (inferredPhase) {
           const currentState = getWorkflowState(sessionId);
-          if (currentState.phase === 'review') {
-            transitionPhase(sessionId, 'complete', `agent_complete:${agentType}`);
+          if (currentState.phase === inferredPhase) {
+            const nextPhase = getNextPhase(sessionId, workspace);
+            if (nextPhase) {
+              transitionPhase(sessionId, nextPhase, `agent_complete:${agentType}`, workspace);
+            }
           }
         }
       }
@@ -403,7 +406,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
       if (inferredPhase) {
         const currentState = getWorkflowState(sessionId);
         if (currentState.phase !== inferredPhase) {
-          const newState = transitionPhase(sessionId, inferredPhase, `agent:${agentType}`);
+          const newState = transitionPhase(sessionId, inferredPhase, `agent:${agentType}`, workspace);
           if (newState) {
             const session = sessions.get(sessionId);
             if (session?.callbacks) {

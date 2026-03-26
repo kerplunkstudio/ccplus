@@ -30,17 +30,7 @@ export interface PhaseEnforcementResult {
 }
 
 // ---- Constants ----
-
-const VALID_TRANSITIONS: Record<WorkflowPhase, WorkflowPhase[]> = {
-  idle: ['design', 'plan', 'execute'],
-  design: ['plan', 'execute'],
-  plan: ['execute'],
-  execute: ['test', 'review'],
-  test: ['review', 'execute'],
-  review: ['merge', 'execute'],
-  merge: ['complete'],
-  complete: ['idle'],
-};
+// (VALID_TRANSITIONS removed - now read from workflow YAML)
 
 
 // ---- Helpers ----
@@ -116,20 +106,71 @@ export function getWorkflowState(sessionId: string, workflowName?: string): Work
   }
 }
 
+/**
+ * Get valid transition targets for the current phase from workflow config
+ */
+export function getValidTransitions(sessionId: string, workspace?: string): string[] {
+  const currentState = getWorkflowState(sessionId);
+  try {
+    const workflow = loadWorkflow(currentState.workflowName, workspace);
+    if (!workflow) return [];
+
+    return workflow.transitions
+      .filter(t => t.from === currentState.phase)
+      .map(t => t.to);
+  } catch (error) {
+    log.warn('Failed to load workflow for transitions', {
+      sessionId,
+      workflowName: currentState.workflowName,
+      error: String(error)
+    });
+    return [];
+  }
+}
+
+/**
+ * Get the next phase from current phase (first valid transition target)
+ * Returns null if no valid transitions exist
+ */
+export function getNextPhase(sessionId: string, workspace?: string): string | null {
+  const validTargets = getValidTransitions(sessionId, workspace);
+  return validTargets.length > 0 ? validTargets[0] : null;
+}
+
 export function transitionPhase(
   sessionId: string,
   toPhase: string,
-  trigger: string
+  trigger: string,
+  workspace?: string
 ): WorkflowState | null {
   const currentState = getWorkflowState(sessionId);
-  const validTargets = VALID_TRANSITIONS[currentState.phase as WorkflowPhase] ?? [];
 
-  if (!validTargets.includes(toPhase as WorkflowPhase)) {
+  // Load workflow config to get valid transitions
+  let validTargets: string[] = [];
+  try {
+    const workflow = loadWorkflow(currentState.workflowName, workspace);
+    if (workflow) {
+      validTargets = workflow.transitions
+        .filter(t => t.from === currentState.phase)
+        .map(t => t.to);
+    }
+  } catch (error) {
+    log.warn('Failed to load workflow for transition validation, allowing transition', {
+      sessionId,
+      workflowName: currentState.workflowName,
+      error: String(error)
+    });
+    // If workflow can't be loaded, allow the transition (don't block edge cases)
+    validTargets = [toPhase];
+  }
+
+  if (!validTargets.includes(toPhase)) {
     log.warn('Invalid workflow transition', {
       sessionId,
       from: currentState.phase,
       to: toPhase,
       trigger,
+      validTargets,
     });
     return null;
   }

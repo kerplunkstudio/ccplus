@@ -64,9 +64,9 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('# cc+ Environment');
-      expect(prompt).not.toContain('Active Workflow');
-      expect(prompt).not.toContain('WORKFLOW');
+      expect(prompt).toContain('# Session Instructions');
+      expect(prompt).not.toContain('## Active Workflow:');
+      expect(prompt).not.toContain('Current Phase:');
     });
 
     it('with workflow includes workflow context', async () => {
@@ -84,7 +84,7 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', undefined, 'feature');
 
-      expect(prompt).toContain('Active Workflow');
+      expect(prompt).toContain('## Active Workflow: feature');
       expect(prompt).toContain('execute');
     });
 
@@ -105,7 +105,7 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('# cc+ Environment');
+      expect(prompt).toContain('# Session Instructions');
       expect(prompt).not.toContain('Available Agents');
     });
 
@@ -115,7 +115,7 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('# cc+ Environment');
+      expect(prompt).toContain('# Session Instructions');
       expect(prompt).not.toContain('Available Agents');
     });
 
@@ -128,8 +128,8 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', undefined, 'invalid');
 
-      expect(prompt).toContain('# cc+ Environment');
-      expect(prompt).not.toContain('Active Workflow');
+      expect(prompt).toContain('# Session Instructions');
+      expect(prompt).not.toContain('## Active Workflow:');
     });
 
     it('no longer contains hardcoded Mandatory Workflow', async () => {
@@ -141,14 +141,13 @@ describe('system-prompt', () => {
       expect(prompt).not.toContain('Mandatory Workflow');
     });
 
-    it('contains Your Role section', async () => {
+    it('contains orchestrator role description', async () => {
       vi.mocked(loadAllAgents).mockResolvedValue([]);
       vi.mocked(formatAgentCatalog).mockReturnValue(null);
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('## Your Role');
-      expect(prompt).toContain('ORCHESTRATOR');
+      expect(prompt).toContain('You are an orchestrator');
       expect(prompt).toContain('delegate work to specialized agents');
     });
   });

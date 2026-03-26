@@ -95,7 +95,6 @@ describe('captain-prompt', () => {
     it('contains key sections', () => {
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('You are Captain');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## The Golden Rule');
-      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Forbidden Actions');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Your Workflow');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Starting Sessions');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Workflow Selection (MANDATORY)');
@@ -108,8 +107,8 @@ describe('captain-prompt', () => {
     });
 
     it('explicitly forbids Edit, Write, and Agent tools', () => {
-      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('NEVER use Edit or Write tools');
-      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('NEVER use the Agent tool');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Edit/Write files or use NotebookEdit');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Spawn Agent subagents');
     });
 
     it('mentions workflow types', () => {
@@ -188,14 +187,14 @@ describe('captain-prompt', () => {
 
       vi.spyOn(workflowConfig, 'listWorkflows').mockReturnValue([]);
       vi.spyOn(agentConfig, 'loadAllAgents').mockResolvedValue(mockAgents);
-      vi.spyOn(agentCatalog, 'formatAgentCatalog').mockReturnValue('## Available Agents\nMock agent catalog');
+      vi.spyOn(agentCatalog, 'formatAgentCatalogForCaptain').mockReturnValue('## Agents Available to Sessions\nMock agent catalog');
 
       const result = await buildCaptainSystemPrompt(testWorkspace);
 
-      expect(result).toContain('## Available Agents');
+      expect(result).toContain('## Agents Available to Sessions');
       expect(result).toContain('Mock agent catalog');
       expect(agentConfig.loadAllAgents).toHaveBeenCalledWith(testWorkspace);
-      expect(agentCatalog.formatAgentCatalog).toHaveBeenCalledWith(mockAgents);
+      expect(agentCatalog.formatAgentCatalogForCaptain).toHaveBeenCalledWith(mockAgents);
     });
 
     it('includes phase enforcement section for feature workflow', async () => {
@@ -253,7 +252,7 @@ describe('captain-prompt', () => {
 
       // Should still return a valid prompt
       expect(result).toContain('You are Captain');
-      expect(result).not.toContain('## Available Agents');
+      expect(result).not.toContain('## Agents Available to Sessions');
 
       consoleWarnSpy.mockRestore();
     });
@@ -301,7 +300,7 @@ describe('captain-prompt', () => {
       vi.spyOn(workflowConfig, 'listWorkflows').mockReturnValue(['feature', 'bug-fix']);
       vi.spyOn(workflowConfig, 'getWorkflowByName').mockReturnValue(mockWorkflow);
       vi.spyOn(agentConfig, 'loadAllAgents').mockResolvedValue(mockAgents);
-      vi.spyOn(agentCatalog, 'formatAgentCatalog').mockReturnValue('## Available Agents\nAgent catalog');
+      vi.spyOn(agentCatalog, 'formatAgentCatalogForCaptain').mockReturnValue('## Agents Available to Sessions\nAgent catalog');
       vi.spyOn(agentCatalog, 'formatPhaseEnforcement').mockReturnValue('## Phase Enforcement\nEnforcement rules');
 
       const result = await buildCaptainSystemPrompt(testWorkspace);
@@ -314,7 +313,7 @@ describe('captain-prompt', () => {
       expect(result).toContain('- **feature** (Feature workflow): design → execute');
 
       // Agent catalog section
-      expect(result).toContain('## Available Agents');
+      expect(result).toContain('## Agents Available to Sessions');
       expect(result).toContain('Agent catalog');
 
       // Phase enforcement section
