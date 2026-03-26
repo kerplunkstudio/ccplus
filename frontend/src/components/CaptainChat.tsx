@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Message } from '../types';
+import { InteractiveMessage } from '../types/interactive';
 import { MessageBubble } from './MessageBubble';
+import { InteractiveCard } from './InteractiveCard';
 import { ChatInput } from './ChatInput';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import './CaptainChat.css';
@@ -21,6 +23,8 @@ interface CaptainChatProps {
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
   onClear: () => void;
+  interactiveMessages: InteractiveMessage[];
+  onRespondToInteractive: (messageId: string, actionId: string) => void;
 }
 
 function formatConversationDate(timestamp: number): string {
@@ -53,6 +57,8 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   archivedConversations,
   onClearHistory,
   onClear,
+  interactiveMessages,
+  onRespondToInteractive,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
@@ -66,7 +72,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
     } else {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, interactiveMessages]);
 
   const handleToggleHistory = () => {
     setShowHistory((prev) => !prev);
@@ -78,6 +84,16 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   };
 
   const hasArchive = archivedConversations.length > 0;
+
+  // Merge messages and interactive messages, sorted by timestamp
+  type TimelineItem =
+    | { type: 'message'; data: Message; timestamp: number }
+    | { type: 'interactive'; data: InteractiveMessage; timestamp: number };
+
+  const timeline: TimelineItem[] = [
+    ...messages.map((msg) => ({ type: 'message' as const, data: msg, timestamp: msg.timestamp })),
+    ...interactiveMessages.map((msg) => ({ type: 'interactive' as const, data: msg, timestamp: msg.createdAt })),
+  ].sort((a, b) => a.timestamp - b.timestamp);
 
   return (
     <div className="captain-chat">
@@ -143,9 +159,19 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            {timeline.map((item) => {
+              if (item.type === 'message') {
+                return <MessageBubble key={item.data.id} message={item.data} />;
+              } else {
+                return (
+                  <InteractiveCard
+                    key={item.data.id}
+                    message={item.data}
+                    onRespond={onRespondToInteractive}
+                  />
+                );
+              }
+            })}
             {isThinking && <ThinkingIndicator activityTree={[]} isModelThinking={isModelThinking} />}
             <div ref={messagesEndRef} />
           </>

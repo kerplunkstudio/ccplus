@@ -1,0 +1,17 @@
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.interactive-card {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.interactive-card-pending .interactive-card-btn-primary {
+  animation: subtlePulse 2s ease-in-out infinite;
+}

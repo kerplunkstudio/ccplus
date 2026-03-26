@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, ImageAttachment } from '../types';
+import { InteractiveMessage } from '../types/interactive';
 import { SOCKET_URL } from '../config';
 const STORAGE_KEY = 'ccplus_captain_messages';
 const ARCHIVE_KEY = 'ccplus_captain_archive';
@@ -54,6 +55,7 @@ export function useCaptainSocket(socket: Socket | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isModelThinking, setIsModelThinking] = useState(false);
+  const [interactiveMessages, setInteractiveMessages] = useState<InteractiveMessage[]>([]);
   const currentSessionIdRef = useRef<string>('');
 
   // Initialize Captain session on mount
@@ -156,11 +158,20 @@ export function useCaptainSocket(socket: Socket | null) {
       setIsModelThinking(data.isThinking);
     };
 
+    const handleCaptainInteractive = (data: InteractiveMessage) => {
+      const now = Date.now();
+      const normalizedMessage = data.expiresAt && data.expiresAt <= now
+        ? { ...data, responseState: 'expired' as const }
+        : data;
+      setInteractiveMessages((prev) => [...prev, normalizedMessage]);
+    };
+
     socket.on('captain_thinking', handleCaptainThinking);
     socket.on('captain_text', handleCaptainText);
     socket.on('captain_complete', handleCaptainComplete);
     socket.on('captain_error', handleCaptainError);
     socket.on('thinking_status', handleThinkingStatus);
+    socket.on('captain_interactive', handleCaptainInteractive);
 
     return () => {
       socket.off('captain_thinking', handleCaptainThinking);
@@ -168,8 +179,52 @@ export function useCaptainSocket(socket: Socket | null) {
       socket.off('captain_complete', handleCaptainComplete);
       socket.off('captain_error', handleCaptainError);
       socket.off('thinking_status', handleThinkingStatus);
+      socket.off('captain_interactive', handleCaptainInteractive);
     };
   }, [socket, captainSessionId]);
+
+  // Handle timeouts for interactive messages
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
+    const now = Date.now();
+
+    interactiveMessages.forEach((msg) => {
+      if (msg.responseState === 'pending' && msg.expiresAt && msg.expiresAt > now) {
+        const delay = msg.expiresAt - now;
+        const timer = setTimeout(() => {
+          setInteractiveMessages((prev) =>
+            prev.map((m) =>
+              m.id === msg.id && m.responseState === 'pending'
+                ? { ...m, responseState: 'expired' as const }
+                : m
+            )
+          );
+        }, delay);
+        timers.push(timer);
+      }
+    });
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [interactiveMessages]);
+
+  const respondToInteractive = useCallback(
+    (messageId: string, actionId: string) => {
+      if (!socket) return;
+
+      socket.emit('captain_interactive_response', { messageId, actionId });
+
+      setInteractiveMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, responseState: 'responded' as const, selectedActionId: actionId }
+            : msg
+        )
+      );
+    },
+    [socket]
+  );
 
   const sendMessage = useCallback(
     (content: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
@@ -226,6 +281,8 @@ export function useCaptainSocket(socket: Socket | null) {
     sendMessage,
     archivedConversations,
     clearHistory,
+    interactiveMessages,
+    respondToInteractive,
   };
 }
 
