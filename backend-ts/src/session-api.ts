@@ -8,10 +8,6 @@ import { log } from "./logger.js";
 import * as config from "./config.js";
 import { loadWorkflow } from "./workflow-config.js";
 
-// ---- Constants ----
-
-const WORKTREE_RULES_FOOTER = "\n\nRULES: Do NOT create branches, PRs, or push. You are in a worktree. Just implement, test, and commit.";
-
 // ---- Types ----
 
 export interface StartSessionParams {
@@ -114,9 +110,7 @@ export function startSession(
     }
   }
 
-  const trimmedPrompt = worktreeEnabled
-    ? prompt.trim() + WORKTREE_RULES_FOOTER
-    : prompt.trim();
+  const trimmedPrompt = prompt.trim();
 
   // Record user message in database
   try {
