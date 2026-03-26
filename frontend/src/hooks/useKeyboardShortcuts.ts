@@ -9,6 +9,7 @@ interface UseKeyboardShortcutsProps {
   showCommandPalette: boolean;
   activePage: string | null;
   streaming: boolean;
+  pageTabsOpen: string[];
   handleNewTab: () => void;
   handleCloseTabInActiveProject: (sessionId: string) => void;
   handleClosePageTab: (page: string) => void;
@@ -16,6 +17,7 @@ interface UseKeyboardShortcutsProps {
   handleSelectTabQuiet: (projectPath: string, sessionId: string) => void;
   setShowCommandPalette: (show: boolean) => void;
   setActivePage: (page: string | null) => void;
+  onCaptainClick: () => void;
   cancelQuery: () => void;
   onSelectTab: (projectPath: string, sessionId: string) => void;
 }
@@ -27,6 +29,7 @@ export function useKeyboardShortcuts({
   showCommandPalette,
   activePage,
   streaming,
+  pageTabsOpen,
   handleNewTab,
   handleCloseTabInActiveProject,
   handleClosePageTab,
@@ -34,13 +37,11 @@ export function useKeyboardShortcuts({
   handleSelectTabQuiet,
   setShowCommandPalette,
   setActivePage,
+  onCaptainClick,
   cancelQuery,
   onSelectTab,
 }: UseKeyboardShortcutsProps) {
-  const mruCycleIndexRef = useRef<number>(0);
   const isCyclingRef = useRef<boolean>(false);
-  const mruSnapshotRef = useRef<string[]>([]);
-  const mruSnapshotProjectRef = useRef<string>('');
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -90,82 +91,60 @@ export function useKeyboardShortcuts({
         }
       }
 
-      // Ctrl+Tab / Ctrl+Shift+Tab: MRU tab switching (cycles through tabs by recency, then crosses projects)
+      // Ctrl+Tab / Ctrl+Shift+Tab: Visual order tab cycling (Captain → page tabs → session tabs → wrap)
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
 
-        if (projects.length === 0 || !activeProject) return;
+        if (!activeProject) return;
 
         const forward = !e.shiftKey;
+        isCyclingRef.current = true;
 
-        if (!isCyclingRef.current) {
-          // Start new cycle: snapshot current project's MRU order
-          isCyclingRef.current = true;
-          mruCycleIndexRef.current = 0;
-          const mru = ensureMruOrder(activeProject.tabs, activeProject.tabMruOrder);
-          mruSnapshotRef.current = mru;
-          mruSnapshotProjectRef.current = activeProject.path;
+        // Build unified tab list in visual order: ['captain', ...pageTabsOpen, ...sessionIds]
+        const sessionIds = activeProject.tabs.map(tab => tab.sessionId); // Extract session IDs from TabState array
+        const allTabs = ['captain', ...pageTabsOpen, ...sessionIds];
+
+        if (allTabs.length === 0) return;
+
+        // Find current position
+        let currentIndex = 0;
+        if (activePage === 'captain') {
+          currentIndex = 0;
+        } else if (activePage && pageTabsOpen.includes(activePage)) {
+          currentIndex = 1 + pageTabsOpen.indexOf(activePage);
+        } else if (activePage === null && activeTab) {
+          const sessionIndex = sessionIds.indexOf(activeTab.sessionId);
+          if (sessionIndex !== -1) {
+            currentIndex = 1 + pageTabsOpen.length + sessionIndex;
+          }
         }
 
-        // If we switched projects during cycling, snapshot that project's MRU
-        if (mruSnapshotProjectRef.current !== activeProject.path) {
-          const mru = ensureMruOrder(activeProject.tabs, activeProject.tabMruOrder);
-          mruSnapshotRef.current = mru;
-          mruSnapshotProjectRef.current = activeProject.path;
-          mruCycleIndexRef.current = forward ? 0 : mru.length - 1;
-        }
+        // Move to next/previous tab with wrapping
+        const nextIndex = forward
+          ? (currentIndex + 1) % allTabs.length
+          : (currentIndex - 1 + allTabs.length) % allTabs.length;
 
-        const snapshot = mruSnapshotRef.current;
-        const rawNext = forward
-          ? mruCycleIndexRef.current + 1
-          : mruCycleIndexRef.current - 1;
+        const targetTab = allTabs[nextIndex];
 
-        if (rawNext >= 0 && rawNext < snapshot.length) {
-          // Still within current project's MRU
-          mruCycleIndexRef.current = rawNext;
-          handleSelectTabInActiveProjectQuiet(snapshot[rawNext]);
+        // Activate target
+        if (targetTab === 'captain') {
+          onCaptainClick();
+        } else if (pageTabsOpen.includes(targetTab)) {
+          setActivePage(targetTab);
         } else {
-          // Try to cross to next/previous project, skipping projects with no tabs
-          let crossed = false;
-          if (projects.length > 1) {
-            const projectIndex = projects.findIndex(p => p.path === activeProject.path);
-            for (let i = 1; i < projects.length; i++) {
-              const candidateIndex = forward
-                ? (projectIndex + i) % projects.length
-                : (projectIndex - i + projects.length) % projects.length;
-              const candidateProject = projects[candidateIndex];
-              const candidateMru = ensureMruOrder(candidateProject.tabs, candidateProject.tabMruOrder);
-              if (candidateMru.length > 0) {
-                const targetIdx = forward ? 0 : candidateMru.length - 1;
-                mruSnapshotRef.current = candidateMru;
-                mruSnapshotProjectRef.current = candidateProject.path;
-                mruCycleIndexRef.current = targetIdx;
-                handleSelectTabQuiet(candidateProject.path, candidateMru[targetIdx]);
-                crossed = true;
-                break;
-              }
-            }
-          }
-          if (!crossed && snapshot.length > 0) {
-            // Wrap around within current project
-            const wrappedIndex = forward ? 0 : snapshot.length - 1;
-            mruCycleIndexRef.current = wrappedIndex;
-            handleSelectTabInActiveProjectQuiet(snapshot[wrappedIndex]);
-          }
+          // It's a session ID
+          handleSelectTabInActiveProjectQuiet(targetTab);
         }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Control' && isCyclingRef.current) {
-        // Commit the final tab selection to MRU
-        if (activeProject && activeTab) {
+        // Commit the final tab selection to MRU (only needed for session tabs)
+        if (activeProject && activeTab && activePage === null) {
           onSelectTab(activeProject.path, activeTab.sessionId);
         }
         isCyclingRef.current = false;
-        mruCycleIndexRef.current = 0;
-        mruSnapshotRef.current = [];
-        mruSnapshotProjectRef.current = '';
       }
     };
 
@@ -201,6 +180,7 @@ export function useKeyboardShortcuts({
     showCommandPalette,
     activePage,
     streaming,
+    pageTabsOpen,
     handleNewTab,
     handleCloseTabInActiveProject,
     handleClosePageTab,
@@ -208,6 +188,7 @@ export function useKeyboardShortcuts({
     handleSelectTabQuiet,
     setShowCommandPalette,
     setActivePage,
+    onCaptainClick,
     cancelQuery,
     onSelectTab,
   ]);

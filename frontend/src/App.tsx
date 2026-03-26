@@ -437,7 +437,7 @@ function AppContent() {
     setOpenPageTabs(prev => prev.filter(p => p !== page));
   }, [openPageTabs]);
 
-  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Cmd+K command palette, Escape cancel, Ctrl+Tab MRU tab switching)
+  // Keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Cmd+K command palette, Escape cancel, Ctrl+Tab visual tab cycling)
   useKeyboardShortcuts({
     activeProject,
     activeTab,
@@ -445,6 +445,7 @@ function AppContent() {
     showCommandPalette,
     activePage,
     streaming,
+    pageTabsOpen: openPageTabs,
     handleNewTab,
     handleCloseTabInActiveProject,
     handleClosePageTab: handleClosePageTab,
@@ -452,6 +453,7 @@ function AppContent() {
     handleSelectTabQuiet,
     setShowCommandPalette,
     setActivePage,
+    onCaptainClick: () => setActivePage('captain'),
     cancelQuery,
     onSelectTab: handleSelectTab,
   });
