@@ -7,7 +7,7 @@ import { loadWorkflow, evaluateToolRule } from './workflow-config.js';
 
 // ---- Types ----
 
-export type WorkflowPhase = 'idle' | 'design' | 'plan' | 'execute' | 'test' | 'review' | 'complete';
+export type WorkflowPhase = 'idle' | 'design' | 'plan' | 'execute' | 'test' | 'review' | 'merge' | 'complete';
 
 export interface TransitionRecord {
   from: string;
@@ -37,7 +37,8 @@ const VALID_TRANSITIONS: Record<WorkflowPhase, WorkflowPhase[]> = {
   plan: ['execute'],
   execute: ['test', 'review'],
   test: ['review', 'execute'],
-  review: ['complete', 'execute'],
+  review: ['merge', 'execute'],
+  merge: ['complete'],
   complete: ['idle'],
 };
 

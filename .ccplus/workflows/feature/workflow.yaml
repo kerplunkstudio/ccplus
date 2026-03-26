@@ -13,11 +13,13 @@ transitions:
   - from: test
     to: review
   - from: review
-    to: complete
+    to: merge
   - from: review
     to: execute
   - from: test
     to: execute
+  - from: merge
+    to: complete
 phases:
   - name: design
     context: >
@@ -117,3 +119,18 @@ phases:
         action: block
         conditions: ["command_contains:git commit"]
         message: "Review phase: commits are blocked until review completes."
+  - name: merge
+    context: |
+      Commit any remaining worktree changes, cherry-pick commits to main, remove the worktree, and prune the branch.
+      This is the final cleanup phase. The merge-cleanup agent handles all git operations.
+    agent_hints:
+      - merge-cleanup
+    tool_rules:
+      - tool_name: Edit
+        action: block
+        conditions: []
+        message: 'Merge phase: use Bash for git operations only.'
+      - tool_name: Write
+        action: block
+        conditions: []
+        message: 'Merge phase: use Bash for git operations only.'
