@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import * as db from "../db/index.js";
 
 const DEFAULT_CONFIG = {
   models: {
@@ -56,8 +57,43 @@ const RESTART_REQUIRED_KEYS = new Set([
   'integrations.discord.allowedUsers',
 ]);
 
-// In-memory config storage (will be replaced with persistence later)
-let currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+/**
+ * Deep merge two objects (DB values override defaults)
+ */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...target };
+  for (const key in source) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const sourceValue = source[key];
+      const targetValue = result[key];
+      if (
+        sourceValue &&
+        typeof sourceValue === 'object' &&
+        !Array.isArray(sourceValue) &&
+        targetValue &&
+        typeof targetValue === 'object' &&
+        !Array.isArray(targetValue)
+      ) {
+        result[key] = deepMerge(targetValue as Record<string, unknown>, sourceValue as Record<string, unknown>);
+      } else {
+        result[key] = sourceValue;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Load config from database and merge with defaults
+ */
+function loadConfigFromDb(): typeof DEFAULT_CONFIG {
+  const dbConfig = db.getAllConfig();
+  return deepMerge(DEFAULT_CONFIG, dbConfig) as typeof DEFAULT_CONFIG;
+}
+
+// In-memory config cache for fast reads (backed by database)
+// Initialize from database on module load
+let currentConfig = loadConfigFromDb();
 
 export function createConfigRoutes(app: Express): void {
   app.get("/api/config", (_req: Request, res: Response) => {
@@ -96,7 +132,10 @@ export function createConfigRoutes(app: Express): void {
 
     current[keys[keys.length - 1]] = value;
 
-    // Assign the updated config
+    // Persist to database
+    db.setConfigValue(key, value);
+
+    // Assign the updated config (in-memory cache)
     currentConfig = updatedConfig;
 
     // Check if restart is required
@@ -109,6 +148,9 @@ export function createConfigRoutes(app: Express): void {
   });
 
   app.post("/api/config/reset", (_req: Request, res: Response) => {
+    // Clear database
+    db.resetConfig();
+    // Reset in-memory cache
     currentConfig = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     res.json({ status: 'ok' });
   });

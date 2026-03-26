@@ -26,6 +26,7 @@ describe("Database Tests", () => {
       database.exec("DELETE FROM session_context");
       database.exec("DELETE FROM rate_limit_events");
       database.exec("DELETE FROM query_usage");
+      database.exec("DELETE FROM config");
       // FTS table is automatically cleaned when conversations are deleted (via trigger)
     } catch {
       // Tables might not exist yet, that's okay
@@ -1656,6 +1657,72 @@ describe("Database Tests", () => {
       expect(insights.summary.cache_read_input_tokens).toBe(0);
       expect(insights.summary.cache_creation_input_tokens).toBe(0);
       expect(insights.summary.cache_hit_rate).toBe(0);
+    });
+  });
+
+  describe("Config Persistence", () => {
+    it("should persist and retrieve a single config value", () => {
+      db.setConfigValue("models.defaultModel", "claude-opus-4");
+      const value = db.getConfigValue("models.defaultModel");
+      expect(value).toBe("claude-opus-4");
+    });
+
+    it("should return null for non-existent config key", () => {
+      const value = db.getConfigValue("nonexistent.key");
+      expect(value).toBeNull();
+    });
+
+    it("should retrieve all config as nested object", () => {
+      db.resetConfig();
+      db.setConfigValue("models.defaultModel", "claude-sonnet-4");
+      db.setConfigValue("models.captainModel", "claude-opus-4");
+      db.setConfigValue("memory.enabled", true);
+
+      const allConfig = db.getAllConfig();
+
+      expect(allConfig).toEqual({
+        models: {
+          defaultModel: "claude-sonnet-4",
+          captainModel: "claude-opus-4",
+        },
+        memory: {
+          enabled: true,
+        },
+      });
+    });
+
+    it("should update existing config value", () => {
+      db.setConfigValue("sessions.bypassPermissions", false);
+      expect(db.getConfigValue("sessions.bypassPermissions")).toBe(false);
+
+      db.setConfigValue("sessions.bypassPermissions", true);
+      expect(db.getConfigValue("sessions.bypassPermissions")).toBe(true);
+    });
+
+    it("should reset all config values", () => {
+      db.setConfigValue("models.defaultModel", "test-model");
+      db.setConfigValue("memory.enabled", false);
+
+      db.resetConfig();
+
+      const allConfig = db.getAllConfig();
+      expect(allConfig).toEqual({});
+    });
+
+    it("should handle complex nested objects", () => {
+      db.setConfigValue("integrations.telegram.allowedUsers", ["user1", "user2"]);
+      const value = db.getConfigValue("integrations.telegram.allowedUsers");
+      expect(value).toEqual(["user1", "user2"]);
+    });
+
+    it("should persist config across database reconnections", () => {
+      db.setConfigValue("workflow.codeReviewGate", true);
+
+      // Close and reopen database connection
+      db.close();
+      const value = db.getConfigValue("workflow.codeReviewGate");
+
+      expect(value).toBe(true);
     });
   });
 });
