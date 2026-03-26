@@ -7,7 +7,7 @@ const baseSession: FleetSession = {
   status: 'running',
   workspace: '/Users/test/project/myapp',
   toolCount: 5,
-  activeAgents: 2,
+  totalAgents: 2,
   inputTokens: 1000,
   outputTokens: 500,
   durationMs: 30000,
@@ -50,7 +50,7 @@ describe('FleetSessionCard', () => {
     expect(screen.getByText('tools')).toBeInTheDocument();
   });
 
-  it('displays active agents stat', () => {
+  it('displays total agents stat', () => {
     render(<FleetSessionCard session={baseSession} onClick={mockOnClick} />);
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('agents')).toBeInTheDocument();

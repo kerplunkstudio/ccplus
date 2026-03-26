@@ -241,7 +241,7 @@ export interface FleetSession {
   status: 'running' | 'idle' | 'completed' | 'failed';
   workspace: string;
   toolCount: number;
-  activeAgents: number;
+  totalAgents: number;
   inputTokens: number;
   outputTokens: number;
   durationMs: number;

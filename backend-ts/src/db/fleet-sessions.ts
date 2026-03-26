@@ -10,6 +10,7 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
       workspace,
       tool_count,
       active_agents,
+      total_agents,
       input_tokens,
       output_tokens,
       duration_ms,
@@ -19,13 +20,14 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
       files_touched,
       requested_by_source,
       requested_by_source_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     info.sessionId,
     info.status,
     info.workspace,
     info.toolCount,
     info.activeAgents,
+    info.totalAgents,
     info.inputTokens,
     info.outputTokens,
     info.durationMs,
@@ -49,6 +51,7 @@ export function getAllFleetSessions(): FleetSessionInfo[] {
     workspace: string;
     tool_count: number;
     active_agents: number;
+    total_agents: number;
     input_tokens: number;
     output_tokens: number;
     duration_ms: number;
@@ -66,6 +69,7 @@ export function getAllFleetSessions(): FleetSessionInfo[] {
     workspace: row.workspace,
     toolCount: row.tool_count,
     activeAgents: row.active_agents,
+    totalAgents: row.total_agents,
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     durationMs: row.duration_ms,
@@ -90,6 +94,7 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
     workspace: string;
     tool_count: number;
     active_agents: number;
+    total_agents: number;
     input_tokens: number;
     output_tokens: number;
     duration_ms: number;
@@ -111,6 +116,7 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
     workspace: row.workspace,
     toolCount: row.tool_count,
     activeAgents: row.active_agents,
+    totalAgents: row.total_agents,
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     durationMs: row.duration_ms,

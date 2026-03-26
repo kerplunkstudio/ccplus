@@ -1204,7 +1204,7 @@ describe("Database Tests", () => {
 
       database.close();
 
-      expect(version.v).toBe(11);
+      expect(version.v).toBe(12);
     });
 
     it("should have applied_at timestamp", () => {

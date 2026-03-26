@@ -10,6 +10,7 @@ export interface FleetSessionInfo {
   workspace: string;
   toolCount: number;
   activeAgents: number;
+  totalAgents: number;
   inputTokens: number;
   outputTokens: number;
   durationMs: number;
@@ -62,6 +63,7 @@ export function registerSession(sessionId: string, workspace: string, requestedB
       workspace,
       toolCount: 0,
       activeAgents: 0,
+      totalAgents: 0,
       inputTokens: 0,
       outputTokens: 0,
       durationMs: 0,
@@ -121,6 +123,7 @@ export function incrementAgentCount(sessionId: string): void {
     const updated: FleetSessionInfo = {
       ...session,
       activeAgents: session.activeAgents + 1,
+      totalAgents: session.totalAgents + 1,
       lastActivity: new Date().toISOString(),
     };
     sessions.set(sessionId, updated);

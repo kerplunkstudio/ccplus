@@ -276,6 +276,13 @@ CREATE TABLE IF NOT EXISTS workflows (
 );
 `,
   },
+  {
+    version: 12,
+    sql: `
+-- Migration v12: Add total_agents to fleet_sessions
+ALTER TABLE fleet_sessions ADD COLUMN total_agents INTEGER DEFAULT 0;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {
