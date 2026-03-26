@@ -444,6 +444,7 @@ function AppContent() {
     projects: workspace.state.projects,
     showCommandPalette,
     activePage,
+    openPageTabs,
     streaming,
     pageTabsOpen: openPageTabs,
     handleNewTab,

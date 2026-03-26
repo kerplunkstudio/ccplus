@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ProjectEntry, TabState, WindowWithElectron } from '../types';
+import { ensureMruOrder } from '../utils/tabs';
 
 interface UseKeyboardShortcutsProps {
   activeProject: ProjectEntry | null;
@@ -7,8 +8,8 @@ interface UseKeyboardShortcutsProps {
   projects: ProjectEntry[];
   showCommandPalette: boolean;
   activePage: string | null;
+  openPageTabs: string[];
   streaming: boolean;
-  pageTabsOpen: string[];
   handleNewTab: () => void;
   handleCloseTabInActiveProject: (sessionId: string) => void;
   handleClosePageTab: (page: string) => void;
@@ -16,7 +17,6 @@ interface UseKeyboardShortcutsProps {
   handleSelectTabQuiet: (projectPath: string, sessionId: string) => void;
   setShowCommandPalette: (show: boolean) => void;
   setActivePage: (page: string | null) => void;
-  onCaptainClick: () => void;
   cancelQuery: () => void;
   onSelectTab: (projectPath: string, sessionId: string) => void;
 }
@@ -27,8 +27,8 @@ export function useKeyboardShortcuts({
   projects,
   showCommandPalette,
   activePage,
+  openPageTabs,
   streaming,
-  pageTabsOpen,
   handleNewTab,
   handleCloseTabInActiveProject,
   handleClosePageTab,
@@ -36,11 +36,11 @@ export function useKeyboardShortcuts({
   handleSelectTabQuiet,
   setShowCommandPalette,
   setActivePage,
-  onCaptainClick,
   cancelQuery,
   onSelectTab,
 }: UseKeyboardShortcutsProps) {
   const isCyclingRef = useRef<boolean>(false);
+  const unifiedTabsSnapshotRef = useRef<Array<{ type: 'captain' | 'page' | 'session', id: string, projectPath?: string }>>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -90,60 +90,95 @@ export function useKeyboardShortcuts({
         }
       }
 
-      // Ctrl+Tab / Ctrl+Shift+Tab: Visual order tab cycling (Captain → page tabs → session tabs → wrap)
+      // Ctrl+Tab / Ctrl+Shift+Tab: Unified tab switching (captain → page tabs → session tabs → wrap)
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
 
-        if (!activeProject) return;
-
         const forward = !e.shiftKey;
-        isCyclingRef.current = true;
 
-        // Build unified tab list in visual order: ['captain', ...pageTabsOpen, ...sessionIds]
-        const sessionIds = activeProject.tabs.map(tab => tab.sessionId); // Extract session IDs from TabState array
-        const allTabs = ['captain', ...pageTabsOpen, ...sessionIds];
+        if (!isCyclingRef.current) {
+          // Start new cycle: build unified tab list
+          isCyclingRef.current = true;
 
-        if (allTabs.length === 0) return;
+          // Build unified list: ['captain', ...openPageTabs, ...allSessionTabsInMRU]
+          const unifiedTabs: Array<{ type: 'captain' | 'page' | 'session', id: string, projectPath?: string }> = [];
 
-        // Find current position
+          // Always start with captain
+          unifiedTabs.push({ type: 'captain', id: 'captain' });
+
+          // Add open page tabs
+          for (const pageId of openPageTabs) {
+            unifiedTabs.push({ type: 'page', id: pageId });
+          }
+
+          // Add all session tabs across all projects in MRU order
+          // Collect all session tabs with their MRU positions
+          const allSessionTabs: Array<{ sessionId: string, projectPath: string, mruIndex: number }> = [];
+          for (const project of projects) {
+            const mru = ensureMruOrder(project.tabs, project.tabMruOrder);
+            for (let i = 0; i < mru.length; i++) {
+              allSessionTabs.push({ sessionId: mru[i], projectPath: project.path, mruIndex: i });
+            }
+          }
+
+          // Sort by MRU index (most recent first)
+          allSessionTabs.sort((a, b) => a.mruIndex - b.mruIndex);
+
+          // Add to unified list
+          for (const tab of allSessionTabs) {
+            unifiedTabs.push({ type: 'session', id: tab.sessionId, projectPath: tab.projectPath });
+          }
+
+          unifiedTabsSnapshotRef.current = unifiedTabs;
+        }
+
+        const snapshot = unifiedTabsSnapshotRef.current;
+        if (snapshot.length === 0) return;
+
+        // Find current index in unified list
         let currentIndex = 0;
         if (activePage === 'captain') {
           currentIndex = 0;
-        } else if (activePage && pageTabsOpen.includes(activePage)) {
-          currentIndex = 1 + pageTabsOpen.indexOf(activePage);
+        } else if (activePage && openPageTabs.includes(activePage)) {
+          currentIndex = 1 + openPageTabs.indexOf(activePage);
         } else if (activePage === null && activeTab) {
-          const sessionIndex = sessionIds.indexOf(activeTab.sessionId);
-          if (sessionIndex !== -1) {
-            currentIndex = 1 + pageTabsOpen.length + sessionIndex;
-          }
+          // Find session tab in unified list
+          const idx = snapshot.findIndex(t => t.type === 'session' && t.id === activeTab.sessionId);
+          currentIndex = idx !== -1 ? idx : 0;
         }
 
-        // Move to next/previous tab with wrapping
+        // Navigate forward or backward with wrap-around
         const nextIndex = forward
-          ? (currentIndex + 1) % allTabs.length
-          : (currentIndex - 1 + allTabs.length) % allTabs.length;
+          ? (currentIndex + 1) % snapshot.length
+          : (currentIndex - 1 + snapshot.length) % snapshot.length;
 
-        const targetTab = allTabs[nextIndex];
+        const target = snapshot[nextIndex];
 
-        // Activate target
-        if (targetTab === 'captain') {
-          onCaptainClick();
-        } else if (pageTabsOpen.includes(targetTab)) {
-          setActivePage(targetTab);
-        } else {
-          // It's a session ID
-          handleSelectTabInActiveProjectQuiet(targetTab);
+        // Navigate to the target
+        if (target.type === 'captain') {
+          setActivePage('captain');
+        } else if (target.type === 'page') {
+          setActivePage(target.id);
+        } else if (target.type === 'session' && target.projectPath) {
+          // Navigate to session tab
+          setActivePage(null);
+          if (activeProject?.path === target.projectPath) {
+            handleSelectTabInActiveProjectQuiet(target.id);
+          } else {
+            handleSelectTabQuiet(target.projectPath, target.id);
+          }
         }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Control' && isCyclingRef.current) {
-        // Commit the final tab selection to MRU (only needed for session tabs)
-        if (activeProject && activeTab && activePage === null) {
+        // Commit the final tab selection to MRU only if we landed on a session tab
+        if (activePage === null && activeProject && activeTab) {
           onSelectTab(activeProject.path, activeTab.sessionId);
         }
         isCyclingRef.current = false;
+        unifiedTabsSnapshotRef.current = [];
       }
     };
 
@@ -178,8 +213,8 @@ export function useKeyboardShortcuts({
     projects,
     showCommandPalette,
     activePage,
+    openPageTabs,
     streaming,
-    pageTabsOpen,
     handleNewTab,
     handleCloseTabInActiveProject,
     handleClosePageTab,
@@ -187,7 +222,6 @@ export function useKeyboardShortcuts({
     handleSelectTabQuiet,
     setShowCommandPalette,
     setActivePage,
-    onCaptainClick,
     cancelQuery,
     onSelectTab,
   ]);
