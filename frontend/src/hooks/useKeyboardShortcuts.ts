@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { ProjectEntry, TabState, WindowWithElectron } from '../types';
-import { ensureMruOrder } from '../utils/tabs';
 
 interface UseKeyboardShortcutsProps {
   activeProject: ProjectEntry | null;
