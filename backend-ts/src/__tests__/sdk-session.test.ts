@@ -3333,7 +3333,7 @@ description: Project command
         await hooks.PostToolUse[0].hooks[0](
           {
             tool_name: "Agent",
-            tool_input: { subagent_type: "code-reviewer" },
+            // tool_input omitted - real SDK does not pass it in PostToolUse
             agent_id: undefined,
           },
           "toolu_reviewer123"
@@ -3436,7 +3436,7 @@ description: Project command
         await hooks.PostToolUse[0].hooks[0](
           {
             tool_name: "Agent",
-            tool_input: { subagent_type: "security-reviewer" },
+            // tool_input omitted - real SDK does not pass it in PostToolUse
             agent_id: undefined,
           },
           "toolu_security123"

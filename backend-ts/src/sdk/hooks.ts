@@ -27,6 +27,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
   const agentIdToToolUseId = new Map<string, string>();
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
   const pendingAgentToolUseIds: string[] = [];
+  const agentTypeByToolUseId = new Map<string, string>();
   const detectedDevServerUrls = new Set<string>();
 
   // Helper to emit tool events and set flag for message splitting
@@ -59,6 +60,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
 
     if (isAgent) {
       pendingAgentToolUseIds.push(actualToolUseId);
+      agentTypeByToolUseId.set(actualToolUseId, (toolParams.subagent_type as string) ?? 'agent');
       emitToolEvent({
         type: "agent_start",
         tool_name: toolName,
@@ -206,11 +208,12 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
 
       // Auto-transition workflow after agents complete successfully
       if (WORKFLOW_ENABLED) {
-        const agentType = (toolParams.subagent_type as string) ?? 'agent';
+        const agentType = agentTypeByToolUseId.get(actualToolUseId) ?? 'agent';
         const wfState = getWorkflowState(sessionId);
         const { loadWorkflow } = await import('../workflow-config.js');
         const workflow = loadWorkflow(wfState.workflowName, workspace);
         const inferredPhase = inferPhaseFromAgent(agentType, workflow);
+        log.info('Workflow: PostToolUse agent complete', { sessionId, agentType, inferredPhase: inferredPhase ?? 'none', currentPhase: wfState.phase });
         if (inferredPhase) {
           const currentState = getWorkflowState(sessionId);
           if (currentState.phase === inferredPhase) {
@@ -221,6 +224,9 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
           }
         }
       }
+
+      // Clean up agentType mapping after workflow logic
+      agentTypeByToolUseId.delete(actualToolUseId);
     } else {
       const event: Record<string, unknown> = {
         type: "tool_complete",
@@ -356,6 +362,9 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
         }
       }
       agentStopData.delete(actualToolUseId);
+
+      // Clean up agentType mapping
+      agentTypeByToolUseId.delete(actualToolUseId);
 
       // Update database with summary (for failed agents)
       try {
