@@ -320,7 +320,7 @@ async function initialize(): Promise<boolean> {
  * Search memories using semantic search
  * Returns the raw text from the MCP response (human-readable format)
  */
-export async function searchMemories(query: string, limit?: number, tags?: string): Promise<string> {
+export async function searchMemories(query: string, limit?: number, tags?: string, mode?: string): Promise<string> {
   const startMs = performance.now();
 
   if (isCircuitOpen()) {
@@ -351,6 +351,9 @@ export async function searchMemories(query: string, limit?: number, tags?: strin
     };
     if (tags) {
       args.tags = tags;
+    }
+    if (mode) {
+      args.mode = mode;
     }
 
     // Run semantic search
@@ -458,6 +461,53 @@ export async function storeMemory(
     log.error('Memory store failed', { error: String(error), durationMs, success: false });
     recordFailure();
     return null;
+  }
+}
+
+/**
+ * Delete a memory by its hash
+ */
+export async function deleteMemory(hash: string): Promise<boolean> {
+  if (!hash || hash.trim() === '') {
+    return false;
+  }
+
+  if (isCircuitOpen()) {
+    log.debug('Memory circuit breaker is open, skipping delete');
+    return false;
+  }
+
+  if (!available && !memoryConfig) {
+    memoryConfig = loadMemoryConfig();
+    if (!memoryConfig) {
+      return false;
+    }
+  }
+
+  try {
+    if (!initialized) {
+      const success = await initialize();
+      if (!success) {
+        return false;
+      }
+    }
+
+    const response = await sendRequest('tools/call', {
+      name: 'memory_delete',
+      arguments: { hash: hash.trim() },
+    });
+
+    recordSuccess();
+
+    if (typeof response === 'object' && response !== null && 'isError' in response) {
+      return !(response as { isError: boolean }).isError;
+    }
+
+    return true;
+  } catch (error) {
+    log.error('Memory delete failed', { error: String(error), hash });
+    recordFailure();
+    return false;
   }
 }
 

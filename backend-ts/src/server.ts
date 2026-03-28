@@ -34,6 +34,7 @@ import { createConfigRoutes } from "./routes/config.js";
 import { createDiffRoutes } from "./routes/diff.js";
 import { createAgentRoutes } from "./routes/agents.js";
 import workflowsRouter from "./routes/workflows.js";
+import { createMemoryRoutes } from "./routes/memory.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
 
@@ -140,6 +141,7 @@ createConfigRoutes(app);
 createDiffRoutes(app, { sessionWorkspaces, sdkSession, log });
 createAgentRoutes(app, { getWorkspaceForSession });
 app.use('/api/workflows', workflowsRouter);
+createMemoryRoutes(app);
 
 // Set workspace (requires mutation of server-level state)
 app.post("/api/set-workspace", (req: Request, res: Response) => {

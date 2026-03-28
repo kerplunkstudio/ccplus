@@ -8,6 +8,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { ActivityTree } from './components/ActivityTree';
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { InsightsPanel } from './components/InsightsPanel';
+import { MemoryDashboard } from './components/MemoryDashboard';
 import { ProfilePanel, useProfile } from './components/ProfilePanel';
 import { MCPPanel } from './components/MCPPanel';
 import { AgentsPanel } from './components/AgentsPanel';
@@ -593,6 +594,7 @@ function AppContent() {
   const shouldShowWorkflows = activePage === 'workflows';
   const shouldShowCaptain = activePage === 'captain';
   const shouldShowSettings = activePage === 'settings';
+  const shouldShowMemory = activePage === 'memory';
 
   const contentMode = shouldShowWelcome ? 'welcome'
     : shouldShowInsights ? 'insights'
@@ -709,13 +711,15 @@ function AppContent() {
           onClosePageTab={handleClosePageTab}
         />
         <div className="panel-content">
-          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowAgents || shouldShowWorkflows || shouldShowCaptain || shouldShowSettings || shouldShowWelcome) ? 'full-width' : ''}`}>
+          <div className={`panel-chat ${(shouldShowDashboard || shouldShowInsights || shouldShowProfile || shouldShowMcp || shouldShowAgents || shouldShowWorkflows || shouldShowCaptain || shouldShowSettings || shouldShowMemory || shouldShowWelcome) ? 'full-width' : ''}`}>
             <div className={`panel-chat-content ${contentMode !== 'chat' && contentMode !== 'browser' ? 'panel-chat-content--centered' : ''}`}>
               {shouldShowWelcome ? (
                 <WelcomeScreen
                   onSelectPrompt={handleWelcomePrompt}
                   onAddProject={handleWelcomeAddProject}
                 />
+              ) : shouldShowMemory ? (
+                <MemoryDashboard />
               ) : shouldShowInsights ? (
                 <InsightsPanel />
               ) : shouldShowProfile ? (

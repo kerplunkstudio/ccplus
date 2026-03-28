@@ -838,6 +838,21 @@ const ProjectSidebar: React.FC<ProjectSidebarProps> = ({
             <span className="footer-nav-label">Flows</span>
           </button>
           <button
+            className={`footer-nav-item ${activePage === 'memory' ? 'active' : ''}`}
+            onClick={() => onNavigate('memory')}
+            aria-label="Memory"
+          >
+            <span className="footer-nav-icon">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2C5.24 2 3 4.24 3 7c0 1.5.6 2.85 1.57 3.83L4 13h8l-.57-2.17A5 5 0 0 0 13 7c0-2.76-2.24-5-5-5z"/>
+                <line x1="6" y1="13" x2="6" y2="15"/>
+                <line x1="10" y1="13" x2="10" y2="15"/>
+                <line x1="6" y1="15" x2="10" y2="15"/>
+              </svg>
+            </span>
+            <span className="footer-nav-label">Memory</span>
+          </button>
+          <button
             className={`footer-nav-item ${activePage === 'insights' ? 'active' : ''}`}
             onClick={() => onNavigate('insights')}
             aria-label="Insights"
