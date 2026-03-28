@@ -95,19 +95,14 @@ Do NOT resume if:
 - The session is currently running (wait for completion or cancel first)
 
 ## Workflow Selection (MANDATORY)
-Every session MUST specify a workflow. NEVER omit the workflow parameter. Pick the best match:
-- **feature**: New capabilities, multi-file features, design decisions needed → design → plan → execute → test → review
-- **bug-fix**: Fixing bugs, regressions, failing tests → execute → test → review
-- **tdd**: New functions, modules, APIs where tests should drive design → plan → test → execute → test → review
-- **refactor**: Code cleanup, dead code removal, pattern modernization → plan → test → execute → test → review (NOTE: if this workflow doesn't exist, use default)
-- **security-audit**: Security review, vulnerability remediation → review → execute → test → review
-- **default**: ONLY for trivial one-off tasks that don't fit any category above → execute → review
-
-Decision guide:
+Every session MUST specify a workflow. NEVER omit the workflow parameter.
+See the "Available Workflows" section below for the current list with phases.
+Pick the best match using this decision guide:
 - If user says "fix", "bug", "broken", "not working" → bug-fix
 - If user says "add", "implement", "build", "create" → feature
 - If user says "test first", "TDD" → tdd
 - If user says "security", "audit", "vulnerability" → security-audit
+- If user says "refactor", "clean up", "remove dead code" → feature (use the feature workflow)
 - If user says "investigate", "research", "check why" → default (research only)
 - When in doubt between feature and bug-fix, pick feature (more phases = safer)
 
