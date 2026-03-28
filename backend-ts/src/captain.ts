@@ -434,6 +434,13 @@ export function unregisterResponseCallback(id: string): void {
 }
 
 /**
+ * Check if a response callback with the given ID exists.
+ */
+export function hasResponseCallback(id: string): boolean {
+  return responseCallbacks.has(id);
+}
+
+/**
  * Register a callback for interactive messages.
  */
 export function registerInteractiveCallback(id: string, callback: InteractiveMessageCallback): void {

@@ -452,28 +452,34 @@ export function setupSocketHandlers(
     socket.on('join_captain', () => {
       const captainSessionId = captain.getCaptainSessionId();
       if (!captainSessionId) return;
-      socket.join(`captain:${captainSessionId}`);
+      const captainRoom = `captain:${captainSessionId}`;
+      socket.join(captainRoom);
 
-      captain.registerResponseCallback(`socket:${socket.id}`, {
-        onText: (text: string, messageIndex: number) => {
-          socket.emit('captain_text', { text, message_index: messageIndex });
-        },
-        onThinking: (thinking: string) => {
-          socket.emit('captain_thinking', { thinking });
-        },
-        onComplete: () => {
-          socket.emit('captain_complete', {});
-        },
-        onError: (message: string) => {
-          socket.emit('captain_error', { message });
-        },
-      });
+      const callbackId = `room:${captainRoom}`;
 
-      captain.registerInteractiveCallback(`socket:${socket.id}`, {
-        onInteractiveMessage: (message: InteractiveMessage) => {
-          socket.emit('captain_interactive', message);
-        },
-      });
+      // Register room-based callback (idempotent — only one per captain session)
+      if (!captain.hasResponseCallback(callbackId)) {
+        captain.registerResponseCallback(callbackId, {
+          onText: (text: string, messageIndex: number) => {
+            io.to(captainRoom).emit('captain_text', { text, message_index: messageIndex });
+          },
+          onThinking: (thinking: string) => {
+            io.to(captainRoom).emit('captain_thinking', { thinking });
+          },
+          onComplete: () => {
+            io.to(captainRoom).emit('captain_complete', {});
+          },
+          onError: (message: string) => {
+            io.to(captainRoom).emit('captain_error', { message });
+          },
+        });
+
+        captain.registerInteractiveCallback(callbackId, {
+          onInteractiveMessage: (message: InteractiveMessage) => {
+            io.to(captainRoom).emit('captain_interactive', message);
+          },
+        });
+      }
     });
 
     socket.on('captain_message', (data: { content: string }) => {
@@ -545,9 +551,8 @@ export function setupSocketHandlers(
       }
       socketTerminals.clear();
 
-      // Cleanup Captain callbacks for this socket
-      captain.unregisterResponseCallback(`socket:${socket.id}`);
-      captain.unregisterInteractiveCallback(`socket:${socket.id}`);
+      // Note: Captain callbacks are now room-based (not socket-based), so no cleanup needed.
+      // Socket.IO automatically removes disconnected sockets from rooms.
 
       // Expire pending interactive messages immediately (prevents up to 2min wait)
       captain.expirePendingInteractiveMessages('disconnected');
