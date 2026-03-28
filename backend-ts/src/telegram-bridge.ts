@@ -11,6 +11,7 @@ import { formatForTelegram, escapeMarkdownV2 } from './telegram-format.js';
 import { log } from './logger.js';
 import { downloadTelegramFile, transcribeAudio } from './voice-transcriber.js';
 import { saveTelegramState as persistTelegramState, loadTelegramState, removeTelegramState } from './state-persistence.js';
+import { InteractiveAction, InteractiveMessage } from './interactive-message.js';
 
 // ---- Types ----
 
@@ -20,24 +21,6 @@ interface ChatState {
   readonly typingInterval: ReturnType<typeof setInterval> | null;
   readonly ackMessageId: number | null;
   readonly pendingOptions: readonly string[];
-}
-
-// TODO: import from './interactive-message.js' when that module is created
-interface InteractiveAction {
-  readonly id: string;
-  readonly label: string;
-  readonly style: 'primary' | 'danger' | 'default';
-  readonly value?: string;
-}
-
-interface InteractiveMessage {
-  readonly id: string;
-  readonly type: 'confirmation' | 'options' | 'multi-select' | 'status-action';
-  readonly text: string;
-  readonly actions: readonly InteractiveAction[];
-  readonly responseState: 'pending' | 'responded' | 'expired' | 'cancelled';
-  readonly timeoutMs?: number;
-  readonly createdAt: number;
 }
 
 // ---- State ----
