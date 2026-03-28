@@ -542,5 +542,168 @@ describe('agent-catalog', () => {
       expect(result).toContain('- review');
       expect(result).toContain('- complete');
     });
+
+    // Regression tests for workflow phase awareness fix
+    describe('regression: agent_hints on transitions and remaining phases warning', () => {
+      const buildMultiPhaseWorkflow = (): WorkflowConfig => ({
+        name: 'feature',
+        description: 'Feature workflow',
+        default_phase: 'execute',
+        phases: [
+          {
+            name: 'execute',
+            context: 'Implement the feature',
+            agent_hints: ['code-agent'],
+            tool_rules: [],
+          },
+          {
+            name: 'review',
+            context: 'Review the code',
+            agent_hints: ['code-reviewer'],
+            tool_rules: [],
+          },
+          {
+            name: 'merge-cleanup',
+            context: 'Merge and clean up',
+            agent_hints: ['merge-cleanup'],
+            tool_rules: [],
+          },
+        ],
+        transitions: [
+          { from: 'execute', to: 'review' },
+          { from: 'review', to: 'merge-cleanup' },
+        ],
+      });
+
+      it('shows agent_hints on valid transitions — spawn one of: <hints>', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        // The transition to "review" should include agent_hints for that phase
+        expect(result).toContain('review — spawn one of: code-reviewer');
+      });
+
+      it('shows remaining phases section when phases exist after current', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('**Remaining phases**: review → merge-cleanup');
+      });
+
+      it('shows mandatory warning to complete all remaining phases', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('You MUST complete all remaining phases before finishing');
+      });
+
+      it('shows "To advance to <phase>" instructions for each remaining phase', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('To advance to `review`');
+        expect(result).toContain('To advance to `merge-cleanup`');
+      });
+
+      it('lists agent hints for each remaining phase in "To advance" instructions', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('spawn one of these agents: code-reviewer');
+        expect(result).toContain('spawn one of these agents: merge-cleanup');
+      });
+
+      it('shows "(see phase context)" when agent_hints is empty for a remaining phase', () => {
+        const workflow: WorkflowConfig = {
+          name: 'test',
+          description: 'Test workflow',
+          default_phase: 'execute',
+          phases: [
+            {
+              name: 'execute',
+              context: 'Do the work',
+              agent_hints: ['code-agent'],
+              tool_rules: [],
+            },
+            {
+              name: 'complete',
+              context: 'Task complete',
+              agent_hints: [],
+              tool_rules: [],
+            },
+          ],
+          transitions: [{ from: 'execute', to: 'complete' }],
+        };
+
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('To advance to `complete`');
+        expect(result).toContain('(see phase context)');
+      });
+
+      it('does not show remaining phases section when current phase is last', () => {
+        const workflow = buildMultiPhaseWorkflow();
+        const result = formatWorkflowContext(workflow, 'merge-cleanup');
+
+        expect(result).not.toContain('**Remaining phases**:');
+        expect(result).not.toContain('You MUST complete all remaining phases');
+      });
+
+      it('does not show agent_hints annotation when transition target has no hints', () => {
+        const workflow: WorkflowConfig = {
+          name: 'test',
+          description: 'Test workflow',
+          default_phase: 'execute',
+          phases: [
+            {
+              name: 'execute',
+              context: 'Do the work',
+              agent_hints: ['code-agent'],
+              tool_rules: [],
+            },
+            {
+              name: 'complete',
+              context: 'Done',
+              agent_hints: [],
+              tool_rules: [],
+            },
+          ],
+          transitions: [{ from: 'execute', to: 'complete' }],
+        };
+
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        // "complete" transition should NOT show "spawn one of: " because hints is empty
+        expect(result).toContain('- complete');
+        expect(result).not.toMatch(/- complete — spawn one of:/);
+      });
+
+      it('shows multiple agent_hints joined with comma in transition annotation', () => {
+        const workflow: WorkflowConfig = {
+          name: 'test',
+          description: 'Test workflow',
+          default_phase: 'execute',
+          phases: [
+            {
+              name: 'execute',
+              context: 'Implement',
+              agent_hints: ['code-agent'],
+              tool_rules: [],
+            },
+            {
+              name: 'test',
+              context: 'Test',
+              agent_hints: ['tdd-guide', 'e2e-runner'],
+              tool_rules: [],
+            },
+          ],
+          transitions: [{ from: 'execute', to: 'test' }],
+        };
+
+        const result = formatWorkflowContext(workflow, 'execute');
+
+        expect(result).toContain('test — spawn one of: tdd-guide, e2e-runner');
+      });
+    });
   });
 });

@@ -48,6 +48,13 @@ If a workflow is active, you will see an "Active Workflow" section below with th
 - **Phase transitions happen automatically when you spawn the right agent.** Each phase lists \`agent_hints\` — spawning one of those agents auto-advances the workflow to the next phase. Do NOT try to use blocked tools directly; instead spawn the agent for the next phase and the transition will happen automatically.
 - Example: in \`design\` phase, spawn \`planner\` → workflow advances to \`plan\`. In \`plan\` phase, spawn \`code_agent\` → advances to \`execute\`. The "To advance" instructions in the Active Workflow section tell you exactly which agents to spawn.
 
+**MANDATORY: You MUST complete ALL workflow phases before finishing.**
+- The workflow is NOT complete until the final phase (merge or complete) is reached
+- After each agent finishes, check the current phase and spawn the next required agent
+- Specifically: after code changes → MUST spawn code-reviewer → after review passes → MUST spawn merge-cleanup
+- If code-reviewer returns BLOCK: spawn code_agent to fix issues, then re-spawn code-reviewer. Loop until READY or WARNING.
+- NEVER consider the task "done" while remaining phases exist. Keep going until merge/complete.
+
 ## Turn Limit
 Sessions have a maximum number of turns. If you are working on a large task, delegate early to specialized agents rather than doing everything directly. Prioritize the most critical work first.
 

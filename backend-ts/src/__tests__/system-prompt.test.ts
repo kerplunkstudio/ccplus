@@ -150,5 +150,45 @@ describe('system-prompt', () => {
       expect(prompt).toContain('You are an orchestrator');
       expect(prompt).toContain('delegate work to specialized agents');
     });
+
+    // Regression tests for workflow phase awareness fix in system-prompt.ts
+    describe('regression: mandatory workflow phase completion instructions', () => {
+      it('workflow phases section contains MANDATORY keyword', async () => {
+        vi.mocked(loadAllAgents).mockResolvedValue([]);
+        vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+        const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+        expect(prompt).toContain('MANDATORY');
+      });
+
+      it('workflow phases section names merge-cleanup as a required phase', async () => {
+        vi.mocked(loadAllAgents).mockResolvedValue([]);
+        vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+        const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+        expect(prompt).toContain('merge-cleanup');
+      });
+
+      it('workflow phases section instructs agent that remaining phases must be completed', async () => {
+        vi.mocked(loadAllAgents).mockResolvedValue([]);
+        vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+        const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+        expect(prompt).toContain('remaining phases');
+      });
+
+      it('workflow phases section states task is not done while remaining phases exist', async () => {
+        vi.mocked(loadAllAgents).mockResolvedValue([]);
+        vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+        const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+        // The fix ensures agents are told to not consider work done while phases remain
+        expect(prompt).toMatch(/remaining phases exist|while remaining phases/i);
+      });
+    });
   });
 });

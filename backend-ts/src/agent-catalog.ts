@@ -154,7 +154,8 @@ export function formatWorkflowContext(workflow: WorkflowConfig | null, currentPh
 **Phases**: ${phaseSequence}`;
 
   if (currentPhase) {
-    const phase = workflow.phases.find((p) => p.name === currentPhase);
+    const currentIndex = workflow.phases.findIndex((p) => p.name === currentPhase);
+    const phase = currentIndex >= 0 ? workflow.phases[currentIndex] : undefined;
 
     if (phase) {
       result += `\n\n### Current Phase: ${currentPhase}`;
@@ -187,6 +188,18 @@ export function formatWorkflowContext(workflow: WorkflowConfig | null, currentPh
         if (primaryHints.length > 0) {
           result += `\n\n**To advance to \`${primaryNext}\`**: spawn one of these agents: ${primaryHints.join(', ')}. The phase transition happens automatically when the agent starts.`;
         }
+      }
+
+      // Show remaining phases after current with mandatory warning
+      const remainingPhases = workflow.phases.slice(currentIndex + 1);
+      if (remainingPhases.length > 0) {
+        const remainingNames = remainingPhases.map((p) => p.name).join(' → ');
+        result += `\n\n**Remaining phases**: ${remainingNames}`;
+        result += `\n\n⚠ You MUST complete all remaining phases before finishing.\n`;
+        remainingPhases.forEach((p) => {
+          const hints = p.agent_hints ?? [];
+          result += `\n**To advance to \`${p.name}\`**: spawn one of these agents: ${hints.length > 0 ? hints.join(', ') : '(see phase context)'}. The phase transition happens automatically when the agent starts.`;
+        });
       }
     }
   }

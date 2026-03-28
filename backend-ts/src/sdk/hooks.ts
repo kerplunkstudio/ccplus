@@ -219,7 +219,21 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
           if (currentState.phase === inferredPhase) {
             const nextPhase = getNextPhase(sessionId, workspace);
             if (nextPhase) {
-              transitionPhase(sessionId, nextPhase, `agent_complete:${agentType}`, workspace);
+              const newState = transitionPhase(sessionId, nextPhase, `agent_complete:${agentType}`, workspace);
+              if (newState) {
+                const session = sessions.get(sessionId);
+                if (session?.callbacks) {
+                  session.callbacks.onSignal?.({
+                    type: 'workflow_phase',
+                    data: {
+                      phase: newState.phase,
+                      previous: currentState.phase,
+                      sessionId,
+                      agent_hints: workflow?.phases.find((p: { name: string }) => p.name === newState.phase)?.agent_hints ?? [],
+                    },
+                  });
+                }
+              }
             }
           }
         }
@@ -425,6 +439,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
                   phase: newState.phase,
                   previous: currentState.phase,
                   sessionId,
+                  agent_hints: workflow?.phases.find((p: { name: string }) => p.name === newState.phase)?.agent_hints ?? [],
                 },
               });
             }
