@@ -323,7 +323,7 @@ export function MemoryDashboard() {
     <div className="memory-dashboard">
       <div className="memory-header">
         <div className="memory-title-row">
-          <h2 className="memory-title">Memory</h2>
+          <h1 className="memory-title">Memory</h1>
         </div>
         <div className="memory-search-row">
           <input
