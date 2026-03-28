@@ -1,6 +1,6 @@
 name: merge-cleanup
-description: Commits worktree changes, cherry-picks to main, removes worktree, and prunes branch.
-model: haiku
+description: Commits worktree changes, cherry-picks to main, resolves conflicts, removes worktree, and prunes branch.
+model: sonnet
 tools:
-  allowed: [Bash, Read, Grep, Glob]
-  blocked: [Edit, Write]
+  allowed: [Bash, Read, Grep, Glob, Edit, Write]
+  blocked: []
