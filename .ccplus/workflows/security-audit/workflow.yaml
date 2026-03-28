@@ -29,17 +29,19 @@ phases:
     agent_hints:
       - code_agent
       - frontend-agent
+      - build-error-resolver
     tool_rules:
       - tool_name: Bash
         action: block
         conditions: ["command_contains:git commit"]
-        message: "Execute phase: complete code review before committing. Transition to review phase first."
+        message: "Execute phase: complete remediation. Transition to test phase first."
   - name: test
     context: |
       Write security tests to verify the remediations work.
       Test that the vulnerabilities are actually fixed, not just patched superficially.
     agent_hints:
       - tdd-guide
+      - e2e-runner
     tool_rules:
       - tool_name: Edit
         action: warn
@@ -55,20 +57,20 @@ phases:
       Confirm no new vulnerabilities were introduced during remediation.
     agent_hints:
       - security-reviewer
-      - code-reviewer
+      - merge-cleanup
     tool_rules:
       - tool_name: Edit
         action: block
         conditions: []
-        message: 'Signoff phase: verify remediations with Read, Grep, and Glob.'
+        message: 'Signoff phase: use Bash for git operations only. No code changes.'
       - tool_name: Write
         action: block
         conditions: []
-        message: 'Signoff phase: verify remediations with Read, Grep, and Glob.'
+        message: 'Signoff phase: use Bash for git operations only. No code changes.'
       - tool_name: Bash
         action: block
-        conditions: []
-        message: 'Signoff phase: use Read, Grep, and Glob to verify fixes.'
+        conditions: ["command_contains:git commit"]
+        message: "Signoff phase: commits are blocked until sign-off completes."
 transitions:
   - from: audit
     to: execute
@@ -76,7 +78,7 @@ transitions:
     to: test
   - from: test
     to: signoff
+  - from: test
+    to: execute
   - from: signoff
     to: complete
-  - from: signoff
-    to: execute
