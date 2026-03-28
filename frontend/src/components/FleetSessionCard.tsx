@@ -90,7 +90,11 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
           <span className="fleet-stat-label">tools</span>
         </div>
         <div className="fleet-stat">
-          <span className="fleet-stat-value">{session.totalAgents}</span>
+          <span className="fleet-stat-value">
+            {session.status === 'completed' || session.status === 'failed' || session.status === 'cancelled'
+              ? session.totalAgents
+              : session.activeAgents}
+          </span>
           <span className="fleet-stat-label">agents</span>
         </div>
         <div className="fleet-stat">

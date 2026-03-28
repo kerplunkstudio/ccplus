@@ -238,9 +238,10 @@ export interface SessionMetadata {
 
 export interface FleetSession {
   sessionId: string;
-  status: 'running' | 'idle' | 'completed' | 'failed';
+  status: 'running' | 'idle' | 'completed' | 'failed' | 'cancelled';
   workspace: string;
   toolCount: number;
+  activeAgents: number;
   totalAgents: number;
   inputTokens: number;
   outputTokens: number;
