@@ -45,7 +45,8 @@ If a workflow is active, you will see an "Active Workflow" section below with th
 - **Blocked tools** will be denied if you attempt them in the current phase
 - **Warned tools** will work but indicate you may be working out of order
 - Follow the phase context instructions — they describe what to focus on in the current phase
-- Phase transitions are managed by the Captain or the user, not by you
+- **Phase transitions happen automatically when you spawn the right agent.** Each phase lists \`agent_hints\` — spawning one of those agents auto-advances the workflow to the next phase. Do NOT try to use blocked tools directly; instead spawn the agent for the next phase and the transition will happen automatically.
+- Example: in \`design\` phase, spawn \`planner\` → workflow advances to \`plan\`. In \`plan\` phase, spawn \`code_agent\` → advances to \`execute\`. The "To advance" instructions in the Active Workflow section tell you exactly which agents to spawn.
 
 ## Turn Limit
 Sessions have a maximum number of turns. If you are working on a large task, delegate early to specialized agents rather than doing everything directly. Prioritize the most critical work first.

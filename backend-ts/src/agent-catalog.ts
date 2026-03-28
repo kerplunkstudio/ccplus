@@ -142,7 +142,7 @@ ${phaseBlocks.join('\n\n')}`;
  * Returns empty string if workflow is null.
  */
 export function formatWorkflowContext(workflow: WorkflowConfig | null, currentPhase?: string): string {
-  if (!workflow || !workflow.phases || workflow.phases.length === 0) {
+  if (!workflow || !workflow.phases || workflow.phases.length === 0 || !workflow.transitions) {
     return '';
   }
 
@@ -163,6 +163,10 @@ export function formatWorkflowContext(workflow: WorkflowConfig | null, currentPh
         result += `\n\n${phase.context}`;
       }
 
+      if (phase.agent_hints && phase.agent_hints.length > 0) {
+        result += `\n\n**Agents for this phase**: ${phase.agent_hints.join(', ')}`;
+      }
+
       const validTransitions = workflow.transitions
         .filter((t) => t.from === currentPhase)
         .map((t) => t.to);
@@ -170,8 +174,19 @@ export function formatWorkflowContext(workflow: WorkflowConfig | null, currentPh
       if (validTransitions.length > 0) {
         result += `\n\n### Valid Transitions from ${currentPhase}`;
         validTransitions.forEach((to) => {
-          result += `\n- ${to}`;
+          const nextPhase = workflow.phases.find((p) => p.name === to);
+          const hints = nextPhase?.agent_hints ?? [];
+          const hintStr = hints.length > 0 ? ` — spawn one of: ${hints.join(', ')}` : '';
+          result += `\n- ${to}${hintStr}`;
         });
+
+        // Show the primary next phase advance instruction prominently
+        const primaryNext = validTransitions[0];
+        const primaryPhase = workflow.phases.find((p) => p.name === primaryNext);
+        const primaryHints = primaryPhase?.agent_hints ?? [];
+        if (primaryHints.length > 0) {
+          result += `\n\n**To advance to \`${primaryNext}\`**: spawn one of these agents: ${primaryHints.join(', ')}. The phase transition happens automatically when the agent starts.`;
+        }
       }
     }
   }
