@@ -56,6 +56,12 @@ type StuckSessionCallback = (sessionId: string, info: FleetSessionInfo) => void;
 let stuckSessionCallback: StuckSessionCallback | null = null;
 let stuckDetectorTimer: ReturnType<typeof setInterval> | null = null;
 
+// ---- Session Pruner ----
+
+const PRUNE_MAX_AGE_MS = 60 * 60 * 1000;  // 1 hour
+const PRUNE_INTERVAL_MS = 10 * 60 * 1000;  // 10 minutes
+const TERMINAL_STATUSES = new Set<FleetSessionInfo['status']>(['completed', 'failed', 'cancelled']);
+
 // ---- Public API ----
 
 export function loadSessionsFromDb(): void {
@@ -347,6 +353,7 @@ const ZOMBIE_REAPER_INTERVAL_MS = 60_000; // every minute
 const ZOMBIE_TIMEOUT_MS = 5 * 60_000; // 5 minutes
 
 let zombieReaperTimer: ReturnType<typeof setInterval> | null = null;
+let prunerTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startZombieReaper(): void {
   if (zombieReaperTimer) return; // already running
@@ -382,6 +389,37 @@ function reapZombieSessions(): void {
   }
 }
 
+// ---- Session Pruner ----
+
+export function startPruner(): void {
+  if (prunerTimer) return; // already running
+  prunerTimer = setInterval(pruneOldSessions, PRUNE_INTERVAL_MS);
+}
+
+export function stopPruner(): void {
+  if (prunerTimer) {
+    clearInterval(prunerTimer);
+    prunerTimer = null;
+  }
+}
+
+function pruneOldSessions(): void {
+  const now = Date.now();
+  let pruneCount = 0;
+  for (const [sessionId, session] of sessions.entries()) {
+    if (
+      TERMINAL_STATUSES.has(session.status) &&
+      now - new Date(session.lastActivity).getTime() > PRUNE_MAX_AGE_MS
+    ) {
+      sessions.delete(sessionId);
+      pruneCount++;
+    }
+  }
+  if (pruneCount > 0) {
+    console.log(`[fleet-monitor] Pruned ${pruneCount} old terminal session(s) from memory`);
+  }
+}
+
 // ---- Testing helpers ----
 
 export function _clearSessions(): void {
@@ -394,6 +432,7 @@ export function _clearSessions(): void {
   stopZombieReaper();
   stopStuckDetector();
   stuckSessionCallback = null;
+  stopPruner();
 }
 
 export function _setSessionLastActivity(sessionId: string, lastActivity: string): void {

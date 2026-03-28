@@ -497,3 +497,127 @@ describe('Fleet Monitor', () => {
     });
   });
 });
+
+  describe('Session Pruner', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      fleetMonitor._clearSessions(); // Clear after fake timers so the pruner state is reset properly
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('removes a terminal session older than 1 hour from memory', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('sess1', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000); // advance by PRUNE_INTERVAL_MS
+
+      expect(fleetMonitor.getSessionDetail('sess1')).toBeNull();
+    });
+
+    it('does NOT remove a terminal session younger than 1 hour', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+
+      // lastActivity is now (just registered and completed), well under 1 hour
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('sess1')).not.toBeNull();
+    });
+
+    it('does NOT remove a running session older than 1 hour', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('sess1', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('sess1')).not.toBeNull();
+    });
+
+    it('does NOT remove an idle session older than 1 hour', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      // status remains 'idle'
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('sess1', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('sess1')).not.toBeNull();
+    });
+    it('prunes old completed sessions', () => {
+      fleetMonitor.registerSession('s1', '/workspace/a');
+      fleetMonitor.updateSessionStatus('s1', 'completed');
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('s1', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('s1')).toBeNull();
+    });
+
+    it('prunes old failed sessions', () => {
+      fleetMonitor.registerSession('s2', '/workspace/b');
+      fleetMonitor.updateSessionStatus('s2', 'failed');
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('s2', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('s2')).toBeNull();
+    });
+
+    it('prunes old cancelled sessions', () => {
+      fleetMonitor.registerSession('s3', '/workspace/c');
+      fleetMonitor.updateSessionStatus('s3', 'cancelled');
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('s3', oneHourAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('s3')).toBeNull();
+    });
+
+    it('_clearSessions() stops the pruner interval', () => {
+      const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+
+      fleetMonitor.startPruner();
+      fleetMonitor._clearSessions(); // internally calls stopPruner()
+
+      expect(clearIntervalSpy).toHaveBeenCalled();
+
+      clearIntervalSpy.mockRestore();
+    });
+
+    it('pruner fires on each PRUNE_INTERVAL_MS tick', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000 - 1).toISOString();
+      fleetMonitor._setSessionLastActivity('sess1', oneHourAgo);
+
+      fleetMonitor.startPruner();
+
+      // Session should still be present before the interval fires
+      expect(fleetMonitor.getSessionDetail('sess1')).not.toBeNull();
+
+      vi.advanceTimersByTime(10 * 60 * 1000); // one full interval
+
+      expect(fleetMonitor.getSessionDetail('sess1')).toBeNull();
+    });
+  });
