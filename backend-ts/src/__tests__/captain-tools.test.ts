@@ -24,6 +24,7 @@ import { buildFleetMcpTools, type CaptainToolDependencies } from '../captain-too
 import * as fleetMonitor from '../fleet-monitor.js';
 import * as workflowState from '../workflow-state.js';
 import * as workflowConfig from '../workflow-config.js';
+import * as sessionApi from '../session-api.js';
 import { log } from '../logger.js';
 
 describe('captain-tools', () => {
@@ -362,6 +363,201 @@ describe('captain-tools', () => {
 
       expect(parsed.sessions[0].workflow_phase).toBeNull();
       expect(parsed.sessions[0].workflow_name).toBeNull();
+    });
+  });
+
+  // ---- Regression tests for Bug 1: start_session workflow validation ----
+  describe('start_session - regression: workflow validation (Bug 1)', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns success:false with "Unknown workflow" error when workflow name is not in listWorkflows()', async () => {
+      // Bug: before the fix, start_session would call startSession() without checking
+      // whether the workflow name was valid, causing confusing downstream errors.
+      // After the fix, listWorkflows() is called first and an early error is returned.
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'do something',
+        workspace: '/tmp',
+        workflow: 'nonexistent-workflow',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('Unknown workflow');
+      expect(parsed.error).toContain('nonexistent-workflow');
+      // startSession must NOT have been called
+      expect(vi.mocked(sessionApi.startSession)).not.toHaveBeenCalled();
+    });
+
+    it('includes the list of available workflows in the error message for an unknown workflow', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'do something',
+        workspace: '/tmp',
+        workflow: 'typo-workflow',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('feature');
+      expect(parsed.error).toContain('bug-fix');
+      expect(parsed.error).toContain('default');
+    });
+
+    it('proceeds to startSession when workflow name is valid', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: true,
+        sessionId: 'new-session-123',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'implement the feature',
+        workspace: '/tmp',
+        workflow: 'feature',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('new-session-123');
+      expect(vi.mocked(sessionApi.startSession)).toHaveBeenCalledOnce();
+    });
+
+    it('returns success:false when startSession itself fails (after passing workflow validation)', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: false,
+        error: 'workspace path does not exist or is not a directory',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'do something',
+        workspace: '/no/such/dir',
+        workflow: 'feature',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('workspace path does not exist');
+    });
+  });
+
+  // ---- Regression tests for Bug 2: transition_session_phase uses workflow config phases ----
+  describe('transition_session_phase - regression: workflow-config phases (Bug 2)', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('reports valid_phases from the actual workflow config, not a hardcoded list', async () => {
+      // Bug: before the fix, valid_phases was populated from a hardcoded constant
+      // (e.g. ['execute', 'test', 'review', 'complete']).
+      // After the fix, phases are loaded from loadWorkflow() and reflect the real config.
+      vi.mocked(workflowState.getWorkflowState).mockReturnValue({
+        phase: 'plan',
+        workflowName: 'tdd',
+        transitions: [],
+        sessionId: 'sess-tdd',
+        createdAt: '2024-01-01',
+      });
+      // Transition attempt fails (returns null) to trigger the error branch
+      vi.mocked(workflowState.transitionPhase).mockReturnValue(null);
+      // The workflow has custom phases that would NOT appear in a hardcoded list
+      vi.mocked(workflowConfig.loadWorkflow).mockReturnValue({
+        name: 'tdd',
+        description: 'TDD workflow',
+        default_phase: 'red',
+        phases: [
+          { name: 'red', context: 'Write failing test', agent_hints: [], tool_rules: [] },
+          { name: 'green', context: 'Make test pass', agent_hints: [], tool_rules: [] },
+          { name: 'refactor', context: 'Refactor', agent_hints: [], tool_rules: [] },
+        ],
+        transitions: [
+          { from: 'red', to: 'green' },
+          { from: 'green', to: 'refactor' },
+          { from: 'refactor', to: 'red' },
+        ],
+      });
+
+      const handler = toolHandlers.get('transition_session_phase');
+      const result = await handler!({
+        session_id: 'sess-tdd',
+        to_phase: 'hardcoded-phase',
+        mode: 'validate',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      // valid_phases must come from the workflow config, not a hardcoded list
+      expect(parsed.valid_phases).toEqual(['red', 'green', 'refactor']);
+      // Hardcoded phase names that were in the old list must NOT appear unless the workflow has them
+      expect(parsed.valid_phases).not.toContain('complete');
+      expect(parsed.valid_phases).not.toContain('execute');
+    });
+
+    it('shows correct workflow name in the error message', async () => {
+      vi.mocked(workflowState.getWorkflowState).mockReturnValue({
+        phase: 'red',
+        workflowName: 'tdd',
+        transitions: [],
+        sessionId: 'sess-tdd',
+        createdAt: '2024-01-01',
+      });
+      vi.mocked(workflowState.transitionPhase).mockReturnValue(null);
+      vi.mocked(workflowConfig.loadWorkflow).mockReturnValue({
+        name: 'tdd',
+        description: 'TDD workflow',
+        default_phase: 'red',
+        phases: [
+          { name: 'red', context: 'Write failing test', agent_hints: [], tool_rules: [] },
+        ],
+        transitions: [],
+      });
+
+      const handler = toolHandlers.get('transition_session_phase');
+      const result = await handler!({
+        session_id: 'sess-tdd',
+        to_phase: 'unknown',
+        mode: 'validate',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('tdd');
+      expect(parsed.current_phase).toBe('red');
+    });
+
+    it('returns empty valid_phases when loadWorkflow throws (workflow config unavailable)', async () => {
+      vi.mocked(workflowState.getWorkflowState).mockReturnValue({
+        phase: 'execute',
+        workflowName: 'unknown-wf',
+        transitions: [],
+        sessionId: 'sess-x',
+        createdAt: '2024-01-01',
+      });
+      vi.mocked(workflowState.transitionPhase).mockReturnValue(null);
+      vi.mocked(workflowConfig.loadWorkflow).mockImplementation(() => {
+        throw new Error('Workflow not found in database');
+      });
+
+      const handler = toolHandlers.get('transition_session_phase');
+      const result = await handler!({
+        session_id: 'sess-x',
+        to_phase: 'review',
+        mode: 'validate',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      // When loadWorkflow throws, valid_phases should be empty (graceful degradation)
+      expect(parsed.valid_phases).toEqual([]);
     });
   });
 

@@ -12,7 +12,7 @@ import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { startSession } from "./session-api.js";
 import { getWorkflowState, transitionPhase, skipToPhase } from "./workflow-state.js";
-import { loadWorkflow } from "./workflow-config.js";
+import { loadWorkflow, listWorkflows } from "./workflow-config.js";
 import { log } from "./logger.js";
 import * as captain from "./captain.js";
 import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
@@ -97,6 +97,21 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       },
       async (args) => {
         try {
+          const availableWorkflows = listWorkflows();
+          if (!availableWorkflows.includes(args.workflow)) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    success: false,
+                    error: `Unknown workflow '${args.workflow}'. Available workflows: ${availableWorkflows.join(', ')}`,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
           const result = startSession(
             {
               prompt: args.prompt,
@@ -470,7 +485,13 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             : transitionPhase(args.session_id, args.to_phase, args.reason ?? 'captain_manual', workspace);
 
           if (!result) {
-            const validTransitions = ['idle', 'design', 'plan', 'execute', 'test', 'review', 'complete'];
+            let validPhases: string[] = [];
+            try {
+              const wfConfig = loadWorkflow(currentState.workflowName);
+              validPhases = wfConfig.phases.map(p => p.name);
+            } catch {
+              // Workflow config unavailable, leave validPhases empty
+            }
             return {
               content: [{
                 type: "text" as const,
@@ -478,7 +499,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   success: false,
                   error: `Cannot transition from '${currentState.phase}' to '${args.to_phase}'. Current workflow: ${currentState.workflowName}`,
                   current_phase: currentState.phase,
-                  valid_phases: validTransitions,
+                  valid_phases: validPhases,
                 }, null, 2),
               }],
             };
