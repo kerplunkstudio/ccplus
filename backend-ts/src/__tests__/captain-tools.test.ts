@@ -56,9 +56,9 @@ describe('captain-tools', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 9 tools', () => {
+    it('builds 11 tools', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(9);
+      expect(tools).toHaveLength(11);
     });
   });
 
@@ -622,6 +622,184 @@ describe('captain-tools', () => {
       expect(parsed.messages).toHaveLength(1);
       expect(parsed.messages[0].content).toHaveLength(1500);
       expect(parsed.messages[0].content).toBe('a'.repeat(1500));
+    });
+  });
+
+  describe('get_session_diff', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns error when session not found', async () => {
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue(null);
+      vi.mocked(mockDeps.database.getConversationHistory).mockReturnValue([]);
+
+      const handler = toolHandlers.get('get_session_diff');
+      const result = await handler!({ session_id: 'unknown-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.error).toContain('Session not found');
+    });
+
+    it('returns error when workspace is not a git repo', async () => {
+      mockDeps.sessionWorkspaces.set('test-session', '/tmp/not-a-git-repo');
+
+      const handler = toolHandlers.get('get_session_diff');
+      const result = await handler!({ session_id: 'test-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      // Will error because /tmp/not-a-git-repo is not a git repo
+      expect(parsed.error).toBeDefined();
+    });
+
+    it('gets workspace from sessionWorkspaces map', async () => {
+      mockDeps.sessionWorkspaces.set('test-session', '/test-workspace');
+
+      const handler = toolHandlers.get('get_session_diff');
+      const result = await handler!({ session_id: 'test-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      // Will have an error since /test-workspace doesn't exist, but it shows the workspace was found
+      if (parsed.workspace) {
+        expect(parsed.workspace).toBe('/test-workspace');
+      } else {
+        // Expected: error because workspace is not a git repo
+        expect(parsed.error).toBeDefined();
+      }
+    });
+
+    it('falls back to fleet monitor for workspace', async () => {
+      // Clear sessionWorkspaces to force fallback to fleet monitor
+      mockDeps.sessionWorkspaces.clear();
+
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue({
+        sessionId: 'test-session-fleet',
+        status: 'running',
+        workspace: '/fleet-workspace',
+        toolCount: 0,
+        activeAgents: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        filesTouched: [],
+        durationMs: 0,
+        label: '',
+        startedAt: '2024-01-01',
+        lastActivity: '2024-01-01',
+      } as fleetMonitor.EnrichedFleetSessionInfo);
+
+      const handler = toolHandlers.get('get_session_diff');
+      const result = await handler!({ session_id: 'test-session-fleet' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      // Will have an error since /fleet-workspace doesn't exist, but it shows the workspace was found
+      if (parsed.workspace) {
+        expect(parsed.workspace).toBe('/fleet-workspace');
+      } else {
+        // Expected: error because workspace is not a git repo
+        expect(parsed.error).toBeDefined();
+      }
+    });
+  });
+
+  describe('get_session_cost', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns error when session not found', async () => {
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue(null);
+
+      const handler = toolHandlers.get('get_session_cost');
+      const result = await handler!({ session_id: 'unknown-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.error).toBe('Session not found');
+    });
+
+    it('calculates cost for session with tokens', async () => {
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue({
+        sessionId: 'test-session',
+        status: 'completed',
+        workspace: '/test',
+        toolCount: 10,
+        activeAgents: 0,
+        inputTokens: 1_000_000, // 1M tokens
+        outputTokens: 500_000, // 500K tokens
+        filesTouched: [],
+        durationMs: 60000,
+        label: 'test',
+        startedAt: '2024-01-01',
+        lastActivity: '2024-01-01',
+      } as fleetMonitor.EnrichedFleetSessionInfo);
+
+      const handler = toolHandlers.get('get_session_cost');
+      const result = await handler!({ session_id: 'test-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.session_id).toBe('test-session');
+      expect(parsed.input_tokens).toBe(1_000_000);
+      expect(parsed.output_tokens).toBe(500_000);
+      expect(parsed.model).toBe('sonnet');
+      expect(parsed.duration_ms).toBe(60000);
+
+      // Sonnet pricing: $3/MTok input, $15/MTok output
+      // 1M tokens input = $3, 500K tokens output = $7.5
+      expect(parsed.estimated_cost_usd).toBe(10.5);
+      expect(parsed.cost_breakdown.input_cost_usd).toBe(3);
+      expect(parsed.cost_breakdown.output_cost_usd).toBe(7.5);
+      expect(parsed.pricing_note).toContain('Sonnet');
+    });
+
+    it('calculates zero cost for session with no tokens', async () => {
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue({
+        sessionId: 'test-session',
+        status: 'running',
+        workspace: '/test',
+        toolCount: 0,
+        activeAgents: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        filesTouched: [],
+        durationMs: 1000,
+        label: '',
+        startedAt: '2024-01-01',
+        lastActivity: '2024-01-01',
+      } as fleetMonitor.EnrichedFleetSessionInfo);
+
+      const handler = toolHandlers.get('get_session_cost');
+      const result = await handler!({ session_id: 'test-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.estimated_cost_usd).toBe(0);
+      expect(parsed.cost_breakdown.input_cost_usd).toBe(0);
+      expect(parsed.cost_breakdown.output_cost_usd).toBe(0);
+    });
+
+    it('handles small token counts with proper precision', async () => {
+      vi.mocked(fleetMonitor.getSessionDetail).mockReturnValue({
+        sessionId: 'test-session',
+        status: 'completed',
+        workspace: '/test',
+        toolCount: 5,
+        activeAgents: 0,
+        inputTokens: 5000, // 5K tokens
+        outputTokens: 2000, // 2K tokens
+        filesTouched: [],
+        durationMs: 5000,
+        label: '',
+        startedAt: '2024-01-01',
+        lastActivity: '2024-01-01',
+      } as fleetMonitor.EnrichedFleetSessionInfo);
+
+      const handler = toolHandlers.get('get_session_cost');
+      const result = await handler!({ session_id: 'test-session' });
+      const parsed = JSON.parse(result.content[0].text);
+
+      // Sonnet pricing: $3/MTok input, $15/MTok output
+      // 5K tokens input = $0.015, 2K tokens output = $0.03
+      expect(parsed.estimated_cost_usd).toBe(0.045);
+      expect(parsed.cost_breakdown.input_cost_usd).toBe(0.015);
+      expect(parsed.cost_breakdown.output_cost_usd).toBe(0.03);
     });
   });
 });

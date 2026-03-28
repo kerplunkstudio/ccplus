@@ -17,6 +17,15 @@ import { log } from "./logger.js";
 import * as captain from "./captain.js";
 import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 import { randomUUID } from 'crypto';
+import { execFileSync } from 'child_process';
+
+// ---- Pricing Constants ----
+
+const MODEL_PRICING = {
+  sonnet: { inputPerMTok: 3, outputPerMTok: 15 },
+  haiku: { inputPerMTok: 0.80, outputPerMTok: 4 },
+  opus: { inputPerMTok: 15, outputPerMTok: 75 },
+} as const;
 
 // ---- Types ----
 
@@ -597,6 +606,246 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             }],
           };
         });
+      }
+    ),
+
+    // get_session_diff - Get git diff for a session's workspace
+    tool(
+      "get_session_diff",
+      "Get the git diff for a session's workspace. Detects if the workspace is a worktree (compares to main/master) or regular repo (compares to HEAD~1). Returns the diff truncated to 10,000 characters if needed.",
+      {
+        session_id: z.string().describe("The session ID to query"),
+      },
+      async (args) => {
+        try {
+          // Get workspace from sessionWorkspaces map
+          let workspace = deps.sessionWorkspaces.get(args.session_id);
+
+          // Fallback to fleet monitor
+          if (!workspace) {
+            const sessionDetail = fleetMonitor.getSessionDetail(args.session_id);
+            if (sessionDetail) {
+              workspace = sessionDetail.workspace;
+            }
+          }
+
+          // Fallback to database
+          if (!workspace) {
+            const messages = deps.database.getConversationHistory(args.session_id, 1);
+            if (messages.length > 0) {
+              const toolEvents = deps.database.getToolEvents(args.session_id, 1);
+              if (toolEvents.length > 0) {
+                // Try to extract workspace from tool events (not reliable, but last resort)
+                return {
+                  content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({
+                      error: "Session not found or workspace unavailable",
+                    }, null, 2),
+                  }],
+                };
+              }
+            }
+            return {
+              content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Session not found",
+                }, null, 2),
+              }],
+            };
+          }
+
+          // Check if it's a git repository
+          try {
+            execFileSync('git', ['rev-parse', '--git-dir'], {
+              cwd: workspace,
+              maxBuffer: 10 * 1024 * 1024,
+              encoding: 'utf8',
+              stdio: 'pipe',
+            });
+          } catch {
+            return {
+              content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Workspace is not a git repository",
+                  workspace,
+                }, null, 2),
+              }],
+            };
+          }
+
+          // Detect if it's a worktree
+          let isWorktree = false;
+          try {
+            const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+              cwd: workspace,
+              maxBuffer: 10 * 1024 * 1024,
+              encoding: 'utf8',
+              stdio: 'pipe',
+            }).trim();
+            const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], {
+              cwd: workspace,
+              maxBuffer: 10 * 1024 * 1024,
+              encoding: 'utf8',
+              stdio: 'pipe',
+            }).trim();
+            isWorktree = commonDir !== gitDir;
+          } catch {
+            // If detection fails, assume not a worktree
+            isWorktree = false;
+          }
+
+          // Get diff based on worktree status
+          let diff = '';
+          try {
+            if (isWorktree) {
+              // Try main first, then master, then HEAD
+              try {
+                diff = execFileSync('git', ['diff', 'main'], {
+                  cwd: workspace,
+                  maxBuffer: 10 * 1024 * 1024,
+                  encoding: 'utf8',
+                  stdio: 'pipe',
+                });
+              } catch {
+                try {
+                  diff = execFileSync('git', ['diff', 'master'], {
+                    cwd: workspace,
+                    maxBuffer: 10 * 1024 * 1024,
+                    encoding: 'utf8',
+                    stdio: 'pipe',
+                  });
+                } catch {
+                  diff = execFileSync('git', ['diff', 'HEAD'], {
+                    cwd: workspace,
+                    maxBuffer: 10 * 1024 * 1024,
+                    encoding: 'utf8',
+                    stdio: 'pipe',
+                  });
+                }
+              }
+            } else {
+              // Regular repo: try HEAD~1, then HEAD
+              try {
+                diff = execFileSync('git', ['diff', 'HEAD~1'], {
+                  cwd: workspace,
+                  maxBuffer: 10 * 1024 * 1024,
+                  encoding: 'utf8',
+                  stdio: 'pipe',
+                });
+              } catch {
+                diff = execFileSync('git', ['diff', 'HEAD'], {
+                  cwd: workspace,
+                  maxBuffer: 10 * 1024 * 1024,
+                  encoding: 'utf8',
+                  stdio: 'pipe',
+                });
+              }
+            }
+          } catch (error) {
+            return {
+              content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: `Git diff failed: ${String(error)}`,
+                  workspace,
+                }, null, 2),
+              }],
+            };
+          }
+
+          // Truncate to 10,000 chars if needed
+          const totalLength = diff.length;
+          const truncated = totalLength > 10000;
+          const displayDiff = truncated ? diff.slice(0, 10000) + '\n\n[... truncated ...]' : diff;
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                session_id: args.session_id,
+                workspace,
+                is_worktree: isWorktree,
+                diff: displayDiff,
+                truncated,
+                total_length: totalLength,
+              }, null, 2),
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                error: `Failed to get session diff: ${String(error)}`,
+              }, null, 2),
+            }],
+          };
+        }
+      }
+    ),
+
+    // get_session_cost - Get estimated cost for a session
+    tool(
+      "get_session_cost",
+      "Get estimated cost for a session based on token usage. Uses Sonnet pricing by default ($3/MTok input, $15/MTok output).",
+      {
+        session_id: z.string().describe("The session ID to query"),
+      },
+      async (args) => {
+        try {
+          const sessionDetail = fleetMonitor.getSessionDetail(args.session_id);
+          if (!sessionDetail) {
+            return {
+              content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Session not found",
+                }, null, 2),
+              }],
+            };
+          }
+
+          const inputTokens = sessionDetail.inputTokens;
+          const outputTokens = sessionDetail.outputTokens;
+          const durationMs = sessionDetail.durationMs;
+
+          // Use Sonnet pricing as default
+          const pricing = MODEL_PRICING.sonnet;
+          const inputCost = (inputTokens / 1_000_000) * pricing.inputPerMTok;
+          const outputCost = (outputTokens / 1_000_000) * pricing.outputPerMTok;
+          const estimatedCostUsd = inputCost + outputCost;
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                session_id: args.session_id,
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                estimated_cost_usd: parseFloat(estimatedCostUsd.toFixed(4)),
+                model: 'sonnet',
+                duration_ms: durationMs,
+                cost_breakdown: {
+                  input_cost_usd: parseFloat(inputCost.toFixed(4)),
+                  output_cost_usd: parseFloat(outputCost.toFixed(4)),
+                },
+                pricing_note: `Using Sonnet pricing: $${pricing.inputPerMTok}/MTok input, $${pricing.outputPerMTok}/MTok output`,
+              }, null, 2),
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                error: `Failed to get session cost: ${String(error)}`,
+              }, null, 2),
+            }],
+          };
+        }
       }
     ),
   ];
