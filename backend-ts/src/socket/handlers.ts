@@ -494,37 +494,61 @@ export function setupSocketHandlers(
       }
     });
 
-    socket.on('captain_interactive_response', (data: { messageId: string; actionId: string; actionValue?: string }) => {
+    socket.on('captain_interactive_response', (data: { messageId: string; actionId?: string; actionIds?: string[]; actionValue?: string }) => {
       if (!captain.isCaptainAlive()) {
         socket.emit('captain_error', { message: 'Captain is not active' });
         return;
       }
 
-      // Validate inputs
-      if (typeof data.messageId !== 'string' || !data.messageId.trim() ||
-          typeof data.actionId !== 'string' || !data.actionId.trim()) {
-        socket.emit('captain_error', { message: 'Invalid interactive response: messageId and actionId must be non-empty strings' });
+      // Validate inputs - either actionId or actionIds must be provided
+      if (typeof data.messageId !== 'string' || !data.messageId.trim()) {
+        socket.emit('captain_error', { message: 'Invalid interactive response: messageId must be a non-empty string' });
         return;
       }
 
-      // Check if message is pending and validate actionId is a known action
+      // Check if message is pending
       const pendingMessage = captain.getPendingInteractiveMessage(data.messageId);
       if (!pendingMessage) {
         socket.emit('captain_error', { message: `No pending interactive message with id: ${data.messageId}` });
         return;
       }
 
-      // Validate actionId is one of the known action ids (prevent forgery)
       const validActionIds = pendingMessage.actions.map((a: { id: string }) => a.id);
-      if (!validActionIds.includes(data.actionId)) {
-        socket.emit('captain_error', { message: `Invalid actionId: ${data.actionId}` });
+      let finalActionId: string;
+
+      // Handle multi-select response (actionIds array)
+      if (data.actionIds && Array.isArray(data.actionIds)) {
+        if (data.actionIds.length === 0) {
+          socket.emit('captain_error', { message: 'Invalid interactive response: actionIds must not be empty' });
+          return;
+        }
+
+        // Validate all actionIds are known
+        for (const id of data.actionIds) {
+          if (!validActionIds.includes(id)) {
+            socket.emit('captain_error', { message: `Invalid actionId in selection: ${id}` });
+            return;
+          }
+        }
+
+        // Join with comma for backwards-compatible storage
+        finalActionId = data.actionIds.join(',');
+      } else if (data.actionId && typeof data.actionId === 'string' && data.actionId.trim()) {
+        // Handle single-select response (actionId string)
+        if (!validActionIds.includes(data.actionId)) {
+          socket.emit('captain_error', { message: `Invalid actionId: ${data.actionId}` });
+          return;
+        }
+        finalActionId = data.actionId;
+      } else {
+        socket.emit('captain_error', { message: 'Invalid interactive response: must provide actionId or actionIds' });
         return;
       }
 
       // All validations passed, respond
       const responded = captain.respondToInteractiveMessage(data.messageId, {
         messageId: data.messageId,
-        actionId: data.actionId,
+        actionId: finalActionId,
         actionValue: data.actionValue,
         respondedAt: Date.now(),
         source: 'web',

@@ -33,6 +33,7 @@ interface PendingInteractiveMsg {
   readonly chatId: number;
   readonly message: InteractiveMessage;
   readonly timeoutTimer: ReturnType<typeof setTimeout> | null;
+  readonly selectedActionIds?: Set<string>;
 }
 
 const pendingInteractiveMsgs = new Map<string, PendingInteractiveMsg>();
@@ -142,12 +143,32 @@ export async function deliverInteractiveMessage(chatId: number, message: Interac
     return;
   }
 
-  // Build inline keyboard — use action index (i) not action id to keep callback_data under 64 bytes
-  // Format: {"m":"<36-char-uuid>","i":0} = ~49 chars, well within 64-byte limit
-  const inlineKeyboard = message.actions.map((action, i) => [{
-    text: action.label,
-    callback_data: JSON.stringify({ m: message.id, i }),
-  }]);
+  const isMultiSelect = message.type === 'multi-select';
+
+  // Build inline keyboard
+  let inlineKeyboard: Array<Array<{ text: string; callback_data: string }>>;
+
+  if (isMultiSelect) {
+    // Multi-select: each action as a toggle button + a "Done" button
+    // Format: {"m":"<uuid>","i":0} for toggle, {"m":"<uuid>","done":true} for confirm
+    inlineKeyboard = [
+      ...message.actions.map((action, i) => [{
+        text: action.label,
+        callback_data: JSON.stringify({ m: message.id, i }),
+      }]),
+      [{
+        text: '✅ Done',
+        callback_data: JSON.stringify({ m: message.id, done: true }),
+      }],
+    ];
+  } else {
+    // Single-select: use action index (i) not action id to keep callback_data under 64 bytes
+    // Format: {"m":"<36-char-uuid>","i":0} = ~49 chars, well within 64-byte limit
+    inlineKeyboard = message.actions.map((action, i) => [{
+      text: action.label,
+      callback_data: JSON.stringify({ m: message.id, i }),
+    }]);
+  }
 
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -168,9 +189,10 @@ export async function deliverInteractiveMessage(chatId: number, message: Interac
       chatId,
       message,
       timeoutTimer,
+      selectedActionIds: isMultiSelect ? new Set() : undefined,
     });
 
-    log.info('Interactive message sent to Telegram', { messageId: message.id, chatId, actions: message.actions.length });
+    log.info('Interactive message sent to Telegram', { messageId: message.id, chatId, actions: message.actions.length, multiSelect: isMultiSelect });
   } catch (error) {
     if (timeoutTimer) clearTimeout(timeoutTimer);
     log.error('Failed to send interactive message to Telegram', { messageId: message.id, chatId, error: String(error) });
@@ -396,54 +418,153 @@ function setupBotHandlers(botInstance: Bot): void {
       return;
     }
 
-    // Check if this is an interactive message callback (has JSON with m+i keys)
-    let parsed: { m?: string; i?: number } | null = null;
+    // Check if this is an interactive message callback (has JSON with m key)
+    let parsed: { m?: string; i?: number; done?: boolean } | null = null;
     try {
       const maybeJson = JSON.parse(data);
-      if (typeof maybeJson === 'object' && maybeJson !== null && 'm' in maybeJson && 'i' in maybeJson) {
-        parsed = maybeJson as { m: string; i: number };
+      if (typeof maybeJson === 'object' && maybeJson !== null && 'm' in maybeJson) {
+        parsed = maybeJson as { m: string; i?: number; done?: boolean };
       }
     } catch {
       // Not JSON — fall through to legacy callback handling
     }
 
-    if (parsed && typeof parsed.m === 'string' && typeof parsed.i === 'number') {
-      // Interactive message callback — defer answerCallbackQuery to each branch
+    if (parsed && typeof parsed.m === 'string') {
+      // Interactive message callback
       const pending = pendingInteractiveMsgs.get(parsed.m);
       if (!pending) {
         await ctx.answerCallbackQuery({ text: 'This message has expired' });
         return;
       }
 
-      const selectedAction = pending.message.actions[parsed.i];
-      if (!selectedAction) {
+      const isMultiSelect = pending.message.type === 'multi-select';
+
+      // Handle multi-select "Done" button
+      if (parsed.done === true) {
+        if (!isMultiSelect) {
+          await ctx.answerCallbackQuery();
+          log.warn('Received "done" callback for non-multi-select message', { messageId: parsed.m });
+          return;
+        }
+
+        const selectedIds = Array.from(pending.selectedActionIds ?? []);
+        if (selectedIds.length === 0) {
+          await ctx.answerCallbackQuery({ text: 'Please select at least one option' });
+          return;
+        }
+
         await ctx.answerCallbackQuery();
-        log.warn('Interactive callback: action index out of range', { messageId: parsed.m, idx: parsed.i });
+
+        // Clean up pending entry
+        pendingInteractiveMsgs.delete(parsed.m);
+        if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+
+        // Edit original message to show selections (removes keyboard)
+        const selectedLabels = selectedIds
+          .map((id) => pending.message.actions.find((a) => a.id === id)?.label)
+          .filter(Boolean)
+          .join(', ');
+
+        try {
+          await bot!.api.editMessageText(
+            pending.chatId,
+            pending.telegramMsgId,
+            `${pending.message.text}\n\n✓ ${selectedLabels}`
+          );
+        } catch (error) {
+          log.warn('Could not edit interactive message after multi-select', { messageId: parsed.m, error: String(error) });
+        }
+
+        // Route response back to Captain as comma-separated action IDs
+        const responseText = selectedIds.join(',');
+        captain.sendCaptainMessage(responseText, 'telegram', String(chatId));
+        log.info('Multi-select response routed to Captain', { messageId: parsed.m, actionIds: selectedIds, chatId });
         return;
       }
 
-      await ctx.answerCallbackQuery();
+      // Handle action toggle (for multi-select) or action selection (for single-select)
+      if (typeof parsed.i === 'number') {
+        const selectedAction = pending.message.actions[parsed.i];
+        if (!selectedAction) {
+          await ctx.answerCallbackQuery();
+          log.warn('Interactive callback: action index out of range', { messageId: parsed.m, idx: parsed.i });
+          return;
+        }
 
-      // Clean up pending entry
-      pendingInteractiveMsgs.delete(parsed.m);
-      if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+        if (isMultiSelect) {
+          // Toggle selection
+          const selected = pending.selectedActionIds!;
+          if (selected.has(selectedAction.id)) {
+            selected.delete(selectedAction.id);
+          } else {
+            selected.add(selectedAction.id);
+          }
 
-      // Edit original message to show selection (removes keyboard)
-      try {
-        await bot!.api.editMessageText(
-          pending.chatId,
-          pending.telegramMsgId,
-          `${pending.message.text}\n\n✓ ${selectedAction.label}`
-        );
-      } catch (error) {
-        log.warn('Could not edit interactive message after selection', { messageId: parsed.m, error: String(error) });
+          // Update the message to reflect current selection
+          const selectedLabels = Array.from(selected)
+            .map((id) => pending.message.actions.find((a) => a.id === id)?.label)
+            .filter(Boolean)
+            .map((label) => `☑ ${label}`)
+            .join('\n');
+
+          const displayText = selectedLabels
+            ? `${pending.message.text}\n\n${selectedLabels}`
+            : pending.message.text;
+
+          // Rebuild keyboard with updated text
+          const inlineKeyboard = [
+            ...pending.message.actions.map((action, i) => {
+              const isSelected = selected.has(action.id);
+              return [{
+                text: isSelected ? `✓ ${action.label}` : action.label,
+                callback_data: JSON.stringify({ m: parsed!.m, i }),
+              }];
+            }),
+            [{
+              text: `✅ Done (${selected.size} selected)`,
+              callback_data: JSON.stringify({ m: parsed!.m, done: true }),
+            }],
+          ];
+
+          try {
+            await bot!.api.editMessageText(
+              pending.chatId,
+              pending.telegramMsgId,
+              displayText,
+              { reply_markup: { inline_keyboard: inlineKeyboard } }
+            );
+          } catch (error) {
+            log.warn('Could not update multi-select message', { messageId: parsed.m, error: String(error) });
+          }
+
+          await ctx.answerCallbackQuery({ text: selected.has(selectedAction.id) ? 'Selected' : 'Deselected' });
+          return;
+        } else {
+          // Single-select — finalize immediately
+          await ctx.answerCallbackQuery();
+
+          // Clean up pending entry
+          pendingInteractiveMsgs.delete(parsed.m);
+          if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
+
+          // Edit original message to show selection (removes keyboard)
+          try {
+            await bot!.api.editMessageText(
+              pending.chatId,
+              pending.telegramMsgId,
+              `${pending.message.text}\n\n✓ ${selectedAction.label}`
+            );
+          } catch (error) {
+            log.warn('Could not edit interactive message after selection', { messageId: parsed.m, error: String(error) });
+          }
+
+          // Route response back to Captain as a regular message
+          const responseText = selectedAction.value ?? selectedAction.label;
+          captain.sendCaptainMessage(responseText, 'telegram', String(chatId));
+          log.info('Interactive response routed to Captain', { messageId: parsed.m, actionId: selectedAction.id, chatId });
+          return;
+        }
       }
-
-      // Route response back to Captain as a regular message
-      const responseText = selectedAction.value ?? selectedAction.label;
-      captain.sendCaptainMessage(responseText, 'telegram', String(chatId));
-      log.info('Interactive response routed to Captain', { messageId: parsed.m, actionId: selectedAction.id, chatId });
-      return;
     }
 
     // Legacy callback handling (existing logic)

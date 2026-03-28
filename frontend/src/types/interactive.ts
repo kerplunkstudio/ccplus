@@ -14,6 +14,9 @@ export interface InteractiveMessage {
   readonly actions: readonly InteractiveAction[]
   readonly responseState: 'pending' | 'responded' | 'expired' | 'cancelled'
   readonly selectedActionId?: string
+  readonly selectedActionIds?: readonly string[]
+  readonly minSelections?: number
+  readonly maxSelections?: number
   readonly timeoutMs?: number
   readonly createdAt: number
   readonly expiresAt?: number

@@ -543,19 +543,21 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
     // request_user_input - Send interactive message and wait for response
     tool(
       "request_user_input",
-      "Send an interactive message to the user and wait for their response. Captain will block until the user responds or the timeout expires. Use for confirmations, option selection, or any decision that requires explicit user input.",
+      "Send an interactive message to the user and wait for their response. Captain will block until the user responds or the timeout expires. Use for confirmations, option selection, multi-select, or any decision that requires explicit user input.",
       {
-        type: z.enum(['confirmation', 'options']).describe("Message type: confirmation (yes/no style) or options (pick from list)"),
+        type: z.enum(['confirmation', 'options', 'multi-select']).describe("Message type: confirmation (yes/no style), options (pick from list), or multi-select (pick multiple items)"),
         text: z.string().describe("Message text shown to the user"),
         actions: z.array(z.object({
           id: z.string().describe("Action identifier (max 52 chars)"),
           label: z.string().describe("Button label shown to user (max 64 chars)"),
           style: z.enum(['primary', 'danger', 'default']).optional().describe("Visual style"),
         })).describe("Available actions the user can pick"),
+        minSelections: z.number().optional().describe("For multi-select: minimum number of selections required (default: 1)"),
+        maxSelections: z.number().optional().describe("For multi-select: maximum number of selections allowed (optional)"),
         timeoutMs: z.number().optional().describe("Timeout in milliseconds (default: 120000)"),
       },
       async (args) => {
-        const { type, text, actions, timeoutMs = 120_000 } = args;
+        const { type, text, actions, minSelections, maxSelections, timeoutMs = 120_000 } = args;
         const messageId = randomUUID();
         const createdAt = Date.now();
         const expiresAt = createdAt + timeoutMs;
@@ -566,16 +568,29 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           style: (a.style ?? 'default') as ActionStyle,
         }));
 
-        const message: InteractiveMessage = {
-          id: messageId,
-          type,
-          text,
-          actions: interactiveActions,
-          responseState: 'pending',
-          timeoutMs,
-          createdAt,
-          expiresAt,
-        };
+        const message: InteractiveMessage = type === 'multi-select'
+          ? {
+              id: messageId,
+              type: 'multi-select',
+              text,
+              actions: interactiveActions,
+              responseState: 'pending',
+              minSelections: minSelections ?? 1,
+              maxSelections,
+              timeoutMs,
+              createdAt,
+              expiresAt,
+            }
+          : {
+              id: messageId,
+              type,
+              text,
+              actions: interactiveActions,
+              responseState: 'pending',
+              timeoutMs,
+              createdAt,
+              expiresAt,
+            };
 
         return new Promise<InteractiveResponse>((resolve) => {
           const timer = setTimeout(() => {
@@ -594,12 +609,19 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           });
           captain.emitInteractiveMessage(message);
         }).then((response) => {
+          // For multi-select, split comma-separated actionId back to array
+          const isMultiSelect = type === 'multi-select';
+          const actionIds = isMultiSelect && response.actionId !== '__expired__'
+            ? response.actionId.split(',')
+            : undefined;
+
           return {
             content: [{
               type: "text" as const,
               text: JSON.stringify({
                 message_id: messageId,
-                action_id: response.actionId,
+                action_id: isMultiSelect ? undefined : response.actionId,
+                action_ids: actionIds,
                 action_value: response.actionValue,
                 expired: response.actionId === '__expired__',
               }, null, 2),

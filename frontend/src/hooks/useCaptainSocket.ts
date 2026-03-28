@@ -213,18 +213,32 @@ export function useCaptainSocket(socket: Socket | null) {
   }, [interactiveMessages]);
 
   const respondToInteractive = useCallback(
-    (messageId: string, actionId: string) => {
+    (messageId: string, actionId: string | string[]) => {
       if (!socket) return;
 
-      socket.emit('captain_interactive_response', { messageId, actionId });
+      if (Array.isArray(actionId)) {
+        // Multi-select response
+        socket.emit('captain_interactive_response', { messageId, actionIds: actionId });
 
-      setInteractiveMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId
-            ? { ...msg, responseState: 'responded' as const, selectedActionId: actionId }
-            : msg
-        )
-      );
+        setInteractiveMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, responseState: 'responded' as const, selectedActionIds: actionId }
+              : msg
+          )
+        );
+      } else {
+        // Single-select response
+        socket.emit('captain_interactive_response', { messageId, actionId });
+
+        setInteractiveMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? { ...msg, responseState: 'responded' as const, selectedActionId: actionId }
+              : msg
+          )
+        );
+      }
     },
     [socket]
   );
