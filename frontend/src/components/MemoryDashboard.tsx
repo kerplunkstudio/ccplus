@@ -297,7 +297,7 @@ export function MemoryDashboard() {
   const handleDelete = useCallback(async (hash: string) => {
     if (deletingHashes.has(hash)) return;
 
-    setDeletingHashes(prev => new Set([...prev, hash]));
+    setDeletingHashes(prev => new Set(Array.from(prev).concat(hash)));
     try {
       const resp = await fetch(`/api/memory/${encodeURIComponent(hash)}`, { method: 'DELETE' });
       const json = await resp.json();
