@@ -83,6 +83,10 @@ const io = new SocketIOServer(httpServer, {
 fleetMonitor.setIOInstance(io);
 fleetMonitor.loadSessionsFromDb();
 fleetMonitor.startZombieReaper();
+fleetMonitor.startStuckDetector();
+fleetMonitor.onSessionStuck((sessionId, info) => {
+  captain.notifySessionStuck(sessionId, info);
+});
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -267,22 +271,26 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // 1. Stop Telegram bridge (deregisters polling with Telegram API)
   await stopTelegramBridge();
 
-  // 2. Stop accepting new connections
+  // 2. Stop fleet monitors
+  fleetMonitor.stopZombieReaper();
+  fleetMonitor.stopStuckDetector();
+
+  // 3. Stop accepting new connections
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   log.info("HTTP server closed");
 
-  // 3. Close all active Socket.IO connections
+  // 4. Close all active Socket.IO connections
   await new Promise<void>((resolve) => io.close(() => resolve()));
   log.info("Socket.IO server closed");
 
-  // 4. Close database connection
+  // 5. Close database connection
   database.close();
   log.info("Database closed");
 
-  // 5. Remove PID file
+  // 6. Remove PID file
   removePidFile();
 
-  // 6. Exit
+  // 7. Exit
   log.info("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);

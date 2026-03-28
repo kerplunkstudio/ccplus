@@ -255,4 +255,245 @@ describe('Fleet Monitor', () => {
       expect(mockIo.emit).toHaveBeenCalledWith('fleet_update', expect.any(Object));
     });
   });
+
+  describe('Stuck Session Detection', () => {
+    it('does not flag session below tool threshold', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 29 tools (below threshold of 30)
+      for (let i = 0; i < 29; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeUndefined();
+    });
+
+    it('does not flag session with files touched', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Touch a file
+      fleetMonitor.addFileTouched('sess1', '/workspace/project1/file.ts');
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeUndefined();
+    });
+
+    it('does not flag session under duration threshold', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Session is only 60s old (below 120s threshold)
+      const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', sixtySecondsAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeUndefined();
+    });
+
+    it('flags session meeting all criteria', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools (above threshold)
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // No files touched (default)
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeDefined();
+      expect(mockIo.to).toHaveBeenCalledWith('fleet_monitor');
+      expect(mockIo.emit).toHaveBeenCalledWith('session_stuck', expect.objectContaining({
+        sessionId: 'sess1',
+        toolCount: 35,
+        filesTouched: 0,
+      }));
+    });
+
+    it('only alerts once', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      const callback = vi.fn();
+      fleetMonitor.onSessionStuck(callback);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection twice
+      fleetMonitor._detectStuckSessions();
+      fleetMonitor._detectStuckSessions();
+
+      // Callback should only be called once
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not flag completed sessions', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Mark as completed before detection
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeUndefined();
+    });
+
+    it('calls registered callback with session info', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      const callback = vi.fn();
+      fleetMonitor.onSessionStuck(callback);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith('sess1', expect.objectContaining({
+        sessionId: 'sess1',
+        toolCount: 35,
+        filesTouched: [],
+        status: 'running',
+        stuckDetectedAt: expect.any(Number),
+      }));
+    });
+
+    it('emits session_stuck socket event', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // 35 tools
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Backdate to >2 minutes ago
+      const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      expect(mockIo.to).toHaveBeenCalledWith('fleet_monitor');
+      expect(mockIo.emit).toHaveBeenCalledWith('session_stuck', {
+        sessionId: 'sess1',
+        toolCount: 35,
+        filesTouched: 0,
+        durationMs: expect.any(Number),
+      });
+    });
+  });
 });

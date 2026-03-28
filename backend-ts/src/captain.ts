@@ -614,3 +614,25 @@ export function notifySessionComplete(sessionId: string, info: { requestedBy?: {
   // Send as a fleet message (will be tagged with [FLEET] prefix)
   sendCaptainMessage(fleetMessage, 'fleet', 'system');
 }
+
+/**
+ * Notify Captain when a session appears stuck.
+ * Sends a fleet message with diagnostic info to help Captain alert the requester.
+ */
+export function notifySessionStuck(sessionId: string, info: fleetMonitor.FleetSessionInfo): void {
+  if (!isCaptainAlive()) {
+    log.info('Captain not alive, skipping stuck session notification', { sessionId });
+    return;
+  }
+
+  const durationMs = Date.now() - new Date(info.startedAt).getTime();
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.floor((durationMs % 60_000) / 1000);
+  const durationStr = `${minutes}m${seconds}s`;
+
+  const fleetMessage = `[FLEET] Session "${sessionId}" appears stuck: ${info.toolCount} tool calls, ${info.filesTouched.length} files written, running for ${durationStr}. Consider cancelling and retrying with a clearer prompt.`;
+
+  log.info('Notifying Captain of stuck session', { sessionId, toolCount: info.toolCount });
+
+  sendCaptainMessage(fleetMessage, 'fleet', 'system');
+}

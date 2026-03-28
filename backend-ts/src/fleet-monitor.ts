@@ -19,6 +19,7 @@ export interface FleetSessionInfo {
   label: string;
   filesTouched: string[];
   requestedBy?: { source: string; sourceId: string };
+  stuckDetectedAt?: number;
 }
 
 export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
@@ -44,6 +45,16 @@ let ioInstance: SocketIOServer | null = null;
 let lastEmitTime = 0;
 const EMIT_THROTTLE_MS = 1000;
 let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// ---- Stuck Session Detection ----
+
+const STUCK_TOOL_THRESHOLD = 30;
+const STUCK_MIN_DURATION_MS = 120_000;
+const STUCK_CHECK_INTERVAL_MS = 30_000;
+
+type StuckSessionCallback = (sessionId: string, info: FleetSessionInfo) => void;
+let stuckSessionCallback: StuckSessionCallback | null = null;
+let stuckDetectorTimer: ReturnType<typeof setInterval> | null = null;
 
 // ---- Public API ----
 
@@ -275,6 +286,61 @@ export function emitFleetUpdate(force = false): void {
   doEmit();
 }
 
+// ---- Stuck Session Detection Functions ----
+
+export function onSessionStuck(callback: StuckSessionCallback): void {
+  stuckSessionCallback = callback;
+}
+
+function detectStuckSessions(): void {
+  const now = Date.now();
+  for (const session of sessions.values()) {
+    if (
+      session.status === 'running' &&
+      !session.stuckDetectedAt &&
+      session.toolCount >= STUCK_TOOL_THRESHOLD &&
+      session.filesTouched.length === 0 &&
+      now - new Date(session.startedAt).getTime() > STUCK_MIN_DURATION_MS
+    ) {
+      const updated: FleetSessionInfo = {
+        ...session,
+        stuckDetectedAt: now,
+      };
+      sessions.set(session.sessionId, updated);
+      upsertFleetSession(updated);
+
+      if (ioInstance) {
+        ioInstance.to('fleet_monitor').emit('session_stuck', {
+          sessionId: session.sessionId,
+          toolCount: session.toolCount,
+          filesTouched: session.filesTouched.length,
+          durationMs: now - new Date(session.startedAt).getTime(),
+        });
+      }
+
+      if (stuckSessionCallback) {
+        try {
+          stuckSessionCallback(session.sessionId, updated);
+        } catch {
+          // swallow callback errors
+        }
+      }
+    }
+  }
+}
+
+export function startStuckDetector(): void {
+  if (stuckDetectorTimer) return;
+  stuckDetectorTimer = setInterval(detectStuckSessions, STUCK_CHECK_INTERVAL_MS);
+}
+
+export function stopStuckDetector(): void {
+  if (stuckDetectorTimer) {
+    clearInterval(stuckDetectorTimer);
+    stuckDetectorTimer = null;
+  }
+}
+
 // ---- Zombie Reaper ----
 
 const ZOMBIE_REAPER_INTERVAL_MS = 60_000; // every minute
@@ -326,11 +392,24 @@ export function _clearSessions(): void {
     pendingTimeout = null;
   }
   stopZombieReaper();
+  stopStuckDetector();
+  stuckSessionCallback = null;
 }
 
 export function _setSessionLastActivity(sessionId: string, lastActivity: string): void {
   const session = sessions.get(sessionId);
   if (session) {
     sessions.set(sessionId, { ...session, lastActivity });
+  }
+}
+
+export function _detectStuckSessions(): void {
+  detectStuckSessions();
+}
+
+export function _setSessionStartedAt(sessionId: string, startedAt: string): void {
+  const session = sessions.get(sessionId);
+  if (session) {
+    sessions.set(sessionId, { ...session, startedAt });
   }
 }
