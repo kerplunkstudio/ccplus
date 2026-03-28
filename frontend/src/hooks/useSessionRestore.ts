@@ -187,6 +187,11 @@ export function useSessionRestore({
             }
           }
           dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+          // Sync sequenceRef so live events continue numbering after restored events
+          const historyStartCount = toolEvents.filter(
+            e => e.type === 'tool_start' || e.type === 'agent_start'
+          ).length;
+          sequenceRef.current = historyStartCount;
           toolEvents.forEach(e => {
             if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
           });
@@ -332,6 +337,11 @@ export function useSessionRestore({
             }
           }
           dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents });
+          // Sync sequenceRef so live events continue numbering after restored events
+          const historyStartCount = toolEvents.filter(
+            e => e.type === 'tool_start' || e.type === 'agent_start'
+          ).length;
+          sequenceRef.current = historyStartCount;
           toolEvents.forEach(e => {
             if (e.tool_use_id) seenToolUseIds.current.add(e.tool_use_id);
           });

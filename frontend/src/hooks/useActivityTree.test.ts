@@ -452,6 +452,21 @@ describe('useActivityTree', () => {
 
         expect((result[0] as AgentNode).agent_type).toBe('agent');
       });
+
+      it('stores sequence on agent node (regression: live sequence numbers stop showing)', () => {
+        const event: ToolEvent = {
+          type: 'agent_start',
+          tool_name: 'Agent',
+          tool_use_id: 'agent_1',
+          parent_agent_id: null,
+          agent_type: 'code_agent',
+          timestamp: '2025-01-01T00:00:00Z',
+        };
+
+        const result = treeReducer([], { type: 'AGENT_START', event, sequence: 42 });
+
+        expect((result[0] as AgentNode).sequence).toBe(42);
+      });
     });
 
     describe('TOOL_START', () => {
@@ -504,6 +519,28 @@ describe('useActivityTree', () => {
         expect(result).toHaveLength(1);
         expect((result[0] as AgentNode).children).toHaveLength(1);
         expect((result[0] as AgentNode).children[0].tool_use_id).toBe('tool_1');
+      });
+
+      it('stores sequence on tool node (regression: live sequence numbers stop showing)', () => {
+        const parentAgent: AgentNode = {
+          tool_use_id: 'agent_1',
+          agent_type: 'code_agent',
+          tool_name: 'Agent',
+          timestamp: '2025-01-01T00:00:00Z',
+          children: [],
+          status: 'running',
+        };
+        const event: ToolEvent = {
+          type: 'tool_start',
+          tool_name: 'Read',
+          tool_use_id: 'tool_1',
+          parent_agent_id: 'agent_1',
+          timestamp: '2025-01-01T00:00:01Z',
+        };
+
+        const result = treeReducer([parentAgent], { type: 'TOOL_START', event, sequence: 7 });
+        const child = (result[0] as AgentNode).children[0] as ToolNode;
+        expect(child.sequence).toBe(7);
       });
     });
 

@@ -907,4 +907,88 @@ describe('useSessionRestore', () => {
       });
     });
   });
+
+  describe('Sequence tracking after restore', () => {
+    it('syncs sequenceRef to tool_start + agent_start count after LOAD_HISTORY (regression: live sequence numbers reset to 1 after session restore)', async () => {
+      // This is a regression test for the fix that added:
+      //   sequenceRef.current = historyStartCount
+      // after dispatchTree({ type: 'LOAD_HISTORY', events: toolEvents })
+      // Without the fix, sequenceRef.current stays at 0, causing live events to be
+      // numbered starting from 1 instead of continuing from where history left off.
+      const dbEvents = [
+        {
+          tool_name: 'Bash',
+          tool_use_id: 'tool-1',
+          parent_agent_id: null,
+          agent_type: null,
+          timestamp: '2025-01-15T10:00:00Z',
+          success: true,
+          duration_ms: 100,
+        },
+        {
+          tool_name: 'Agent',
+          tool_use_id: 'agent-1',
+          parent_agent_id: null,
+          agent_type: 'code_agent',
+          timestamp: '2025-01-15T10:00:01Z',
+          success: null, // still running — no agent_stop event generated
+          description: 'Write tests',
+        },
+        {
+          tool_name: 'Read',
+          tool_use_id: 'tool-2',
+          parent_agent_id: 'agent-1',
+          agent_type: null,
+          timestamp: '2025-01-15T10:00:02Z',
+          success: true,
+          duration_ms: 50,
+        },
+      ];
+      // The three db events produce 3 start events (tool_start, agent_start, tool_start)
+      // so historyStartCount should be 3, and sequenceRef.current should be set to 3.
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ messages: [], streaming: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ events: dbEvents }),
+        });
+
+      renderHook(() => useSessionRestore(createHookProps()));
+
+      await waitFor(() => {
+        expect(mockSetters.dispatchTree).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'LOAD_HISTORY' })
+        );
+      });
+
+      // sequenceRef must be advanced to match the count of start events in history
+      // so that the next live AGENT_START or TOOL_START gets sequence 4, not 1.
+      expect(mockRefs.sequenceRef.current).toBe(3);
+    });
+
+    it('leaves sequenceRef at 0 when there are no activity events to restore', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ messages: [], streaming: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ events: [] }),
+        });
+
+      renderHook(() => useSessionRestore(createHookProps()));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+      });
+
+      // No events means no start events, sequenceRef stays at its initialized value
+      expect(mockRefs.sequenceRef.current).toBe(0);
+    });
+  });
 });
