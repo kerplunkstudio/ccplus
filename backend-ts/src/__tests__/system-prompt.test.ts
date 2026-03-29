@@ -197,7 +197,7 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('Tool blocked by workflow phase');
+      expect(prompt).toContain('Blocked tools');
     });
 
     it('contains "Do NOT retry the blocked tool" delegation instruction', async () => {
@@ -206,7 +206,7 @@ describe('system-prompt', () => {
 
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-      expect(prompt).toContain('Do NOT retry the blocked tool');
+      expect(prompt).toContain('Do NOT try to use blocked tools directly');
     });
 
     it('contains "agent_hints" in workflow phase transition text', async () => {
