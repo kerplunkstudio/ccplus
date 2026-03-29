@@ -42,6 +42,7 @@ vi.mock('../config.js', () => ({
 vi.mock('../captain.js', () => ({
   unregisterResponseCallback: vi.fn(),
   registerResponseCallback: vi.fn(),
+  hasResponseCallback: vi.fn().mockReturnValue(false),
   isCaptainAlive: vi.fn().mockReturnValue(true),
   sendCaptainMessage: vi.fn(),
 }));
@@ -80,6 +81,7 @@ import {
   isTelegramBridgeActive,
   extractNumberedOptions,
   resolveCallbackCommand,
+  isFleetNotification,
 } from '../telegram-bridge.js';
 
 describe('TelegramBridge', () => {
@@ -476,6 +478,67 @@ describe('TelegramBridge', () => {
       expect(resolveCallbackCommand('option:1', options)).toBe('First');
       expect(resolveCallbackCommand('option:3', options)).toBe('Third');
       expect(resolveCallbackCommand('option:5', options)).toBe('Fifth');
+    });
+  });
+
+  describe('isFleetNotification', () => {
+    it('returns true for messages with [FLEET] tag', () => {
+      expect(isFleetNotification('[FLEET] Session completed')).toBe(true);
+      expect(isFleetNotification('[fleet] Session failed')).toBe(true);
+      expect(isFleetNotification('Something [FLEET] in the middle')).toBe(true);
+    });
+
+    it('returns true for session status messages', () => {
+      expect(isFleetNotification('Session "abc-123" completed')).toBe(true);
+      expect(isFleetNotification('Session xyz failed with error')).toBe(true);
+      expect(isFleetNotification('Session appears stuck')).toBe(true);
+      expect(isFleetNotification('Session was cancelled')).toBe(true);
+    });
+
+    it('returns false for non-fleet messages', () => {
+      expect(isFleetNotification('Hello world')).toBe(false);
+      expect(isFleetNotification('Start a new session')).toBe(false);
+      expect(isFleetNotification('What is the status?')).toBe(false);
+      expect(isFleetNotification('Session started successfully')).toBe(false); // "started" is not a status keyword
+    });
+
+    it('returns false when only session keyword present', () => {
+      expect(isFleetNotification('Session info')).toBe(false);
+      expect(isFleetNotification('New session')).toBe(false);
+    });
+
+    it('returns false when only status keyword present', () => {
+      expect(isFleetNotification('Task completed')).toBe(false);
+      expect(isFleetNotification('Operation failed')).toBe(false);
+    });
+
+    it('is case insensitive', () => {
+      expect(isFleetNotification('SESSION COMPLETED')).toBe(true);
+      expect(isFleetNotification('Session FAILED')).toBe(true);
+      expect(isFleetNotification('[Fleet] notification')).toBe(true);
+    });
+  });
+
+  describe('fleet notification callback', () => {
+    it('registers telegram:fleet callback on start', async () => {
+      await startTelegramBridge();
+
+      expect(captain.registerResponseCallback).toHaveBeenCalledWith(
+        'telegram:fleet',
+        expect.objectContaining({
+          onText: expect.any(Function),
+          onThinking: expect.any(Function),
+          onComplete: expect.any(Function),
+          onError: expect.any(Function),
+        })
+      );
+    });
+
+    it('unregisters telegram:fleet callback on stop', async () => {
+      await startTelegramBridge();
+      await stopTelegramBridge();
+
+      expect(captain.unregisterResponseCallback).toHaveBeenCalledWith('telegram:fleet');
     });
   });
 });

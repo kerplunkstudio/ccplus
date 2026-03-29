@@ -27,6 +27,7 @@ interface ChatState {
 
 let bot: Bot | null = null;
 const chatStates = new Map<number, ChatState>();
+const knownChatIds = new Set<number>();
 
 interface PendingInteractiveMsg {
   readonly telegramMsgId: number;
@@ -82,6 +83,43 @@ export function extractNumberedOptions(text: string): string[] {
     }
   }
   return options.length >= 2 ? options : [];
+}
+
+// Exported for testing
+export function isFleetNotification(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (lower.includes('[fleet]')) return true;
+  const hasSession = lower.includes('session');
+  const hasStatus = lower.includes('completed') || lower.includes('failed') || lower.includes('stuck') || lower.includes('cancelled');
+  return hasSession && hasStatus;
+}
+
+function registerFleetNotificationCallback(): void {
+  const callbackId = 'telegram:fleet';
+  captain.registerResponseCallback(callbackId, {
+    onText: (text: string, _messageIndex: number) => {
+      if (!bot || !isFleetNotification(text)) return;
+
+      for (const chatId of knownChatIds) {
+        // Skip chats that already have a per-message callback (they'll get the broadcast)
+        if (captain.hasResponseCallback(`telegram:${chatId}`)) continue;
+
+        const chunks = formatForTelegram(text);
+        for (const chunk of chunks) {
+          bot.api.sendMessage(chatId, chunk, { parse_mode: 'MarkdownV2' })
+            .catch(() => {
+              bot?.api.sendMessage(chatId, chunk).catch((err) => {
+                log.error('Fleet notification send failed', { chatId, error: String(err) });
+              });
+            });
+        }
+      }
+    },
+    onThinking: () => {},
+    onComplete: () => {},
+    onError: () => {},
+  });
+  log.info('Fleet notification callback registered for Telegram');
 }
 
 // ---- Callback data resolver ----
@@ -218,6 +256,9 @@ export async function startTelegramBridge(): Promise<void> {
   // Set up handlers
   setupBotHandlers(bot);
 
+  // Register fleet notification callback
+  registerFleetNotificationCallback();
+
   // Start polling with error recovery and auto-recovery on permanent failure
   startPollingWithRetry().catch((err) => {
     log.error('Telegram polling failed, scheduling recovery in 60s', { error: String(err) });
@@ -259,6 +300,10 @@ export async function stopTelegramBridge(): Promise<void> {
     chatStates.delete(chatId);
   }
 
+  // Unregister fleet notification callback and clear known chat IDs
+  captain.unregisterResponseCallback('telegram:fleet');
+  knownChatIds.clear();
+
   try {
     await bot.stop();
   } catch (error) {
@@ -286,6 +331,7 @@ function setupBotHandlers(botInstance: Bot): void {
       await ctx.reply('Access denied. Contact the cc+ admin for access.');
       return;
     }
+    knownChatIds.add(ctx.chat!.id);
     await ctx.reply(
       escapeMarkdownV2('cc+ Captain — Fleet orchestrator.\n\nSend a message to interact. Captain can start sessions, monitor progress, and manage your coding agents.'),
       { parse_mode: 'MarkdownV2', reply_markup: buildIdleKeyboard() }
@@ -620,6 +666,8 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
     await ctx.api.sendMessage(chatId, 'Captain is not active. Start cc+ first.');
     return;
   }
+
+  knownChatIds.add(chatId);
 
   // Send typing indicator
   await ctx.api.sendChatAction(chatId, 'typing');
