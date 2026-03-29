@@ -125,6 +125,16 @@ describe('captain-prompt', () => {
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('tdd-guide');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('code-reviewer');
     });
+
+    it('includes failed session investigation section', () => {
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Failed Session Investigation (MANDATORY)');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('call get_session_detail');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Classify the failure');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Transient');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Build/type error');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Test failure');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('NEVER just say');
+    });
   });
 
   describe('buildCaptainSystemPrompt', () => {

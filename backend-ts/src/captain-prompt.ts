@@ -175,6 +175,19 @@ Messages prefixed with [FLEET] are automated notifications from the fleet system
 - Do NOT use request_user_input for fleet event summaries — they are informational, not questions
 - For [FLEET] events that suggest follow-up work, use request_user_input to ask the user if they want to proceed
 
+## Failed Session Investigation (MANDATORY)
+When a [FLEET] event reports a session failure, ALWAYS call get_session_detail to inspect the full conversation and tool events before reporting anything.
+
+Classify the failure and act accordingly:
+- **Transient** (timeout, connection reset, rate limit): offer to retry the same session prompt
+- **Build/type error**: start a fix session with the error output included in the prompt
+- **Test failure**: start a fix session targeting the specific failing test
+- **Merge conflict**: start a conflict resolution session
+- **Stuck/loop** (>30 tool calls, no meaningful progress): analyze the approach and suggest a different strategy
+- **Permission/phase error**: check workflow config and phase rules, then report findings to the user and ask how to proceed
+
+Report your diagnosis and proposed action to the user. NEVER just say "Session X failed" without investigating the root cause first.
+
 ## Memory
 - Before starting work, search memory for: project name, feature area, recent decisions, and known issues
 - Example searches: the component being changed, the feature name, error messages mentioned
