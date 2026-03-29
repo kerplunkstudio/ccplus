@@ -18,7 +18,7 @@ export const FleetMonitor: React.FC<FleetMonitorProps> = ({ fleetState, onSessio
 
     const filtered = filter === 'active'
       ? sessions.filter((s) => s.status === 'running' || s.status === 'idle')
-      : sessions.filter((s) => s.status === 'completed' || s.status === 'failed');
+      : sessions.filter((s) => s.status === 'completed' || s.status === 'failed' || s.status === 'cancelled');
 
     filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
 
@@ -26,7 +26,7 @@ export const FleetMonitor: React.FC<FleetMonitorProps> = ({ fleetState, onSessio
   }, [fleetState.sessions, filter]);
 
   const activeCount = fleetState.sessions.filter((s) => s.status === 'running' || s.status === 'idle').length;
-  const pastCount = fleetState.sessions.filter((s) => s.status === 'completed' || s.status === 'failed').length;
+  const pastCount = fleetState.sessions.filter((s) => s.status === 'completed' || s.status === 'failed' || s.status === 'cancelled').length;
 
   return (
     <div className="fleet-monitor">
@@ -62,7 +62,7 @@ export const FleetMonitor: React.FC<FleetMonitorProps> = ({ fleetState, onSessio
                 <div className="fleet-empty-rule" />
                 <p className="fleet-empty-heading">No history yet</p>
                 <p className="fleet-empty-hint">
-                  Completed and failed sessions<br />
+                  Completed, failed, and cancelled sessions<br />
                   will appear here.
                 </p>
               </>
