@@ -985,5 +985,46 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         }
       }
     ),
+
+    // send_message_to_session - Inject a message into a running session
+    tool(
+      "send_message_to_session",
+      "Send a message to a running session to guide, correct, or nudge it. If the session has an active query, the message is injected immediately with high priority. If idle, it starts a new query (like resume).",
+      {
+        session_id: z.string().describe("The session ID to send the message to"),
+        message: z.string().describe("The message to send to the session"),
+      },
+      async (args) => {
+        try {
+          const sessionDetail = fleetMonitor.getSessionDetail(args.session_id);
+          if (!sessionDetail) {
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: "Session not found" }, null, 2) }] };
+          }
+
+          if (deps.sdkSession.isActive(args.session_id)) {
+            // Inject into active query
+            const injected = await deps.sdkSession.injectMessage(args.session_id, args.message);
+            if (injected) {
+              return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "injected", message: "Message injected into active query" }, null, 2) }] };
+            }
+            // Injection failed (query ended between check and inject), fall through to submitQuery
+          }
+
+          // Session is idle or injection failed — start new query
+          const callbacks = deps.buildSocketCallbacks(args.session_id, sessionDetail.workspace) as any;
+          deps.sdkSession.submitQuery(
+            args.session_id,
+            args.message,
+            sessionDetail.workspace,
+            callbacks
+          );
+          fleetMonitor.updateSessionStatus(args.session_id, 'running');
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "new_query", message: "New query started with message" }, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
   ];
 }
