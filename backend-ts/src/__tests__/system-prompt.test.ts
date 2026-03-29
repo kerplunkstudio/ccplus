@@ -190,5 +190,41 @@ describe('system-prompt', () => {
         expect(prompt).toMatch(/remaining phases exist|while remaining phases/i);
       });
     });
+
+    it('contains "Tool blocked by workflow phase" failure handling guidance', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+      expect(prompt).toContain('Tool blocked by workflow phase');
+    });
+
+    it('contains "Do NOT retry the blocked tool" delegation instruction', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+      expect(prompt).toContain('Do NOT retry the blocked tool');
+    });
+
+    it('contains "agent_hints" in workflow phase transition text', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+      expect(prompt).toContain('agent_hints');
+    });
+
+    it('contains mandatory workflow completion requirement', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+      expect(prompt).toContain('MANDATORY: You MUST complete ALL workflow phases');
+    });
   });
 });

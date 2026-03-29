@@ -33,15 +33,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: 'Design phase: use Read, Grep, and Glob to explore. Present approach options to the user.'
+        message: 'Design phase: use Read, Grep, and Glob to explore. Do NOT write code — delegate to code_agent via the Agent tool instead.'
       - tool_name: Write
         action: block
         conditions: []
-        message: 'Design phase: use Read, Grep, and Glob to explore. Present approach options to the user.'
+        message: 'Design phase: use Read, Grep, and Glob to explore. Do NOT write code — delegate to code_agent via the Agent tool instead.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: 'Design phase: use Read, Grep, and Glob to explore the codebase.'
+        message: 'Design phase: use Read, Grep, and Glob to explore the codebase. Do NOT run commands — delegate implementation to code_agent via the Agent tool.'
   - name: plan
     context: >
       Write a detailed step-by-step implementation plan. Include file paths,
@@ -54,15 +54,15 @@ phases:
       - tool_name: Edit
         action: block
         conditions: []
-        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text. Do NOT write code — spawn code_agent in the execute phase.'
       - tool_name: Write
         action: block
         conditions: []
-        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text.'
+        message: 'Plan phase: use Read, Grep, and Glob to research. Output your plan as text. Do NOT write code — spawn code_agent in the execute phase.'
       - tool_name: Bash
         action: block
         conditions: []
-        message: 'Plan phase: use Read, Grep, and Glob to research the codebase.'
+        message: 'Plan phase: use Read, Grep, and Glob to research the codebase. Do NOT run commands — delegate implementation to code_agent.'
   - name: execute
     context: >
       Implement the feature following the approved plan. Write clean, tested,

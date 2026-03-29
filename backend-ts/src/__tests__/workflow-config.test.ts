@@ -187,6 +187,52 @@ describe('workflow-config', () => {
     });
   });
 
+  describe('feature workflow block messages', () => {
+    it('design phase Edit block message contains "delegate to code_agent"', () => {
+      const workflow = loadWorkflow('feature');
+      const designPhase = workflow.phases.find(p => p.name === 'design');
+
+      expect(designPhase).toBeDefined();
+      const editRule = designPhase!.tool_rules.find(r => r.tool_name === 'Edit');
+      expect(editRule).toBeDefined();
+      expect(editRule!.action).toBe('block');
+      expect(editRule!.message).toContain('delegate to code_agent');
+    });
+
+    it('design phase Write block message contains "delegate to code_agent"', () => {
+      const workflow = loadWorkflow('feature');
+      const designPhase = workflow.phases.find(p => p.name === 'design');
+
+      expect(designPhase).toBeDefined();
+      const writeRule = designPhase!.tool_rules.find(r => r.tool_name === 'Write');
+      expect(writeRule).toBeDefined();
+      expect(writeRule!.action).toBe('block');
+      expect(writeRule!.message).toContain('delegate to code_agent');
+    });
+
+    it('plan phase Edit block message contains "code_agent"', () => {
+      const workflow = loadWorkflow('feature');
+      const planPhase = workflow.phases.find(p => p.name === 'plan');
+
+      expect(planPhase).toBeDefined();
+      const editRule = planPhase!.tool_rules.find(r => r.tool_name === 'Edit');
+      expect(editRule).toBeDefined();
+      expect(editRule!.action).toBe('block');
+      expect(editRule!.message).toContain('code_agent');
+    });
+
+    it('plan phase Write block message contains "code_agent"', () => {
+      const workflow = loadWorkflow('feature');
+      const planPhase = workflow.phases.find(p => p.name === 'plan');
+
+      expect(planPhase).toBeDefined();
+      const writeRule = planPhase!.tool_rules.find(r => r.tool_name === 'Write');
+      expect(writeRule).toBeDefined();
+      expect(writeRule!.action).toBe('block');
+      expect(writeRule!.message).toContain('code_agent');
+    });
+  });
+
   describe('YAML parsing edge cases', () => {
     it('handles empty agent_hints arrays', () => {
       const yamlContent = `name: test
