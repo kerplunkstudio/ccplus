@@ -84,6 +84,7 @@ fleetMonitor.setIOInstance(io);
 fleetMonitor.loadSessionsFromDb();
 fleetMonitor.startZombieReaper();
 fleetMonitor.startStuckDetector();
+fleetMonitor.startPruner();
 fleetMonitor.onSessionStuck((sessionId, info) => {
   captain.notifySessionStuck(sessionId, info);
 });
@@ -276,6 +277,7 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // 2. Stop fleet monitors
   fleetMonitor.stopZombieReaper();
   fleetMonitor.stopStuckDetector();
+  fleetMonitor.stopPruner();
 
   // 3. Stop accepting new connections
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));
