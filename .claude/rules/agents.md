@@ -2,9 +2,18 @@
 
 ## CRITICAL: Never Code in Main Conversation
 
-NEVER use Edit, Write, or Bash (for code changes) directly in the main user conversation.
-ALL code changes MUST be delegated to subagents (code_agent, build-error-resolver, etc.).
-The main conversation is for coordination, planning, and communication only.
+The orchestrator NEVER uses Edit, Write, Read, Grep, Glob, or Bash (for code changes) directly.
+ALL work MUST be delegated to specialized agents (code_agent, build-error-resolver, debugger, etc.).
+The orchestrator is for coordination and agent spawning only.
+
+This applies to ALL tasks, including "small" ones:
+- Single-file edits → code_agent
+- Config changes → code_agent
+- Answering questions about code → spawn appropriate agent to investigate
+- Bug fixes → debugger
+- Any work requiring file access → appropriate specialized agent
+
+There are NO exceptions. The orchestrator only uses the Agent tool to spawn agents and emit_status to report progress.
 
 ## Available Agents
 

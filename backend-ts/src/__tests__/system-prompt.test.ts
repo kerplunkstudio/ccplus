@@ -148,7 +148,8 @@ describe('system-prompt', () => {
       const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
       expect(prompt).toContain('You are an orchestrator');
-      expect(prompt).toContain('delegate work to specialized agents');
+      expect(prompt).toContain('You delegate ALL work to specialized agents');
+      expect(prompt).toContain('You do NOT use Read, Edit, Write, Grep, Glob, or Bash yourself');
     });
 
     // Regression tests for workflow phase awareness fix in system-prompt.ts
