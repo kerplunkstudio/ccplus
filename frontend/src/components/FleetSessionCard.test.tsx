@@ -51,28 +51,27 @@ describe('FleetSessionCard', () => {
     expect(screen.getByText('tools')).toBeInTheDocument();
   });
 
-  it('displays activeAgents for running session', () => {
+  it('displays totalAgents for running session', () => {
     render(<FleetSessionCard session={baseSession} onClick={mockOnClick} />);
-    // baseSession has activeAgents=1, totalAgents=2; running session must show activeAgents
+    // baseSession has activeAgents=1, totalAgents=2; always show totalAgents
     const agentsLabel = screen.getByText('agents');
-    const agentsStat = agentsLabel.previousElementSibling;
-    expect(agentsStat?.textContent).toBe('1');
+    expect(agentsLabel.previousElementSibling?.textContent).toBe('2');
     expect(screen.getByText('agents')).toBeInTheDocument();
   });
 
-  describe('agent count: activeAgents vs totalAgents', () => {
-    it('shows activeAgents for running session (not totalAgents)', () => {
+  describe('agent count: always shows totalAgents', () => {
+    it('shows totalAgents for running session', () => {
       const session: FleetSession = { ...baseSession, status: 'running', activeAgents: 3, totalAgents: 10 };
       render(<FleetSessionCard session={session} onClick={mockOnClick} />);
       const agentsLabel = screen.getByText('agents');
-      expect(agentsLabel.previousElementSibling?.textContent).toBe('3');
+      expect(agentsLabel.previousElementSibling?.textContent).toBe('10');
     });
 
-    it('shows activeAgents for idle session (not totalAgents)', () => {
+    it('shows totalAgents for idle session', () => {
       const session: FleetSession = { ...baseSession, status: 'idle', activeAgents: 0, totalAgents: 5 };
       render(<FleetSessionCard session={session} onClick={mockOnClick} />);
       const agentsLabel = screen.getByText('agents');
-      expect(agentsLabel.previousElementSibling?.textContent).toBe('0');
+      expect(agentsLabel.previousElementSibling?.textContent).toBe('5');
     });
 
     it('shows totalAgents for completed session', () => {
