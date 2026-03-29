@@ -6,7 +6,7 @@ __pycache__/
 .env.*.local
 data/
 logs/
-node_modules/
+node_modules
 frontend/build/
 static/chat/
 .DS_Store
