@@ -1232,6 +1232,7 @@ Commands:
   desktop          Launch Electron desktop app (stops existing services)
   desktop-parallel Launch desktop app in parallel with web server
   stop             Stop Node.js server
+  restart          Restart the server (graceful shutdown + start)
   setup            Force re-run setup
   import           Import historical Claude Code sessions from ~/.claude/projects/
   help             Show this help message
@@ -1361,6 +1362,10 @@ case "$COMMAND" in
         ;;
     stop)
         kill_server
+        ;;
+    restart)
+        kill_server
+        start_server
         ;;
     setup)
         run_setup

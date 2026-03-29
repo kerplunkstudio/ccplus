@@ -8,7 +8,7 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { readFileSync, statSync } from 'fs';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
@@ -19,6 +19,7 @@ import { log } from "./logger.js";
 import * as captain from "./captain.js";
 import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 import { randomUUID } from 'crypto';
+import { PROJECT_ROOT } from './config.js';
 
 // ---- Pricing Constants ----
 
@@ -1023,6 +1024,53 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "new_query", message: "New query started with message" }, null, 2) }] };
         } catch (error) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // deploy_ccplus - Deploy ccplus changes
+    tool(
+      "deploy_ccplus",
+      "Deploy ccplus changes. Modes: 'frontend' (build+deploy, no restart), 'backend' (build only, no restart), 'restart' (build backend + restart server — Captain will die and resume on boot).",
+      {
+        mode: z.enum(['frontend', 'backend', 'restart']).describe("Deploy mode"),
+      },
+      async (args) => {
+        try {
+          const ccplusDir = deps.sessionWorkspaces.values().next().value ?? PROJECT_ROOT;
+
+          if (args.mode === 'frontend') {
+            const output = execFileSync('./ccplus', ['frontend'], {
+              cwd: ccplusDir, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
+            });
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'frontend', message: "Frontend built and deployed. Hard refresh browser to see changes.", output: output.slice(-500) }, null, 2) }] };
+          }
+
+          if (args.mode === 'backend') {
+            const output = execFileSync('npm', ['run', 'build'], {
+              cwd: `${ccplusDir}/backend-ts`, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
+            });
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'backend', message: "Backend built. Run deploy_ccplus with mode='restart' to apply changes.", output: output.slice(-500) }, null, 2) }] };
+          }
+
+          if (args.mode === 'restart') {
+            execFileSync('npm', ['run', 'build'], {
+              cwd: `${ccplusDir}/backend-ts`, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
+            });
+
+            const child = spawn('bash', ['-c', `sleep 2 && ${ccplusDir}/ccplus restart`], {
+              cwd: ccplusDir,
+              detached: true,
+              stdio: 'ignore',
+            });
+            child.unref();
+
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'restart', message: "Backend built. Server will restart in ~2 seconds. Captain will resume automatically on boot with full conversation history." }, null, 2) }] };
+          }
+
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown mode" }, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
         }
       }
     ),
