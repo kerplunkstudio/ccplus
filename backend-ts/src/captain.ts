@@ -166,7 +166,7 @@ export async function startCaptainSession(
       options: {
         model: config.getCaptainModel(),
         cwd: workspace,
-        settingSources: ['user'],
+        settingSources: [], // Captain only needs fleet-control MCP, not user-configured MCPs (avoids stdio spawn cost)
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -390,7 +390,7 @@ async function startCaptainQuery(content: string): Promise<void> {
     options: {
       model: config.getCaptainModel(),
       cwd: captainState.workspace ?? config.CAPTAIN_WORKSPACE,
-      settingSources: ['user'],
+      settingSources: [], // Captain only needs fleet-control MCP, not user-configured MCPs (avoids stdio spawn cost)
       systemPrompt: {
         type: "preset",
         preset: "claude_code",

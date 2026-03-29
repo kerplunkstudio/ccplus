@@ -129,12 +129,21 @@ describe('captain-prompt', () => {
 
   describe('buildCaptainSystemPrompt', () => {
     const testWorkspace = '/test/workspace';
+    // Monotonically increasing fake timestamp so every test starts with time
+    // at least 61 s ahead of the previous test's cache entry.
+    let fakeNow = new Date('2050-01-01T00:00:00Z').getTime();
 
     beforeEach(() => {
       vi.clearAllMocks();
+      // Advance fake clock by 2 minutes each test so the module-level promptCache
+      // (builtAt set during a previous test) is always beyond the 60 s TTL.
+      fakeNow += 120_000;
+      vi.useFakeTimers();
+      vi.setSystemTime(fakeNow);
     });
 
     afterEach(() => {
+      vi.useRealTimers();
       vi.restoreAllMocks();
     });
 
@@ -373,6 +382,78 @@ describe('captain-prompt', () => {
 
       expect(result).toContain('- **feature**');
       expect(result).not.toContain('- **nonexistent**');
+    });
+  });
+
+  // ---- Regression tests for the 60-second TTL prompt cache (cold-start fix) ----
+  describe('buildCaptainSystemPrompt caching (regression: cold-start fix)', () => {
+    // Monotonically increasing fake timestamp so every test starts with time
+    // at least 61 s ahead of the previous test's cache entry.
+    let cacheTestFakeNow = new Date('2060-01-01T00:00:00Z').getTime();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      cacheTestFakeNow += 120_000;
+      vi.useFakeTimers();
+      vi.setSystemTime(cacheTestFakeNow);
+
+      // Default stubs shared by all cache tests
+      vi.spyOn(workflowConfig, 'listWorkflows').mockReturnValue([]);
+      vi.spyOn(workflowConfig, 'getWorkflowByName').mockReturnValue(null);
+      vi.spyOn(agentConfig, 'loadAllAgents').mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it('calls loadAllAgents and listWorkflows on first call (cache miss)', async () => {
+      await buildCaptainSystemPrompt('/workspace/cache-test');
+
+      expect(workflowConfig.listWorkflows).toHaveBeenCalledTimes(1);
+      expect(agentConfig.loadAllAgents).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns cached prompt on second call within TTL without re-invoking dependencies', async () => {
+      const firstResult = await buildCaptainSystemPrompt('/workspace/cache-test');
+
+      // Advance time by 30 s — still within the 60 s TTL
+      vi.setSystemTime(cacheTestFakeNow + 30_000);
+
+      const secondResult = await buildCaptainSystemPrompt('/workspace/cache-test');
+
+      expect(secondResult).toBe(firstResult);
+      // Each dependency should have been called exactly once (on the first call)
+      expect(workflowConfig.listWorkflows).toHaveBeenCalledTimes(1);
+      expect(agentConfig.loadAllAgents).toHaveBeenCalledTimes(1);
+    });
+
+    it('rebuilds prompt after 60-second TTL expires', async () => {
+      await buildCaptainSystemPrompt('/workspace/cache-test');
+
+      // Advance time past the TTL
+      vi.setSystemTime(cacheTestFakeNow + 61_000);
+
+      await buildCaptainSystemPrompt('/workspace/cache-test');
+
+      // Each dependency should be called twice — once for the initial build and
+      // once again after the cache expired
+      expect(workflowConfig.listWorkflows).toHaveBeenCalledTimes(2);
+      expect(agentConfig.loadAllAgents).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not use cache when workspace path changes', async () => {
+      await buildCaptainSystemPrompt('/workspace/a');
+
+      // Second call with a different workspace — still within TTL
+      vi.setSystemTime(cacheTestFakeNow + 5_000);
+      await buildCaptainSystemPrompt('/workspace/b');
+
+      // Both calls must hit the real implementation
+      expect(workflowConfig.listWorkflows).toHaveBeenCalledTimes(2);
+      expect(workflowConfig.listWorkflows).toHaveBeenNthCalledWith(1, '/workspace/a');
+      expect(workflowConfig.listWorkflows).toHaveBeenNthCalledWith(2, '/workspace/b');
     });
   });
 });

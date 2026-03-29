@@ -10,6 +10,17 @@ import { listWorkflows, getWorkflowByName } from './workflow-config.js';
 import { formatAgentCatalogForCaptain, formatPhaseEnforcement } from './agent-catalog.js';
 import { log } from './logger.js';
 
+// ---- Prompt Caching ----
+
+interface PromptCache {
+  workspace: string
+  prompt: string
+  builtAt: number
+}
+
+let promptCache: PromptCache | null = null;
+const PROMPT_CACHE_TTL_MS = 60_000;
+
 // ---- Idle Message Filtering ----
 
 /**
@@ -214,6 +225,12 @@ You have access to the \`request_user_input\` tool which shows interactive cards
  * Build the Captain system prompt with dynamic workflow list, agent catalog, and phase enforcement.
  */
 export async function buildCaptainSystemPrompt(workspace: string): Promise<string> {
+  // Check cache first
+  const now = Date.now();
+  if (promptCache && promptCache.workspace === workspace && now - promptCache.builtAt < PROMPT_CACHE_TTL_MS) {
+    return promptCache.prompt;
+  }
+
   // 1. Build workflow section (existing logic)
   const workflowNames = listWorkflows(workspace);
   const workflowDescriptions = workflowNames.map(name => {
@@ -256,5 +273,10 @@ export async function buildCaptainSystemPrompt(workspace: string): Promise<strin
     log.warn('Failed to load phase enforcement for captain prompt', { error: String(error) });
   }
 
-  return CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection + agentSection + enforcementSection;
+  const result = CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection + agentSection + enforcementSection;
+
+  // Cache the result
+  promptCache = { workspace, prompt: result, builtAt: now };
+
+  return result;
 }
