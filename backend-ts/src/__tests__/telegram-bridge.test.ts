@@ -78,7 +78,6 @@ import {
   startTelegramBridge,
   stopTelegramBridge,
   isTelegramBridgeActive,
-  detectApprovalPattern,
   extractNumberedOptions,
   resolveCallbackCommand,
 } from '../telegram-bridge.js';
@@ -417,38 +416,6 @@ describe('TelegramBridge', () => {
       }
 
       vi.unstubAllGlobals();
-    });
-  });
-
-  describe('detectApprovalPattern', () => {
-    it('detects "want me to" pattern', () => {
-      expect(detectApprovalPattern('Want me to proceed?')).toBe(true);
-    });
-
-    it('detects "should i" pattern', () => {
-      expect(detectApprovalPattern('Should I continue?')).toBe(true);
-    });
-
-    it('detects "would you like" pattern', () => {
-      expect(detectApprovalPattern('Would you like me to proceed?')).toBe(true);
-    });
-
-    it('detects "shall i" pattern', () => {
-      expect(detectApprovalPattern('Shall I continue?')).toBe(true);
-    });
-
-    it('returns false for regular statements', () => {
-      expect(detectApprovalPattern('The task is complete.')).toBe(false);
-    });
-
-    it('checks last line only', () => {
-      expect(detectApprovalPattern('Done.\nShould I also fix the tests?')).toBe(true);
-      expect(detectApprovalPattern('Should I start?\nDone.')).toBe(false);
-    });
-
-    it('detects question with keywords', () => {
-      expect(detectApprovalPattern('Do you want me to proceed?')).toBe(true);
-      expect(detectApprovalPattern('Can I approve this change?')).toBe(true);
     });
   });
 

@@ -59,24 +59,6 @@ function buildIdleKeyboard(): Keyboard {
     .persistent();
 }
 
-function buildRunningInlineKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('❌ Cancel', 'cancel')
-    .text('📊 Status', 'status');
-}
-
-function buildCompletedInlineKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('🔀 Cherry-pick', 'cherry-pick')
-    .text('🆕 New Session', 'new-session');
-}
-
-function buildApprovalInlineKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('✅ Approve', 'approve')
-    .text('❌ Reject', 'reject');
-}
-
 function buildNumberedOptionsKeyboard(options: string[]): InlineKeyboard {
   return options.slice(0, 5).reduce(
     (kb, _, i) => kb.text(`${i + 1}`, `option:${i + 1}`).row(),
@@ -85,21 +67,6 @@ function buildNumberedOptionsKeyboard(options: string[]): InlineKeyboard {
 }
 
 // ---- Response analysis ----
-
-// Exported for testing
-export function detectApprovalPattern(text: string): boolean {
-  const lines = text.trim().split('\n').filter((l) => l.trim());
-  const lastLine = lines[lines.length - 1] ?? '';
-  const lower = lastLine.toLowerCase();
-  return (
-    lower.startsWith('want me to') ||
-    lower.startsWith('should i') ||
-    lower.startsWith('would you like') ||
-    lower.startsWith('shall i') ||
-    (lastLine.endsWith('?') &&
-      (lower.includes('want') || lower.includes('should') || lower.includes('proceed') || lower.includes('approve')))
-  );
-}
 
 // Exported for testing
 export function extractNumberedOptions(text: string): string[] {
@@ -711,11 +678,9 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
     },
   });
 
-  // Send immediate acknowledgment with running keyboard
+  // Send immediate acknowledgment
   if (bot) {
-    const ackMsg = await bot.api.sendMessage(chatId, '⏳', {
-      reply_markup: buildRunningInlineKeyboard(),
-    });
+    const ackMsg = await bot.api.sendMessage(chatId, '⏳');
     const currentState = chatStates.get(chatId);
     if (currentState) {
       chatStates.set(chatId, { ...currentState, ackMessageId: ackMsg.message_id });
@@ -759,21 +724,12 @@ async function handleComplete(chatId: number): Promise<void> {
     }
 
     if (state.pendingText) {
-      // Analyze response to determine appropriate keyboard
+      // Check for numbered options (request_user_input flow) — only these get an inline keyboard
       const numberedOptions = extractNumberedOptions(state.pendingText);
-      const isApproval = numberedOptions.length === 0 && detectApprovalPattern(state.pendingText);
-
-      let lastChunkKeyboard: InlineKeyboard;
-      let resolvedOptions: readonly string[] = [];
-
-      if (numberedOptions.length > 0) {
-        lastChunkKeyboard = buildNumberedOptionsKeyboard(numberedOptions);
-        resolvedOptions = numberedOptions;
-      } else if (isApproval) {
-        lastChunkKeyboard = buildApprovalInlineKeyboard();
-      } else {
-        lastChunkKeyboard = buildCompletedInlineKeyboard();
-      }
+      const lastChunkKeyboard = numberedOptions.length > 0
+        ? buildNumberedOptionsKeyboard(numberedOptions)
+        : undefined;
+      const resolvedOptions: readonly string[] = numberedOptions.length > 0 ? numberedOptions : [];
 
       // Format and send final version with markdown
       const chunks = formatForTelegram(state.pendingText);
