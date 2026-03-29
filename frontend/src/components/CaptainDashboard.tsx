@@ -14,7 +14,7 @@ interface CaptainDashboardProps {
 }
 
 export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, captainState, onSessionClick }) => {
-  const { messages, isStreaming, isThinking, isModelThinking, sendMessage, archivedConversations, clearHistory, interactiveMessages, respondToInteractive } = captainState;
+  const { messages, isStreaming, isThinking, isModelThinking, toolActivity, sendMessage, archivedConversations, clearHistory, interactiveMessages, respondToInteractive } = captainState;
   const { fleetState } = useFleetState(socket);
   const [dividerPosition, setDividerPosition] = useState(50);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -85,6 +85,7 @@ export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, capt
           isStreaming={isStreaming}
           isThinking={isThinking}
           isModelThinking={isModelThinking}
+          toolActivity={toolActivity}
           onSendMessage={sendMessage}
           archivedConversations={archivedConversations}
           onClearHistory={clearHistory}

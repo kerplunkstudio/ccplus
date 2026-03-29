@@ -26,6 +26,7 @@ export interface ResponseCallback {
   readonly onThinking: (thinking: string) => void;
   readonly onComplete: () => void;
   readonly onError: (message: string) => void;
+  readonly onToolUse?: (toolName: string, toolInput?: Record<string, unknown>) => void;
 }
 
 export interface InteractiveMessageCallback {
@@ -251,6 +252,14 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
                 callback.onThinking(block.thinking);
               } catch (error) {
                 log.error("Captain callback error (onThinking)", { error: String(error) });
+              }
+            }
+          } else if (block.type === "tool_use") {
+            for (const callback of getTargetCallbacks(routeToCallbackId)) {
+              try {
+                callback.onToolUse?.(block.name, block.input as Record<string, unknown>);
+              } catch (error) {
+                log.error("Captain callback error (onToolUse)", { error: String(error) });
               }
             }
           }

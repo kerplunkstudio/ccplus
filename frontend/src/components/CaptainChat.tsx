@@ -19,12 +19,13 @@ interface CaptainChatProps {
   isStreaming: boolean;
   isThinking: boolean;
   isModelThinking?: boolean;
+  toolActivity?: string | null;
   onSendMessage: (content: string) => void;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
   onClear: () => void;
   interactiveMessages: InteractiveMessage[];
-  onRespondToInteractive: (messageId: string, actionId: string | string[]) => void;
+  onRespondToInteractive: (messageId: string, actionId: string) => void;
 }
 
 function formatConversationDate(timestamp: number): string {
@@ -53,6 +54,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   isStreaming,
   isThinking,
   isModelThinking,
+  toolActivity,
   onSendMessage,
   archivedConversations,
   onClearHistory,
@@ -164,31 +166,17 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                 return <MessageBubble key={item.data.id} message={item.data} />;
               } else {
                 // Map InteractiveMessage to InteractiveCard props
-                const { text, actions, responseState, selectedActionId, selectedActionIds, type, minSelections, maxSelections } = item.data;
+                const { text, actions, responseState, selectedActionId } = item.data;
                 const buttons = actions.map((action) => ({
                   label: action.label,
                   type: action.style as 'primary' | 'danger' | 'default',
                 }));
                 const state = responseState === 'cancelled' ? 'expired' : responseState;
-                const isMultiSelect = type === 'multi-select';
-
-                // For multi-select
-                const selectedIndices = selectedActionIds
-                  ? selectedActionIds.map((id) => actions.findIndex((action) => action.id === id)).filter((i) => i >= 0)
-                  : undefined;
-
-                // For single-select
-                const selectedIndex = selectedActionId && !isMultiSelect
+                const selectedIndex = selectedActionId
                   ? actions.findIndex((action) => action.id === selectedActionId)
                   : undefined;
-
                 const handleSelect = (index: number) => {
                   onRespondToInteractive(item.data.id, actions[index].id);
-                };
-
-                const handleMultiSelect = (indices: number[]) => {
-                  const actionIds = indices.map((i) => actions[i].id);
-                  onRespondToInteractive(item.data.id, actionIds);
                 };
 
                 return (
@@ -198,17 +186,12 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                     buttons={buttons}
                     state={state}
                     selectedIndex={selectedIndex}
-                    selectedIndices={selectedIndices}
                     onSelect={handleSelect}
-                    onMultiSelect={handleMultiSelect}
-                    multiSelect={isMultiSelect}
-                    minSelections={minSelections}
-                    maxSelections={maxSelections}
                   />
                 );
               }
             })}
-            {isThinking && <ThinkingIndicator activityTree={[]} isModelThinking={isModelThinking} />}
+            {isThinking && <ThinkingIndicator activityTree={[]} isModelThinking={isModelThinking} toolActivity={toolActivity} />}
             <div ref={messagesEndRef} />
           </>
         )}

@@ -19,14 +19,17 @@ interface ThinkingIndicatorProps {
   activityTree: ActivityNode[];
   signals?: SignalState;
   isModelThinking?: boolean;
+  toolActivity?: string | null;
 }
 
 export const ThinkingIndicator: React.FC<ThinkingIndicatorProps> = ({
   activityTree,
   signals,
   isModelThinking,
+  toolActivity,
 }) => {
-  const statusText = signals?.status?.detail ||
+  const statusText = toolActivity ||
+    signals?.status?.detail ||
     (signals?.status?.phase ? signals.status.phase.charAt(0).toUpperCase() + signals.status.phase.slice(1) :
     (() => {
       const runningAgents = countRunningAgents(activityTree);

@@ -7,6 +7,17 @@ const STORAGE_KEY = 'ccplus_captain_messages';
 const ARCHIVE_KEY = 'ccplus_captain_archive';
 const MAX_ARCHIVED = 20;
 
+const TOOL_LABELS: Record<string, string> = {
+  'mcp__memory__memory_search': 'Searching memory...',
+  'mcp__fleet-control__start_session': 'Starting session...',
+  'mcp__fleet-control__list_sessions': 'Checking fleet...',
+  'mcp__fleet-control__get_session_state': 'Checking session...',
+  'mcp__fleet-control__request_user_input': 'Waiting for input...',
+  'mcp__fleet-control__cancel_session': 'Cancelling session...',
+};
+const DEFAULT_TOOL_LABEL = 'Working...';
+const SAFETY_TIMEOUT_MS = 90_000;
+
 export interface CaptainConversation {
   id: string;
   messages: Message[];
@@ -56,7 +67,10 @@ export function useCaptainSocket(socket: Socket | null) {
   const [isThinking, setIsThinking] = useState(false);
   const [isModelThinking, setIsModelThinking] = useState(false);
   const [interactiveMessages, setInteractiveMessages] = useState<InteractiveMessage[]>([]);
+  const [toolActivity, setToolActivity] = useState<string | null>(null);
   const currentSessionIdRef = useRef<string>('');
+  const messageIndexRef = useRef<number>(-1);
+  const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize Captain session on mount
   useEffect(() => {
@@ -85,6 +99,33 @@ export function useCaptainSocket(socket: Socket | null) {
     saveMessages(messages);
   }, [messages]);
 
+  // Safety timeout helpers
+  const clearSafetyTimeout = useCallback(() => {
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startSafetyTimeout = useCallback(() => {
+    clearSafetyTimeout();
+    safetyTimeoutRef.current = setTimeout(() => {
+      setIsStreaming(false);
+      setIsThinking(false);
+      setToolActivity(null);
+      safetyTimeoutRef.current = null;
+    }, SAFETY_TIMEOUT_MS);
+  }, [clearSafetyTimeout]);
+
+  // Cleanup safety timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Join Captain's Socket.IO room when session is ready
   useEffect(() => {
     if (!socket || !captainSessionId) return;
@@ -110,21 +151,46 @@ export function useCaptainSocket(socket: Socket | null) {
       setIsThinking(true);
     };
 
+    const handleCaptainToolUse = (data: { tool: string; input?: unknown }) => {
+      const label = TOOL_LABELS[data.tool] ?? DEFAULT_TOOL_LABEL;
+      setToolActivity(label);
+      setIsThinking(true);
+    };
+
     const handleCaptainText = (data: { text: string; message_index: number }) => {
       setIsThinking(false);
-      // Backend sends full text per assistant message (not streaming deltas)
-      const newMessage: Message = {
-        id: `assistant_${Date.now()}_${data.message_index}`,
-        role: 'assistant',
-        content: data.text,
-        timestamp: Date.now(),
-        streaming: false,
-      };
-      setMessages((prev) => [...prev, newMessage]);
+      setToolActivity(null);
+
+      if (data.message_index === messageIndexRef.current) {
+        // Update last assistant message content
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role !== 'assistant') return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, content: data.text },
+          ];
+        });
+      } else {
+        // New assistant message
+        messageIndexRef.current = data.message_index;
+        const newMessage: Message = {
+          id: `assistant_${Date.now()}_${data.message_index}`,
+          role: 'assistant',
+          content: data.text,
+          timestamp: Date.now(),
+          streaming: false,
+        };
+        setMessages((prev) => [...prev, newMessage]);
+      }
       setIsStreaming(true);
     };
 
     const handleCaptainComplete = () => {
+      setToolActivity(null);
+      messageIndexRef.current = -1;
+      clearSafetyTimeout();
       setIsThinking(false);
       setMessages((prev) => {
         if (prev.length === 0) return prev;
@@ -142,6 +208,9 @@ export function useCaptainSocket(socket: Socket | null) {
     };
 
     const handleCaptainError = (data: { message: string }) => {
+      setToolActivity(null);
+      messageIndexRef.current = -1;
+      clearSafetyTimeout();
       setIsThinking(false);
       const errorMessage: Message = {
         id: `error_${Date.now()}`,
@@ -170,6 +239,7 @@ export function useCaptainSocket(socket: Socket | null) {
     };
 
     socket.on('captain_thinking', handleCaptainThinking);
+    socket.on('captain_tool_use', handleCaptainToolUse);
     socket.on('captain_text', handleCaptainText);
     socket.on('captain_complete', handleCaptainComplete);
     socket.on('captain_error', handleCaptainError);
@@ -178,13 +248,14 @@ export function useCaptainSocket(socket: Socket | null) {
 
     return () => {
       socket.off('captain_thinking', handleCaptainThinking);
+      socket.off('captain_tool_use', handleCaptainToolUse);
       socket.off('captain_text', handleCaptainText);
       socket.off('captain_complete', handleCaptainComplete);
       socket.off('captain_error', handleCaptainError);
       socket.off('thinking_status', handleThinkingStatus);
       socket.off('captain_interactive', handleCaptainInteractive);
     };
-  }, [socket, captainSessionId]);
+  }, [socket, captainSessionId, clearSafetyTimeout]);
 
   // Handle timeouts for interactive messages
   useEffect(() => {
@@ -213,32 +284,18 @@ export function useCaptainSocket(socket: Socket | null) {
   }, [interactiveMessages]);
 
   const respondToInteractive = useCallback(
-    (messageId: string, actionId: string | string[]) => {
+    (messageId: string, actionId: string) => {
       if (!socket) return;
 
-      if (Array.isArray(actionId)) {
-        // Multi-select response
-        socket.emit('captain_interactive_response', { messageId, actionIds: actionId });
+      socket.emit('captain_interactive_response', { messageId, actionId });
 
-        setInteractiveMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? { ...msg, responseState: 'responded' as const, selectedActionIds: actionId }
-              : msg
-          )
-        );
-      } else {
-        // Single-select response
-        socket.emit('captain_interactive_response', { messageId, actionId });
-
-        setInteractiveMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId
-              ? { ...msg, responseState: 'responded' as const, selectedActionId: actionId }
-              : msg
-          )
-        );
-      }
+      setInteractiveMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, responseState: 'responded' as const, selectedActionId: actionId }
+            : msg
+        )
+      );
     },
     [socket]
   );
@@ -280,8 +337,11 @@ export function useCaptainSocket(socket: Socket | null) {
 
       setIsStreaming(true);
       setIsThinking(true);
+      messageIndexRef.current = -1;
+      setToolActivity(null);
+      startSafetyTimeout();
     },
-    [socket, captainSessionId, messages, archivedConversations]
+    [socket, captainSessionId, messages, archivedConversations, startSafetyTimeout]
   );
 
   const clearHistory = useCallback(() => {
@@ -295,6 +355,7 @@ export function useCaptainSocket(socket: Socket | null) {
     isStreaming,
     isThinking,
     isModelThinking,
+    toolActivity,
     sendMessage,
     archivedConversations,
     clearHistory,

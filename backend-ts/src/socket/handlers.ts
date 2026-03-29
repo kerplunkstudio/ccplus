@@ -472,6 +472,9 @@ export function setupSocketHandlers(
           onError: (message: string) => {
             io.to(captainRoom).emit('captain_error', { message });
           },
+          onToolUse: (toolName: string, toolInput?: Record<string, unknown>) => {
+            io.to(captainRoom).emit('captain_tool_use', { tool: toolName, input: toolInput });
+          },
         });
 
         captain.registerInteractiveCallback(callbackId, {
