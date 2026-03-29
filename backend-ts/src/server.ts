@@ -199,6 +199,8 @@ const captainRouter = createCaptainRouter({
   },
   startCaptainSession: (workspace) => captain.startCaptainSession(workspace, captainDeps),
   workspace: config.WORKSPACE_PATH ?? process.cwd(),
+  getCaptainMessages: database.getCaptainMessages,
+  getLatestCaptainConversationId: database.getLatestCaptainConversationId,
 });
 
 createMiscRoutes(app, { sdkSession, io, fleetMonitor, captainRouter });

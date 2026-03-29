@@ -72,22 +72,52 @@ export function useCaptainSocket(socket: Socket | null) {
   const messageIndexRef = useRef<number>(-1);
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialize Captain session on mount
+  // Initialize Captain session on mount and load messages from DB
   useEffect(() => {
     const startCaptainSession = async () => {
       try {
-        const response = await fetch(`${SOCKET_URL}/api/captain/start`, {
+        // Start Captain session
+        const startResponse = await fetch(`${SOCKET_URL}/api/captain/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (response.ok) {
-          const data = await response.json();
+        if (startResponse.ok) {
+          const data = await startResponse.json();
           setCaptainSessionId(data.session_id);
           currentSessionIdRef.current = data.session_id;
         }
+
+        // Load messages from DB
+        const messagesResponse = await fetch(`${SOCKET_URL}/api/captain/messages`);
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          if (messagesData.success && messagesData.messages.length > 0) {
+            // Map DB messages to Message format
+            const dbMessages: Message[] = messagesData.messages.map((m: {
+              id: string;
+              role: string;
+              content: string;
+              timestamp: number;
+            }) => ({
+              id: m.id,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: m.timestamp,
+              streaming: false,
+            }));
+            setMessages(dbMessages);
+            // Also save to localStorage as cache
+            saveMessages(dbMessages);
+          }
+        }
       } catch (error) {
         // Captain session creation failed, retry on next mount
+        // Fall back to localStorage if API fails
+        const localMessages = loadMessages();
+        if (localMessages.length > 0) {
+          setMessages(localMessages);
+        }
       }
     };
 
@@ -301,7 +331,7 @@ export function useCaptainSocket(socket: Socket | null) {
   );
 
   const sendMessage = useCallback(
-    (content: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
+    async (content: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
       if (!socket || !captainSessionId || !content.trim()) return;
 
       // Handle /clear command
@@ -318,8 +348,21 @@ export function useCaptainSocket(socket: Socket | null) {
           setArchivedConversations(updated);
           saveArchive(updated);
         }
+
+        // Clear local state
         setMessages([]);
         saveMessages([]);
+
+        // Notify backend to start new conversation
+        try {
+          await fetch(`${SOCKET_URL}/api/captain/messages/clear`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch (error) {
+          // Clear request failed, but local state is already cleared
+        }
+
         return;
       }
 

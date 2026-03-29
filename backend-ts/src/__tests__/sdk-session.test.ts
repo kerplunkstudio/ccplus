@@ -17,6 +17,9 @@ const { mockQuery, mockDatabase, mockExecFileSync, mockExecAsync } = vi.hoisted(
     getSessionMetadata: vi.fn(() => null),
     upsertFleetSession: vi.fn(),
     getAllFleetSessions: vi.fn(() => []),
+    saveCaptainMessage: vi.fn(),
+    getCaptainMessages: vi.fn(() => []),
+    getLatestCaptainConversationId: vi.fn(() => null),
   };
   const mockExecFileSync = vi.fn(() => "[]");
   // Mock execAsync to reject immediately (simulating non-git workspace)

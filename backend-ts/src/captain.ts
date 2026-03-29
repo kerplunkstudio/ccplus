@@ -275,6 +275,19 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
               log.error("Captain callback error (onText)", { error: String(error) });
             }
           }
+
+          // Save assistant message to DB (wrap in try/catch, never throw)
+          try {
+            const convId = database.getLatestCaptainConversationId() ?? `captain-conv-${Date.now()}`;
+            database.saveCaptainMessage({
+              conversationId: convId,
+              role: "assistant",
+              content: fullText,
+              messageIndex,
+            });
+          } catch (err) {
+            log.error("Failed to save captain assistant message", { error: String(err) });
+          }
         }
       } else if (message.type === "result") {
         const result = message as any;
@@ -322,6 +335,18 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         log.error("Captain callback error (onError)", { error: String(err) });
       }
     }
+
+    // Save error message to DB (wrap in try/catch, never throw)
+    try {
+      const convId = database.getLatestCaptainConversationId() ?? `captain-conv-${Date.now()}`;
+      database.saveCaptainMessage({
+        conversationId: convId,
+        role: "error",
+        content: String(error),
+      });
+    } catch (err) {
+      log.error("Failed to save captain error message", { error: String(err) });
+    }
   } finally {
     // Just clear activeQuery, DON'T restart. Captain stays alive.
     captainState = {
@@ -338,6 +363,21 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string): void {
   if (!captainState.sessionId) {
     throw new Error("Captain session is not active");
+  }
+
+  // Save user message to DB (wrap in try/catch, never throw)
+  try {
+    const existingConvId = database.getLatestCaptainConversationId();
+    const convId = existingConvId ?? `captain-conv-${Date.now()}`;
+    database.saveCaptainMessage({
+      conversationId: convId,
+      role: "user",
+      content,
+      source,
+      sourceId,
+    });
+  } catch (err) {
+    log.error("Failed to save captain user message", { error: String(err) });
   }
 
   // Tag content by source

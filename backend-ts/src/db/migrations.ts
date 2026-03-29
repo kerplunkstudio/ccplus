@@ -294,6 +294,24 @@ CREATE TABLE IF NOT EXISTS config (
 );
 `,
   },
+  {
+    version: 14,
+    sql: `
+-- Migration v14: Captain messages persistence
+CREATE TABLE IF NOT EXISTS captain_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'web',
+    source_id TEXT NOT NULL DEFAULT '',
+    message_index INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_captain_messages_conversation ON captain_messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_captain_messages_created ON captain_messages(created_at);
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {
