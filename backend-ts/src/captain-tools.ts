@@ -7,6 +7,8 @@
 
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { readFileSync, statSync } from 'fs';
+import { execFileSync } from 'child_process';
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
@@ -17,7 +19,6 @@ import { log } from "./logger.js";
 import * as captain from "./captain.js";
 import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 import { randomUUID } from 'crypto';
-import { execFileSync } from 'child_process';
 
 // ---- Pricing Constants ----
 
@@ -867,6 +868,120 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               }, null, 2),
             }],
           };
+        }
+      }
+    ),
+
+    // read_file - Read a file's contents with line numbers
+    tool(
+      "read_file",
+      "Read a file's contents with line numbers. Max 500 lines.",
+      {
+        path: z.string().describe("Absolute file path"),
+        offset: z.number().optional().describe("Start line (1-based, default 1)"),
+        limit: z.number().optional().describe("Max lines (default 200, max 500)"),
+      },
+      async (args) => {
+        try {
+          const stat = statSync(args.path);
+          if (stat.isDirectory()) throw new Error("Path is a directory");
+          const content = readFileSync(args.path, 'utf8');
+          const lines = content.split('\n');
+          const start = Math.max(0, (args.offset ?? 1) - 1);
+          const end = Math.min(lines.length, start + Math.min(args.limit ?? 200, 500));
+          const numbered = lines.slice(start, end).map((l, i) => `${start + i + 1}: ${l}`).join('\n');
+          return { content: [{ type: "text" as const, text: JSON.stringify({ path: args.path, total_lines: lines.length, showing: `${start+1}-${end}`, content: numbered }, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // grep - Search file contents with regex
+    tool(
+      "grep",
+      "Search file contents with regex. Uses ripgrep.",
+      {
+        pattern: z.string().describe("Regex pattern"),
+        path: z.string().optional().describe("Directory to search (default: workspace)"),
+        glob: z.string().optional().describe("File glob filter, e.g. '*.ts'"),
+        max_results: z.number().optional().describe("Max results (default 20, max 50)"),
+      },
+      async (args) => {
+        try {
+          const searchPath = args.path ?? deps.sessionWorkspaces.values().next().value ?? '.';
+          const rgArgs = [args.pattern, searchPath, '-n', '--max-count', String(Math.min(args.max_results ?? 20, 50))];
+          if (args.glob) rgArgs.push('--glob', args.glob);
+          const result = execFileSync('rg', rgArgs, { encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 10000 }).slice(0, 10000);
+          return { content: [{ type: "text" as const, text: result || 'No matches found' }] };
+        } catch (error: any) {
+          if (error.status === 1) return { content: [{ type: "text" as const, text: 'No matches found' }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // glob_files - Find files matching a glob pattern
+    tool(
+      "glob_files",
+      "Find files matching a glob pattern.",
+      {
+        pattern: z.string().describe("Glob pattern, e.g. '**/*.ts'"),
+        path: z.string().optional().describe("Base directory (default: workspace)"),
+      },
+      async (args) => {
+        try {
+          const searchPath = args.path ?? deps.sessionWorkspaces.values().next().value ?? '.';
+          const result = execFileSync('rg', ['--files', '--glob', args.pattern, searchPath], { encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 10000 });
+          const files = result.trim().split('\n').filter(Boolean).slice(0, 100);
+          return { content: [{ type: "text" as const, text: JSON.stringify({ count: files.length, files }, null, 2) }] };
+        } catch (error: any) {
+          if (error.status === 1) return { content: [{ type: "text" as const, text: JSON.stringify({ count: 0, files: [] }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // git_status - Get git status and current branch
+    tool(
+      "git_status",
+      "Get git status and current branch for a workspace.",
+      {
+        workspace: z.string().optional().describe("Workspace path (default: first known workspace)"),
+      },
+      async (args) => {
+        try {
+          const cwd = args.workspace ?? deps.sessionWorkspaces.values().next().value ?? '.';
+          const branch = execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+          const status = execFileSync('git', ['status', '--short'], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+          const lines = status ? status.split('\n') : [];
+          return { content: [{ type: "text" as const, text: JSON.stringify({ branch, clean: lines.length === 0, files: lines.slice(0, 50) }, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // git_log - Get recent git commits
+    tool(
+      "git_log",
+      "Get recent git commits.",
+      {
+        workspace: z.string().optional().describe("Workspace path"),
+        limit: z.number().optional().describe("Max commits (default 10, max 50)"),
+        since: z.string().optional().describe("Date filter, e.g. '2 days ago'"),
+      },
+      async (args) => {
+        try {
+          const cwd = args.workspace ?? deps.sessionWorkspaces.values().next().value ?? '.';
+          const n = Math.min(args.limit ?? 10, 50);
+          const gitArgs = ['log', `--format=%H|%an|%ai|%s`, `-n${n}`];
+          if (args.since) gitArgs.push('--since', args.since);
+          const result = execFileSync('git', gitArgs, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+          const commits = result ? result.split('\n').map(line => { const [hash, author, date, ...msg] = line.split('|'); return { hash: hash.slice(0,8), author, date, message: msg.join('|') }; }) : [];
+          return { content: [{ type: "text" as const, text: JSON.stringify({ count: commits.length, commits }, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
         }
       }
     ),
