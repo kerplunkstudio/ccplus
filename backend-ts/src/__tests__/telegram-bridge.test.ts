@@ -454,15 +454,6 @@ describe('TelegramBridge', () => {
   });
 
   describe('resolveCallbackCommand', () => {
-    it('resolves named commands', () => {
-      expect(resolveCallbackCommand('cancel', [])).toBe('Cancel the current running session.');
-      expect(resolveCallbackCommand('approve', [])).toBe('Yes, please proceed.');
-      expect(resolveCallbackCommand('reject', [])).toBe('No, please stop.');
-      expect(resolveCallbackCommand('status', [])).toBe('What is the current fleet status? List all sessions.');
-      expect(resolveCallbackCommand('cherry-pick', [])).toBe('Cherry-pick the changes from the completed session.');
-      expect(resolveCallbackCommand('new-session', [])).toBe('Start a new session.');
-    });
-
     it('resolves option by text', () => {
       expect(resolveCallbackCommand('option:1', ['Fix the bug', 'Add tests'])).toBe('Fix the bug');
       expect(resolveCallbackCommand('option:2', ['Fix the bug', 'Add tests'])).toBe('Add tests');

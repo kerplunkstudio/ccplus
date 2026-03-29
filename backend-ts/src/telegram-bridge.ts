@@ -88,12 +88,6 @@ export function extractNumberedOptions(text: string): string[] {
 
 // Exported for testing
 export function resolveCallbackCommand(data: string, pendingOptions: readonly string[]): string | null {
-  if (data === 'cancel') return 'Cancel the current running session.';
-  if (data === 'status') return 'What is the current fleet status? List all sessions.';
-  if (data === 'cherry-pick') return 'Cherry-pick the changes from the completed session.';
-  if (data === 'new-session') return 'Start a new session.';
-  if (data === 'approve') return 'Yes, please proceed.';
-  if (data === 'reject') return 'No, please stop.';
   if (data.startsWith('option:')) {
     const idx = parseInt(data.slice(7), 10) - 1;
     const option = pendingOptions[idx];
