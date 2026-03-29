@@ -4,7 +4,7 @@
  * Voice messages are transcribed locally using whisper-cli.
  */
 
-import { Bot, Context, InlineKeyboard, Keyboard } from 'grammy';
+import { Bot, Context, Keyboard } from 'grammy';
 import * as config from './config.js';
 import * as captain from './captain.js';
 import { formatForTelegram, escapeMarkdownV2 } from './telegram-format.js';
@@ -20,7 +20,6 @@ interface ChatState {
   readonly pendingText: string;
   readonly typingInterval: ReturnType<typeof setInterval> | null;
   readonly ackMessageId: number | null;
-  readonly pendingOptions: readonly string[];
   readonly flushTimer: ReturnType<typeof setTimeout> | null;
   readonly sentMessageIds: number[];
   readonly lastSentText: string;
@@ -64,30 +63,7 @@ function buildIdleKeyboard(): Keyboard {
     .persistent();
 }
 
-function buildNumberedOptionsKeyboard(options: string[]): InlineKeyboard {
-  return options.slice(0, 5).reduce(
-    (kb, _, i) => kb.text(`${i + 1}`, `option:${i + 1}`).row(),
-    new InlineKeyboard()
-  );
-}
-
 // ---- Response analysis ----
-
-// Exported for testing
-export function extractNumberedOptions(text: string): string[] {
-  const lines = text.split('\n');
-  const options: string[] = [];
-  for (const line of lines) {
-    const match = line.match(/^(\d+)[.)]\s+(.+)/);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num === options.length + 1 && num <= 5) {
-        options.push(match[2].trim());
-      }
-    }
-  }
-  return options.length >= 2 ? options : [];
-}
 
 // Exported for testing
 export function isFleetNotification(text: string): boolean {
@@ -124,18 +100,6 @@ function registerFleetNotificationCallback(): void {
     onError: () => {},
   });
   log.info('Fleet notification callback registered for Telegram');
-}
-
-// ---- Callback data resolver ----
-
-// Exported for testing
-export function resolveCallbackCommand(data: string, pendingOptions: readonly string[]): string | null {
-  if (data.startsWith('option:')) {
-    const idx = parseInt(data.slice(7), 10) - 1;
-    const option = pendingOptions[idx];
-    return option ?? null;
-  }
-  return null;
 }
 
 // ---- Public API ----
@@ -581,14 +545,8 @@ function setupBotHandlers(botInstance: Bot): void {
       }
     }
 
-    // Legacy callback handling (existing logic)
+    // Legacy callback handling (no-op if no JSON handler matched)
     await ctx.answerCallbackQuery();
-
-    const state = chatStates.get(chatId);
-    const command = resolveCallbackCommand(data, state?.pendingOptions ?? []);
-    if (command) {
-      await handleMessageById(chatId, ctx, command);
-    }
   });
 
   // -- Error handler --
@@ -700,7 +658,6 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
     pendingText: '',
     typingInterval,
     ackMessageId: null,
-    pendingOptions: [],
     flushTimer: null,
     sentMessageIds: [],
     lastSentText: '',
@@ -750,21 +707,17 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
 
 async function sendTelegramChunk(
   chatId: number,
-  chunk: string,
-  replyMarkup?: InlineKeyboard
+  chunk: string
 ): Promise<number | null> {
   if (!bot) return null;
   try {
     const sent = await bot.api.sendMessage(chatId, chunk, {
       parse_mode: 'MarkdownV2',
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     });
     return sent.message_id;
   } catch {
     // Fallback: send without formatting
-    const sent = await bot.api.sendMessage(chatId, chunk, {
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-    });
+    const sent = await bot.api.sendMessage(chatId, chunk);
     return sent.message_id;
   }
 }
@@ -772,21 +725,17 @@ async function sendTelegramChunk(
 async function editTelegramChunk(
   chatId: number,
   messageId: number,
-  chunk: string,
-  replyMarkup?: InlineKeyboard
+  chunk: string
 ): Promise<void> {
   if (!bot) return;
   try {
     await bot.api.editMessageText(chatId, messageId, chunk, {
       parse_mode: 'MarkdownV2',
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     });
   } catch {
     // Fallback: edit without formatting; also silently handles "message not modified"
     try {
-      await bot.api.editMessageText(chatId, messageId, chunk, {
-        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-      });
+      await bot.api.editMessageText(chatId, messageId, chunk);
     } catch {
       // Silently ignore -- content may be unchanged or message deleted
     }
@@ -908,56 +857,36 @@ async function handleComplete(chatId: number): Promise<void> {
       return;
     }
 
-    // Extract numbered options (request_user_input flow)
-    const numberedOptions = extractNumberedOptions(state.pendingText);
-    const lastChunkKeyboard = numberedOptions.length > 0
-      ? buildNumberedOptionsKeyboard(numberedOptions)
-      : undefined;
-    const resolvedOptions: readonly string[] = numberedOptions.length > 0 ? numberedOptions : [];
-
     // Format text into chunks
     const chunks = formatForTelegram(state.pendingText);
 
     if (state.sentMessageIds.length === 0) {
       // Fast response: no streaming happened, send all chunks fresh
       for (let i = 0; i < chunks.length; i++) {
-        const isLast = i === chunks.length - 1;
-        const replyMarkup = isLast ? lastChunkKeyboard : undefined;
         try {
           await bot.api.sendMessage(chatId, chunks[i], {
             parse_mode: 'MarkdownV2',
-            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
           });
         } catch {
           // Fallback: send without formatting
-          await bot.api.sendMessage(chatId, chunks[i], {
-            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-          });
+          await bot.api.sendMessage(chatId, chunks[i]);
         }
         await delay(100);
       }
     } else {
-      // Streaming happened: edit existing messages with final text, attach keyboard to last chunk
+      // Streaming happened: edit existing messages with final text
       const messageIds = [...state.sentMessageIds];
       for (let i = 0; i < chunks.length; i++) {
-        const isLast = i === chunks.length - 1;
-        const replyMarkup = isLast ? lastChunkKeyboard : undefined;
         if (i < messageIds.length) {
           // Edit existing message
-          await editTelegramChunk(chatId, messageIds[i], chunks[i], replyMarkup);
+          await editTelegramChunk(chatId, messageIds[i], chunks[i]);
         } else {
           // Send new message if chunk count grew
-          const msgId = await sendTelegramChunk(chatId, chunks[i], replyMarkup);
+          const msgId = await sendTelegramChunk(chatId, chunks[i]);
           if (msgId !== null) messageIds.push(msgId);
         }
         await delay(100);
       }
-    }
-
-    // Store resolved options for callback handler
-    const currentState = chatStates.get(chatId);
-    if (currentState) {
-      chatStates.set(chatId, { ...currentState, pendingOptions: resolvedOptions });
     }
   } catch (error) {
     log.error('Telegram complete error', { chatId, error: String(error) });
@@ -1001,7 +930,6 @@ function cleanupChatState(chatId: number): void {
     clearTimeout(state.flushTimer);
   }
   // Don't unregister callback — keep it for future messages in this chat
-  // Preserve pendingOptions so callback handler can still resolve them
   chatStates.set(chatId, {
     ...state,
     pendingText: '',

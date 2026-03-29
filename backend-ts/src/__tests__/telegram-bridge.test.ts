@@ -80,8 +80,6 @@ import {
   startTelegramBridge,
   stopTelegramBridge,
   isTelegramBridgeActive,
-  extractNumberedOptions,
-  resolveCallbackCommand,
   isFleetNotification,
 } from '../telegram-bridge.js';
 
@@ -420,67 +418,6 @@ describe('TelegramBridge', () => {
 
       vi.unstubAllGlobals();
     });
-  });
-
-  describe('extractNumberedOptions', () => {
-    it('extracts consecutive numbered options', () => {
-      const text = '1. Option A\n2. Option B\n3. Option C';
-      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B', 'Option C']);
-    });
-
-    it('handles parentheses numbering', () => {
-      const text = '1) Option A\n2) Option B\n3) Option C';
-      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B', 'Option C']);
-    });
-
-    it('returns empty for single option', () => {
-      expect(extractNumberedOptions('1. Only one')).toEqual([]);
-    });
-
-    it('returns empty for non-consecutive numbers', () => {
-      expect(extractNumberedOptions('1. A\n3. B')).toEqual([]);
-    });
-
-    it('caps at 5 options', () => {
-      const text = '1. A\n2. B\n3. C\n4. D\n5. E\n6. F';
-      expect(extractNumberedOptions(text)).toHaveLength(5);
-    });
-
-    it('trims whitespace from options', () => {
-      const text = '1.   Option A   \n2.   Option B   ';
-      expect(extractNumberedOptions(text)).toEqual(['Option A', 'Option B']);
-    });
-
-    it('returns empty for no numbered options', () => {
-      expect(extractNumberedOptions('Just some text\nNo numbers here')).toEqual([]);
-    });
-  });
-
-  describe('resolveCallbackCommand', () => {
-    it('resolves option by text', () => {
-      expect(resolveCallbackCommand('option:1', ['Fix the bug', 'Add tests'])).toBe('Fix the bug');
-      expect(resolveCallbackCommand('option:2', ['Fix the bug', 'Add tests'])).toBe('Add tests');
-    });
-
-    it('returns null for out-of-range option', () => {
-      expect(resolveCallbackCommand('option:3', ['A', 'B'])).toBeNull();
-    });
-
-    it('returns null for unknown command', () => {
-      expect(resolveCallbackCommand('unknown', [])).toBeNull();
-    });
-
-    it('handles empty options array', () => {
-      expect(resolveCallbackCommand('option:1', [])).toBeNull();
-    });
-
-    it('resolves multiple options correctly', () => {
-      const options = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
-      expect(resolveCallbackCommand('option:1', options)).toBe('First');
-      expect(resolveCallbackCommand('option:3', options)).toBe('Third');
-      expect(resolveCallbackCommand('option:5', options)).toBe('Fifth');
-    });
-  });
   });
 
   describe('isFleetNotification', () => {
