@@ -183,8 +183,8 @@ export async function startCaptainSession(
         resume: resumeSdkSessionId ?? captainState.sdkSessionId ?? undefined,
         maxTurns: config.CAPTAIN_MAX_TURNS,
         includePartialMessages: true,
-        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
-        allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
+        permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
+        allowDangerouslySkipPermissions: config.getBypassPermissions(),
       },
     });
 
@@ -499,8 +499,8 @@ async function startCaptainQuery(content: string): Promise<void> {
       resume: captainState.sdkSessionId ?? undefined,
       maxTurns: config.CAPTAIN_MAX_TURNS,
       includePartialMessages: true,
-      permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
-      allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
+      permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
+      allowDangerouslySkipPermissions: config.getBypassPermissions(),
     },
   });
 

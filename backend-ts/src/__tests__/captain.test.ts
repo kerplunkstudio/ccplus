@@ -51,9 +51,9 @@ vi.mock('../config.js', async () => {
   return {
     ...actual,
     getCaptainModel: vi.fn().mockReturnValue('claude-3-5-sonnet-20241022'),
+    getBypassPermissions: vi.fn().mockReturnValue(false),
     CAPTAIN_MAX_TURNS: 10,
     CAPTAIN_WORKSPACE: '/tmp/test-workspace',
-    BYPASS_PERMISSIONS: false,
     CAPTAIN_CONTEXT_WINDOW: 1_000_000,
   };
 });
@@ -174,9 +174,10 @@ describe('Captain', () => {
     });
   });
 
-  // ---- Regression tests for Fix 2: settingSources = [] (cold-start fix) ----
-  describe('startCaptainSession settingSources (regression: cold-start fix)', () => {
-    // Minimal stub dependencies required by startCaptainSession
+  // ---- Regression tests for boot query options ----
+  // Tests the options captain.ts passes to query() on first boot.
+  // Covers both the settingSources fix and the BYPASS_PERMISSIONS env var fix.
+  describe('startCaptainSession boot query options', () => {
     const stubDependencies = {
       database: {
         recordMessage: vi.fn(() => ({ id: 1 })),
@@ -201,18 +202,36 @@ describe('Captain', () => {
       } as any,
     };
 
-    it('does not include "user" in settingSources on boot query (prevents stdio MCP spawn)', async () => {
+    it('uses correct options: empty settingSources and no bypassPermissions when getBypassPermissions() returns false', async () => {
+      // This single test covers two regressions in one query() call:
+      //
+      // Fix 1 (settingSources): Captain must use settingSources=[] to avoid spawning
+      // user-configured MCP stdio processes during boot.
+      //
+      // Fix 2 (BYPASS_PERMISSIONS env var): Before the fix, captain.ts used
+      // config.BYPASS_PERMISSIONS (a hardcoded static export = true), so setting
+      // CCPLUS_BYPASS_PERMISSIONS=false had no effect. After the fix, captain.ts
+      // calls config.getBypassPermissions() at query time, so the mock returning
+      // false here means permissionMode is NOT "bypassPermissions".
+      //
+      // The module-level config mock has getBypassPermissions() returning false.
       await captain.startCaptainSession('/test/workspace', stubDependencies);
 
       expect(mockQuery).toHaveBeenCalled();
 
       const callArgs = mockQuery.mock.calls[0][0] as any;
-      const settingSources = callArgs?.options?.settingSources;
 
+      // Assert Fix 1: settingSources must be empty array
+      const settingSources = callArgs?.options?.settingSources;
       expect(settingSources).toBeDefined();
       expect(settingSources).not.toContain('user');
-      // Must be an empty array — not undefined, not ['user']
       expect(settingSources).toEqual([]);
+
+      // Assert Fix 2 (regression: BYPASS_PERMISSIONS env var fix):
+      // permissionMode must NOT be "bypassPermissions" when getBypassPermissions()=false
+      expect(callArgs?.options?.permissionMode).not.toBe('bypassPermissions');
+      expect(callArgs?.options?.allowDangerouslySkipPermissions).toBe(false);
     });
   });
+
 });

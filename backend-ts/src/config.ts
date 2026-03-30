@@ -79,9 +79,6 @@ export const MAX_ACTIVITY_EVENTS = MAX_ACTIVITY_EVENTS_DEFAULT;
 // Server PID path (for process management)
 export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
 
-// Permission bypass (always enabled)
-export const BYPASS_PERMISSIONS = true;
-
 // Memory system configuration
 export const MEMORY_ENABLED = process.env.CCPLUS_MEMORY_ENABLED !== 'false';
 export const MEMORY_DISTILL_ENABLED = process.env.CCPLUS_MEMORY_DISTILL !== 'false';
