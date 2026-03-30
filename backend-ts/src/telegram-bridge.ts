@@ -180,6 +180,14 @@ async function expireInteractiveMessage(messageId: string): Promise<void> {
   } catch (error) {
     log.warn('Could not expire interactive message on Telegram', { messageId, error: String(error) });
   }
+
+  // Resolve the pending Captain promise so Captain does not block forever
+  captain.respondToInteractiveMessage(messageId, {
+    messageId,
+    actionId: '__expired__',
+    respondedAt: Date.now(),
+    source: 'telegram',
+  });
 }
 
 async function cleanupOrphanedAckMessages(botInstance: Bot): Promise<void> {
