@@ -1,6 +1,6 @@
 # cc+ — Watch your agents work.
 
-Open-source desktop app for Claude Code. See every tool call, every agent, every token — in real-time. Run multiple sessions. Orchestrate your fleet with Captain. Free, local, yours.
+Fleet orchestration for Claude Code — run parallel AI coding sessions with real-time observability and multi-agent workflows.
 
 <p align="center">
   <a href="https://github.com/kerplunkstudio/ccplus/actions"><img src="https://img.shields.io/github/actions/workflow/status/kerplunkstudio/ccplus/ci.yml?branch=main&style=for-the-badge" alt="CI"></a>
@@ -15,6 +15,12 @@ Open-source desktop app for Claude Code. See every tool call, every agent, every
 
 ---
 
+## Who is this for
+
+You're a developer who uses Claude Code daily. You want to run 5 sessions in parallel, each on a different feature, with automated testing and code review. cc+ does that. See every tool call, every agent, every token — in real-time. Fleet monitor shows all sessions at once. Captain orchestrates workflows autonomously.
+
+---
+
 ## Quick Install
 
 ```sh
@@ -23,16 +29,16 @@ curl -fsSL https://ccplus.run/install | sh
 
 Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macOS and Linux.
 
-## Install from Source
+### Install from Source
 
-### Prerequisites
+#### Prerequisites
 
 - **Node.js 16+** (check: `node --version`)
 - **Claude Code CLI** installed globally: `npm install -g @anthropic-ai/claude-code`
 - **Claude authentication**: Run `claude login` and follow prompts
 - **Git** (for cloning the repository)
 
-### Install Steps
+#### Install Steps
 
 1. **Clone the repository**:
    ```sh
@@ -62,17 +68,29 @@ Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macO
    - Build frontend React app → `static/chat/`
    - Launch desktop app (Electron)
 
-### Quick Start
+---
 
-After installation, you can:
+## How It Works
 
-- **Launch desktop app**: `./ccplus`
-- **Launch web UI**: `./ccplus web` (access at http://localhost:4000)
-- **Run both simultaneously**: `./ccplus desktop-parallel` (desktop + web on port 4001)
-- **Check system health**: `./ccplus doctor`
-- **View logs**: `./ccplus logs`
+You tell Captain: "fix the auth bug". Captain starts a bug-fix workflow → Debugger investigates → Code Agent patches → TDD Guide writes regression test → Code Reviewer approves → merged to main. You get a summary.
 
-**Desktop app users**: Run `./ccplus desktop-parallel` for development to keep both desktop and web interfaces running.
+The process is automatic. No manual intervention needed. Captain manages workflow state, retries on failure, and adapts to blockers.
+
+---
+
+## The Model
+
+You talk to Captain. Captain runs workflows. You watch.
+
+Each session is fully isolated. Multi-tab interface. Desktop app (Electron) for macOS/Linux, web UI at localhost for remote access. Real-time activity trees show every agent spawn, tool call, and file edit as a hierarchy.
+
+Token and cost tracking per query, session, and project. Context window usage. Trust scores. Cache efficiency.
+
+---
+
+## Fleet Monitor
+
+Multi-tab sessions (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is its own Claude Code session. Fleet monitor shows all sessions at once: status, tools, tokens, files touched.
 
 ---
 
@@ -80,29 +98,52 @@ After installation, you can:
 
 Real-time activity trees. Every agent spawn, tool call, and file edit, structured as a hierarchy. Agent → sub-agent → Read → Edit → Write. Status, duration, parameters. Not terminal scroll, a live tree.
 
-Token and cost tracking per query, session, and project. Context window usage. Trust scores. Cache efficiency.
+---
 
-## Run the Fleet
+## Cross-Session Memory
 
-Multi-tab sessions (Cmd+T, Cmd+W, Ctrl+Tab). Each tab is its own Claude Code session. Fleet monitor shows all sessions at once: status, tools, tokens, files touched.
+Persistent knowledge across sessions.
 
-Captain: a persistent AI that manages your sessions. Tell it what you want in plain language. It writes the prompt, picks the workspace, starts the session in an isolated worktree, and watches it. If an agent gets stuck, Captain cancels and retries with a better prompt. When it's done, you get a summary.
+---
+
+## Scheduled Tasks
+
+Cron-based recurring prompts.
+
+---
+
+## Fleet Grid View
+
+Fleet monitor shows all sessions at once.
+
+---
 
 ## Access Anywhere
 
-Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. Voice messages supported.
+Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. For Telegram setup details, see [docs](docs/).
 
-### Telegram Setup
+---
 
-1. Create a bot via [@BotFather](https://t.me/BotFather) and copy the token
-2. Add to your `.env`:
-   ```
-   CCPLUS_TELEGRAM_BOT_TOKEN=your-bot-token
-   CCPLUS_TELEGRAM_ALLOWLIST=your-username
-   ```
-3. Restart cc+. Message your bot to talk to Captain.
+## Built on the Agent SDK
 
-Comma-separated for multiple users.
+The Claude Agent SDK does the heavy lifting. cc+ is a real-time observability layer around it.
+
+The SDK handles:
+- In-process agent spawning and async streaming
+- Tool execution and result injection
+- Agent parent-child correlation
+- Cooperative cancellation
+- File system access (read, edit, write)
+
+cc+ adds:
+- Multi-session coordination
+- SQLite persistence (conversations, activity tree, costs)
+- Real-time WebSocket updates to the UI
+- Desktop app + web interface
+- Captain AI orchestration
+- Telegram bridge
+
+The result: you get full transparency into what your agents are doing, and the power to run them at scale.
 
 ---
 
@@ -115,8 +156,6 @@ Comma-separated for multiple users.
 - Integrated terminal
 - Command palette (Cmd+K)
 - Conversation search (FTS5)
-- Scheduled tasks (cron-based recurring prompts)
-- Cross-session memory
 - Session import from Claude Code history
 - Insights dashboard (daily trends, model breakdowns, tool success rates)
 - Image attachments
@@ -135,7 +174,12 @@ User messages → WebSocket → Claude Agent SDK → Real-time callbacks → SQL
 
 ---
 
-## CLI Reference
+## Development
+
+<details>
+<summary><strong>Click to expand development guide</strong></summary>
+
+### CLI Reference
 
 | Command | Description |
 |---------|-------------|
@@ -154,13 +198,6 @@ User messages → WebSocket → Claude Agent SDK → Real-time callbacks → SQL
 | `./ccplus logs` | Tail server logs |
 | `./ccplus update` | Update to latest version |
 | `./ccplus release` | Package desktop app for distribution |
-
----
-
-## Development
-
-<details>
-<summary><strong>Click to expand development guide</strong></summary>
 
 ### Backend Development
 
