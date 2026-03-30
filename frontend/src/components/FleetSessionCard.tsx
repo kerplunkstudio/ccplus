@@ -32,6 +32,7 @@ const STATUS_LABELS: Record<string, string> = {
   idle: 'idle',
   completed: 'done',
   failed: 'failed',
+  pending: 'Awaiting approval',
 };
 
 const getStatusLabel = (session: FleetSession): string => {
