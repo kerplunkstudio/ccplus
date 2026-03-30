@@ -108,6 +108,7 @@ export const CAPTAIN_STATE_PATH = path.join(DATA_DIR, 'captain_state.json');
 export const TELEGRAM_STATE_PATH = path.join(DATA_DIR, 'telegram_state.json');
 export const DEPLOY_STATE_PATH = path.join(DATA_DIR, 'deploy_pending.json');
 export const CAPTAIN_RESUME_ON_STARTUP = process.env.CCPLUS_CAPTAIN_RESUME_ON_STARTUP !== 'false';
+export const CAPTAIN_CONTEXT_WINDOW = 1_000_000;
 
 // Telegram bridge
 export const TELEGRAM_BOT_TOKEN = process.env.CCPLUS_TELEGRAM_BOT_TOKEN ?? '';

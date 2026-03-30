@@ -29,6 +29,9 @@ interface CaptainRouterDependencies {
     sessionId: string | null;
     uptimeMs: number;
     messageCount: number;
+    lastInputTokens: number;
+    totalInputTokens: number;
+    contextPct: number;
   };
   readonly sendCaptainMessage: (content: string, source: string, sourceId: string) => void;
   readonly startCaptainSession: (workspace: string) => Promise<{ sessionId: string }>;

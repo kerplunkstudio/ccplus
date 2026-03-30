@@ -66,6 +66,8 @@ interface CaptainState {
   readonly workspace: string | null;
   readonly lastQueryCallbackId: string | null;
   readonly lastQuerySource: { source: string; sourceId: string } | null;
+  readonly lastInputTokens: number;
+  readonly totalInputTokens: number;
 }
 
 let captainState: CaptainState = {
@@ -78,6 +80,8 @@ let captainState: CaptainState = {
   workspace: null,
   lastQueryCallbackId: null,
   lastQuerySource: null,
+  lastInputTokens: 0,
+  totalInputTokens: 0,
 };
 
 let captainDeps: CaptainDependencies | null = null;
@@ -195,6 +199,8 @@ export async function startCaptainSession(
       workspace,
       lastQueryCallbackId: null,
       lastQuerySource: null,
+      lastInputTokens: 0,
+      totalInputTokens: 0,
     };
 
     // Process boot query in background
@@ -238,7 +244,13 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 
   try {
     for await (const message of q) {
-      if (message.type === "assistant") {
+      if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
+        log.warn('Captain context compaction detected', {
+          sessionId,
+          lastInputTokens: captainState.lastInputTokens,
+          totalInputTokens: captainState.totalInputTokens,
+        });
+      } else if (message.type === "assistant") {
         messageIndex++;
         const msg = message as any;
         const textBlocks: string[] = [];
@@ -312,6 +324,28 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
           }
         }
 
+        // Extract token usage
+        const usageObj = (result as any).usage ?? {};
+        const currentInputTokens = (usageObj.input_tokens || 0)
+          + (usageObj.cache_read_input_tokens || 0)
+          + (usageObj.cache_creation_input_tokens || 0);
+
+        captainState = {
+          ...captainState,
+          lastInputTokens: currentInputTokens,
+          totalInputTokens: captainState.totalInputTokens + currentInputTokens,
+        };
+
+        const contextPct = (currentInputTokens / config.CAPTAIN_CONTEXT_WINDOW) * 100;
+        log.info('Captain token usage', {
+          sessionId,
+          inputTokens: currentInputTokens,
+          cacheRead: usageObj.cache_read_input_tokens || 0,
+          cacheCreation: usageObj.cache_creation_input_tokens || 0,
+          totalInputTokens: captainState.totalInputTokens,
+          contextPct: Math.round(contextPct * 100) / 100,
+        });
+
         // Send completion to target callback(s)
         for (const callback of getTargetCallbacks(routeToCallbackId)) {
           try {
@@ -325,6 +359,20 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
       }
     }
   } catch (error) {
+    const errorStr = String(error).toLowerCase();
+    const isContextOverflow = errorStr.includes('context') || errorStr.includes('token limit')
+      || errorStr.includes('too many tokens') || errorStr.includes('max_tokens');
+
+    if (isContextOverflow) {
+      log.warn('Captain context overflow detected', {
+        sessionId,
+        lastInputTokens: captainState.lastInputTokens,
+        totalInputTokens: captainState.totalInputTokens,
+        contextPct: (captainState.lastInputTokens / config.CAPTAIN_CONTEXT_WINDOW) * 100,
+        error: String(error),
+      });
+    }
+
     log.error("Captain query error", { sessionId, error: String(error) });
 
     // Send error to target callback(s)
@@ -604,6 +652,9 @@ export function getCaptainStatus(): {
   sessionId: string | null;
   uptimeMs: number;
   messageCount: number;
+  lastInputTokens: number;
+  totalInputTokens: number;
+  contextPct: number;
 } {
   const active = isCaptainAlive();
   const uptimeMs = captainState.startedAt ? Date.now() - captainState.startedAt : 0;
@@ -613,6 +664,11 @@ export function getCaptainStatus(): {
     sessionId: captainState.sessionId,
     uptimeMs,
     messageCount: captainState.messageCount,
+    lastInputTokens: captainState.lastInputTokens,
+    totalInputTokens: captainState.totalInputTokens,
+    contextPct: captainState.lastInputTokens > 0
+      ? Math.round((captainState.lastInputTokens / config.CAPTAIN_CONTEXT_WINDOW) * 100 * 100) / 100
+      : 0,
   };
 }
 

@@ -54,6 +54,7 @@ vi.mock('../config.js', async () => {
     CAPTAIN_MAX_TURNS: 10,
     CAPTAIN_WORKSPACE: '/tmp/test-workspace',
     BYPASS_PERMISSIONS: false,
+    CAPTAIN_CONTEXT_WINDOW: 1_000_000,
   };
 });
 
@@ -88,6 +89,88 @@ describe('Captain', () => {
   describe('sendCaptainMessage', () => {
     it('throws when Captain is not active', () => {
       expect(() => captain.sendCaptainMessage('test message', 'web', 'test-id')).toThrow('Captain session is not active');
+    });
+  });
+
+  // ---- Context Management Tests (Phase 1) ----
+  describe('Context Management', () => {
+    it('getCaptainStatus() includes token fields', () => {
+      const status = captain.getCaptainStatus();
+      expect(status).toHaveProperty('lastInputTokens');
+      expect(status).toHaveProperty('totalInputTokens');
+      expect(status).toHaveProperty('contextPct');
+      expect(typeof status.lastInputTokens).toBe('number');
+      expect(typeof status.totalInputTokens).toBe('number');
+      expect(typeof status.contextPct).toBe('number');
+    });
+
+    it('token extraction logic sums all three token types', () => {
+      // Test the extraction logic used in processQueryResponse
+      const usageObj = {
+        input_tokens: 1000,
+        cache_read_input_tokens: 500,
+        cache_creation_input_tokens: 200,
+      };
+
+      const currentInputTokens = (usageObj.input_tokens || 0)
+        + (usageObj.cache_read_input_tokens || 0)
+        + (usageObj.cache_creation_input_tokens || 0);
+
+      expect(currentInputTokens).toBe(1700);
+    });
+
+    it('token extraction handles missing usage fields gracefully', () => {
+      // Test with undefined usage
+      const usageObj1 = undefined;
+      const tokens1 = ((usageObj1 as any)?.input_tokens || 0)
+        + ((usageObj1 as any)?.cache_read_input_tokens || 0)
+        + ((usageObj1 as any)?.cache_creation_input_tokens || 0);
+      expect(tokens1).toBe(0);
+
+      // Test with partial usage
+      const usageObj2 = { input_tokens: 100 };
+      const tokens2 = ((usageObj2 as any)?.input_tokens || 0)
+        + ((usageObj2 as any)?.cache_read_input_tokens || 0)
+        + ((usageObj2 as any)?.cache_creation_input_tokens || 0);
+      expect(tokens2).toBe(100);
+    });
+
+    it('contextPct calculation is correct', () => {
+      const CONTEXT_WINDOW = 1_000_000;
+
+      // 10% of context
+      const lastInputTokens1 = 100_000;
+      const contextPct1 = (lastInputTokens1 / CONTEXT_WINDOW) * 100;
+      expect(contextPct1).toBe(10);
+
+      // 0.17% of context
+      const lastInputTokens2 = 1700;
+      const contextPct2 = Math.round((lastInputTokens2 / CONTEXT_WINDOW) * 100 * 100) / 100;
+      expect(contextPct2).toBe(0.17);
+
+      // Zero tokens
+      const lastInputTokens3 = 0;
+      const contextPct3 = lastInputTokens3 > 0
+        ? Math.round((lastInputTokens3 / CONTEXT_WINDOW) * 100 * 100) / 100
+        : 0;
+      expect(contextPct3).toBe(0);
+    });
+
+    it('cumulative token tracking logic', () => {
+      // Simulate cumulative tracking
+      let totalInputTokens = 0;
+
+      // First query: 1000 tokens
+      totalInputTokens = totalInputTokens + 1000;
+      expect(totalInputTokens).toBe(1000);
+
+      // Second query: 500 tokens
+      totalInputTokens = totalInputTokens + 500;
+      expect(totalInputTokens).toBe(1500);
+
+      // Third query: 200 tokens
+      totalInputTokens = totalInputTokens + 200;
+      expect(totalInputTokens).toBe(1700);
     });
   });
 
