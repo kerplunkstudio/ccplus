@@ -1,4 +1,4 @@
-import React, { useState, KeyboardEvent } from 'react';
+import React, { useState } from 'react';
 import { IntegrationsConfig } from '../../hooks/useSettings';
 
 interface IntegrationsPanelProps {
@@ -9,9 +9,6 @@ interface IntegrationsPanelProps {
 export function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) {
   const [telegramTokenVisible, setTelegramTokenVisible] = useState(false);
   const [telegramUserInput, setTelegramUserInput] = useState('');
-  const [discordTokenVisible, setDiscordTokenVisible] = useState(false);
-  const [discordUserInput, setDiscordUserInput] = useState('');
-
   if (!config) {
     return (
       <div className="settings-panel">
@@ -28,7 +25,7 @@ export function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) 
     );
   }
 
-  const handleTelegramUserAdd = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleTelegramUserAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && telegramUserInput.trim()) {
       const newUsers = [...config.telegram.allowedUsers, telegramUserInput.trim()];
       onUpdate('integrations.telegram.allowedUsers', newUsers);
@@ -36,22 +33,9 @@ export function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) 
     }
   };
 
-  const handleDiscordUserAdd = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && discordUserInput.trim()) {
-      const newUsers = [...config.discord.allowedUsers, discordUserInput.trim()];
-      onUpdate('integrations.discord.allowedUsers', newUsers);
-      setDiscordUserInput('');
-    }
-  };
-
   const removeTelegramUser = (user: string) => {
     const newUsers = config.telegram.allowedUsers.filter((u) => u !== user);
     onUpdate('integrations.telegram.allowedUsers', newUsers);
-  };
-
-  const removeDiscordUser = (user: string) => {
-    const newUsers = config.discord.allowedUsers.filter((u) => u !== user);
-    onUpdate('integrations.discord.allowedUsers', newUsers);
   };
 
   return (
@@ -154,73 +138,7 @@ export function IntegrationsPanel({ config, onUpdate }: IntegrationsPanelProps) 
         </div>
       </div>
 
-      <h3 className="settings-section-header">Discord</h3>
-
-      <div className="settings-row">
-        <div className="settings-row-label-group">
-          <div className="settings-row-label">
-            Bot Token
-            <span className="settings-restart-badge">· restart required</span>
-          </div>
-          <div className="settings-row-description">
-            Discord bot token from Developer Portal
-          </div>
-        </div>
-        <div className="settings-row-control">
-          <div className="settings-password-wrapper">
-            <input
-              type={discordTokenVisible ? 'text' : 'password'}
-              className="settings-password-input"
-              value={config.discord.botToken}
-              onChange={(e) => onUpdate('integrations.discord.botToken', e.target.value)}
-              placeholder="Enter token..."
-            />
-            <button
-              className="settings-password-toggle"
-              onClick={() => setDiscordTokenVisible(!discordTokenVisible)}
-              aria-label={discordTokenVisible ? 'Hide token' : 'Show token'}
-            >
-              {discordTokenVisible ? '👁️' : '👁️‍🗨️'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div className="settings-row-label-group">
-          <div className="settings-row-label">
-            Allowed Users
-            <span className="settings-restart-badge">· restart required</span>
-          </div>
-          <div className="settings-row-description">
-            Discord user IDs authorized to interact with the bot
-          </div>
-        </div>
-        <div className="settings-row-control">
-          <div className="settings-tag-input-wrapper">
-            {config.discord.allowedUsers.map((user) => (
-              <span key={user} className="settings-tag">
-                {user}
-                <button
-                  className="settings-tag-remove"
-                  onClick={() => removeDiscordUser(user)}
-                  aria-label={`Remove ${user}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            <input
-              type="text"
-              className="settings-tag-input"
-              value={discordUserInput}
-              onChange={(e) => setDiscordUserInput(e.target.value)}
-              onKeyDown={handleDiscordUserAdd}
-              placeholder="Add user ID..."
-            />
-          </div>
-        </div>
-      </div>
+      {/* TODO: Discord integration not yet implemented */}
     </div>
   );
 }
