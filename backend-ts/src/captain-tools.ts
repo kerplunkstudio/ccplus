@@ -73,6 +73,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           const fleetState = fleetMonitor.getFleetState();
           const sessions = fleetState.sessions.map((s: fleetMonitor.EnrichedFleetSessionInfo) => ({
             session_id: s.sessionId,
+            session_number: s.sessionNumber,
             status: s.status,
             workspace: s.workspace,
             tool_count: s.toolCount,

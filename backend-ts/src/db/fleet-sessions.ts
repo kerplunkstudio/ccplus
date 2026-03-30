@@ -1,6 +1,15 @@
 import { getDb } from "./connection.js";
 import type { FleetSessionInfo } from "../fleet-monitor.js";
 
+export function getNextSessionNumber(): number {
+  const d = getDb();
+  const result = d.prepare(`
+    SELECT MAX(session_number) as max_num FROM fleet_sessions
+  `).get() as { max_num: number | null } | undefined;
+
+  return (result?.max_num ?? 0) + 1;
+}
+
 export function upsertFleetSession(info: FleetSessionInfo): void {
   const d = getDb();
   d.prepare(`
@@ -21,8 +30,9 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
       requested_by_source,
       requested_by_source_id,
       stuck_detected_at,
-      description
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      description,
+      session_number
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     info.sessionId,
     info.status,
@@ -40,7 +50,8 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
     info.requestedBy?.source ?? null,
     info.requestedBy?.sourceId ?? null,
     info.stuckDetectedAt ?? null,
-    info.description ?? null
+    info.description ?? null,
+    info.sessionNumber ?? null
   );
 }
 
@@ -68,6 +79,7 @@ export function getAllFleetSessions(limit = 500): FleetSessionInfo[] {
     requested_by_source_id: string | null;
     stuck_detected_at: number | null;
     description: string | null;
+    session_number: number | null;
   }>;
 
   return rows.map((row) => ({
@@ -89,6 +101,7 @@ export function getAllFleetSessions(limit = 500): FleetSessionInfo[] {
       : undefined,
     stuckDetectedAt: row.stuck_detected_at ?? undefined,
     description: row.description ?? undefined,
+    sessionNumber: row.session_number ?? undefined,
   }));
 }
 
@@ -115,6 +128,7 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
     requested_by_source_id: string | null;
     stuck_detected_at: number | null;
     description: string | null;
+    session_number: number | null;
   } | undefined;
 
   if (!row) {
@@ -140,5 +154,6 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
       : undefined,
     stuckDetectedAt: row.stuck_detected_at ?? undefined,
     description: row.description ?? undefined,
+    sessionNumber: row.session_number ?? undefined,
   };
 }

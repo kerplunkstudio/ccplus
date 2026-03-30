@@ -327,6 +327,13 @@ ALTER TABLE fleet_sessions ADD COLUMN stuck_detected_at INTEGER;
 ALTER TABLE fleet_sessions ADD COLUMN description TEXT;
 `,
   },
+  {
+    version: 17,
+    sql: `
+-- Migration v17: Add session_number for display-only auto-incrementing session IDs
+ALTER TABLE fleet_sessions ADD COLUMN session_number INTEGER;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

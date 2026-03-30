@@ -1,5 +1,5 @@
 import type { Server as SocketIOServer } from "socket.io";
-import { upsertFleetSession, getAllFleetSessions } from "./database.js";
+import { upsertFleetSession, getAllFleetSessions, getNextSessionNumber } from "./db/fleet-sessions.js";
 import { getWorkflowState } from "./workflow-state.js";
 import { log } from "./logger.js";
 
@@ -22,6 +22,7 @@ export interface FleetSessionInfo {
   requestedBy?: { source: string; sourceId: string };
   stuckDetectedAt?: number;
   description?: string;
+  sessionNumber?: number;
 }
 
 export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
@@ -93,6 +94,7 @@ export function registerSession(sessionId: string, workspace: string, requestedB
       filesTouched: [],
       requestedBy,
       description,
+      sessionNumber: getNextSessionNumber(),
     };
     sessions.set(sessionId, info);
     upsertFleetSession(info);
