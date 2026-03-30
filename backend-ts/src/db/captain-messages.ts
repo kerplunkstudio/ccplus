@@ -47,7 +47,7 @@ export function saveCaptainMessage(params: SaveCaptainMessageParams): CaptainMes
 /**
  * Get Captain messages for a given conversation ID.
  * If no conversationId provided, uses the latest conversation.
- * Returns messages in chronological order (oldest first).
+ * Returns the LATEST N messages in chronological order (oldest first).
  */
 export function getCaptainMessages(conversationId?: string, limit: number = 100): CaptainMessage[] {
   const db = getDb();
@@ -60,10 +60,13 @@ export function getCaptainMessages(conversationId?: string, limit: number = 100)
   const rows = db
     .prepare(
       `
-    SELECT * FROM captain_messages
-    WHERE conversation_id = ?
+    SELECT * FROM (
+      SELECT * FROM captain_messages
+      WHERE conversation_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    ) sub
     ORDER BY created_at ASC, id ASC
-    LIMIT ?
   `
     )
     .all(convId, limit) as CaptainMessage[];
