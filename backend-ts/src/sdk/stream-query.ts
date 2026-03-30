@@ -649,16 +649,8 @@ export async function streamQuery(
     // Emit final completion
     if (gotResult && Object.keys(lastCompletionData).length > 0) {
       callbacks.onComplete(lastCompletionData);
-      fleetMonitor.updateSessionStatus(sessionId, 'completed');
-
-      // Notify Captain if this is a fleet session
-      const sessionInfo = fleetMonitor.getSessionDetail(sessionId);
-      if (sessionInfo) {
-        captain.notifySessionComplete(sessionId, {
-          requestedBy: sessionInfo.requestedBy,
-          filesTouched: sessionInfo.filesTouched,
-        });
-      }
+      const finalStatus = lastCompletionData.is_error ? 'failed' : 'completed';
+      fleetMonitor.updateSessionStatus(sessionId, finalStatus);
     }
   } catch (err) {
     const errorStr = String(err);
@@ -710,5 +702,21 @@ export async function streamQuery(
 
     // Clear resultText array to free memory
     resultText.length = 0;
+  }
+
+  // Notify Captain outside the main try/catch so notification failures cannot
+  // overwrite the session status that was already set above.
+  if (gotResult && Object.keys(lastCompletionData).length > 0 && !lastCompletionData.is_error) {
+    const sessionInfo = fleetMonitor.getSessionDetail(sessionId);
+    if (sessionInfo) {
+      try {
+        captain.notifySessionComplete(sessionId, {
+          requestedBy: sessionInfo.requestedBy,
+          filesTouched: sessionInfo.filesTouched,
+        });
+      } catch (notifyErr) {
+        log.error('Failed to notify captain of session completion', { sessionId, error: String(notifyErr) });
+      }
+    }
   }
 }
