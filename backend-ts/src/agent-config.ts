@@ -44,6 +44,11 @@ export const AgentConfigSchema = z.object({
   security: SecurityConfigSchema.optional(),
   memory: MemoryConfigSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  skills: z.object({
+    required: z.array(z.string()).optional(),
+    available: z.array(z.string()).optional(),
+  }).optional(),
+  mcpServers: z.array(z.string()).optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;

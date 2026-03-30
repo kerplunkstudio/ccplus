@@ -1,5 +1,6 @@
 import path from "path";
 import { discoverSkills } from "./skills.js";
+import type { SkillInfo } from "./types.js";
 import * as config from "../config.js";
 import { searchMemories } from '../memory-client.js';
 import { log } from "../logger.js";
@@ -9,6 +10,70 @@ import { loadAllAgents } from '../agent-config.js';
 import { loadWorkflow } from '../workflow-config.js';
 import { getWorkflowState } from '../workflow-state.js';
 import { formatAgentCatalog, formatWorkflowContext } from '../agent-catalog.js';
+import { getAllMcpServers } from '../mcp-config.js';
+import type { McpServerEntry } from '../mcp-config.js';
+
+function buildAgentSkillsSection(
+  agentSkills: { required?: string[]; available?: string[] },
+  allSkills: SkillInfo[]
+): string | null {
+  const required = agentSkills.required ?? []
+  const available = agentSkills.available ?? []
+  if (required.length === 0 && available.length === 0) return null
+
+  const findDesc = (name: string) => {
+    const skill = allSkills.find(s => s.name === name)
+    return skill?.description ? ` — ${skill.description}` : ''
+  }
+
+  const lines: string[] = ['## Agent Skills', 'You have access to these skills via the Skill tool:']
+
+  if (required.length > 0) {
+    lines.push('\n### Required (MUST consult before making changes):')
+    for (const name of required) {
+      lines.push(`- /${name}${findDesc(name)}`)
+    }
+  }
+
+  if (available.length > 0) {
+    lines.push('\n### Available (use when relevant):')
+    for (const name of available) {
+      lines.push(`- /${name}${findDesc(name)}`)
+    }
+  }
+
+  lines.push('\nConsult required skills BEFORE starting implementation. Use available skills when they are relevant to the task.')
+  return lines.join('\n')
+}
+
+function buildAgentMcpSection(
+  agentMcpNames: string[],
+  allMcpServers: McpServerEntry[]
+): string | null {
+  if (agentMcpNames.length === 0) return null
+
+  const MCP_DESCRIPTIONS: Record<string, string> = {
+    playwright: 'Browser automation and testing. Use for E2E tests, screenshots, and UI verification.',
+    memory: 'Persistent memory storage and retrieval across sessions.',
+    github: 'GitHub API access for repos, PRs, issues, and code search.',
+    filesystem: 'File system access for reading and writing files.',
+    fetch: 'HTTP requests and web content fetching.',
+    'chrome-devtools': 'Chrome browser debugging and automation.',
+  }
+
+  const lines: string[] = [
+    '## Available MCP Tools',
+    'These MCP tool servers are available in your session. Use them for relevant tasks:',
+  ]
+
+  for (const name of agentMcpNames) {
+    const entry = allMcpServers.find(s => s.name === name)
+    const desc = MCP_DESCRIPTIONS[name] ?? (entry ? `${name} MCP server` : `${name} MCP server`)
+    lines.push(`- ${name} — ${desc}`)
+  }
+
+  return lines.join('\n')
+}
 
 // System prompt appended to every SDK session
 const CCPLUS_SYSTEM_PROMPT_BASE = `
@@ -122,6 +187,23 @@ export async function buildSystemPrompt(
       return `- /${s.name} (${s.plugin})${desc}`;
     });
     prompt += `\n\n## Available Skills\nThe following slash commands are available. Use the Skill tool to execute them:\n${skillLines.join("\n")}`;
+  }
+
+  // Agent-specific skills section
+  if (agent?.skills) {
+    const agentSkillsSection = buildAgentSkillsSection(agent.skills, skills)
+    if (agentSkillsSection) {
+      prompt += '\n\n' + agentSkillsSection
+    }
+  }
+
+  // Agent-specific MCP tools section
+  if (agent?.mcpServers?.length) {
+    const mcpServers = getAllMcpServers(projectPath)
+    const mcpSection = buildAgentMcpSection(agent.mcpServers, mcpServers)
+    if (mcpSection) {
+      prompt += '\n\n' + mcpSection
+    }
   }
 
   // Inject relevant memories from knowledge base

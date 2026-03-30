@@ -19,9 +19,14 @@ vi.mock('../logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-// Mock skills discovery to return empty
+// Mock skills discovery to return empty by default
 vi.mock('../sdk/skills.js', () => ({
   discoverSkills: vi.fn().mockReturnValue([]),
+}));
+
+// Mock mcp-config
+vi.mock('../mcp-config.js', () => ({
+  getAllMcpServers: vi.fn().mockReturnValue([]),
 }));
 
 // Mock agent-catalog functions
@@ -35,6 +40,8 @@ import { loadAllAgents } from '../agent-config.js';
 import { loadWorkflow } from '../workflow-config.js';
 import { getWorkflowState } from '../workflow-state.js';
 import { formatAgentCatalog, formatWorkflowContext } from '../agent-catalog.js';
+import { discoverSkills } from '../sdk/skills.js';
+import { getAllMcpServers } from '../mcp-config.js';
 
 describe('system-prompt', () => {
   const mockAgents = [
@@ -229,88 +236,134 @@ describe('system-prompt', () => {
     });
   });
 
-  describe('required skills injection', () => {
-    it('includes required skills section when agent has skills.required', async () => {
+  describe('agent-specific skills and MCP tools', () => {
+    it('agent with skills.required includes Required section', async () => {
       vi.mocked(loadAllAgents).mockResolvedValue([]);
       vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(discoverSkills).mockReturnValue([
+        { name: 'frontend-patterns', plugin: 'project', description: 'Frontend patterns guide' },
+      ]);
 
       const agent = {
-        id: 'frontend-agent',
-        name: 'Frontend Agent',
+        id: 'test-agent',
+        name: 'Test Agent',
         dirPath: '/test',
         skills: {
-          required: ['frontend-patterns', 'frontend-design'],
+          required: ['frontend-patterns'],
         },
-      } as any;
+      };
 
-      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
 
-      expect(prompt).toContain('## Required Skills');
-      expect(prompt).toContain('Before making changes, you MUST consult these skills');
+      expect(prompt).toContain('## Agent Skills');
+      expect(prompt).toContain('Required (MUST consult before making changes)');
+      expect(prompt).toContain('/frontend-patterns');
+    });
+
+    it('agent with skills.available includes Available section', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(discoverSkills).mockReturnValue([
+        { name: 'frontend-design', plugin: 'project', description: 'Design system' },
+      ]);
+
+      const agent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        dirPath: '/test',
+        skills: {
+          available: ['frontend-design'],
+        },
+      };
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
+
+      expect(prompt).toContain('## Agent Skills');
+      expect(prompt).toContain('Available (use when relevant)');
+      expect(prompt).toContain('/frontend-design');
+    });
+
+    it('agent with both required and available skills includes both sections', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(discoverSkills).mockReturnValue([
+        { name: 'frontend-patterns', plugin: 'project', description: 'Frontend patterns guide' },
+        { name: 'frontend-design', plugin: 'project', description: 'Design system' },
+      ]);
+
+      const agent = {
+        id: 'test-agent',
+        name: 'Test Agent',
+        dirPath: '/test',
+        skills: {
+          required: ['frontend-patterns'],
+          available: ['frontend-design'],
+        },
+      };
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
+
+      expect(prompt).toContain('Required (MUST consult before making changes)');
+      expect(prompt).toContain('Available (use when relevant)');
       expect(prompt).toContain('/frontend-patterns');
       expect(prompt).toContain('/frontend-design');
     });
 
-    it('does NOT include required skills section when agent has no skills', async () => {
+    it('agent without skills config does not include MUST consult or use when relevant', async () => {
       vi.mocked(loadAllAgents).mockResolvedValue([]);
       vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(discoverSkills).mockReturnValue([
+        { name: 'some-skill', plugin: 'project', description: 'Some skill' },
+      ]);
 
       const agent = {
-        id: 'basic-agent',
-        name: 'Basic Agent',
+        id: 'test-agent',
+        name: 'Test Agent',
         dirPath: '/test',
-      } as any;
+      };
 
-      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
 
-      expect(prompt).not.toContain('## Required Skills');
+      expect(prompt).not.toContain('MUST consult before making changes');
+      expect(prompt).not.toContain('use when relevant');
     });
 
-    it('does NOT include required skills section when skills.required is empty', async () => {
+    it('agent with mcpServers includes MCP Tools section', async () => {
       vi.mocked(loadAllAgents).mockResolvedValue([]);
       vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(getAllMcpServers).mockReturnValue([
+        { name: 'playwright', config: { type: 'stdio', command: 'playwright' }, scope: 'user', enabled: true },
+      ]);
 
       const agent = {
-        id: 'empty-skills-agent',
-        name: 'Empty Skills Agent',
+        id: 'test-agent',
+        name: 'Test Agent',
         dirPath: '/test',
-        skills: {
-          required: [],
-        },
-      } as any;
+        mcpServers: ['playwright'],
+      };
 
-      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
 
-      expect(prompt).not.toContain('## Required Skills');
+      expect(prompt).toContain('## Available MCP Tools');
+      expect(prompt).toContain('playwright');
+      expect(prompt).toContain('Browser automation and testing');
     });
 
-    it('does NOT include required skills section when agent is undefined', async () => {
+    it('agent with empty mcpServers does not include MCP section', async () => {
       vi.mocked(loadAllAgents).mockResolvedValue([]);
       vi.mocked(formatAgentCatalog).mockReturnValue(null);
-
-      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
-
-      expect(prompt).not.toContain('## Required Skills');
-    });
-
-    it('formats multiple required skills with slash prefix', async () => {
-      vi.mocked(loadAllAgents).mockResolvedValue([]);
-      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+      vi.mocked(getAllMcpServers).mockReturnValue([]);
 
       const agent = {
-        id: 'multi-skill-agent',
-        name: 'Multi Skill Agent',
+        id: 'test-agent',
+        name: 'Test Agent',
         dirPath: '/test',
-        skills: {
-          required: ['skill-one', 'skill-two', 'skill-three'],
-        },
-      } as any;
+        mcpServers: [],
+      };
 
-      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent as any);
 
-      expect(prompt).toContain('/skill-one');
-      expect(prompt).toContain('/skill-two');
-      expect(prompt).toContain('/skill-three');
+      expect(prompt).not.toContain('## Available MCP Tools');
     });
   });
 });
