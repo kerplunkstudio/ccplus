@@ -9,7 +9,7 @@ process.env.DATABASE_PATH = TEST_DB_PATH;
 
 // Now import modules (they will use the TEST_DB_PATH)
 import * as fleetMonitor from '../fleet-monitor.js';
-import { getDb, close } from '../database.js';
+import { getDb, close, getAllFleetSessions } from '../database.js';
 
 describe('Fleet Monitor - Database Persistence', () => {
   beforeAll(() => {
@@ -249,5 +249,87 @@ describe('Fleet Monitor - Database Persistence', () => {
     expect(detail?.inputTokens).toBe(100);
     expect(detail?.outputTokens).toBe(50);
     expect(detail?.label).toBe('First session');
+  });
+
+  it('persists stuckDetectedAt to database', () => {
+    fleetMonitor.registerSession('sess1', '/workspace/project1');
+    fleetMonitor.updateSessionStatus('sess1', 'running');
+
+    // Arm 35 tools so stuck detection can fire
+    for (let i = 0; i < 35; i++) {
+      fleetMonitor.incrementToolCount('sess1');
+    }
+
+    // Backdate session start beyond the threshold
+    const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+    fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+    // Trigger stuck detection — this sets stuckDetectedAt and calls upsertFleetSession
+    fleetMonitor._detectStuckSessions();
+
+    // Confirm in-memory value was set
+    const detail = fleetMonitor.getSessionDetail('sess1');
+    expect(detail?.stuckDetectedAt).toBeDefined();
+
+    // Confirm the value was written to the database
+    const row = getDb().prepare('SELECT stuck_detected_at FROM fleet_sessions WHERE session_id = ?').get('sess1') as any;
+    expect(row.stuck_detected_at).toBe(detail?.stuckDetectedAt);
+  });
+
+  it('restores stuckDetectedAt from database on reload — stuck alert does not re-fire', () => {
+    fleetMonitor.registerSession('sess1', '/workspace/project1');
+    fleetMonitor.updateSessionStatus('sess1', 'running');
+
+    for (let i = 0; i < 35; i++) {
+      fleetMonitor.incrementToolCount('sess1');
+    }
+
+    const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
+    fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+
+    fleetMonitor._detectStuckSessions();
+    const beforeRestart = fleetMonitor.getSessionDetail('sess1');
+    expect(beforeRestart?.stuckDetectedAt).toBeDefined();
+
+    // Simulate restart
+    fleetMonitor._clearSessions();
+    fleetMonitor.loadSessionsFromDb();
+
+    // stuckDetectedAt must survive the reload
+    const afterRestart = fleetMonitor.getSessionDetail('sess1');
+    expect(afterRestart?.stuckDetectedAt).toBe(beforeRestart?.stuckDetectedAt);
+
+    // Stuck detection must NOT fire again (stuckDetectedAt is already set)
+    fleetMonitor._detectStuckSessions();
+    const rowAfterSecondCheck = getDb().prepare('SELECT stuck_detected_at FROM fleet_sessions WHERE session_id = ?').get('sess1') as any;
+    expect(rowAfterSecondCheck.stuck_detected_at).toBe(beforeRestart?.stuckDetectedAt);
+  });
+
+  it('getAllFleetSessions respects limit parameter', () => {
+    // Insert 10 sessions directly into the database
+    for (let i = 1; i <= 10; i++) {
+      getDb().prepare(`
+        INSERT INTO fleet_sessions (
+          session_id, status, workspace, tool_count, active_agents,
+          input_tokens, output_tokens, duration_ms, started_at,
+          last_activity, label, files_touched
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        `sess${i}`,
+        'completed',
+        '/workspace/project',
+        0, 0, 0, 0, 0,
+        new Date(Date.now() - i * 1000).toISOString(),
+        new Date(Date.now() - i * 1000).toISOString(),
+        '',
+        '[]'
+      );
+    }
+
+    const limited = getAllFleetSessions(3);
+    expect(limited).toHaveLength(3);
+
+    const defaultLimit = getAllFleetSessions();
+    expect(defaultLimit).toHaveLength(10); // only 10 exist, well under the 500 default
   });
 });

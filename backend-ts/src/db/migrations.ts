@@ -312,6 +312,13 @@ CREATE INDEX IF NOT EXISTS idx_captain_messages_conversation ON captain_messages
 CREATE INDEX IF NOT EXISTS idx_captain_messages_created ON captain_messages(created_at);
 `,
   },
+  {
+    version: 15,
+    sql: `
+-- Migration v15: Persist stuck_detected_at for fleet sessions
+ALTER TABLE fleet_sessions ADD COLUMN stuck_detected_at INTEGER;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

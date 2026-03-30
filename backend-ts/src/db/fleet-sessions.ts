@@ -19,8 +19,9 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
       label,
       files_touched,
       requested_by_source,
-      requested_by_source_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      requested_by_source_id,
+      stuck_detected_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     info.sessionId,
     info.status,
@@ -36,16 +37,18 @@ export function upsertFleetSession(info: FleetSessionInfo): void {
     info.label,
     JSON.stringify(info.filesTouched),
     info.requestedBy?.source ?? null,
-    info.requestedBy?.sourceId ?? null
+    info.requestedBy?.sourceId ?? null,
+    info.stuckDetectedAt ?? null
   );
 }
 
-export function getAllFleetSessions(): FleetSessionInfo[] {
+export function getAllFleetSessions(limit = 500): FleetSessionInfo[] {
   const d = getDb();
   const rows = d.prepare(`
     SELECT * FROM fleet_sessions
     ORDER BY started_at DESC
-  `).all() as Array<{
+    LIMIT ?
+  `).all(limit) as Array<{
     session_id: string;
     status: string;
     workspace: string;
@@ -61,6 +64,7 @@ export function getAllFleetSessions(): FleetSessionInfo[] {
     files_touched: string;
     requested_by_source: string | null;
     requested_by_source_id: string | null;
+    stuck_detected_at: number | null;
   }>;
 
   return rows.map((row) => ({
@@ -80,6 +84,7 @@ export function getAllFleetSessions(): FleetSessionInfo[] {
     requestedBy: row.requested_by_source && row.requested_by_source_id
       ? { source: row.requested_by_source, sourceId: row.requested_by_source_id }
       : undefined,
+    stuckDetectedAt: row.stuck_detected_at ?? undefined,
   }));
 }
 
@@ -104,6 +109,7 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
     files_touched: string;
     requested_by_source: string | null;
     requested_by_source_id: string | null;
+    stuck_detected_at: number | null;
   } | undefined;
 
   if (!row) {
@@ -127,5 +133,6 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
     requestedBy: row.requested_by_source && row.requested_by_source_id
       ? { source: row.requested_by_source, sourceId: row.requested_by_source_id }
       : undefined,
+    stuckDetectedAt: row.stuck_detected_at ?? undefined,
   };
 }

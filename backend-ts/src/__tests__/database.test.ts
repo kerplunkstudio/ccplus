@@ -1196,7 +1196,7 @@ describe("Database Tests", () => {
       expect(tableExists.c).toBe(1);
     });
 
-    it("should mark new database as version 10", () => {
+    it("should mark new database as version 15", () => {
       const database = new Database(config.DATABASE_PATH);
 
       const version = database.prepare(
@@ -1205,7 +1205,7 @@ describe("Database Tests", () => {
 
       database.close();
 
-      expect(version.v).toBe(14);
+      expect(version.v).toBe(15);
     });
 
     it("should have applied_at timestamp", () => {
