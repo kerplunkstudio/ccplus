@@ -601,8 +601,8 @@ describe('TelegramBridge', () => {
       // Advance timers to trigger the expiry timeout
       await vi.runAllTimersAsync();
 
-      // The Telegram message should have been edited to "Expirado"
-      expect(botInstance.api.editMessageText).toHaveBeenCalledWith(12345, 123, 'Expirado');
+      // The Telegram message should have been edited to "⏳ Expired"
+      expect(botInstance.api.editMessageText).toHaveBeenCalledWith(12345, 123, '⏳ Expired');
 
       // CRITICAL: respondToInteractiveMessage must be called with '__expired__' so Captain unblocks
       expect(captain.respondToInteractiveMessage).toHaveBeenCalledWith(
