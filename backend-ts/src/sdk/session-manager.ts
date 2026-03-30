@@ -72,5 +72,9 @@ function getSdkSettingsPath(): string {
   return sdkSettingsPath;
 }
 
+function removeSession(sessionId: string): void {
+  sessions.delete(sessionId);
+}
+
 // ---- Exports (for use within sdk/ directory only) ----
-export { sessions, MAX_STREAMING_BUFFER, getOrCreateSession, getSdkSettingsPath };
+export { sessions, MAX_STREAMING_BUFFER, getOrCreateSession, getSdkSettingsPath, removeSession };

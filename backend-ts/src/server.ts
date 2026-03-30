@@ -317,6 +317,24 @@ process.on("SIGTERM", () => { gracefulShutdown("SIGTERM").catch((err) => { log.e
 process.on("SIGINT", () => { gracefulShutdown("SIGINT").catch((err) => { log.error("Shutdown error", { error: String(err) }); process.exit(1); }); });
 process.on("exit", removePidFile);
 
+// ---- Connected clients sweep (every 5 minutes) ----
+
+setInterval(() => {
+  let staleCount = 0;
+  const allSocketIds = new Set(io.sockets.sockets.keys());
+
+  for (const [socketId] of connectedClients.entries()) {
+    if (!allSocketIds.has(socketId)) {
+      connectedClients.delete(socketId);
+      staleCount++;
+    }
+  }
+
+  if (staleCount > 0) {
+    log.info(`Swept ${staleCount} stale client(s) from connectedClients Map`);
+  }
+}, 5 * 60 * 1000); // 5 minutes
+
 // ---- Scheduled tasks tick ----
 
 setInterval(() => {

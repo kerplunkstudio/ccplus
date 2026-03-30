@@ -656,3 +656,73 @@ describe('Fleet Monitor', () => {
       expect(fleetMonitor.getSessionDetail('sess1')).toBeNull();
     });
   });
+
+  describe('Session Pruner — 15-minute terminal threshold (regression Fix #2)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      fleetMonitor._clearSessions();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('prunes a terminal session older than 15 minutes from memory', () => {
+      fleetMonitor.registerSession('term1', '/workspace/a');
+      fleetMonitor.updateSessionStatus('term1', 'completed');
+
+      const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000).toISOString();
+      fleetMonitor._setSessionLastActivity('term1', sixteenMinutesAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('term1')).toBeNull();
+    });
+
+    it('does NOT prune a terminal session whose age is less than 15 minutes after pruner fires', () => {
+      // lastActivity is set to 1 minute ago.
+      // After the pruner interval (10 min) fires, the session is 11 minutes old.
+      // 11 min < 15 min threshold, so it must NOT be pruned.
+      fleetMonitor.registerSession('term2', '/workspace/b');
+      fleetMonitor.updateSessionStatus('term2', 'completed');
+
+      const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000).toISOString();
+      fleetMonitor._setSessionLastActivity('term2', oneMinuteAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('term2')).not.toBeNull();
+    });
+
+    it('does NOT prune a running session older than 15 minutes', () => {
+      fleetMonitor.registerSession('run1', '/workspace/c');
+      fleetMonitor.updateSessionStatus('run1', 'running');
+
+      const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000).toISOString();
+      fleetMonitor._setSessionLastActivity('run1', sixteenMinutesAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('run1')).not.toBeNull();
+    });
+
+    it('prunes failed and cancelled terminal sessions after 15 minutes', () => {
+      fleetMonitor.registerSession('fail1', '/workspace/d');
+      fleetMonitor.registerSession('cancel1', '/workspace/e');
+      fleetMonitor.updateSessionStatus('fail1', 'failed');
+      fleetMonitor.updateSessionStatus('cancel1', 'cancelled');
+
+      const sixteenMinutesAgo = new Date(Date.now() - 16 * 60 * 1000).toISOString();
+      fleetMonitor._setSessionLastActivity('fail1', sixteenMinutesAgo);
+      fleetMonitor._setSessionLastActivity('cancel1', sixteenMinutesAgo);
+
+      fleetMonitor.startPruner();
+      vi.advanceTimersByTime(10 * 60 * 1000);
+
+      expect(fleetMonitor.getSessionDetail('fail1')).toBeNull();
+      expect(fleetMonitor.getSessionDetail('cancel1')).toBeNull();
+    });
+  });

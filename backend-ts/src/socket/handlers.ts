@@ -567,23 +567,27 @@ export function setupSocketHandlers(
     // -- Disconnect --
 
     socket.on("disconnect", () => {
-      const client = connectedClients.get(socket.id);
-      connectedClients.delete(socket.id);
-      if (client) {
-        log.debug("Client disconnected", { sessions: [...client.sessions] });
+      try {
+        const client = connectedClients.get(socket.id);
+        if (client) {
+          log.debug("Client disconnected", { sessions: [...client.sessions] });
+        }
+
+        // Kill all terminals owned by this socket
+        for (const terminalId of socketTerminals) {
+          ptyService.killTerminal(terminalId);
+        }
+        socketTerminals.clear();
+
+        // Note: Captain callbacks are now room-based (not socket-based), so no cleanup needed.
+        // Socket.IO automatically removes disconnected sockets from rooms.
+
+        // Expire pending interactive messages immediately (prevents up to 2min wait)
+        captain.expirePendingInteractiveMessages('disconnected');
+      } finally {
+        // Always remove from connectedClients Map (defensive cleanup)
+        connectedClients.delete(socket.id);
       }
-
-      // Kill all terminals owned by this socket
-      for (const terminalId of socketTerminals) {
-        ptyService.killTerminal(terminalId);
-      }
-      socketTerminals.clear();
-
-      // Note: Captain callbacks are now room-based (not socket-based), so no cleanup needed.
-      // Socket.IO automatically removes disconnected sockets from rooms.
-
-      // Expire pending interactive messages immediately (prevents up to 2min wait)
-      captain.expirePendingInteractiveMessages('disconnected');
     });
   });
 }

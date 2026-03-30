@@ -156,6 +156,11 @@ export async function startCaptainSession(
       throw new Error("Captain dependencies not provided");
     }
 
+    // Clear callback maps on restart to prevent leaks
+    clearResponseCallbacks();
+    clearInteractiveCallbacks();
+    clearPendingInteractiveMessages();
+
     // Generate Captain session ID with timestamp
     const sessionId = `captain-${Date.now()}`;
 
@@ -559,6 +564,18 @@ export function unregisterResponseCallback(id: string): void {
 }
 
 /**
+ * Clear all response callbacks.
+ * Used on Captain restart to prevent memory leaks.
+ */
+export function clearResponseCallbacks(): void {
+  const count = responseCallbacks.size;
+  responseCallbacks.clear();
+  if (count > 0) {
+    log.info("Cleared all Captain response callbacks", { count });
+  }
+}
+
+/**
  * Check if a response callback with the given ID exists.
  */
 export function hasResponseCallback(id: string): boolean {
@@ -579,6 +596,18 @@ export function registerInteractiveCallback(id: string, callback: InteractiveMes
 export function unregisterInteractiveCallback(id: string): void {
   interactiveCallbacks.delete(id);
   log.info("Captain interactive callback unregistered", { id });
+}
+
+/**
+ * Clear all interactive callbacks.
+ * Used on Captain restart to prevent memory leaks.
+ */
+export function clearInteractiveCallbacks(): void {
+  const count = interactiveCallbacks.size;
+  interactiveCallbacks.clear();
+  if (count > 0) {
+    log.info("Cleared all Captain interactive callbacks", { count });
+  }
 }
 
 /**
@@ -648,6 +677,27 @@ export function expirePendingInteractiveMessages(reason: 'disconnected' | 'cance
       source: 'api',
     });
     log.info('Interactive message expired', { messageId, reason });
+  }
+}
+
+/**
+ * Clear all pending interactive messages.
+ * Used on Captain restart to prevent memory leaks.
+ */
+export function clearPendingInteractiveMessages(): void {
+  const count = pendingInteractiveMessages.size;
+  for (const [messageId, pending] of pendingInteractiveMessages.entries()) {
+    clearTimeout(pending.timer);
+    pending.resolve({
+      messageId,
+      actionId: '__cleared__',
+      respondedAt: Date.now(),
+      source: 'api',
+    });
+  }
+  pendingInteractiveMessages.clear();
+  if (count > 0) {
+    log.info("Cleared all pending interactive messages", { count });
   }
 }
 

@@ -5,7 +5,7 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import type { ActiveSession } from "./types.js";
-import { sessions, MAX_STREAMING_BUFFER, getSdkSettingsPath } from "./session-manager.js";
+import { sessions, MAX_STREAMING_BUFFER, getSdkSettingsPath, removeSession } from "./session-manager.js";
 import { buildHooks } from "./hooks.js";
 import { buildSystemPrompt } from "./system-prompt.js";
 import { buildSignalServer } from "./signal-server.js";
@@ -643,7 +643,6 @@ export async function streamQuery(
 
     fleetMonitor.updateSessionStatus(sessionId, 'failed');
     callbacks.onError(userMessage);
-    sessions.delete(sessionId);
   } finally {
     // Close query to release resources
     if (session.activeQuery) {
@@ -652,6 +651,9 @@ export async function streamQuery(
 
     session.activeQuery = null;
     session.streamingContent = '';
+
+    // Remove session from Map to free memory (both success and error paths)
+    removeSession(sessionId);
 
     // Always send completion so frontend cursor clears
     if (!gotResult) {
@@ -674,5 +676,8 @@ export async function streamQuery(
         log.warn('Memory distillation failed', { sessionId, error: String(err) });
       });
     }
+
+    // Clear resultText array to free memory
+    resultText.length = 0;
   }
 }

@@ -59,7 +59,8 @@ let stuckDetectorTimer: ReturnType<typeof setInterval> | null = null;
 
 // ---- Session Pruner ----
 
-const PRUNE_MAX_AGE_MS = 60 * 60 * 1000;  // 1 hour
+const PRUNE_MAX_AGE_MS = 60 * 60 * 1000;  // 1 hour for running/idle sessions
+const PRUNE_TERMINAL_AGE_MS = 15 * 60 * 1000;  // 15 minutes for terminal sessions
 const PRUNE_INTERVAL_MS = 10 * 60 * 1000;  // 10 minutes
 const TERMINAL_STATUSES = new Set<FleetSessionInfo['status']>(['completed', 'failed', 'cancelled']);
 
@@ -408,10 +409,12 @@ function pruneOldSessions(): void {
   const now = Date.now();
   let pruneCount = 0;
   for (const [sessionId, session] of sessions.entries()) {
-    if (
-      TERMINAL_STATUSES.has(session.status) &&
-      now - new Date(session.lastActivity).getTime() > PRUNE_MAX_AGE_MS
-    ) {
+    const age = now - new Date(session.lastActivity).getTime();
+    const isTerminal = TERMINAL_STATUSES.has(session.status);
+
+    // Only prune terminal sessions (completed, failed, cancelled) after 15 minutes
+    // Running/idle sessions are kept indefinitely
+    if (isTerminal && age > PRUNE_TERMINAL_AGE_MS) {
       sessions.delete(sessionId);
       pruneCount++;
     }
