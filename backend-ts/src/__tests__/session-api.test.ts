@@ -243,8 +243,8 @@ describe('session-api', () => {
         undefined,
         undefined,
         undefined,
-        undefined
-      );
+        undefined,
+        undefined      );
     });
 
     it('builds socket callbacks with correct parameters', () => {

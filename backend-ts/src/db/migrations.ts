@@ -320,6 +320,13 @@ CREATE INDEX IF NOT EXISTS idx_captain_messages_created ON captain_messages(crea
 ALTER TABLE fleet_sessions ADD COLUMN stuck_detected_at INTEGER;
 `,
   },
+  {
+    version: 16,
+    sql: `
+-- Migration v16: Add description field to fleet sessions
+ALTER TABLE fleet_sessions ADD COLUMN description TEXT;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

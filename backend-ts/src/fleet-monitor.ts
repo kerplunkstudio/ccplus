@@ -21,6 +21,7 @@ export interface FleetSessionInfo {
   filesTouched: string[];
   requestedBy?: { source: string; sourceId: string };
   stuckDetectedAt?: number;
+  description?: string;
 }
 
 export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
@@ -73,7 +74,7 @@ export function loadSessionsFromDb(): void {
   }
 }
 
-export function registerSession(sessionId: string, workspace: string, requestedBy?: { source: string; sourceId: string }): void {
+export function registerSession(sessionId: string, workspace: string, requestedBy?: { source: string; sourceId: string }, description?: string): void {
   const existing = sessions.get(sessionId);
   if (!existing) {
     const info: FleetSessionInfo = {
@@ -91,6 +92,7 @@ export function registerSession(sessionId: string, workspace: string, requestedB
       label: '',
       filesTouched: [],
       requestedBy,
+      description,
     };
     sessions.set(sessionId, info);
     upsertFleetSession(info);

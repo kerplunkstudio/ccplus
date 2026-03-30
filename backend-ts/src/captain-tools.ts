@@ -107,6 +107,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
         workflow: z.string().describe("REQUIRED. Workflow to use: 'feature', 'bug-fix', 'tdd', 'security-audit', or 'default'. See Workflow Selection section."),
         force: z.boolean().optional().describe("If true, bypass pending state and start session immediately. If false or omitted (default), session requires user approval before starting."),
+        description: z.string().optional().describe("Optional 1-sentence description of what this session is working on (human-readable summary)."),
       },
       async (args) => {
         try {
@@ -131,6 +132,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             sessionId: args.session_id,
             requestedBy: deps.getLastQuerySource() ?? undefined,
             workflow: args.workflow,
+            description: args.description,
           };
 
           // If force is true, start session immediately; otherwise create pending session

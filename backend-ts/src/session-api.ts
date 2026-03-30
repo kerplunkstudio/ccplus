@@ -19,6 +19,7 @@ export interface StartSessionParams {
   requestedBy?: { source: string; sourceId: string };
   agentId?: string;
   workflow?: string;
+  description?: string;
 }
 
 export interface StartSessionResult {
@@ -266,7 +267,7 @@ export function startSession(
   params: StartSessionParams,
   dependencies: SessionDependencies
 ): StartSessionResult {
-  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy, agentId, workflow } = params;
+  const { prompt, workspace, model, sessionId: providedSessionId, requestedBy, agentId, workflow, description } = params;
   const { database: db, sdkSession: sdk, sessionWorkspaces, buildSocketCallbacks } = dependencies;
 
   // Validate required fields
@@ -368,7 +369,8 @@ export function startSession(
     undefined,
     requestedBy,
     agentId,
-    workflow
+    workflow,
+    description
   );
 
   // If session was requested by Captain, emit session_proposal event to captain chat

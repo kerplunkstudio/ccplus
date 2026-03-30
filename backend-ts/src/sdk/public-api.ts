@@ -19,6 +19,7 @@ export function submitQuery(
   requestedBy?: { source: string; sourceId: string },
   agentId?: string,
   workflow?: string,
+  description?: string,
 ): void {
   const session = getOrCreateSession(sessionId, workspace, model);
 
@@ -29,7 +30,7 @@ export function submitQuery(
   }
 
   // Register session and mark as running
-  fleetMonitor.registerSession(sessionId, workspace, requestedBy);
+  fleetMonitor.registerSession(sessionId, workspace, requestedBy, description);
   fleetMonitor.updateSessionStatus(sessionId, 'running');
 
   // Force-close stale query if one is lingering

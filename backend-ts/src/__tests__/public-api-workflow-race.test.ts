@@ -115,7 +115,7 @@ describe('submitQuery workflow race condition fix', () => {
     submitQuery(sessionId, prompt, workspace, mockCallbacks, undefined, undefined, undefined, undefined, workflow);
 
     // Verify fleet monitor was called
-    expect(fleetMonitor.registerSession).toHaveBeenCalledWith(sessionId, workspace, undefined);
+    expect(fleetMonitor.registerSession).toHaveBeenCalledWith(sessionId, workspace, undefined, undefined);
     expect(fleetMonitor.updateSessionStatus).toHaveBeenCalledWith(sessionId, 'running');
 
     // Verify workflow state was created with correct workflow name
@@ -168,7 +168,7 @@ describe('submitQuery workflow race condition fix', () => {
     expect(existsSync(statePath)).toBe(false);
 
     // Fleet monitor should still be called
-    expect(fleetMonitor.registerSession).toHaveBeenCalledWith(sessionId, workspace, undefined);
+    expect(fleetMonitor.registerSession).toHaveBeenCalledWith(sessionId, workspace, undefined, undefined);
     expect(fleetMonitor.updateSessionStatus).toHaveBeenCalledWith(sessionId, 'running');
   });
 
