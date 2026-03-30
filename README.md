@@ -112,10 +112,6 @@ Cron-based recurring prompts.
 
 ---
 
-## Fleet Grid View
-
-Fleet monitor shows all sessions at once.
-
 ---
 
 ## Access Anywhere
@@ -315,6 +311,12 @@ Coverage targets: 80%+ on critical paths (sdk-session, database), 100% on utilit
 
 ---
 
+
+## Open source, local, yours
+
+MIT licensed. Runs on your machine. Your data stays local.
+
+---
 ## Contributing
 
 Fork, branch, test, PR. See [CLAUDE.md](CLAUDE.md) for conventions.
