@@ -1,6 +1,7 @@
 import type { Server as SocketIOServer } from "socket.io";
 import { upsertFleetSession, getAllFleetSessions } from "./database.js";
 import { getWorkflowState } from "./workflow-state.js";
+import { log } from "./logger.js";
 
 // ---- Types ----
 
@@ -416,7 +417,7 @@ function pruneOldSessions(): void {
     }
   }
   if (pruneCount > 0) {
-    console.log(`[fleet-monitor] Pruned ${pruneCount} old terminal session(s) from memory`);
+    log.info(`Pruned ${pruneCount} old terminal session(s) from memory`);
   }
 }
 

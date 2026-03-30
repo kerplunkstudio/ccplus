@@ -176,7 +176,7 @@ async function expireInteractiveMessage(messageId: string): Promise<void> {
   if (pending.timeoutTimer) clearTimeout(pending.timeoutTimer);
 
   try {
-    await bot.api.editMessageText(pending.chatId, pending.telegramMsgId, 'Expirado');
+    await bot.api.editMessageText(pending.chatId, pending.telegramMsgId, '⏳ Expired');
   } catch (error) {
     log.warn('Could not expire interactive message on Telegram', { messageId, error: String(error) });
   }

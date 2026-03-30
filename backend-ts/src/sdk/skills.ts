@@ -4,6 +4,7 @@ import { homedir } from "os";
 import path from "path";
 import type { SkillInfo } from "./types.js";
 import { findClaudeBinary } from "../utils.js";
+import { log } from "../logger.js";
 
 let cachedSkills: SkillInfo[] | null = null;
 
@@ -16,7 +17,7 @@ function parseDescription(filePath: string): string | null {
       if (descMatch) return descMatch[1].trim();
     }
   } catch (err) {
-    console.error('Failed to parse description from', filePath, ':', err);
+    log.error('Failed to parse description from skill file', { filePath, error: String(err) });
   }
   return null;
 }
@@ -38,7 +39,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
         skills.push({ name, plugin: "user", description: desc || "" });
       }
     } catch (err) {
-      console.error('Failed to discover user commands:', err);
+      log.error('Failed to discover user commands', { error: String(err) });
     }
   }
 
@@ -53,7 +54,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
         skills.push({ name: dir, plugin: "skill", description: desc || "" });
       }
     } catch (err) {
-      console.error('Failed to discover user skills:', err);
+      log.error('Failed to discover user skills', { error: String(err) });
     }
   }
 
@@ -81,7 +82,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
                   skills.push({ name: dir, plugin: pluginName, description: desc || "" });
                 }
               } catch (err) {
-                console.error(`Failed to discover skills from plugin ${pluginName}:`, err);
+                log.error('Failed to discover skills from plugin', { pluginName, error: String(err) });
               }
             }
             const cmdDir = path.join(installPath, "commands");
@@ -95,7 +96,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
                   skills.push({ name, plugin: pluginName, description: desc || "" });
                 }
               } catch (err) {
-                console.error(`Failed to discover commands from plugin ${pluginName}:`, err);
+                log.error('Failed to discover commands from plugin', { pluginName, error: String(err) });
               }
             }
           }
@@ -109,7 +110,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
       }
     }
   } catch (err) {
-    console.error('Failed to discover plugin skills via Claude CLI:', err);
+    log.error('Failed to discover plugin skills via Claude CLI', { error: String(err) });
   }
 
   // 4. Project-level commands
@@ -125,7 +126,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
           skills.push({ name, plugin: "project", description: desc || "" });
         }
       } catch (err) {
-        console.error('Failed to discover project commands:', err);
+        log.error('Failed to discover project commands', { error: String(err) });
       }
     }
   }
@@ -144,7 +145,7 @@ export function discoverSkills(projectPath?: string): SkillInfo[] {
           skills.push({ name: dir, plugin: "project", description: desc || "" });
         }
       } catch (err) {
-        console.error('Failed to discover project skills:', err);
+        log.error('Failed to discover project skills', { error: String(err) });
       }
     }
   }
@@ -177,7 +178,7 @@ export function getInstalledPlugins(): Array<{ type: "local"; path: string }> {
       }
     }
   } catch (err) {
-    console.error('Failed to get installed plugins via Claude CLI:', err);
+    log.error('Failed to get installed plugins via Claude CLI', { error: String(err) });
   }
 
   cachedPluginPaths = result;
