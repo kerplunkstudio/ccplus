@@ -64,6 +64,10 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   const statusLabel = getStatusLabel(session);
   const showWorkflow = session.workflowName && session.workflowName !== 'default';
 
+  // Use description if available, otherwise fall back to label
+  const primaryText = session.description || truncatedLabel;
+  const showSecondaryId = !!session.description;
+
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
       <div className="fleet-card-header">
@@ -76,7 +80,10 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
         </div>
       </div>
 
-      <div className="fleet-card-label">{truncatedLabel}</div>
+      <div className="fleet-card-label">{primaryText}</div>
+      {showSecondaryId && (
+        <div className="fleet-card-session-id">{truncatedLabel}</div>
+      )}
 
       {showWorkflow && (
         <div className="fleet-card-workflow">{session.workflowName}</div>

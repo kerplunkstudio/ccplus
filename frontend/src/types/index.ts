@@ -254,6 +254,7 @@ export interface FleetSession {
   startedAt: string;
   lastActivity: string;
   label: string;
+  description?: string;
   filesTouched: string[];
   workflowPhase?: string;
   workflowName?: string;

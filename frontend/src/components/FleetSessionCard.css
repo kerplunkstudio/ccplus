@@ -140,6 +140,17 @@
   margin-bottom: var(--space-sm);
 }
 
+.fleet-card-session-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Workflow */
 
 .fleet-card-workflow {
