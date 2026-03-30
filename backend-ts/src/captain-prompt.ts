@@ -127,7 +127,7 @@ Pick the best match using this decision guide:
 - If user says "test first", "TDD" → tdd
 - If user says "security", "audit", "vulnerability" → security-audit
 - If user says "refactor", "clean up", "remove dead code" → feature (use the feature workflow)
-- If user says "investigate", "research", "check why" → default (research only)
+- If user says "investigate", "research", "check why", "analyze" → research (produces docs, no commit/merge)
 - When in doubt between feature and bug-fix, pick feature (more phases = safer)
 
 ## Parallelization (CRITICAL)

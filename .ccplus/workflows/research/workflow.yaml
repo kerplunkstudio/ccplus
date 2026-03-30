@@ -1,0 +1,43 @@
+name: research
+description: Research and investigation workflow. Produces analysis docs in worktree but does NOT merge to main.
+default_phase: execute
+phases:
+  - name: execute
+    context: |
+      Research the requested topic. Read code, run queries, analyze data.
+      Write findings to a markdown doc in backend-ts/docs/ or the appropriate location.
+      Focus on thoroughness and accuracy. Cite file:line references for claims.
+    agent_hints:
+      - code_agent
+      - debugger
+    tool_rules:
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Research sessions do not commit. Write your findings to a doc file."
+  - name: review
+    context: |
+      Review the research findings for accuracy and completeness.
+      Verify claims against actual code. Check for missing areas.
+    agent_hints:
+      - code-reviewer
+    tool_rules:
+      - tool_name: Edit
+        action: block
+        conditions: []
+        message: "Review phase: report findings only."
+      - tool_name: Write
+        action: block
+        conditions: []
+        message: "Review phase: report findings only."
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Research sessions do not commit."
+transitions:
+  - from: execute
+    to: review
+  - from: review
+    to: complete
+  - from: review
+    to: execute
