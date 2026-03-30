@@ -15,13 +15,64 @@ Open-source desktop app for Claude Code. See every tool call, every agent, every
 
 ---
 
-## Install
+## Quick Install
 
 ```sh
 curl -fsSL https://ccplus.run/install | sh
 ```
 
 Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macOS and Linux.
+
+## Install from Source
+
+### Prerequisites
+
+- **Node.js 16+** (check: `node --version`)
+- **Claude Code CLI** installed globally: `npm install -g @anthropic-ai/claude-code`
+- **Claude authentication**: Run `claude login` and follow prompts
+- **Git** (for cloning the repository)
+
+### Install Steps
+
+1. **Clone the repository**:
+   ```sh
+   git clone https://github.com/kerplunkstudio/ccplus.git
+   cd ccplus
+   ```
+
+2. **Install dependencies**:
+   ```sh
+   cd backend-ts && npm install && cd ..
+   cd frontend && npm install && cd ..
+   ```
+
+3. **Configure environment** (optional):
+   ```sh
+   cp .env.example .env
+   # Edit .env to customize workspace path, port, etc.
+   ```
+
+4. **Build and launch**:
+   ```sh
+   ./ccplus
+   ```
+
+   The first run will:
+   - Build backend TypeScript → `backend-ts/dist/`
+   - Build frontend React app → `static/chat/`
+   - Launch desktop app (Electron)
+
+### Quick Start
+
+After installation, you can:
+
+- **Launch desktop app**: `./ccplus`
+- **Launch web UI**: `./ccplus web` (access at http://localhost:4000)
+- **Run both simultaneously**: `./ccplus desktop-parallel` (desktop + web on port 4001)
+- **Check system health**: `./ccplus doctor`
+- **View logs**: `./ccplus logs`
+
+**Desktop app users**: Run `./ccplus desktop-parallel` for development to keep both desktop and web interfaces running.
 
 ---
 
@@ -162,11 +213,13 @@ Then hard refresh browser (Cmd+Shift+R) to clear cached assets.
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKSPACE_PATH` | `~/Workspace` | Working directory for SDK sessions |
-| `SDK_MODEL` | `sonnet` | Default model for SDK queries |
-| `PORT` | `4000` | Server port |
+See [.env.example](.env.example) for all available environment variables. Key settings:
+
+- `WORKSPACE_PATH` — Working directory for SDK sessions (default: `~/Workspace`)
+- `SDK_MODEL` — Default model for SDK queries (default: `sonnet`)
+- `PORT` — Server port (default: `4000`)
+- `CCPLUS_TELEGRAM_BOT_TOKEN` — Enable Telegram bridge (optional)
+- `CCPLUS_CAPTAIN_MODEL` — Captain AI model (default: `claude-opus-4-6`)
 
 ### File Tree
 
