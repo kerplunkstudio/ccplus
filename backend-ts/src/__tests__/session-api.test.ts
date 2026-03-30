@@ -497,6 +497,171 @@ describe('session-api', () => {
       rejectPendingSession(pendingResult.sessionId!);
 
       expect(mockSdkSession.submitQuery).not.toHaveBeenCalled();
+
+  describe('session_proposal event (captain integration)', () => {
+    const mockEmit = vi.fn();
+    const mockTo = vi.fn(() => ({ emit: mockEmit }));
+
+    const captainDependencies = {
+      database: mockDatabase,
+      sdkSession: mockSdkSession,
+      sessionWorkspaces: mockSessionWorkspaces,
+      io: { to: mockTo } as any,
+      buildSocketCallbacks: mockBuildSocketCallbacks,
+      log: mockLog,
+    };
+
+    beforeEach(() => {
+      mockEmit.mockClear();
+      mockTo.mockClear();
+      mockTo.mockReturnValue({ emit: mockEmit });
+      mockDatabase.getConversationHistory.mockReturnValue([{ id: 1 }]);
+    });
+
+    it('emits session_proposal to captain room when source is captain', () => {
+      const result = startSession(
+        {
+          prompt: 'Fix the login bug',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: 'captain-session-abc' },
+        },
+        captainDependencies
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockTo).toHaveBeenCalledWith('captain:captain-session-abc');
+      expect(mockEmit).toHaveBeenCalledWith('session_proposal', expect.objectContaining({
+        sessionId: result.sessionId,
+        prompt: 'Fix the login bug',
+        workspace: homedir(),
+      }));
+    });
+
+    it('session_proposal payload contains all required fields', () => {
+      // No custom workflow to avoid DB lookup; defaults to 'default'
+      const result = startSession(
+        {
+          prompt: 'Refactor auth module',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: 'captain-session-xyz' },
+        },
+        captainDependencies
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith('session_proposal', {
+        sessionId: result.sessionId,
+        prompt: 'Refactor auth module',
+        workspace: homedir(),
+        workflow: 'default',
+        timestamp: expect.any(Number),
+      });
+    });
+
+    it('session_proposal payload uses "default" workflow when no workflow provided', () => {
+      const result = startSession(
+        {
+          prompt: 'Run tests',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: 'captain-session-xyz' },
+        },
+        captainDependencies
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith('session_proposal', expect.objectContaining({
+        workflow: 'default',
+      }));
+    });
+
+    it('does NOT emit session_proposal when source is not captain', () => {
+      startSession(
+        {
+          prompt: 'Test task',
+          workspace: homedir(),
+          requestedBy: { source: 'http', sourceId: 'some-client-id' },
+        },
+        captainDependencies
+      );
+
+      expect(mockTo).not.toHaveBeenCalledWith(expect.stringContaining('captain:'));
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit session_proposal when requestedBy is absent', () => {
+      startSession(
+        { prompt: 'Test task', workspace: homedir() },
+        captainDependencies
+      );
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit session_proposal when sourceId is missing', () => {
+      startSession(
+        {
+          prompt: 'Test task',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: '' },
+        },
+        captainDependencies
+      );
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit session_proposal when io has no to() method', () => {
+      const depsWithoutIo = {
+        ...captainDependencies,
+        io: null,
+      };
+
+      const result = startSession(
+        {
+          prompt: 'Test task',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: 'captain-session-abc' },
+        },
+        depsWithoutIo
+      );
+
+      // Session succeeds but no event emitted
+      expect(result.success).toBe(true);
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('emits to the correct captain room based on sourceId', () => {
+      const sourceId = 'my-captain-session-id-99';
+
+      startSession(
+        {
+          prompt: 'Deploy to staging',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId },
+        },
+        captainDependencies
+      );
+
+      expect(mockTo).toHaveBeenCalledWith(`captain:${sourceId}`);
+    });
+
+    it('session_proposal timestamp is a recent unix timestamp', () => {
+      const before = Date.now();
+
+      startSession(
+        {
+          prompt: 'Test timing',
+          workspace: homedir(),
+          requestedBy: { source: 'captain', sourceId: 'captain-session-ts' },
+        },
+        captainDependencies
+      );
+
+      const after = Date.now();
+
+      const [[, payload]] = mockEmit.mock.calls;
+      expect(payload.timestamp).toBeGreaterThanOrEqual(before);
+      expect(payload.timestamp).toBeLessThanOrEqual(after);
     });
   });
 });

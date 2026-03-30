@@ -478,4 +478,165 @@ describe('useCaptainSocket', () => {
       });
     });
   });
+
+  describe('session_proposal event', () => {
+    it('registers a session_proposal socket listener on mount', async () => {
+      renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalledWith('session_proposal', expect.any(Function));
+      });
+    });
+
+    it('cleans up session_proposal listener on unmount', async () => {
+      const { unmount } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(mockSocket.on).toHaveBeenCalledWith('session_proposal', expect.any(Function));
+      });
+
+      unmount();
+
+      expect(mockSocket.off).toHaveBeenCalledWith('session_proposal', expect.any(Function));
+    });
+
+    it('adds a message with type session_proposal when event is received', async () => {
+      const { result } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(result.current.captainSessionId).toBe('captain-session-123');
+      });
+
+      const sessionProposalHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'session_proposal'
+      )?.[1];
+
+      expect(sessionProposalHandler).toBeDefined();
+
+      const proposalData = {
+        sessionId: 'sess-abc-123',
+        prompt: 'Refactor the auth module',
+        workspace: '/Users/test/myproject',
+        workflow: 'feature-dev',
+        timestamp: 1700000000000,
+      };
+
+      act(() => {
+        sessionProposalHandler(proposalData);
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(1);
+      });
+
+      const msg = result.current.messages[0];
+      expect(msg.type).toBe('session_proposal');
+      expect(msg.role).toBe('assistant');
+      expect(msg.sessionId).toBe('sess-abc-123');
+      expect(msg.proposalPrompt).toBe('Refactor the auth module');
+      expect(msg.proposalWorkspace).toBe('/Users/test/myproject');
+      expect(msg.proposalWorkflow).toBe('feature-dev');
+      expect(msg.timestamp).toBe(1700000000000);
+    });
+
+    it('proposal message id is unique and contains the sessionId', async () => {
+      const { result } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(result.current.captainSessionId).toBe('captain-session-123');
+      });
+
+      const sessionProposalHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'session_proposal'
+      )?.[1];
+
+      act(() => {
+        sessionProposalHandler({
+          sessionId: 'unique-sess-id',
+          prompt: 'Fix bug',
+          workspace: '/home/user/project',
+          workflow: 'default',
+          timestamp: Date.now(),
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(1);
+      });
+
+      expect(result.current.messages[0].id).toContain('unique-sess-id');
+    });
+
+    it('proposal message has streaming false', async () => {
+      const { result } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(result.current.captainSessionId).toBe('captain-session-123');
+      });
+
+      const sessionProposalHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'session_proposal'
+      )?.[1];
+
+      act(() => {
+        sessionProposalHandler({
+          sessionId: 'sess-xyz',
+          prompt: 'Deploy to staging',
+          workspace: '/home/user/project',
+          workflow: 'deploy',
+          timestamp: Date.now(),
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(1);
+      });
+
+      expect(result.current.messages[0].streaming).toBe(false);
+    });
+
+    it('appends multiple session_proposal messages without replacing existing messages', async () => {
+      const { result } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(result.current.captainSessionId).toBe('captain-session-123');
+      });
+
+      const captainTextHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'captain_text'
+      )?.[1];
+
+      const sessionProposalHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'session_proposal'
+      )?.[1];
+
+      // First add a regular assistant message
+      act(() => {
+        captainTextHandler({ text: 'Starting your session now', message_index: 0 });
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(1);
+      });
+
+      // Then receive a session_proposal
+      act(() => {
+        sessionProposalHandler({
+          sessionId: 'sess-new-1',
+          prompt: 'Build feature X',
+          workspace: '/home/user/project',
+          workflow: 'default',
+          timestamp: Date.now(),
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(2);
+      });
+
+      expect(result.current.messages[0].role).toBe('assistant');
+      expect(result.current.messages[0].type).toBeUndefined();
+      expect(result.current.messages[1].type).toBe('session_proposal');
+    });
+  });
 });

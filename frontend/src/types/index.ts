@@ -15,6 +15,11 @@ export interface Message {
   toolLog?: ToolEvent[];
   images?: ImageAttachment[];
   isCompactBoundary?: boolean;
+  type?: 'session_proposal';
+  sessionId?: string;
+  proposalPrompt?: string;
+  proposalWorkspace?: string;
+  proposalWorkflow?: string;
 }
 
 export interface TodoItem {

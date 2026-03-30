@@ -3,6 +3,7 @@ import { Message, ImageAttachment } from '../types';
 import { InteractiveMessage } from '../types/interactive';
 import { MessageBubble } from './MessageBubble';
 import { InteractiveCard } from './InteractiveCard';
+import { SessionProposalCard } from './SessionProposalCard';
 import { ChatInput } from './ChatInput';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import './CaptainChat.css';
@@ -163,7 +164,20 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
           <>
             {timeline.map((item) => {
               if (item.type === 'message') {
-                return <MessageBubble key={item.data.id} message={item.data} />;
+                const msg = item.data;
+                // Check if this is a session proposal message
+                if (msg.type === 'session_proposal' && msg.sessionId && msg.proposalPrompt && msg.proposalWorkspace && msg.proposalWorkflow) {
+                  return (
+                    <SessionProposalCard
+                      key={msg.id}
+                      sessionId={msg.sessionId}
+                      prompt={msg.proposalPrompt}
+                      workspace={msg.proposalWorkspace}
+                      workflow={msg.proposalWorkflow}
+                    />
+                  );
+                }
+                return <MessageBubble key={msg.id} message={msg} />;
               } else {
                 // Map InteractiveMessage to InteractiveCard props
                 const { text, actions, responseState, selectedActionId } = item.data;

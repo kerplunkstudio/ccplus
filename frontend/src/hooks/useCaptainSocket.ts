@@ -268,6 +268,28 @@ export function useCaptainSocket(socket: Socket | null) {
       setInteractiveMessages((prev) => [...prev, normalizedMessage]);
     };
 
+    const handleSessionProposal = (data: {
+      sessionId: string;
+      prompt: string;
+      workspace: string;
+      workflow: string;
+      timestamp: number;
+    }) => {
+      const proposalMessage: Message = {
+        id: `proposal_${data.sessionId}_${data.timestamp}`,
+        role: 'assistant',
+        content: '',
+        timestamp: data.timestamp,
+        streaming: false,
+        type: 'session_proposal',
+        sessionId: data.sessionId,
+        proposalPrompt: data.prompt,
+        proposalWorkspace: data.workspace,
+        proposalWorkflow: data.workflow,
+      };
+      setMessages((prev) => [...prev, proposalMessage]);
+    };
+
     socket.on('captain_thinking', handleCaptainThinking);
     socket.on('captain_tool_use', handleCaptainToolUse);
     socket.on('captain_text', handleCaptainText);
@@ -275,6 +297,7 @@ export function useCaptainSocket(socket: Socket | null) {
     socket.on('captain_error', handleCaptainError);
     socket.on('thinking_status', handleThinkingStatus);
     socket.on('captain_interactive', handleCaptainInteractive);
+    socket.on('session_proposal', handleSessionProposal);
 
     return () => {
       socket.off('captain_thinking', handleCaptainThinking);
@@ -284,6 +307,7 @@ export function useCaptainSocket(socket: Socket | null) {
       socket.off('captain_error', handleCaptainError);
       socket.off('thinking_status', handleThinkingStatus);
       socket.off('captain_interactive', handleCaptainInteractive);
+      socket.off('session_proposal', handleSessionProposal);
     };
   }, [socket, captainSessionId, clearSafetyTimeout]);
 

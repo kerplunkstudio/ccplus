@@ -371,6 +371,21 @@ export function startSession(
     workflow
   );
 
+  // If session was requested by Captain, emit session_proposal event to captain chat
+  if (requestedBy && requestedBy.source === 'captain' && requestedBy.sourceId) {
+    const io = dependencies.io as any;
+    if (io && typeof io.to === 'function') {
+      const captainRoom = `captain:${requestedBy.sourceId}`;
+      io.to(captainRoom).emit('session_proposal', {
+        sessionId,
+        prompt: trimmedPrompt,
+        workspace: resolvedWorkspace,
+        workflow: workflow ?? 'default',
+        timestamp: Date.now(),
+      });
+    }
+  }
+
   return {
     success: true,
     sessionId,

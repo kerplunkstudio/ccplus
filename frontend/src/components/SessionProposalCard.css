@@ -1,0 +1,100 @@
+/* Entry animation */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.session-proposal-card {
+  border-left: 2px solid var(--accent);
+  padding: var(--space-md) 0 var(--space-md) var(--space-xl);
+  margin: var(--space-lg) 0;
+  animation: card-enter 0.25s var(--ease-out) both;
+}
+
+.session-proposal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.session-proposal-icon {
+  color: var(--accent);
+}
+
+.session-proposal-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.session-proposal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.session-proposal-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.session-proposal-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.session-proposal-value {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.session-proposal-value code,
+code.session-proposal-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  display: inline-block;
+}
+
+.session-proposal-workflow {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  width: fit-content;
+}
+
+.session-proposal-prompt {
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
