@@ -46,6 +46,7 @@ vi.mock('../captain.js', () => ({
   hasResponseCallback: vi.fn().mockReturnValue(false),
   isCaptainAlive: vi.fn().mockReturnValue(true),
   sendCaptainMessage: vi.fn(),
+  respondToInteractiveMessage: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock('../telegram-format.js', () => ({
@@ -81,6 +82,7 @@ import {
   stopTelegramBridge,
   isTelegramBridgeActive,
   isFleetNotification,
+  deliverInteractiveMessage,
 } from '../telegram-bridge.js';
 
 describe('TelegramBridge', () => {
@@ -478,6 +480,70 @@ describe('TelegramBridge', () => {
       await stopTelegramBridge();
 
       expect(captain.unregisterResponseCallback).toHaveBeenCalledWith('telegram:fleet');
+    });
+  });
+
+  describe('expireInteractiveMessage', () => {
+    it('calls respondToInteractiveMessage with __expired__ so Captain does not block forever', async () => {
+      // Restore full Bot mock implementation (may be overridden by earlier tests in the suite)
+      vi.mocked(Bot).mockImplementation(function (this: any) {
+        this.start = vi.fn().mockResolvedValue(undefined);
+        this.stop = vi.fn();
+        this.command = vi.fn();
+        this.on = vi.fn();
+        this.catch = vi.fn();
+        this.api = {
+          sendMessage: vi.fn().mockResolvedValue({ message_id: 123 }),
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
+          deleteWebhook: vi.fn().mockResolvedValue(undefined),
+          sendChatAction: vi.fn().mockResolvedValue(undefined),
+          editMessageText: vi.fn().mockResolvedValue(undefined),
+        };
+      });
+
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+
+      vi.useFakeTimers();
+
+      const message = {
+        id: 'test-msg-id',
+        type: 'options' as const,
+        text: 'Pick one',
+        actions: [{ id: 'a1', label: 'Option A', style: 'default' as const }],
+        responseState: 'pending' as const,
+        timeoutMs: 5000,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 5000,
+      };
+
+      // deliverInteractiveMessage registers the pending entry and schedules the timer
+      await deliverInteractiveMessage(12345, message);
+
+      // Confirm the interactive message was sent
+      expect(botInstance.api.sendMessage).toHaveBeenCalledWith(
+        12345,
+        'Pick one',
+        expect.objectContaining({ reply_markup: expect.any(Object) })
+      );
+
+      // Advance timers to trigger the expiry timeout
+      await vi.runAllTimersAsync();
+
+      // The Telegram message should have been edited to "Expirado"
+      expect(botInstance.api.editMessageText).toHaveBeenCalledWith(12345, 123, 'Expirado');
+
+      // CRITICAL: respondToInteractiveMessage must be called with '__expired__' so Captain unblocks
+      expect(captain.respondToInteractiveMessage).toHaveBeenCalledWith(
+        'test-msg-id',
+        expect.objectContaining({
+          messageId: 'test-msg-id',
+          actionId: '__expired__',
+          source: 'telegram',
+        })
+      );
+
+      vi.useRealTimers();
     });
   });
 
