@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test": "vitest run",
+    "test": "bash scripts/test-with-lock.sh run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
