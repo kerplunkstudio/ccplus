@@ -47,13 +47,15 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   useEffect(() => {
     if (session.status === 'running' && session.startedAt) {
       const startTime = new Date(session.startedAt).getTime();
-      const update = () => setElapsed(Date.now() - startTime);
-      update();
-      const interval = setInterval(update, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setElapsed(session.durationMs);
+      // Guard against invalid dates (returns NaN)
+      if (!isNaN(startTime)) {
+        const update = () => setElapsed(Date.now() - startTime);
+        update();
+        const interval = setInterval(update, 1000);
+        return () => clearInterval(interval);
+      }
     }
+    setElapsed(session.durationMs);
   }, [session.status, session.startedAt, session.durationMs]);
 
   const statusClass = `status-${session.status}`;
@@ -67,6 +69,10 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   // Use description if available, otherwise fall back to label
   const primaryText = session.description || truncatedLabel;
   const showSecondaryId = !!session.description;
+
+  // Check if session has valid start time
+  const hasValidStartTime = session.startedAt && !isNaN(new Date(session.startedAt).getTime());
+  const elapsedDisplay = hasValidStartTime ? formatDuration(elapsed) : 'Awaiting approval';
 
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
@@ -103,7 +109,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
           <span className="fleet-stat-label">agents</span>
         </div>
         <div className="fleet-stat">
-          <span className="fleet-stat-value">{formatDuration(elapsed)}</span>
+          <span className="fleet-stat-value">{elapsedDisplay}</span>
           <span className="fleet-stat-label">elapsed</span>
         </div>
       </div>

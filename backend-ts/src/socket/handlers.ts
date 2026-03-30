@@ -5,6 +5,7 @@ import { validateCronExpression, type Scheduler } from "../scheduler.js";
 import type { RouteDependencies } from "../routes/types.js";
 import type { InteractiveMessage } from "../interactive-message.js";
 import * as sessionApi from "../session-api.js";
+import { getPendingSessionForMessage } from "../captain-tools.js";
 
 // Helper: Join a session room and sync state
 function joinSession(
@@ -550,6 +551,9 @@ export function setupSocketHandlers(
         return;
       }
 
+      // Check if this is a pending session interactive (approve/reject)
+      const sessionId = getPendingSessionForMessage(data.messageId);
+
       // All validations passed, respond
       const responded = captain.respondToInteractiveMessage(data.messageId, {
         messageId: data.messageId,
@@ -562,6 +566,39 @@ export function setupSocketHandlers(
 
       if (!responded) {
         socket.emit('captain_error', { message: `No pending interactive message with id: ${data.messageId}` });
+        return;
+      }
+
+      // Handle session approval/rejection if this was a pending session interactive
+      if (sessionId) {
+        try {
+          if (finalActionId === 'approve') {
+            const result = sessionApi.approvePendingSession(sessionId, {
+              database,
+              sdkSession,
+              sessionWorkspaces,
+              io,
+              buildSocketCallbacks,
+              log,
+            });
+
+            if (result.success) {
+              log.info('Session approved via interactive card', { sessionId });
+            } else {
+              log.error('Failed to approve session via interactive card', { sessionId, error: result.error });
+            }
+          } else if (finalActionId === 'reject') {
+            const result = sessionApi.rejectPendingSession(sessionId);
+
+            if (result.success) {
+              log.info('Session rejected via interactive card', { sessionId });
+            } else {
+              log.error('Failed to reject session via interactive card', { sessionId, error: result.error });
+            }
+          }
+        } catch (error) {
+          log.error('Error handling session interactive response', { sessionId, actionId: finalActionId, error: String(error) });
+        }
       }
     });
 

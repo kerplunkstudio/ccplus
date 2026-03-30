@@ -30,6 +30,23 @@ const MODEL_PRICING = {
   opus: { inputPerMTok: 15, outputPerMTok: 75 },
 } as const;
 
+// ---- Pending Session Interactive Storage ----
+
+// Map messageId -> sessionId for interactive session proposals
+const pendingSessionInteractives = new Map<string, string>();
+
+function storePendingSessionInteractive(messageId: string, sessionId: string): void {
+  pendingSessionInteractives.set(messageId, sessionId);
+}
+
+function removePendingSessionInteractive(messageId: string): void {
+  pendingSessionInteractives.delete(messageId);
+}
+
+export function getPendingSessionForMessage(messageId: string): string | undefined {
+  return pendingSessionInteractives.get(messageId);
+}
+
 // ---- Types ----
 
 export interface CaptainToolDependencies {
@@ -140,7 +157,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             ? startSession(sessionParams, deps)
             : createPendingSession(sessionParams, deps);
 
-          if (result.success) {
+          if (result.success && result.sessionId) {
             // Emit session proposal event to fleet monitor room (only for pending sessions)
             if (args.force !== true) {
               const io = deps.io as any;
@@ -152,6 +169,61 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   workflow: args.workflow,
                 });
               }
+
+              // Also emit interactive card to Captain chat for pending sessions
+              const messageId = randomUUID();
+              const sessionLabel = args.prompt.length > 60
+                ? `${args.prompt.slice(0, 57)}...`
+                : args.prompt;
+
+              const interactiveMessage: InteractiveMessage = {
+                id: messageId,
+                type: 'status-action',
+                text: `Start session: ${sessionLabel}\nWorkflow: ${args.workflow}\nWorkspace: ${args.workspace}`,
+                actions: [
+                  { id: 'approve', label: 'Accept', style: 'primary' },
+                  { id: 'reject', label: 'Reject', style: 'danger' },
+                ],
+                responseState: 'pending',
+                sessionId: result.sessionId,
+                timeoutMs: 120_000,
+                createdAt: Date.now(),
+                expiresAt: Date.now() + 120_000,
+              };
+
+              // Store mapping for response handling
+              storePendingSessionInteractive(messageId, result.sessionId);
+
+              // Register timeout handler
+              const timer = setTimeout(() => {
+                captain.respondToInteractiveMessage(messageId, {
+                  messageId,
+                  actionId: '__expired__',
+                  respondedAt: Date.now(),
+                  source: 'api',
+                });
+                removePendingSessionInteractive(messageId);
+              }, 120_000);
+
+              // Register pending interactive message
+              captain.registerPendingInteractiveMessage(messageId, {
+                message: interactiveMessage,
+                resolve: (response: InteractiveResponse) => {
+                  clearTimeout(timer);
+                  removePendingSessionInteractive(messageId);
+
+                  // Handle approve/reject
+                  if (response.actionId === 'approve') {
+                    deps.log.info('Session proposal approved via interactive card', { sessionId: result.sessionId });
+                  } else if (response.actionId === 'reject') {
+                    deps.log.info('Session proposal rejected via interactive card', { sessionId: result.sessionId });
+                  }
+                },
+                timer,
+              });
+
+              // Emit to Captain chat
+              captain.emitInteractiveMessage(interactiveMessage);
             }
 
             return {
