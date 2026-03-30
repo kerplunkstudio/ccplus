@@ -42,6 +42,9 @@ export const DATABASE_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "c
 export const MAX_CONVERSATION_HISTORY = 50;
 export const MAX_ACTIVITY_EVENTS = 200;
 
+// Permissions - always bypass for now (not configurable)
+export const BYPASS_PERMISSIONS = true;
+
 // Export getters for hot-reloadable values
 export function getSDKModel(): string {
   return settingsData.models?.sdk_model ?? DEFAULT_SETTINGS.models!.sdk_model!;

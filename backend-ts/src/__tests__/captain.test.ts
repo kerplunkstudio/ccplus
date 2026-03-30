@@ -51,7 +51,7 @@ vi.mock('../config.js', async () => {
   return {
     ...actual,
     getCaptainModel: vi.fn().mockReturnValue('claude-3-5-sonnet-20241022'),
-    getBypassPermissions: vi.fn().mockReturnValue(false),
+    BYPASS_PERMISSIONS: false,
     CAPTAIN_MAX_TURNS: 10,
     CAPTAIN_WORKSPACE: '/tmp/test-workspace',
     CAPTAIN_CONTEXT_WINDOW: 1_000_000,
@@ -202,19 +202,17 @@ describe('Captain', () => {
       } as any,
     };
 
-    it('uses correct options: empty settingSources and no bypassPermissions when getBypassPermissions() returns false', async () => {
+    it('uses correct options: empty settingSources and no bypassPermissions when BYPASS_PERMISSIONS is false', async () => {
       // This single test covers two regressions in one query() call:
       //
       // Fix 1 (settingSources): Captain must use settingSources=[] to avoid spawning
       // user-configured MCP stdio processes during boot.
       //
-      // Fix 2 (BYPASS_PERMISSIONS env var): Before the fix, captain.ts used
-      // config.BYPASS_PERMISSIONS (a hardcoded static export = true), so setting
-      // CCPLUS_BYPASS_PERMISSIONS=false had no effect. After the fix, captain.ts
-      // calls config.getBypassPermissions() at query time, so the mock returning
-      // false here means permissionMode is NOT "bypassPermissions".
+      // Fix 2 (BYPASS_PERMISSIONS): The test mocks BYPASS_PERMISSIONS=false to verify
+      // that captain.ts respects the constant value. When false, permissionMode must
+      // NOT be "bypassPermissions".
       //
-      // The module-level config mock has getBypassPermissions() returning false.
+      // The module-level config mock has BYPASS_PERMISSIONS set to false.
       await captain.startCaptainSession('/test/workspace', stubDependencies);
 
       expect(mockQuery).toHaveBeenCalled();
@@ -227,8 +225,7 @@ describe('Captain', () => {
       expect(settingSources).not.toContain('user');
       expect(settingSources).toEqual([]);
 
-      // Assert Fix 2 (regression: BYPASS_PERMISSIONS env var fix):
-      // permissionMode must NOT be "bypassPermissions" when getBypassPermissions()=false
+      // Assert Fix 2: permissionMode must NOT be "bypassPermissions" when BYPASS_PERMISSIONS=false
       expect(callArgs?.options?.permissionMode).not.toBe('bypassPermissions');
       expect(callArgs?.options?.allowDangerouslySkipPermissions).toBe(false);
     });
