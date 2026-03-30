@@ -381,8 +381,8 @@ describe("Config API Routes", () => {
 
       const data = await response.json();
 
-      expect(response.status).toBe(200);
-      expect(data.status).toBe("ok");
+      expect(response.status).toBe(400);
+      expect(data).toHaveProperty("error");
     });
 
     it("returns restart_required: true for captain.auto_start change", async () => {
