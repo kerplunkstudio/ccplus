@@ -83,24 +83,54 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
  * Converts encoded folder name to filesystem path.
  * Claude Code encodes `/` as `-`:
  * - `-Users-matifuentes-Workspace-ccplus` → `/Users/matifuentes/Workspace/ccplus`
+ *
+ * When directory names contain literal hyphens (e.g., `/Users/john-doe/Workspace`),
+ * naive replacement is ambiguous. This function uses a BFS/recursive approach to
+ * find the first valid path on disk, falling back to naive decode if none is found.
  */
 export function decodeFolderPath(folderName: string): string {
-  // Replace leading `-` with `/`, then all remaining `-` with `/`
   if (!folderName.startsWith('-')) {
     return folderName;
   }
 
-  const decoded = '/' + folderName.slice(1).replace(/-/g, '/');
+  const naive = '/' + folderName.slice(1).replace(/-/g, '/');
 
-  // Check if decoded path exists
-  if (fs.existsSync(decoded)) {
-    return decoded;
+  // Fast path: naive decode exists on disk
+  if (fs.existsSync(naive)) {
+    return naive;
   }
 
-  // Handle ambiguity: try keeping hyphens for segments that don't resolve
-  // For now, return decoded path even if it doesn't exist
-  // The caller can handle non-existent paths
-  return decoded;
+  // Disambiguate: split on hyphens and try combining adjacent segments with
+  // literal hyphens to reconstruct path components that contain hyphens.
+  // e.g., ['Users', 'john', 'doe', 'Workspace'] → /Users/john-doe/Workspace
+  const segments = folderName.slice(1).split('-');
+
+  function findValidPath(segIndex: number, currentPath: string): string | null {
+    if (segIndex === segments.length) {
+      return fs.existsSync(currentPath) ? currentPath : null;
+    }
+
+    // Try consuming 1..n segments joined with hyphens as one path component
+    for (let count = 1; segIndex + count <= segments.length; count++) {
+      const component = segments.slice(segIndex, segIndex + count).join('-');
+      const newPath = currentPath + '/' + component;
+      const isLast = segIndex + count === segments.length;
+
+      if (isLast) {
+        // At the end, check the full path rather than requiring it to be a directory
+        const result = findValidPath(segIndex + count, newPath);
+        if (result !== null) return result;
+      } else if (fs.existsSync(newPath)) {
+        const result = findValidPath(segIndex + count, newPath);
+        if (result !== null) return result;
+      }
+    }
+
+    return null;
+  }
+
+  const found = findValidPath(0, '');
+  return found ?? naive;
 }
 
 /**
