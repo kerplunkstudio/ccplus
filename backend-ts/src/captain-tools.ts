@@ -106,6 +106,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         workspace: z.string().describe("Absolute path to the workspace/project directory"),
         session_id: z.string().optional().describe("Optional session ID (alphanumeric, dots, dashes, underscores only). If not provided, a UUID will be generated."),
         workflow: z.string().describe("REQUIRED. Workflow to use: 'feature', 'bug-fix', 'tdd', 'security-audit', or 'default'. See Workflow Selection section."),
+        force: z.boolean().optional().describe("If true, bypass pending state and start session immediately. If false or omitted (default), session requires user approval before starting."),
       },
       async (args) => {
         try {
@@ -124,27 +125,31 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             };
           }
 
-          const result = createPendingSession(
-            {
-              prompt: args.prompt,
-              workspace: args.workspace,
-              sessionId: args.session_id,
-              requestedBy: deps.getLastQuerySource() ?? undefined,
-              workflow: args.workflow,
-            },
-            deps
-          );
+          const sessionParams = {
+            prompt: args.prompt,
+            workspace: args.workspace,
+            sessionId: args.session_id,
+            requestedBy: deps.getLastQuerySource() ?? undefined,
+            workflow: args.workflow,
+          };
+
+          // If force is true, start session immediately; otherwise create pending session
+          const result = args.force === true
+            ? startSession(sessionParams, deps)
+            : createPendingSession(sessionParams, deps);
 
           if (result.success) {
-            // Emit session proposal event to fleet monitor room
-            const io = deps.io as any;
-            if (io && io.to) {
-              io.to('fleet_monitor').emit('session_proposal', {
-                session_id: result.sessionId,
-                prompt: args.prompt,
-                workspace: args.workspace,
-                workflow: args.workflow,
-              });
+            // Emit session proposal event to fleet monitor room (only for pending sessions)
+            if (args.force !== true) {
+              const io = deps.io as any;
+              if (io && io.to) {
+                io.to('fleet_monitor').emit('session_proposal', {
+                  session_id: result.sessionId,
+                  prompt: args.prompt,
+                  workspace: args.workspace,
+                  workflow: args.workflow,
+                });
+              }
             }
 
             return {
@@ -154,8 +159,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: true,
                     session_id: result.sessionId,
-                    status: "pending",
-                    message: `Session ${result.sessionId} created in pending state — awaiting user approval`,
+                    status: args.force === true ? "running" : "pending",
+                    message: args.force === true
+                      ? `Session ${result.sessionId} started successfully`
+                      : `Session ${result.sessionId} created in pending state — awaiting user approval`,
                   }, null, 2),
                 },
               ],

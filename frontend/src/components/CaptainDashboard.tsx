@@ -73,10 +73,6 @@ export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, capt
     }
   };
 
-  const handleClearConversation = () => {
-    sendMessage('/clear');
-  };
-
   return (
     <div className="captain-dashboard" ref={containerRef}>
       <div className="captain-panel" style={{ width: `${dividerPosition}%` }}>
@@ -90,7 +86,6 @@ export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, capt
           sessionId={captainSessionId}
           archivedConversations={archivedConversations}
           onClearHistory={clearHistory}
-          onClear={handleClearConversation}
           interactiveMessages={interactiveMessages}
           onRespondToInteractive={respondToInteractive}
         />

@@ -410,7 +410,7 @@ describe('captain-tools', () => {
       expect(parsed.error).toContain('default');
     });
 
-    it('creates pending session when workflow name is valid', async () => {
+    it('proceeds to createPendingSession when workflow name is valid and force is not provided', async () => {
       vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
       vi.mocked(sessionApi.createPendingSession).mockReturnValue({
         success: true,
@@ -428,8 +428,57 @@ describe('captain-tools', () => {
       expect(parsed.success).toBe(true);
       expect(parsed.session_id).toBe('new-session-123');
       expect(parsed.status).toBe('pending');
-      expect(parsed.message).toContain('awaiting user approval');
+      expect(parsed.message).toContain('pending state');
       expect(vi.mocked(sessionApi.createPendingSession)).toHaveBeenCalledOnce();
+      expect(vi.mocked(sessionApi.startSession)).not.toHaveBeenCalled();
+    });
+
+    it('proceeds to createPendingSession when workflow name is valid and force is false', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
+      vi.mocked(sessionApi.createPendingSession).mockReturnValue({
+        success: true,
+        sessionId: 'new-session-456',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'implement the feature',
+        workspace: '/tmp',
+        workflow: 'feature',
+        force: false,
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('new-session-456');
+      expect(parsed.status).toBe('pending');
+      expect(parsed.message).toContain('pending state');
+      expect(vi.mocked(sessionApi.createPendingSession)).toHaveBeenCalledOnce();
+      expect(vi.mocked(sessionApi.startSession)).not.toHaveBeenCalled();
+    });
+
+    it('proceeds to startSession when workflow name is valid and force is true', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: true,
+        sessionId: 'new-session-789',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'implement the feature',
+        workspace: '/tmp',
+        workflow: 'feature',
+        force: true,
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('new-session-789');
+      expect(parsed.status).toBe('running');
+      expect(parsed.message).toContain('started successfully');
+      expect(vi.mocked(sessionApi.startSession)).toHaveBeenCalledOnce();
+      expect(vi.mocked(sessionApi.createPendingSession)).not.toHaveBeenCalled();
     });
 
     it('returns success:false when createPendingSession itself fails (after passing workflow validation)', async () => {
@@ -444,6 +493,26 @@ describe('captain-tools', () => {
         prompt: 'do something',
         workspace: '/no/such/dir',
         workflow: 'feature',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.error).toContain('workspace path does not exist');
+    });
+
+    it('returns success:false when startSession itself fails with force=true (after passing workflow validation)', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature']);
+      vi.mocked(sessionApi.createPendingSession).mockReturnValue({
+        success: false,
+        error: 'workspace path does not exist or is not a directory',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'do something',
+        workspace: '/no/such/dir',
+        workflow: 'feature',
+        force: true,
       });
       const parsed = JSON.parse(result.content[0].text);
 

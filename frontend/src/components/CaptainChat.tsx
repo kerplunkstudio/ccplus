@@ -24,7 +24,6 @@ interface CaptainChatProps {
   sessionId?: string;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
-  onClear: () => void;
   interactiveMessages: InteractiveMessage[];
   onRespondToInteractive: (messageId: string, actionId: string) => void;
 }
@@ -60,7 +59,6 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   sessionId,
   archivedConversations,
   onClearHistory,
-  onClear,
   interactiveMessages,
   onRespondToInteractive,
 }) => {
