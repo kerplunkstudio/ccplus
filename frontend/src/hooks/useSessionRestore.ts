@@ -240,7 +240,7 @@ export function useSessionRestore({
 
     restoreSession();
     return () => { isMounted = false; };
-  }, [sessionId, socket, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool, setTodos]);
+  }, [sessionId, socket, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool, setTodos, sequenceRef]);
 
   // Reconnect effect
   // Uses ref pattern to avoid stale closure — reconnect handler always reads latest lastSeq
@@ -393,7 +393,7 @@ export function useSessionRestore({
       socket.io.off('reconnect', handleReconnect);
       socket.off('full_reset_required');
     };
-  }, [socket, currentSessionIdRef, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool, setTodos]);
+  }, [socket, currentSessionIdRef, streamDispatch, setContextTokens, setUsageStats, dispatchTree, seenToolUseIds, setCurrentTool, setTodos, sequenceRef]);
 
   return {
     isRestoringSession,
