@@ -116,6 +116,12 @@ export function createCaptainRouter(deps: CaptainRouterDependencies): Router {
   // GET /api/captain/messages - Get Captain messages
   router.get("/messages", (req: Request, res: Response) => {
     try {
+      const status = deps.getCaptainStatus();
+      if (status.messageCount === 0) {
+        res.json({ success: true, messages: [], conversation_id: null });
+        return;
+      }
+
       const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : 100;
       const conversationId = req.query.conversation_id as string | undefined;
       const messages = deps.getCaptainMessages(conversationId, limit);

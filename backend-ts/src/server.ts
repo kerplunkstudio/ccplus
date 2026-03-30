@@ -83,6 +83,8 @@ const io = new SocketIOServer(httpServer, {
 // Wire fleet monitor to Socket.IO
 fleetMonitor.setIOInstance(io);
 fleetMonitor.loadSessionsFromDb();
+fleetMonitor.markOrphanedSessions();
+fleetMonitor.emitFleetUpdate(true);
 fleetMonitor.startZombieReaper();
 fleetMonitor.startStuckDetector();
 fleetMonitor.startPruner();

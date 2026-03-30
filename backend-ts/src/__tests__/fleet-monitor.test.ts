@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fleetMonitor from '../fleet-monitor.js';
+import * as database from '../database.js';
 
 describe('Fleet Monitor', () => {
   beforeEach(() => {
@@ -230,6 +231,234 @@ describe('Fleet Monitor', () => {
       const detail = fleetMonitor.getSessionDetail('sess1');
       expect(detail).toBeDefined();
       expect(detail?.sessionId).toBe('sess1');
+    });
+  });
+
+  describe('markOrphanedSessions', () => {
+    let upsertSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      upsertSpy = vi.spyOn(database, 'upsertFleetSession').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      upsertSpy.mockRestore();
+    });
+
+    it('marks running sessions as failed', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.status).toBe('failed');
+    });
+
+    it('marks idle sessions as failed', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      // status is 'idle' by default after registerSession
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.status).toBe('failed');
+    });
+
+    it('does not change sessions with failed status', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'failed');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(upsertSpy).not.toHaveBeenCalled();
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.status).toBe('failed');
+    });
+
+    it('does not change sessions with completed status', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not change sessions with cancelled status', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'cancelled');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('appends (orphaned on restart) suffix to label', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.setLabel('sess1', 'My task');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.label).toBe('My task (orphaned on restart)');
+    });
+
+    it('does not duplicate the suffix when called twice on the same session', () => {
+      // Call markOrphanedSessions once — session becomes failed with suffix
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      fleetMonitor.markOrphanedSessions();
+
+      // Manually reset status back to idle to allow a second call to process it
+      // (simulating a case where a label with the suffix is already present)
+      fleetMonitor.updateSessionStatus('sess1', 'idle');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      // Should not have doubled suffix
+      expect(detail?.label).toBe('(orphaned on restart)');
+      expect(detail?.label).not.toBe('(orphaned on restart) (orphaned on restart)');
+    });
+
+    it('sets label to (orphaned on restart) when session has no label', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      // label is '' by default
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.label).toBe('(orphaned on restart)');
+    });
+
+    it('calculates a positive durationMs', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      upsertSpy.mockClear();
+
+      const before = Date.now();
+      fleetMonitor.markOrphanedSessions();
+      const after = Date.now();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.durationMs).toBeGreaterThanOrEqual(0);
+      expect(detail?.durationMs).toBeLessThanOrEqual(after - new Date(detail?.startedAt ?? '').getTime() + 10);
+    });
+
+    it('durationMs increases with session age', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // Backdate startedAt by 5 seconds
+      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', fiveSecondsAgo);
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.durationMs).toBeGreaterThanOrEqual(5000);
+    });
+
+    it('sets lastActivity to a recent ISO timestamp', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      upsertSpy.mockClear();
+
+      const before = Date.now();
+      fleetMonitor.markOrphanedSessions();
+      const after = Date.now();
+
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      const lastActivityTs = new Date(detail?.lastActivity ?? '').getTime();
+      expect(lastActivityTs).toBeGreaterThanOrEqual(before);
+      expect(lastActivityTs).toBeLessThanOrEqual(after);
+    });
+
+    it('calls upsertFleetSession for each orphaned session', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      fleetMonitor.registerSession('sess2', '/workspace/project2');
+      // sess2 stays idle
+      fleetMonitor.registerSession('sess3', '/workspace/project3');
+      fleetMonitor.updateSessionStatus('sess3', 'completed');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      // sess1 (running) and sess2 (idle) are orphaned; sess3 (completed) is not
+      expect(upsertSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('does nothing when there are no sessions', () => {
+      // sessions are already cleared by beforeEach
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when all sessions are in terminal states', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+      fleetMonitor.registerSession('sess2', '/workspace/project2');
+      fleetMonitor.updateSessionStatus('sess2', 'failed');
+      fleetMonitor.registerSession('sess3', '/workspace/project3');
+      fleetMonitor.updateSessionStatus('sess3', 'cancelled');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns void (no return value)', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      upsertSpy.mockClear();
+
+      const result = fleetMonitor.markOrphanedSessions();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('handles mixed statuses — only orphans running and idle sessions', () => {
+      fleetMonitor.registerSession('sess-running', '/workspace/a');
+      fleetMonitor.updateSessionStatus('sess-running', 'running');
+
+      fleetMonitor.registerSession('sess-idle', '/workspace/b');
+      // idle by default
+
+      fleetMonitor.registerSession('sess-completed', '/workspace/c');
+      fleetMonitor.updateSessionStatus('sess-completed', 'completed');
+
+      fleetMonitor.registerSession('sess-failed', '/workspace/d');
+      fleetMonitor.updateSessionStatus('sess-failed', 'failed');
+
+      fleetMonitor.registerSession('sess-cancelled', '/workspace/e');
+      fleetMonitor.updateSessionStatus('sess-cancelled', 'cancelled');
+      upsertSpy.mockClear();
+
+      fleetMonitor.markOrphanedSessions();
+
+      expect(fleetMonitor.getSessionDetail('sess-running')?.status).toBe('failed');
+      expect(fleetMonitor.getSessionDetail('sess-idle')?.status).toBe('failed');
+      expect(fleetMonitor.getSessionDetail('sess-completed')?.status).toBe('completed');
+      expect(fleetMonitor.getSessionDetail('sess-failed')?.status).toBe('failed');
+      expect(fleetMonitor.getSessionDetail('sess-cancelled')?.status).toBe('cancelled');
+      expect(upsertSpy).toHaveBeenCalledTimes(2);
     });
   });
 

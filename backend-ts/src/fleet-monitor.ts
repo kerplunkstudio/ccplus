@@ -72,6 +72,36 @@ export function loadSessionsFromDb(): void {
   }
 }
 
+export function markOrphanedSessions(): void {
+  let orphanedCount = 0;
+  for (const [sessionId, session] of sessions.entries()) {
+    if (session.status === 'running' || session.status === 'idle') {
+      const now = Date.now();
+      const startTime = new Date(session.startedAt).getTime();
+      const durationMs = now - startTime;
+
+      const suffix = '(orphaned on restart)';
+      const newLabel = session.label && !session.label.includes(suffix)
+        ? `${session.label} ${suffix}`
+        : session.label || suffix;
+
+      const updated: FleetSessionInfo = {
+        ...session,
+        status: 'failed',
+        durationMs,
+        lastActivity: new Date().toISOString(),
+        label: newLabel,
+      };
+      sessions.set(sessionId, updated);
+      upsertFleetSession(updated);
+      orphanedCount++;
+    }
+  }
+  if (orphanedCount > 0) {
+    log.info(`Marked ${orphanedCount} orphaned session(s) as failed`, { orphanedCount });
+  }
+}
+
 export function registerSession(sessionId: string, workspace: string, requestedBy?: { source: string; sourceId: string }): void {
   const existing = sessions.get(sessionId);
   if (!existing) {

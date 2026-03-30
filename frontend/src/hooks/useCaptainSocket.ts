@@ -92,24 +92,31 @@ export function useCaptainSocket(socket: Socket | null) {
         const messagesResponse = await fetch(`${SOCKET_URL}/api/captain/messages`);
         if (messagesResponse.ok) {
           const messagesData = await messagesResponse.json();
-          if (messagesData.success && messagesData.messages.length > 0) {
-            // Map DB messages to Message format
-            const dbMessages: Message[] = messagesData.messages.map((m: {
-              id: string;
-              role: string;
-              content: string;
-              timestamp: number;
-            }) => ({
-              id: m.id,
-              role: m.role as 'user' | 'assistant',
-              content: m.content,
-              timestamp: m.timestamp,
-              streaming: false,
-            }));
-            setMessages(dbMessages);
-            // Also save to localStorage as cache
-            saveMessages(dbMessages);
+          if (messagesData.success) {
+            if (messagesData.messages.length > 0) {
+              // Map DB messages to Message format
+              const dbMessages: Message[] = messagesData.messages.map((m: {
+                id: string;
+                role: string;
+                content: string;
+                timestamp: number;
+              }) => ({
+                id: m.id,
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+                timestamp: m.timestamp,
+                streaming: false,
+              }));
+              setMessages(dbMessages);
+              // Also save to localStorage as cache
+              saveMessages(dbMessages);
+            } else {
+              // Backend returned empty (Captain restarted)
+              setMessages([]);
+              saveMessages([]);
+            }
           }
+          // if !success, do nothing (preserve localStorage fallback)
         }
       } catch (error) {
         // Captain session creation failed, retry on next mount
