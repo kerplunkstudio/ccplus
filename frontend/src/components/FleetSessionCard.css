@@ -3,6 +3,17 @@
   50% { opacity: 0.4; }
 }
 
+@keyframes cardEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .fleet-session-card {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -12,6 +23,7 @@
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   position: relative;
+  animation: cardEntrance 400ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 
 .fleet-session-card:hover {

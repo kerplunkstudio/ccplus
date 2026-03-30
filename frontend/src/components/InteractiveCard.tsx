@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useFlyToFleet } from '../hooks/useFlyToFleet';
 import './InteractiveCard.css';
 
 interface InteractiveCardButton {
@@ -32,6 +33,21 @@ export function InteractiveCard({
   maxSelections
 }: InteractiveCardProps) {
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
+  const cardRef = useRef<HTMLDivElement>(null);
+  const prevStateRef = useRef<'pending' | 'responded' | 'expired'>(state);
+  const triggerFlyToFleet = useFlyToFleet();
+
+  // Trigger animation when state changes from pending to responded (session approved)
+  useEffect(() => {
+    if (prevStateRef.current === 'pending' && state === 'responded') {
+      // Check if this is a session approval (primary button)
+      const isPrimaryAction = buttons.some(btn => btn.type === 'primary');
+      if (isPrimaryAction && cardRef.current) {
+        triggerFlyToFleet(cardRef.current);
+      }
+    }
+    prevStateRef.current = state;
+  }, [state, buttons, triggerFlyToFleet]);
 
   const handleSingleClick = (index: number) => {
     if (state === 'pending' && onSelect) {
@@ -69,7 +85,7 @@ export function InteractiveCard({
   // Multi-select mode
   if (multiSelect) {
     return (
-      <div className="interactive-card" data-state={state}>
+      <div ref={cardRef} className="interactive-card" data-state={state}>
         <p className="interactive-card-text">{message}</p>
 
         <div className="interactive-card-multiselect">
@@ -133,7 +149,7 @@ export function InteractiveCard({
 
   // Single-select mode (existing behavior)
   return (
-    <div className="interactive-card" data-state={state}>
+    <div ref={cardRef} className="interactive-card" data-state={state}>
       <p className="interactive-card-text">{message}</p>
 
       <div className="interactive-card-actions">
