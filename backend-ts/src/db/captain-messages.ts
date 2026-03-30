@@ -91,16 +91,6 @@ export function getLatestCaptainConversationId(): string | null {
 }
 
 /**
- * Archive a Captain conversation.
- * Currently a no-op placeholder for future use (e.g., marking as archived).
- * New conversations are created by using a new conversation_id on /clear.
- */
-export function archiveCaptainConversation(conversationId: string): void {
-  // No-op for now - conversation archival happens by starting a new conversation_id
-  // Keep this function for future enhancement (e.g., adding an 'archived' column)
-}
-
-/**
  * Get a list of all Captain conversations with metadata.
  * Returns conversations in reverse chronological order (newest first).
  */
