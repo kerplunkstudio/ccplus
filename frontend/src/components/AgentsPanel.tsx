@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { useAgents } from '../hooks/useAgents';
 import type { Agent } from '../hooks/useAgents';
+import { useSkills } from '../hooks/useSkills';
+import { useMcpServers } from '../hooks/useMcpServers';
+import { ChipPicker } from './ChipPicker';
 import { AGENT_ICONS } from '../constants/agentIcons';
 import { SOCKET_URL } from '../config';
 import './AgentsPanel.css';
@@ -14,19 +17,25 @@ interface EditState {
   model?: string;
   personality?: string;
   disallowedTools?: string[];
+  skillsRequired?: string[];
+  skillsAvailable?: string[];
+  mcpServers?: string[];
 }
 
 export const AgentsPanel: React.FC = () => {
   const { agents, loading, error, refetch } = useAgents();
+  const { skills } = useSkills();
+  const { servers: mcpServers } = useMcpServers();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [editState, setEditState] = useState<Record<string, EditState>>({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedAgent((prev) => (prev === id ? null : id));
   }, []);
 
-  const handleEdit = useCallback((id: string, field: keyof EditState, value: any) => {
+  const handleEdit = useCallback((id: string, field: keyof EditState, value: EditState[keyof EditState]) => {
     setEditState((prev) => ({
       ...prev,
       [id]: { ...prev[id], [field]: value },
@@ -55,6 +64,11 @@ export const AgentsPanel: React.FC = () => {
         allowedTools: agent.security?.allowedTools,
         disallowedTools: edits.disallowedTools ?? agent.security?.disallowedTools,
       },
+      skills: {
+        required: edits.skillsRequired ?? agent.skills?.required,
+        available: edits.skillsAvailable ?? agent.skills?.available,
+      },
+      mcpServers: edits.mcpServers ?? agent.mcpServers,
     };
 
     try {
@@ -74,9 +88,10 @@ export const AgentsPanel: React.FC = () => {
         return next;
       });
 
+      setSaveError(null);
       await refetch();
     } catch (err) {
-      // Error handling could be improved with user notification
+      setSaveError(err instanceof Error ? err.message : "Failed to save agent");
     } finally {
       setSaving(false);
     }
@@ -135,6 +150,9 @@ export const AgentsPanel: React.FC = () => {
               const currentModel = editState[agent.id]?.model ?? agent.model ?? 'sonnet';
               const currentPersonality = editState[agent.id]?.personality ?? agent.personality ?? '';
               const currentDisallowedTools = editState[agent.id]?.disallowedTools ?? agent.security?.disallowedTools ?? [];
+              const currentSkillsRequired = editState[agent.id]?.skillsRequired ?? agent.skills?.required ?? [];
+              const currentSkillsAvailable = editState[agent.id]?.skillsAvailable ?? agent.skills?.available ?? [];
+              const currentMcpServers = editState[agent.id]?.mcpServers ?? agent.mcpServers ?? [];
 
               return (
                 <React.Fragment key={agent.id}>
@@ -223,6 +241,40 @@ export const AgentsPanel: React.FC = () => {
                             </div>
                           </div>
 
+                          <div className="agent-edit-field">
+                            <ChipPicker
+                              label="Required Skills"
+                              items={currentSkillsRequired}
+                              available={skills.map((s) => ({ name: s.name, label: s.name }))}
+                              onChange={(items) => handleEdit(agent.id, 'skillsRequired', items)}
+                              placeholder="Add required skill..."
+                            />
+                          </div>
+
+                          <div className="agent-edit-field">
+                            <ChipPicker
+                              label="Available Skills"
+                              items={currentSkillsAvailable}
+                              available={skills.map((s) => ({ name: s.name, label: s.name }))}
+                              onChange={(items) => handleEdit(agent.id, 'skillsAvailable', items)}
+                              placeholder="Add available skill..."
+                            />
+                          </div>
+
+                          <div className="agent-edit-field">
+                            <ChipPicker
+                              label="MCP Servers"
+                              items={currentMcpServers}
+                              available={mcpServers.map((s) => ({ name: s.name, label: s.name }))}
+                              onChange={(items) => handleEdit(agent.id, 'mcpServers', items)}
+                              placeholder="Add MCP server..."
+                            />
+                          </div>
+
+
+                          {saveError && (
+                            <div className="agent-save-error">{saveError}</div>
+                          )}
                           {hasUnsavedChanges(agent.id) && (
                             <button
                               className="agent-save-button"

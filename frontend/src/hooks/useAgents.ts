@@ -16,6 +16,11 @@ export interface Agent {
   personality?: string;
   soulContent: string;
   security?: AgentSecurity;
+  skills?: {
+    required?: string[];
+    available?: string[];
+  };
+  mcpServers?: string[];
   dirPath: string;
 }
 

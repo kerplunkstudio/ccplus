@@ -1,0 +1,87 @@
+.chip-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chip-picker-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.chip-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chip-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.chip-picker-chip:hover {
+  background: #e8e8e8;
+  border-color: #ccc;
+}
+
+.chip-picker-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-picker-remove:hover {
+  background: #ddd;
+  color: #666;
+}
+
+.chip-picker-select {
+  width: 100%;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-picker-select:hover {
+  border-color: #bbb;
+}
+
+.chip-picker-select:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+}
