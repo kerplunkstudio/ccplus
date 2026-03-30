@@ -338,8 +338,8 @@ export async function streamQuery(
         model: effectiveModel,
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: config.getBypassPermissions() ? "bypassPermissions" as any : undefined,
-        allowDangerouslySkipPermissions: config.getBypassPermissions(),
+        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
+        allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
         env: cleanEnv,
         hooks: hooks as any,
         plugins: [

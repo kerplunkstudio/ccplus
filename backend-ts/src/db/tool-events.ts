@@ -1,5 +1,5 @@
-import * as config from "../config.js";
 import { getDb } from "./connection.js";
+import { MAX_ACTIVITY_EVENTS } from "../config.js";
 
 export function recordToolEvent(
   sessionId: string,
@@ -60,7 +60,7 @@ export function updateToolEvent(
   );
 }
 
-export function getToolEvents(sessionId: string, limit: number = config.MAX_ACTIVITY_EVENTS_DEFAULT): Record<string, unknown>[] {
+export function getToolEvents(sessionId: string, limit: number = MAX_ACTIVITY_EVENTS): Record<string, unknown>[] {
   const d = getDb();
   // Retrieve the most-recent `limit` rows ordered newest-first, then reverse so
   // the returned array is in chronological (ascending) order.  This ensures that

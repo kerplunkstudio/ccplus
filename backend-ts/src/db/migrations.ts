@@ -287,6 +287,7 @@ ALTER TABLE fleet_sessions ADD COLUMN total_agents INTEGER DEFAULT 0;
     version: 13,
     sql: `
 -- Migration v13: Config persistence
+-- DEPRECATED: Settings now stored in data/settings.json
 CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,

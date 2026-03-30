@@ -27,7 +27,7 @@ export function createDataRoutes(app: Express, deps: RouteDependencies): void {
 
   app.get("/api/activity/:sessionId", (req: Request, res: Response) => {
     try {
-      const events = database.getToolEvents(req.params.sessionId, config.getMaxActivityEvents());
+      const events = database.getToolEvents(req.params.sessionId, config.MAX_ACTIVITY_EVENTS);
       res.json({ events });
     } catch (err) {
       log.error("Failed to fetch activity", { sessionId: req.params.sessionId, error: String(err) });

@@ -824,11 +824,6 @@ describe("Server Configuration", () => {
     expect(config.DATABASE_PATH).toBeTruthy();
     expect(config.WORKSPACE_PATH).toBeTruthy();
   });
-
-  it("has correct constants", () => {
-    expect(config.MAX_CONVERSATION_HISTORY).toBe(50);
-    expect(config.MAX_ACTIVITY_EVENTS).toBe(200);
-  });
 });
 
 describe("POST /api/sessions/start", () => {

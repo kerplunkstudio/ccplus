@@ -327,8 +327,8 @@ describe("Config API Routes", () => {
 
       expect(data.integrations.telegram).toHaveProperty("botToken");
       expect(data.integrations.discord).toHaveProperty("botToken");
-      expect(typeof data.integrations.telegram.botToken).toBe("string");
-      expect(typeof data.integrations.discord.botToken).toBe("string");
+      expect(typeof data.integrations.telegram.botToken).toBe("boolean");
+      expect(typeof data.integrations.discord.botToken).toBe("boolean");
     });
   });
 
@@ -374,9 +374,8 @@ describe("Config API Routes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          memory: {
-            enabled: "not-a-boolean", // Should be boolean
-          },
+          key: "memory.distillationEnabled",
+          value: "not-a-boolean", // Should be boolean
         }),
       });
 

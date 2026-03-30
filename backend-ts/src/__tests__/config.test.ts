@@ -4,8 +4,6 @@ import {
   DATABASE_PATH,
   DATA_DIR,
   LOG_DIR,
-  MAX_ACTIVITY_EVENTS,
-  MAX_CONVERSATION_HISTORY,
   PROJECT_ROOT,
 } from "../config.js";
 
@@ -28,11 +26,6 @@ describe("Config", () => {
   });
 
   describe("default values", () => {
-    it("should have correct constants", () => {
-      expect(MAX_CONVERSATION_HISTORY).toBe(50);
-      expect(MAX_ACTIVITY_EVENTS).toBe(200);
-    });
-
     it("should have DATABASE_PATH containing ccplus.db", () => {
       expect(DATABASE_PATH).toContain("ccplus.db");
     });

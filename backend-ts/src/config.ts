@@ -39,42 +39,13 @@ export const HOST = process.env.HOST ?? "127.0.0.1";
 export const PORT = parseInt(process.env.PORT ?? "4000", 10);
 export const DATABASE_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "ccplus.db");
 
-// Hot-reloadable config values (can be updated dynamically)
-let runtimeConfig = {
-  SDK_MODEL: process.env.SDK_MODEL ?? "claude-sonnet-4-6",
-  MAX_CONVERSATION_HISTORY: 50,
-  MAX_ACTIVITY_EVENTS: 200,
-  BYPASS_PERMISSIONS: true,
-  MEMORY_ENABLED: process.env.CCPLUS_MEMORY_ENABLED !== 'false',
-  MEMORY_DISTILL_ENABLED: process.env.CCPLUS_MEMORY_DISTILL !== 'false',
-  MEMORY_DISTILL_DEBOUNCE_MS: 60000,
-  MEMORY_DISTILL_MIN_MESSAGES: 3,
-  WORKTREE_ENABLED: process.env.CCPLUS_WORKTREES !== 'false',
-};
-
-export const MAX_CONVERSATION_HISTORY_DEFAULT = 50;
-export const MAX_ACTIVITY_EVENTS_DEFAULT = 200;
+export const MAX_CONVERSATION_HISTORY = 50;
+export const MAX_ACTIVITY_EVENTS = 200;
 
 // Export getters for hot-reloadable values
 export function getSDKModel(): string {
   return settingsData.models?.sdk_model ?? DEFAULT_SETTINGS.models!.sdk_model!;
 }
-
-export function getMaxConversationHistory(): number {
-  return runtimeConfig.MAX_CONVERSATION_HISTORY;
-}
-
-export function getMaxActivityEvents(): number {
-  return runtimeConfig.MAX_ACTIVITY_EVENTS;
-}
-
-export function getBypassPermissions(): boolean {
-  return runtimeConfig.BYPASS_PERMISSIONS;
-}
-
-// Legacy exports for backward compatibility (deprecated, use getters)
-export const MAX_CONVERSATION_HISTORY = MAX_CONVERSATION_HISTORY_DEFAULT;
-export const MAX_ACTIVITY_EVENTS = MAX_ACTIVITY_EVENTS_DEFAULT;
 
 // Server PID path (for process management)
 export const SERVER_PID_PATH = path.join(DATA_DIR, "node_server.pid");
@@ -113,52 +84,7 @@ export const TELEGRAM_ALLOWLIST: readonly string[] = (process.env.CCPLUS_TELEGRA
   .split(',').map(s => s.trim()).filter(Boolean);
 
 // Discord bridge
-export const DISCORD_BOT_TOKEN = process.env.CCPLUS_DISCORD_BOT_TOKEN ?? '';
-export const DISCORD_ALLOWLIST: readonly string[] = (process.env.CCPLUS_DISCORD_ALLOWLIST ?? '')
-  .split(',').map(s => s.trim()).filter(Boolean);
-
-/**
- * Reload hot-reloadable config values from environment
- * Called by ConfigWatcher when .env changes
- */
-export function reloadConfig(key: string, value: string | undefined): void {
-  switch (key) {
-    case "SDK_MODEL":
-      runtimeConfig = { ...runtimeConfig, SDK_MODEL: value ?? "claude-sonnet-4-6" };
-      break;
-    case "MAX_CONVERSATION_HISTORY":
-      runtimeConfig = { ...runtimeConfig, MAX_CONVERSATION_HISTORY: value ? parseInt(value, 10) : MAX_CONVERSATION_HISTORY_DEFAULT };
-      break;
-    case "MAX_ACTIVITY_EVENTS":
-      runtimeConfig = { ...runtimeConfig, MAX_ACTIVITY_EVENTS: value ? parseInt(value, 10) : MAX_ACTIVITY_EVENTS_DEFAULT };
-      break;
-    case "CCPLUS_BYPASS_PERMISSIONS":
-      runtimeConfig = { ...runtimeConfig, BYPASS_PERMISSIONS: value === 'true' };
-      break;
-    case "CCPLUS_MEMORY_ENABLED":
-      runtimeConfig.MEMORY_ENABLED = value !== 'false';
-      break;
-    case "CCPLUS_MEMORY_DISTILL":
-      runtimeConfig.MEMORY_DISTILL_ENABLED = value !== 'false';
-      break;
-    case "CCPLUS_MEMORY_DISTILL_DEBOUNCE_MS":
-      runtimeConfig.MEMORY_DISTILL_DEBOUNCE_MS = value ? parseInt(value, 10) : 60000;
-      break;
-    case "CCPLUS_MEMORY_DISTILL_MIN_MESSAGES":
-      runtimeConfig.MEMORY_DISTILL_MIN_MESSAGES = value ? parseInt(value, 10) : 3;
-      break;
-    case "CCPLUS_WORKTREES":
-      runtimeConfig.WORKTREE_ENABLED = value !== 'false';
-      break;
-  }
-}
-
-/**
- * Get all runtime config values (for testing/debugging)
- */
-export function getRuntimeConfig() {
-  return { ...runtimeConfig };
-}
+const DISCORD_BOT_TOKEN = process.env.CCPLUS_DISCORD_BOT_TOKEN ?? '';
 
 // =========================================================================
 // Settings Persistence Layer
@@ -252,7 +178,8 @@ const DEFAULT_SETTINGS: Settings = {
     },
     discord: {
       bot_token: '',
-      allowed_users: [...DISCORD_ALLOWLIST],
+      allowed_users: (process.env.CCPLUS_DISCORD_ALLOWLIST ?? '')
+        .split(',').map(s => s.trim()).filter(Boolean),
     },
   },
 };
@@ -304,9 +231,6 @@ export function loadSettings(): Settings {
       const parsed = JSON.parse(fileContent) as DeepPartial<Settings>;
       settingsData = deepMerge(DEFAULT_SETTINGS, parsed);
 
-      // Apply hot-reloadable settings
-      applyHotReloadableSettings();
-
       return settingsData;
     }
   } catch (error) {
@@ -332,9 +256,6 @@ export function saveSettings(partial: DeepPartial<Settings>): { restart_required
     throw new Error(`Failed to write settings.json: ${String(error)}`);
   }
 
-  // Apply hot-reloadable settings
-  applyHotReloadableSettings();
-
   // Check if restart is required
   const restartRequired = isRestartRequired(partial);
 
@@ -344,7 +265,7 @@ export function saveSettings(partial: DeepPartial<Settings>): { restart_required
 /**
  * Check if any restart-required keys were modified
  */
-function isRestartRequired(partial: DeepPartial<Settings>): boolean {
+export function isRestartRequired(partial: DeepPartial<Settings>): boolean {
   // Restart-required paths:
   // - captain.auto_start, captain.resume_on_startup, captain.workspace_path
   // - integrations.telegram.* (all), integrations.discord.* (all)
@@ -367,16 +288,10 @@ function isRestartRequired(partial: DeepPartial<Settings>): boolean {
 }
 
 /**
- * Apply hot-reloadable settings to runtimeConfig
+ * Get raw settings (unredacted, for routes/config.ts)
  */
-function applyHotReloadableSettings(): void {
-  runtimeConfig = {
-    ...runtimeConfig,
-    ...(settingsData.models?.sdk_model !== undefined && { SDK_MODEL: settingsData.models.sdk_model }),
-    ...(settingsData.sessions?.bypass_permissions !== undefined && {
-      BYPASS_PERMISSIONS: settingsData.sessions.bypass_permissions,
-    }),
-  };
+export function getSettingsRaw(): Settings {
+  return structuredClone(settingsData);
 }
 
 /**
