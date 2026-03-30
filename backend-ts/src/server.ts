@@ -19,7 +19,7 @@ import { createCaptainRouter } from "./captain-router.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import { scheduler } from "./scheduler.js";
-import { saveCaptainState, loadCaptainState } from './state-persistence.js';
+import { saveCaptainState, loadCaptainState, loadDeployState, removeDeployState } from './state-persistence.js';
 import { buildSocketCallbacks } from "./socket/callbacks.js";
 import { setupSocketHandlers } from "./socket/handlers.js";
 import { createHealthRoutes } from "./routes/health.js";
@@ -392,7 +392,33 @@ httpServer.listen(config.PORT, config.HOST, () => {
       captainDeps,
       persistedState?.sdkSessionId
     )
-      .then(({ sessionId }) => log.info('Captain session started', { sessionId, resumed: !!persistedState }))
+      .then(({ sessionId }) => {
+        log.info('Captain session started', { sessionId, resumed: !!persistedState })
+
+        // Check for pending deploy confirmation
+        const deployState = loadDeployState(config.DEPLOY_STATE_PATH)
+        removeDeployState(config.DEPLOY_STATE_PATH) // Always clean up immediately
+
+        if (deployState) {
+          const ageMs = Date.now() - deployState.savedAt
+          if (ageMs <= 60_000) {
+            setTimeout(() => {
+              try {
+                captain.sendCaptainMessage(
+                  `[SYSTEM] Deploy successful. The server restarted and is now running the new build. Deploy mode: ${deployState.mode}, downtime: ~${Math.round(ageMs / 1000)}s.`,
+                  'fleet',
+                  'system'
+                )
+                log.info('Deploy confirmation sent to Captain', { mode: deployState.mode, ageMs })
+              } catch (err) {
+                log.error('Failed to send deploy confirmation to Captain', { error: String(err) })
+              }
+            }, 3000) // 3s delay to let boot query finish
+          } else {
+            log.info('Deploy state too old, ignoring', { ageMs, maxMs: 60_000 })
+          }
+        }
+      })
       .catch((err: unknown) => log.error('Captain auto-start failed', { error: String(err) }))
   }
 

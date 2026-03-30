@@ -19,7 +19,8 @@ import { log } from "./logger.js";
 import * as captain from "./captain.js";
 import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 import { randomUUID } from 'crypto';
-import { PROJECT_ROOT } from './config.js';
+import { PROJECT_ROOT, DEPLOY_STATE_PATH } from './config.js';
+import { saveDeployState } from './state-persistence.js';
 
 // ---- Pricing Constants ----
 
@@ -1057,6 +1058,8 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             execFileSync('npm', ['run', 'build'], {
               cwd: `${ccplusDir}/backend-ts`, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
             });
+
+            saveDeployState({ mode: 'restart', savedAt: Date.now() }, DEPLOY_STATE_PATH);
 
             const child = spawn('bash', ['-c', `sleep 2 && ${ccplusDir}/ccplus restart`], {
               cwd: ccplusDir,

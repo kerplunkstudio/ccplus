@@ -100,3 +100,50 @@ export function removeTelegramState(filePath: string): void {
     }
   }
 }
+
+export interface DeployPendingState {
+  readonly mode: string
+  readonly savedAt: number
+}
+
+export function saveDeployState(state: DeployPendingState, filePath: string): void {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(state, null, 2), 'utf8')
+    log.debug('Deploy state saved', { filePath, mode: state.mode })
+  } catch (err) {
+    log.error('Failed to save deploy state', { filePath, error: String(err) })
+  }
+}
+
+export function loadDeployState(filePath: string): DeployPendingState | null {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8')
+    const parsed = JSON.parse(raw) as unknown
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof (parsed as Record<string, unknown>).mode !== 'string' ||
+      typeof (parsed as Record<string, unknown>).savedAt !== 'number'
+    ) {
+      log.warn('Deploy state file has invalid structure', { filePath })
+      return null
+    }
+    return parsed as DeployPendingState
+  } catch (err) {
+    const isNotFound = (err as NodeJS.ErrnoException).code === 'ENOENT'
+    if (!isNotFound) {
+      log.warn('Failed to load deploy state', { filePath, error: String(err) })
+    }
+    return null
+  }
+}
+
+export function removeDeployState(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      log.warn('Failed to remove deploy state', { filePath, error: String(err) })
+    }
+  }
+}

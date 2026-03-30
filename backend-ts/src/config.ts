@@ -106,6 +106,7 @@ export const CAPTAIN_MAX_TURNS = parseInt(process.env.CCPLUS_CAPTAIN_MAX_TURNS ?
 export const CAPTAIN_WORKSPACE = process.env.CCPLUS_CAPTAIN_WORKSPACE ?? WORKSPACE_PATH;
 export const CAPTAIN_STATE_PATH = path.join(DATA_DIR, 'captain_state.json');
 export const TELEGRAM_STATE_PATH = path.join(DATA_DIR, 'telegram_state.json');
+export const DEPLOY_STATE_PATH = path.join(DATA_DIR, 'deploy_pending.json');
 export const CAPTAIN_RESUME_ON_STARTUP = process.env.CCPLUS_CAPTAIN_RESUME_ON_STARTUP !== 'false';
 
 // Telegram bridge

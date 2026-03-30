@@ -10,8 +10,12 @@ import {
   saveTelegramState,
   loadTelegramState,
   removeTelegramState,
+  saveDeployState,
+  loadDeployState,
+  removeDeployState,
   type CaptainPersistedState,
   type TelegramPersistedState,
+  type DeployPendingState,
 } from '../state-persistence.js'
 
 // Mock logger to suppress output during tests
@@ -28,6 +32,7 @@ describe('state-persistence', () => {
   let testDir: string
   let captainStateFile: string
   let telegramStateFile: string
+  let deployStateFile: string
 
   beforeEach(() => {
     // Create unique temp directory for each test
@@ -35,6 +40,7 @@ describe('state-persistence', () => {
     fs.mkdirSync(testDir, { recursive: true })
     captainStateFile = path.join(testDir, 'captain_state.json')
     telegramStateFile = path.join(testDir, 'telegram_state.json')
+    deployStateFile = path.join(testDir, 'deploy_state.json')
   })
 
   afterEach(() => {
@@ -312,6 +318,132 @@ describe('state-persistence', () => {
 
         // Should not throw
         expect(() => removeTelegramState(telegramStateFile)).not.toThrow()
+      })
+    })
+  })
+
+  describe('Deploy state persistence', () => {
+    describe('saveDeployState', () => {
+      it('writes valid JSON to file', () => {
+        const state: DeployPendingState = {
+          mode: 'web',
+          savedAt: Date.now(),
+        }
+
+        saveDeployState(state, deployStateFile)
+
+        expect(fs.existsSync(deployStateFile)).toBe(true)
+        const raw = fs.readFileSync(deployStateFile, 'utf8')
+        const parsed = JSON.parse(raw)
+        expect(parsed).toEqual(state)
+      })
+
+      it('does not throw on bad path', () => {
+        const state: DeployPendingState = {
+          mode: 'desktop',
+          savedAt: Date.now(),
+        }
+
+        // Should not throw, just log error
+        expect(() => saveDeployState(state, '/nonexistent/path/file.json')).not.toThrow()
+      })
+
+      it('overwrites existing file', () => {
+        const state1: DeployPendingState = {
+          mode: 'web',
+          savedAt: 1000,
+        }
+        const state2: DeployPendingState = {
+          mode: 'desktop',
+          savedAt: 2000,
+        }
+
+        saveDeployState(state1, deployStateFile)
+        saveDeployState(state2, deployStateFile)
+
+        const raw = fs.readFileSync(deployStateFile, 'utf8')
+        const parsed = JSON.parse(raw)
+        expect(parsed).toEqual(state2)
+      })
+    })
+
+    describe('loadDeployState', () => {
+      it('returns state from valid file', () => {
+        const state: DeployPendingState = {
+          mode: 'web',
+          savedAt: Date.now(),
+        }
+
+        fs.writeFileSync(deployStateFile, JSON.stringify(state), 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toEqual(state)
+      })
+
+      it('returns null for missing file', () => {
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+
+      it('returns null for corrupted JSON', () => {
+        fs.writeFileSync(deployStateFile, 'not valid json{', 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+
+      it('returns null when mode is missing', () => {
+        const invalidState = {
+          savedAt: Date.now(),
+        }
+
+        fs.writeFileSync(deployStateFile, JSON.stringify(invalidState), 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+
+      it('returns null when savedAt is missing', () => {
+        const invalidState = {
+          mode: 'web',
+        }
+
+        fs.writeFileSync(deployStateFile, JSON.stringify(invalidState), 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+
+      it('returns null when file is not an object', () => {
+        fs.writeFileSync(deployStateFile, JSON.stringify('not an object'), 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+
+      it('returns null when file contains null', () => {
+        fs.writeFileSync(deployStateFile, JSON.stringify(null), 'utf8')
+
+        const loaded = loadDeployState(deployStateFile)
+        expect(loaded).toBeNull()
+      })
+    })
+
+    describe('removeDeployState', () => {
+      it('deletes existing file', () => {
+        fs.writeFileSync(deployStateFile, '{}', 'utf8')
+        expect(fs.existsSync(deployStateFile)).toBe(true)
+
+        removeDeployState(deployStateFile)
+
+        expect(fs.existsSync(deployStateFile)).toBe(false)
+      })
+
+      it('is no-op for missing file', () => {
+        expect(fs.existsSync(deployStateFile)).toBe(false)
+
+        // Should not throw
+        expect(() => removeDeployState(deployStateFile)).not.toThrow()
       })
     })
   })
