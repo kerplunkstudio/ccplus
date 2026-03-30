@@ -260,9 +260,9 @@ describe('Fleet Monitor - Database Persistence', () => {
       fleetMonitor.incrementToolCount('sess1');
     }
 
-    // Backdate session start beyond the threshold
+    // Backdate lastActivity beyond the idle threshold (simulates a truly stuck session)
     const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-    fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+    fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
     // Trigger stuck detection — this sets stuckDetectedAt and calls upsertFleetSession
     fleetMonitor._detectStuckSessions();
@@ -285,7 +285,7 @@ describe('Fleet Monitor - Database Persistence', () => {
     }
 
     const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-    fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+    fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
     fleetMonitor._detectStuckSessions();
     const beforeRestart = fleetMonitor.getSessionDetail('sess1');

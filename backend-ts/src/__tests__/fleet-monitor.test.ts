@@ -272,9 +272,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -301,9 +301,9 @@ describe('Fleet Monitor', () => {
       // Touch a file
       fleetMonitor.addFileTouched('sess1', '/workspace/project1/file.ts');
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -312,7 +312,7 @@ describe('Fleet Monitor', () => {
       expect(detail?.stuckDetectedAt).toBeUndefined();
     });
 
-    it('does not flag session under duration threshold', () => {
+    it('does not flag session with recent activity (idle < 2 minutes)', () => {
       const mockIo = {
         to: vi.fn().mockReturnThis(),
         emit: vi.fn(),
@@ -327,9 +327,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Session is only 60s old (below 120s threshold)
+      // lastActivity is only 60s ago (below 120s idle threshold) — session is still active
       const sixtySecondsAgo = new Date(Date.now() - 60_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', sixtySecondsAgo);
+      fleetMonitor._setSessionLastActivity('sess1', sixtySecondsAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -354,9 +354,9 @@ describe('Fleet Monitor', () => {
       }
 
       // No files touched (default)
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate truly idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -389,9 +389,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate truly idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection twice
       fleetMonitor._detectStuckSessions();
@@ -416,9 +416,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate truly idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Mark as completed before detection
       fleetMonitor.updateSessionStatus('sess1', 'completed');
@@ -448,9 +448,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate truly idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -480,9 +480,9 @@ describe('Fleet Monitor', () => {
         fleetMonitor.incrementToolCount('sess1');
       }
 
-      // Backdate to >2 minutes ago
+      // Backdate lastActivity to >2 minutes ago (simulate truly idle session)
       const twoMinutesAgo = new Date(Date.now() - 130_000).toISOString();
-      fleetMonitor._setSessionStartedAt('sess1', twoMinutesAgo);
+      fleetMonitor._setSessionLastActivity('sess1', twoMinutesAgo);
 
       // Trigger detection
       fleetMonitor._detectStuckSessions();
@@ -494,6 +494,41 @@ describe('Fleet Monitor', () => {
         filesTouched: 0,
         durationMs: expect.any(Number),
       });
+    });
+
+    it('does not flag research session with active tool calls (no false positive)', () => {
+      const mockIo = {
+        to: vi.fn().mockReturnThis(),
+        emit: vi.fn(),
+      };
+      fleetMonitor.setIOInstance(mockIo as any);
+
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+
+      // Research session: 35+ tool calls, no files written
+      for (let i = 0; i < 35; i++) {
+        fleetMonitor.incrementToolCount('sess1');
+      }
+
+      // Session started 5 minutes ago — would have triggered false positive with old startedAt check
+      const fiveMinutesAgo = new Date(Date.now() - 300_000).toISOString();
+      fleetMonitor._setSessionStartedAt('sess1', fiveMinutesAgo);
+
+      // But lastActivity is recent (30 seconds ago) — session is actively making tool calls
+      const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString();
+      fleetMonitor._setSessionLastActivity('sess1', thirtySecondsAgo);
+
+      // Trigger detection
+      fleetMonitor._detectStuckSessions();
+
+      // Should NOT be flagged — session is actively progressing
+      const detail = fleetMonitor.getSessionDetail('sess1');
+      expect(detail?.stuckDetectedAt).toBeUndefined();
+      const stuckEmitCalls = (mockIo.emit as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (call: unknown[]) => call[0] === 'session_stuck'
+      );
+      expect(stuckEmitCalls).toHaveLength(0);
     });
   });
 });

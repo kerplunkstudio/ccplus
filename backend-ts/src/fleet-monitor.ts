@@ -50,7 +50,7 @@ let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
 // ---- Stuck Session Detection ----
 
 const STUCK_TOOL_THRESHOLD = 30;
-const STUCK_MIN_DURATION_MS = 120_000;
+const STUCK_IDLE_THRESHOLD_MS = 120_000;
 const STUCK_CHECK_INTERVAL_MS = 30_000;
 
 type StuckSessionCallback = (sessionId: string, info: FleetSessionInfo) => void;
@@ -307,7 +307,7 @@ function detectStuckSessions(): void {
       !session.stuckDetectedAt &&
       session.toolCount >= STUCK_TOOL_THRESHOLD &&
       session.filesTouched.length === 0 &&
-      now - new Date(session.startedAt).getTime() > STUCK_MIN_DURATION_MS
+      now - new Date(session.lastActivity).getTime() > STUCK_IDLE_THRESHOLD_MS
     ) {
       const updated: FleetSessionInfo = {
         ...session,
