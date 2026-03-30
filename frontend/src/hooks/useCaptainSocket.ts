@@ -332,7 +332,7 @@ export function useCaptainSocket(socket: Socket | null) {
 
   const sendMessage = useCallback(
     async (content: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
-      if (!socket || !captainSessionId || !content.trim()) return;
+      if (!socket || !captainSessionId || (!content.trim() && !imageIds?.length)) return;
 
       // Handle /clear command
       if (content.trim() === '/clear') {
@@ -369,14 +369,14 @@ export function useCaptainSocket(socket: Socket | null) {
       const userMessage: Message = {
         id: `user_${Date.now()}`,
         role: 'user',
-        content,
+        content: content || '[Image]',
         timestamp: Date.now(),
         images,
       };
 
       setMessages((prev) => [...prev, userMessage]);
 
-      socket.emit('captain_message', { content });
+      socket.emit('captain_message', { content: content || '[Image]', image_ids: imageIds?.length ? imageIds : undefined });
 
       setIsStreaming(true);
       setIsThinking(true);

@@ -20,7 +20,8 @@ interface CaptainChatProps {
   isThinking: boolean;
   isModelThinking?: boolean;
   toolActivity?: string | null;
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, model?: string, imageIds?: string[], images?: import('../types').ImageAttachment[]) => void;
+  sessionId?: string;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;
   onClear: () => void;
@@ -56,6 +57,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   isModelThinking,
   toolActivity,
   onSendMessage,
+  sessionId,
   archivedConversations,
   onClearHistory,
   onClear,
@@ -205,6 +207,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
           backgroundProcessing={false}
           onCancel={() => {}}
           messages={messages}
+          sessionId={sessionId}
         />
       </div>
     </div>

@@ -485,13 +485,14 @@ export function setupSocketHandlers(
       }
     });
 
-    socket.on('captain_message', (data: { content: string }) => {
+    socket.on('captain_message', (data: { content: string; image_ids?: string[] }) => {
       if (!captain.isCaptainAlive()) {
         socket.emit('captain_error', { message: 'Captain is not active' });
         return;
       }
       try {
-        captain.sendCaptainMessage(data.content, 'web', socket.id);
+        const imageIds = Array.isArray(data.image_ids) && data.image_ids.length > 0 ? data.image_ids : undefined;
+        captain.sendCaptainMessage(data.content, 'web', socket.id, imageIds);
       } catch (error) {
         socket.emit('captain_error', { message: String(error) });
       }

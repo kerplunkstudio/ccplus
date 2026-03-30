@@ -408,7 +408,7 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
  * Send a message to the Captain session.
  * Tags content based on source and starts a new query immediately.
  */
-export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string): void {
+export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string, imageIds?: string[]): void {
   if (!captainState.sessionId) {
     throw new Error("Captain session is not active");
   }
@@ -453,7 +453,7 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   log.info("Captain message received", { source, sourceId, length: content.length });
 
   // Start a new query immediately — SDK handles conversation continuity via resume
-  startCaptainQuery(taggedContent).catch((error) => {
+  startCaptainQuery(taggedContent, imageIds).catch((error) => {
     log.error("Captain query failed", { error: String(error) });
   });
 }
@@ -461,7 +461,7 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
 /**
  * Start a new Captain query with the given content, resuming the conversation.
  */
-async function startCaptainQuery(content: string): Promise<void> {
+async function startCaptainQuery(content: string, imageIds?: string[]): Promise<void> {
   if (!captainState.sessionId || !captainDeps) {
     return;
   }
@@ -482,8 +482,36 @@ async function startCaptainQuery(content: string): Promise<void> {
   }
 
   const captainPrompt = await buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE);
+
+  // Build prompt — plain string, or an AsyncIterable message stream when images are attached
+  let promptArg: string | AsyncIterable<Record<string, unknown>> = content;
+  if (imageIds?.length) {
+    const contentBlocks: Record<string, unknown>[] = [];
+    for (const imgId of imageIds) {
+      try {
+        const img = database.getImage(imgId);
+        if (img) {
+          const data = img.data as Buffer;
+          const b64 = data.toString('base64');
+          let mediaType = img.mime_type as string;
+          if (mediaType === 'image/jpg') mediaType = 'image/jpeg';
+          contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } });
+        }
+      } catch (e) {
+        log.error('Captain: failed to load image for query', { imageId: imgId, error: String(e) });
+      }
+    }
+    if (content) {
+      contentBlocks.push({ type: 'text', text: content });
+    }
+    async function* messageStream() {
+      yield { type: 'user', message: { role: 'user', content: contentBlocks } };
+    }
+    promptArg = messageStream();
+  }
+
   const q = query({
-    prompt: content,
+    prompt: promptArg as any,
     options: {
       model: config.getCaptainModel(),
       cwd: captainState.workspace ?? config.CAPTAIN_WORKSPACE,
