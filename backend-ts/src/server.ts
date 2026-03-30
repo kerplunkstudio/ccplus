@@ -37,6 +37,7 @@ import workflowsRouter from "./routes/workflows.js";
 import { createMemoryRoutes } from "./routes/memory.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
+import { isClaudeAuthenticated } from './captain-auth.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -374,52 +375,68 @@ httpServer.listen(config.PORT, config.HOST, () => {
 
   // Auto-start Captain if enabled
   if (config.CAPTAIN_AUTO_START) {
-    const persistedState = config.CAPTAIN_RESUME_ON_STARTUP
-      ? loadCaptainState(config.CAPTAIN_STATE_PATH)
-      : null
-
-    if (persistedState) {
-      log.info('Resuming Captain from persisted state', {
-        sdkSessionId: persistedState.sdkSessionId,
-        savedAt: new Date(persistedState.savedAt).toISOString(),
-      })
+    if (!isClaudeAuthenticated()) {
+      const authErrorMessage =
+        "Captain could not start — Claude is not authenticated. Run `claude login` in your terminal and restart the server.";
+      log.error("Captain auto-start skipped: Claude is not authenticated");
+      try {
+        const convId = `captain-conv-${Date.now()}`;
+        database.saveCaptainMessage({
+          conversationId: convId,
+          role: "error",
+          content: authErrorMessage,
+        });
+      } catch (dbErr) {
+        log.error("Failed to save Captain auth error message", { error: String(dbErr) });
+      }
     } else {
-      log.info('Starting Captain fresh (no persisted state found)')
-    }
+      const persistedState = config.CAPTAIN_RESUME_ON_STARTUP
+        ? loadCaptainState(config.CAPTAIN_STATE_PATH)
+        : null
 
-    captain.startCaptainSession(
-      persistedState?.workspace ?? config.CAPTAIN_WORKSPACE ?? process.cwd(),
-      captainDeps,
-      persistedState?.sdkSessionId
-    )
-      .then(({ sessionId }) => {
-        log.info('Captain session started', { sessionId, resumed: !!persistedState })
+      if (persistedState) {
+        log.info('Resuming Captain from persisted state', {
+          sdkSessionId: persistedState.sdkSessionId,
+          savedAt: new Date(persistedState.savedAt).toISOString(),
+        })
+      } else {
+        log.info('Starting Captain fresh (no persisted state found)')
+      }
 
-        // Check for pending deploy confirmation
-        const deployState = loadDeployState(config.DEPLOY_STATE_PATH)
-        removeDeployState(config.DEPLOY_STATE_PATH) // Always clean up immediately
+      captain.startCaptainSession(
+        persistedState?.workspace ?? config.CAPTAIN_WORKSPACE ?? process.cwd(),
+        captainDeps,
+        persistedState?.sdkSessionId
+      )
+        .then(({ sessionId }) => {
+          log.info('Captain session started', { sessionId, resumed: !!persistedState })
 
-        if (deployState) {
-          const ageMs = Date.now() - deployState.savedAt
-          if (ageMs <= 60_000) {
-            setTimeout(() => {
-              try {
-                captain.sendCaptainMessage(
-                  `[SYSTEM] Deploy successful. The server restarted and is now running the new build. Deploy mode: ${deployState.mode}, downtime: ~${Math.round(ageMs / 1000)}s.`,
-                  'fleet',
-                  'system'
-                )
-                log.info('Deploy confirmation sent to Captain', { mode: deployState.mode, ageMs })
-              } catch (err) {
-                log.error('Failed to send deploy confirmation to Captain', { error: String(err) })
-              }
-            }, 3000) // 3s delay to let boot query finish
-          } else {
-            log.info('Deploy state too old, ignoring', { ageMs, maxMs: 60_000 })
+          // Check for pending deploy confirmation
+          const deployState = loadDeployState(config.DEPLOY_STATE_PATH)
+          removeDeployState(config.DEPLOY_STATE_PATH) // Always clean up immediately
+
+          if (deployState) {
+            const ageMs = Date.now() - deployState.savedAt
+            if (ageMs <= 60_000) {
+              setTimeout(() => {
+                try {
+                  captain.sendCaptainMessage(
+                    `[SYSTEM] Deploy successful. The server restarted and is now running the new build. Deploy mode: ${deployState.mode}, downtime: ~${Math.round(ageMs / 1000)}s.`,
+                    'fleet',
+                    'system'
+                  )
+                  log.info('Deploy confirmation sent to Captain', { mode: deployState.mode, ageMs })
+                } catch (err) {
+                  log.error('Failed to send deploy confirmation to Captain', { error: String(err) })
+                }
+              }, 3000) // 3s delay to let boot query finish
+            } else {
+              log.info('Deploy state too old, ignoring', { ageMs, maxMs: 60_000 })
+            }
           }
-        }
-      })
-      .catch((err: unknown) => log.error('Captain auto-start failed', { error: String(err) }))
+        })
+        .catch((err: unknown) => log.error('Captain auto-start failed', { error: String(err) }))
+    }
   }
 
   // Auto-start Telegram bridge if token configured
