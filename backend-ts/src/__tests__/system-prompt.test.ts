@@ -170,13 +170,13 @@ describe('system-prompt', () => {
         expect(prompt).toContain('MANDATORY');
       });
 
-      it('workflow phases section names merge-cleanup as a required phase', async () => {
+      it('workflow phases section instructs to continue until remaining phases complete', async () => {
         vi.mocked(loadAllAgents).mockResolvedValue([]);
         vi.mocked(formatAgentCatalog).mockReturnValue(null);
 
         const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
 
-        expect(prompt).toContain('merge-cleanup');
+        expect(prompt).toContain('remaining phases');
       });
 
       it('workflow phases section instructs agent that remaining phases must be completed', async () => {

@@ -497,6 +497,8 @@ describe('session-api', () => {
       rejectPendingSession(pendingResult.sessionId!);
 
       expect(mockSdkSession.submitQuery).not.toHaveBeenCalled();
+    });
+  });
 
   describe('session_proposal event (captain integration)', () => {
     const mockEmit = vi.fn();

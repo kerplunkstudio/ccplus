@@ -359,21 +359,8 @@ export function startSession(
   // Store workspace for this session
   sessionWorkspaces.set(sessionId, resolvedWorkspace);
 
-  // Submit query to SDK (fire-and-forget, same as socket handler)
-  sdk.submitQuery(
-    sessionId,
-    trimmedPrompt,
-    resolvedWorkspace,
-    buildSocketCallbacks(sessionId, resolvedWorkspace) as any,
-    model && typeof model === "string" ? model : undefined,
-    undefined,
-    requestedBy,
-    agentId,
-    workflow,
-    description
-  );
-
-  // If session was requested by Captain, emit session_proposal event to captain chat
+  // If session was requested by Captain, emit session_proposal event to captain chat BEFORE submitQuery
+  // (to ensure the proposal card renders before SDK events start arriving)
   if (requestedBy && requestedBy.source === 'captain' && requestedBy.sourceId) {
     const io = dependencies.io as any;
     if (io && typeof io.to === 'function') {
@@ -387,6 +374,20 @@ export function startSession(
       });
     }
   }
+
+  // Submit query to SDK (fire-and-forget, same as socket handler)
+  sdk.submitQuery(
+    sessionId,
+    trimmedPrompt,
+    resolvedWorkspace,
+    buildSocketCallbacks(sessionId, resolvedWorkspace) as any,
+    model && typeof model === "string" ? model : undefined,
+    undefined,
+    requestedBy,
+    agentId,
+    workflow,
+    description
+  );
 
   return {
     success: true,
