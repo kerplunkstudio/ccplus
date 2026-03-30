@@ -2,3 +2,20 @@ name: Frontend Agent
 description: Frontend-specialized agent for UI components, hooks, styling, and accessibility
 icon: 🎨
 model: sonnet
+skills:
+  required:
+    - frontend-patterns
+    - frontend-design
+  available:
+    - impeccable
+mcpServers:
+  - playwright
+tools:
+  allowed:
+    - Read
+    - Write
+    - Edit
+    - Bash
+    - Grep
+    - Glob
+    - Skill

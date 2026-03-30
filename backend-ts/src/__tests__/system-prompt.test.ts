@@ -228,4 +228,89 @@ describe('system-prompt', () => {
       expect(prompt).toContain('MANDATORY: You MUST complete ALL workflow phases');
     });
   });
+
+  describe('required skills injection', () => {
+    it('includes required skills section when agent has skills.required', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const agent = {
+        id: 'frontend-agent',
+        name: 'Frontend Agent',
+        dirPath: '/test',
+        skills: {
+          required: ['frontend-patterns', 'frontend-design'],
+        },
+      } as any;
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+
+      expect(prompt).toContain('## Required Skills');
+      expect(prompt).toContain('Before making changes, you MUST consult these skills');
+      expect(prompt).toContain('/frontend-patterns');
+      expect(prompt).toContain('/frontend-design');
+    });
+
+    it('does NOT include required skills section when agent has no skills', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const agent = {
+        id: 'basic-agent',
+        name: 'Basic Agent',
+        dirPath: '/test',
+      } as any;
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+
+      expect(prompt).not.toContain('## Required Skills');
+    });
+
+    it('does NOT include required skills section when skills.required is empty', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const agent = {
+        id: 'empty-skills-agent',
+        name: 'Empty Skills Agent',
+        dirPath: '/test',
+        skills: {
+          required: [],
+        },
+      } as any;
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+
+      expect(prompt).not.toContain('## Required Skills');
+    });
+
+    it('does NOT include required skills section when agent is undefined', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1');
+
+      expect(prompt).not.toContain('## Required Skills');
+    });
+
+    it('formats multiple required skills with slash prefix', async () => {
+      vi.mocked(loadAllAgents).mockResolvedValue([]);
+      vi.mocked(formatAgentCatalog).mockReturnValue(null);
+
+      const agent = {
+        id: 'multi-skill-agent',
+        name: 'Multi Skill Agent',
+        dirPath: '/test',
+        skills: {
+          required: ['skill-one', 'skill-two', 'skill-three'],
+        },
+      } as any;
+
+      const prompt = await buildSystemPrompt('/test', 'user prompt', 'session-1', agent);
+
+      expect(prompt).toContain('/skill-one');
+      expect(prompt).toContain('/skill-two');
+      expect(prompt).toContain('/skill-three');
+    });
+  });
 });

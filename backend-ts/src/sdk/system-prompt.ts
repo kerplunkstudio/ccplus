@@ -156,6 +156,12 @@ export async function buildSystemPrompt(
     }
   }
 
+  // Inject required skills instruction
+  if (agent?.skills?.required && agent.skills.required.length > 0) {
+    const skillLines = agent.skills.required.map((s: string) => `- /${s}`).join('\n');
+    prompt += `\n\n## Required Skills\nBefore making changes, you MUST consult these skills using the Skill tool:\n${skillLines}\nApply their guidance to your implementation.`;
+  }
+
   if (agent?.personality) {
     prompt += `\n\n## Agent Personality\n${agent.personality}`;
   }

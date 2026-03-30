@@ -12,7 +12,7 @@ import { buildSignalServer } from "./signal-server.js";
 import { getInstalledPlugins } from "./skills.js";
 import * as config from "../config.js";
 import * as database from "../database.js";
-import { getAllMcpServers, buildSdkMcpServers } from "../mcp-config.js";
+import { getAllMcpServers, buildSdkMcpServers, type McpServerEntry } from "../mcp-config.js";
 import { log } from "../logger.js";
 import { distillSession } from '../memory-distiller.js';
 import * as fleetMonitor from '../fleet-monitor.js';
@@ -23,6 +23,35 @@ import { loadWorkflow } from '../workflow-config.js';
 // ---- Internal streaming logic ----
 
 const execAsync = promisify(exec);
+
+/**
+ * Filter installed plugins to only those matching agent's skills.required or skills.available lists.
+ * Exact match: path.basename(plugin.path) === skillName
+ * Returns all plugins if agent has no skills specified.
+ */
+export function filterPluginsByAgent(
+  plugins: Array<{ type: 'local'; path: string }>,
+  agentConfig: ResolvedAgent | null | undefined,
+): Array<{ type: 'local'; path: string }> {
+  const requiredSkills = agentConfig?.skills?.required ?? [];
+  const availableSkills = agentConfig?.skills?.available ?? [];
+  const allAllowed = [...requiredSkills, ...availableSkills];
+  if (allAllowed.length === 0) return plugins;
+  return plugins.filter(p => allAllowed.some(s => path.basename(p.path) === s));
+}
+
+/**
+ * Filter MCP server entries to only those whose name is in agent's mcpServers list.
+ * Returns all servers if agent has no mcpServers specified.
+ */
+export function filterMcpServersByAgent(
+  servers: McpServerEntry[],
+  agentConfig: ResolvedAgent | null | undefined,
+): McpServerEntry[] {
+  const allowed = agentConfig?.mcpServers;
+  if (!allowed || allowed.length === 0) return servers;
+  return servers.filter(s => allowed.includes(s.name));
+}
 
 /**
  * Ensure workspace is checked out to the tip of the local main/master branch before creating a worktree.
@@ -302,13 +331,15 @@ export async function streamQuery(
     }
 
     // Load installed plugins so the SDK subprocess can execute skills
-    const installedPlugins = getInstalledPlugins();
+    const allPlugins = getInstalledPlugins();
+    const installedPlugins = filterPluginsByAgent(allPlugins, agentConfig);
 
     // Build signal server for progress reporting
     const signalServer = buildSignalServer(sessionId, callbacks);
 
     // Load MCP servers from user and project configs
-    const mcpServerEntries = getAllMcpServers(workspace);
+    const allMcpServerEntries = getAllMcpServers(workspace);
+    const mcpServerEntries = filterMcpServersByAgent(allMcpServerEntries, agentConfig);
     const userMcpServers = buildSdkMcpServers(mcpServerEntries);
 
     // Determine if worktree should be enabled

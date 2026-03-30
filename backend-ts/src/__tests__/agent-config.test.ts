@@ -98,6 +98,80 @@ personality: Be helpful and concise.
       const result = await loadAgentsFromDir(testDir);
       expect(result).toHaveLength(0);
     });
+
+    it('parses agent with skills and mcpServers fields', async () => {
+      const agentDir = path.join(testDir, 'skill-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+      fs.writeFileSync(path.join(agentDir, 'agent.yaml'), `
+name: Skill Agent
+description: Agent with skills
+skills:
+  required:
+    - frontend-patterns
+    - frontend-design
+  available:
+    - impeccable
+mcpServers:
+  - playwright
+  - chrome-devtools
+`);
+
+      const result = await loadAgentsFromDir(testDir);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('skill-agent');
+      expect(result[0].skills).toEqual({
+        required: ['frontend-patterns', 'frontend-design'],
+        available: ['impeccable'],
+      });
+      expect(result[0].mcpServers).toEqual(['playwright', 'chrome-devtools']);
+    });
+
+    it('parses agent without skills or mcpServers (backward compat)', async () => {
+      const agentDir = path.join(testDir, 'legacy-agent');
+      fs.mkdirSync(agentDir, { recursive: true });
+      fs.writeFileSync(path.join(agentDir, 'agent.yaml'), `
+name: Legacy Agent
+description: Agent without new fields
+model: sonnet
+`);
+
+      const result = await loadAgentsFromDir(testDir);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('legacy-agent');
+      expect(result[0].skills).toBeUndefined();
+      expect(result[0].mcpServers).toBeUndefined();
+    });
+
+    it('parses agent with only required skills', async () => {
+      const agentDir = path.join(testDir, 'required-only');
+      fs.mkdirSync(agentDir, { recursive: true });
+      fs.writeFileSync(path.join(agentDir, 'agent.yaml'), `
+name: Required Only Agent
+skills:
+  required:
+    - tdd
+`);
+
+      const result = await loadAgentsFromDir(testDir);
+      expect(result).toHaveLength(1);
+      expect(result[0].skills).toEqual({ required: ['tdd'] });
+    });
+
+    it('parses agent with only available skills', async () => {
+      const agentDir = path.join(testDir, 'available-only');
+      fs.mkdirSync(agentDir, { recursive: true });
+      fs.writeFileSync(path.join(agentDir, 'agent.yaml'), `
+name: Available Only Agent
+skills:
+  available:
+    - impeccable
+    - another-skill
+`);
+
+      const result = await loadAgentsFromDir(testDir);
+      expect(result).toHaveLength(1);
+      expect(result[0].skills).toEqual({ available: ['impeccable', 'another-skill'] });
+    });
   });
 
 

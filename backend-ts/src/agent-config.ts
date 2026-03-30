@@ -36,6 +36,11 @@ export const AgentConfigSchema = z.object({
     allowed: z.array(z.string()).optional(),
     blocked: z.array(z.string()).optional(),
   }).optional(),
+  skills: z.object({
+    required: z.array(z.string()).optional(),
+    available: z.array(z.string()).optional(),
+  }).optional(),
+  mcpServers: z.array(z.string()).optional(),
   security: SecurityConfigSchema.optional(),
   memory: MemoryConfigSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
