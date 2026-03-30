@@ -224,7 +224,7 @@ export async function startTelegramBridge(): Promise<void> {
 
   // Log allowlist status
   if (config.TELEGRAM_ALLOWLIST.length === 0) {
-    log.warn('Telegram bridge running without allowlist — any user can interact with Captain');
+    log.warn('SECURITY: Telegram bridge started without CCPLUS_TELEGRAM_ALLOWLIST — all users will be rejected. Set CCPLUS_TELEGRAM_ALLOWLIST to grant access.');
   } else {
     log.info('Telegram bridge allowlist configured', { count: config.TELEGRAM_ALLOWLIST.length });
   }
@@ -619,7 +619,7 @@ async function startPollingWithRetry(): Promise<void> {
 }
 
 function isAllowed(ctx: Context): boolean {
-  if (config.TELEGRAM_ALLOWLIST.length === 0) return true;
+  if (config.TELEGRAM_ALLOWLIST.length === 0) return false;
 
   const userId = String(ctx.from?.id ?? '');
   const username = ctx.from?.username ?? '';

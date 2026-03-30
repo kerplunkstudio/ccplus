@@ -143,7 +143,7 @@ describe('TelegramBridge', () => {
       await startTelegramBridge();
 
       expect(log.warn).toHaveBeenCalledWith(
-        'Telegram bridge running without allowlist — any user can interact with Captain'
+        'SECURITY: Telegram bridge started without CCPLUS_TELEGRAM_ALLOWLIST — all users will be rejected. Set CCPLUS_TELEGRAM_ALLOWLIST to grant access.'
       );
     });
 
@@ -162,6 +162,77 @@ describe('TelegramBridge', () => {
       await startTelegramBridge();
 
       expect(isTelegramBridgeActive()).toBe(true);
+    });
+  });
+
+  describe('isAllowed (via message:text handler)', () => {
+    function makeCtx(userId: string, username: string, replyFn: ReturnType<typeof vi.fn>) {
+      return {
+        from: { id: Number(userId), username },
+        chat: { id: 999 },
+        message: { text: 'hello' },
+        reply: replyFn,
+        api: {
+          sendChatAction: vi.fn().mockResolvedValue(undefined),
+        },
+      };
+    }
+
+    function getTextHandler(botInstance: any): ((ctx: any) => Promise<void>) {
+      // botInstance.on is called with ('message:text', handler)
+      const call = vi.mocked(botInstance.on).mock.calls.find(
+        (c: any[]) => c[0] === 'message:text'
+      );
+      return call![1];
+    }
+
+    it('rejects any user when allowlist is empty', async () => {
+      vi.mocked(config).TELEGRAM_ALLOWLIST = [];
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+      const handler = getTextHandler(botInstance);
+
+      const reply = vi.fn().mockResolvedValue(undefined);
+      await handler(makeCtx('99999', 'anyone', reply));
+
+      expect(reply).toHaveBeenCalledWith(expect.stringMatching(/access denied/i));
+    });
+
+    it('allows a user whose numeric id is in the allowlist', async () => {
+      vi.mocked(config).TELEGRAM_ALLOWLIST = ['12345'];
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+      const handler = getTextHandler(botInstance);
+
+      const reply = vi.fn().mockResolvedValue(undefined);
+      // The handler calls captain functions when allowed; we just verify no rejection reply
+      await handler(makeCtx('12345', '', reply));
+
+      expect(reply).not.toHaveBeenCalledWith(expect.stringMatching(/not configured|access denied/i));
+    });
+
+    it('allows a user whose username is in the allowlist', async () => {
+      vi.mocked(config).TELEGRAM_ALLOWLIST = ['alice'];
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+      const handler = getTextHandler(botInstance);
+
+      const reply = vi.fn().mockResolvedValue(undefined);
+      await handler(makeCtx('99999', 'alice', reply));
+
+      expect(reply).not.toHaveBeenCalledWith(expect.stringMatching(/not configured|access denied/i));
+    });
+
+    it('rejects a user whose id and username are not in the allowlist', async () => {
+      vi.mocked(config).TELEGRAM_ALLOWLIST = ['12345'];
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+      const handler = getTextHandler(botInstance);
+
+      const reply = vi.fn().mockResolvedValue(undefined);
+      await handler(makeCtx('99999', 'stranger', reply));
+
+      expect(reply).toHaveBeenCalledWith(expect.stringMatching(/access denied/i));
     });
   });
 
