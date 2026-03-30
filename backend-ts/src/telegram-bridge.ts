@@ -645,12 +645,25 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
   // Send typing indicator
   await ctx.api.sendChatAction(chatId, 'typing');
 
-  // Set up typing interval
-  const existingState = chatStates.get(chatId);
-  if (existingState?.typingInterval) {
-    clearInterval(existingState.typingInterval);
+  // Clean up any in-flight state from a previous message before creating the new one
+  const callbackId = `telegram:${chatId}`;
+  const previousState = chatStates.get(chatId);
+  if (previousState) {
+    if (previousState.flushTimer) {
+      clearTimeout(previousState.flushTimer);
+    }
+    if (previousState.typingInterval) {
+      clearInterval(previousState.typingInterval);
+    }
+    // Flush any pending text from the interrupted message so it is not lost
+    if (previousState.pendingText && previousState.pendingText !== previousState.lastSentText) {
+      flushPendingText(chatId).catch((err) => {
+        log.error('Telegram pre-empt flush error', { chatId, error: String(err) });
+      });
+    }
   }
 
+  // Set up new typing interval
   const typingInterval = setInterval(async () => {
     try {
       await ctx.api.sendChatAction(chatId, 'typing');
@@ -659,8 +672,6 @@ async function handleMessageById(chatId: number, ctx: Context, text: string): Pr
     }
   }, TYPING_INTERVAL_MS);
 
-  // Initialize chat state
-  const callbackId = `telegram:${chatId}`;
   const newState: ChatState = {
     callbackId,
     pendingText: '',

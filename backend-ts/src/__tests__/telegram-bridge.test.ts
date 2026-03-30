@@ -620,4 +620,111 @@ describe('TelegramBridge', () => {
 
   // Note: Streaming tests are complex due to vitest mock/timer interactions.
   // The streaming feature is implemented and functional. Integration testing would be more appropriate.
+
+  describe('concurrent message race condition (BUG-04)', () => {
+    beforeEach(() => {
+      // Restore the Bot mock to its original implementation before each test in this block,
+      // because the 'polling retry' tests use vi.mocked(Bot).mockImplementation(...) which
+      // overrides the default and is NOT reset by vi.clearAllMocks().
+      vi.mocked(Bot).mockImplementation(function (this: any) {
+        this.start = vi.fn().mockResolvedValue(undefined);
+        this.stop = vi.fn();
+        this.command = vi.fn();
+        this.on = vi.fn();
+        this.catch = vi.fn();
+        this.api = {
+          sendMessage: vi.fn().mockResolvedValue({ message_id: 123 }),
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
+          deleteWebhook: vi.fn().mockResolvedValue(undefined),
+          sendChatAction: vi.fn().mockResolvedValue(undefined),
+          editMessageText: vi.fn().mockResolvedValue(undefined),
+        };
+      } as any);
+    });
+
+    function buildCtx(chatId: number) {
+      return {
+        chat: { id: chatId },
+        from: { id: 12345, username: '12345' },
+        api: {
+          sendMessage: vi.fn().mockResolvedValue({ message_id: 999 }),
+          deleteMessage: vi.fn().mockResolvedValue(undefined),
+          sendChatAction: vi.fn().mockResolvedValue(undefined),
+          editMessageText: vi.fn().mockResolvedValue(undefined),
+        },
+        reply: vi.fn().mockResolvedValue(undefined),
+        message: { text: 'hello' },
+      } as any;
+    }
+
+    function getTextHandler(botInstance: any): ((ctx: any) => Promise<void>) | undefined {
+      const calls = botInstance.on.mock.calls;
+      const entry = calls.find((c: any[]) => c[0] === 'message:text');
+      return entry ? entry[1] : undefined;
+    }
+
+    it('clears previous flushTimer when a second message arrives before first completes', async () => {
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+
+      const handler = getTextHandler(botInstance);
+      expect(handler).toBeDefined();
+
+      const chatId = 77001;
+      const ctx1 = buildCtx(chatId);
+
+      // First message — creates initial chat state
+      await handler!(ctx1);
+
+      // Simulate onText being called for the first message, installing a flushTimer
+      const registerCalls = vi.mocked(captain.registerResponseCallback).mock.calls;
+      const firstCallbackEntry = registerCalls.find((c) => c[0] === `telegram:${chatId}`);
+      expect(firstCallbackEntry).toBeDefined();
+      const firstCallbacks = firstCallbackEntry![1] as any;
+
+      // Track clearTimeout calls to verify the flushTimer is cancelled
+      const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+
+      // Trigger onText which schedules a flushTimer on the state
+      firstCallbacks.onText('partial response from message 1', 0);
+      await Promise.resolve();
+
+      // Second message arrives before the first completes — should clear previous timers
+      const ctx2 = buildCtx(chatId);
+      await handler!(ctx2);
+
+      // clearTimeout must have been called (for the flushTimer from message 1's onText call)
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      // clearInterval must have been called (for the typingInterval from message 1)
+      expect(clearIntervalSpy).toHaveBeenCalled();
+
+      clearTimeoutSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    });
+
+    it('does not call clearTimeout/clearInterval for the first message (no prior state)', async () => {
+      await startTelegramBridge();
+      const botInstance = vi.mocked(Bot).mock.results[0].value;
+
+      const handler = getTextHandler(botInstance);
+      expect(handler).toBeDefined();
+
+      const chatId = 77002;
+      const ctx = buildCtx(chatId);
+
+      const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
+
+      // First-ever message for this chatId — no prior state to clean up
+      await handler!(ctx);
+
+      // No cleanup calls expected since there was no previous state
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
+      expect(clearIntervalSpy).not.toHaveBeenCalled();
+
+      clearTimeoutSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    });
+  });
 });
