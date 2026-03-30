@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Message } from '../types';
+import { Message, ImageAttachment } from '../types';
 import { InteractiveMessage } from '../types/interactive';
 import { MessageBubble } from './MessageBubble';
 import { InteractiveCard } from './InteractiveCard';
@@ -20,7 +20,7 @@ interface CaptainChatProps {
   isThinking: boolean;
   isModelThinking?: boolean;
   toolActivity?: string | null;
-  onSendMessage: (content: string, model?: string, imageIds?: string[], images?: import('../types').ImageAttachment[]) => void;
+  onSendMessage: (content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => void;
   sessionId?: string;
   archivedConversations: CaptainConversation[];
   onClearHistory: () => void;

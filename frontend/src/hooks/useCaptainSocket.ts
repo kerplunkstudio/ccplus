@@ -331,7 +331,7 @@ export function useCaptainSocket(socket: Socket | null) {
   );
 
   const sendMessage = useCallback(
-    async (content: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
+    async (content: string, _workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
       if (!socket || !captainSessionId || (!content.trim() && !imageIds?.length)) return;
 
       // Handle /clear command
