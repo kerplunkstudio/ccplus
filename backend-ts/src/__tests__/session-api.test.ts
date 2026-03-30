@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { startSession } from '../session-api.js';
+import { startSession, createPendingSession, approvePendingSession, rejectPendingSession, _clearPendingStore } from '../session-api.js';
+import * as fleetMonitor from '../fleet-monitor.js';
 import { homedir } from 'os';
 import path from 'path';
+
+vi.mock('../fleet-monitor.js', () => ({
+  registerSession: vi.fn(),
+  updateSessionStatus: vi.fn(),
+}));
+
+vi.mock('../workflow-config.js', () => ({
+  loadWorkflow: vi.fn(() => ({ worktree: false })),
+}));
 
 describe('session-api', () => {
   const mockDatabase = {
@@ -40,6 +50,7 @@ describe('session-api', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSessionWorkspaces.clear();
+    _clearPendingStore();
     mockDatabase.recordMessage.mockReturnValue({ id: 1 });
     mockDatabase.getConversationHistory.mockReturnValue([]);
     mockSdkSession.isActive.mockReturnValue(false);
@@ -280,6 +291,212 @@ describe('session-api', () => {
       expect(result.sessionId).toBeDefined();
       // Verify incrementUserStats was called (and threw)
       expect(mockDatabase.incrementUserStats).toHaveBeenCalledWith('local', 1);
+    });
+  });
+
+  describe('createPendingSession', () => {
+    it('creates pending session with valid input', () => {
+      const result = createPendingSession(
+        { prompt: 'test prompt', workspace: homedir() },
+        dependencies
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.sessionId).toBeDefined();
+      expect(fleetMonitor.registerSession).toHaveBeenCalledWith(
+        result.sessionId,
+        homedir(),
+        undefined
+      );
+      expect(fleetMonitor.updateSessionStatus).toHaveBeenCalledWith(
+        result.sessionId,
+        'pending'
+      );
+    });
+
+    it('validates prompt and workspace', () => {
+      const result = createPendingSession(
+        { prompt: '', workspace: homedir() },
+        dependencies
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('prompt is required');
+    });
+
+    it('does NOT record message in database', () => {
+      createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+      expect(mockDatabase.recordMessage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call submitQuery', () => {
+      createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+      expect(mockSdkSession.submitQuery).not.toHaveBeenCalled();
+    });
+
+    it('stores requestedBy and workflow data', () => {
+      const requestedBy = { source: 'telegram', sourceId: 'user123' };
+      const result = createPendingSession(
+        {
+          prompt: 'test',
+          workspace: homedir(),
+          requestedBy,
+          workflow: 'feature',
+        },
+        dependencies
+      );
+      expect(result.success).toBe(true);
+      expect(fleetMonitor.registerSession).toHaveBeenCalledWith(
+        result.sessionId,
+        homedir(),
+        requestedBy
+      );
+    });
+  });
+
+  describe('approvePendingSession', () => {
+    it('approves pending session and starts it', () => {
+      // Create pending session first
+      const pendingResult = createPendingSession(
+        { prompt: 'test prompt', workspace: homedir() },
+        dependencies
+      );
+      expect(pendingResult.success).toBe(true);
+
+      mockDatabase.getConversationHistory.mockReturnValue([{ id: 1 }]);
+
+      // Approve it
+      const result = approvePendingSession(pendingResult.sessionId!, dependencies);
+
+      expect(result.success).toBe(true);
+      expect(result.sessionId).toBe(pendingResult.sessionId);
+      expect(mockDatabase.recordMessage).toHaveBeenCalledWith(
+        pendingResult.sessionId,
+        'local',
+        'user',
+        'test prompt',
+        undefined,
+        homedir(),
+        undefined
+      );
+      expect(mockSdkSession.submitQuery).toHaveBeenCalled();
+      expect(mockSessionWorkspaces.get(pendingResult.sessionId!)).toBe(homedir());
+    });
+
+    it('rejects approval of non-existent pending session', () => {
+      const result = approvePendingSession('nonexistent-session', dependencies);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No pending session found');
+    });
+
+    it('removes session from pending store after approval', () => {
+      const pendingResult = createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+      mockDatabase.getConversationHistory.mockReturnValue([{ id: 1 }]);
+
+      approvePendingSession(pendingResult.sessionId!, dependencies);
+
+      // Try to approve again - should fail
+      const secondApproval = approvePendingSession(pendingResult.sessionId!, dependencies);
+      expect(secondApproval.success).toBe(false);
+      expect(secondApproval.error).toContain('No pending session found');
+    });
+
+    it('passes model and workflow to SDK', () => {
+      const pendingResult = createPendingSession(
+        {
+          prompt: 'test',
+          workspace: homedir(),
+          model: 'claude-opus-4',
+          workflow: 'feature',
+        },
+        dependencies
+      );
+      mockDatabase.getConversationHistory.mockReturnValue([{ id: 1 }]);
+
+      approvePendingSession(pendingResult.sessionId!, dependencies);
+
+      expect(mockSdkSession.submitQuery).toHaveBeenCalledWith(
+        pendingResult.sessionId,
+        'test',
+        homedir(),
+        expect.any(Object),
+        'claude-opus-4',
+        undefined,
+        undefined,
+        undefined,
+        'feature'
+      );
+    });
+  });
+
+  describe('rejectPendingSession', () => {
+    it('rejects pending session', () => {
+      // Create pending session first
+      const pendingResult = createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+      expect(pendingResult.success).toBe(true);
+
+      // Reject it
+      const result = rejectPendingSession(pendingResult.sessionId!);
+
+      expect(result.success).toBe(true);
+      expect(result.sessionId).toBe(pendingResult.sessionId);
+      expect(fleetMonitor.updateSessionStatus).toHaveBeenCalledWith(
+        pendingResult.sessionId,
+        'cancelled'
+      );
+    });
+
+    it('rejects rejection of non-existent pending session', () => {
+      const result = rejectPendingSession('nonexistent-session');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No pending session found');
+    });
+
+    it('removes session from pending store after rejection', () => {
+      const pendingResult = createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+
+      rejectPendingSession(pendingResult.sessionId!);
+
+      // Try to reject again - should fail
+      const secondRejection = rejectPendingSession(pendingResult.sessionId!);
+      expect(secondRejection.success).toBe(false);
+      expect(secondRejection.error).toContain('No pending session found');
+    });
+
+    it('does NOT record message in database', () => {
+      const pendingResult = createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+
+      rejectPendingSession(pendingResult.sessionId!);
+
+      expect(mockDatabase.recordMessage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call submitQuery', () => {
+      const pendingResult = createPendingSession(
+        { prompt: 'test', workspace: homedir() },
+        dependencies
+      );
+
+      rejectPendingSession(pendingResult.sessionId!);
+
+      expect(mockSdkSession.submitQuery).not.toHaveBeenCalled();
     });
   });
 });

@@ -7,7 +7,7 @@ import { log } from "./logger.js";
 
 export interface FleetSessionInfo {
   sessionId: string;
-  status: 'running' | 'idle' | 'completed' | 'failed' | 'cancelled';
+  status: 'running' | 'idle' | 'completed' | 'failed' | 'cancelled' | 'pending';
   workspace: string;
   toolCount: number;
   activeAgents: number;
@@ -244,6 +244,7 @@ export function getFleetState(): FleetState {
   const aggregate = {
     totalSessions: sessionList.length,
     activeSessions: sessionList.filter(s => s.status === 'running').length,
+    pendingSessions: sessionList.filter(s => s.status === 'pending').length,
     totalToolCalls: sessionList.reduce((sum, s) => sum + s.toolCount, 0),
     totalInputTokens: sessionList.reduce((sum, s) => sum + s.inputTokens, 0),
     totalOutputTokens: sessionList.reduce((sum, s) => sum + s.outputTokens, 0),

@@ -389,8 +389,8 @@ describe('captain-tools', () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error).toContain('Unknown workflow');
       expect(parsed.error).toContain('nonexistent-workflow');
-      // startSession must NOT have been called
-      expect(vi.mocked(sessionApi.startSession)).not.toHaveBeenCalled();
+      // createPendingSession must NOT have been called
+      expect(vi.mocked(sessionApi.createPendingSession)).not.toHaveBeenCalled();
     });
 
     it('includes the list of available workflows in the error message for an unknown workflow', async () => {
@@ -410,9 +410,9 @@ describe('captain-tools', () => {
       expect(parsed.error).toContain('default');
     });
 
-    it('proceeds to startSession when workflow name is valid', async () => {
+    it('creates pending session when workflow name is valid', async () => {
       vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix', 'default']);
-      vi.mocked(sessionApi.startSession).mockReturnValue({
+      vi.mocked(sessionApi.createPendingSession).mockReturnValue({
         success: true,
         sessionId: 'new-session-123',
       });
@@ -427,12 +427,14 @@ describe('captain-tools', () => {
 
       expect(parsed.success).toBe(true);
       expect(parsed.session_id).toBe('new-session-123');
-      expect(vi.mocked(sessionApi.startSession)).toHaveBeenCalledOnce();
+      expect(parsed.status).toBe('pending');
+      expect(parsed.message).toContain('awaiting user approval');
+      expect(vi.mocked(sessionApi.createPendingSession)).toHaveBeenCalledOnce();
     });
 
-    it('returns success:false when startSession itself fails (after passing workflow validation)', async () => {
+    it('returns success:false when createPendingSession itself fails (after passing workflow validation)', async () => {
       vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature']);
-      vi.mocked(sessionApi.startSession).mockReturnValue({
+      vi.mocked(sessionApi.createPendingSession).mockReturnValue({
         success: false,
         error: 'workspace path does not exist or is not a directory',
       });

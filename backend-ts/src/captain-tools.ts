@@ -12,7 +12,7 @@ import { execFileSync, spawn } from 'child_process';
 import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
-import { startSession } from "./session-api.js";
+import { startSession, createPendingSession } from "./session-api.js";
 import { getWorkflowState, transitionPhase, skipToPhase } from "./workflow-state.js";
 import { loadWorkflow, listWorkflows } from "./workflow-config.js";
 import { log } from "./logger.js";
@@ -124,7 +124,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             };
           }
 
-          const result = startSession(
+          const result = createPendingSession(
             {
               prompt: args.prompt,
               workspace: args.workspace,
@@ -136,6 +136,17 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           );
 
           if (result.success) {
+            // Emit session proposal event to fleet monitor room
+            const io = deps.io as any;
+            if (io && io.to) {
+              io.to('fleet_monitor').emit('session_proposal', {
+                session_id: result.sessionId,
+                prompt: args.prompt,
+                workspace: args.workspace,
+                workflow: args.workflow,
+              });
+            }
+
             return {
               content: [
                 {
@@ -143,7 +154,8 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: true,
                     session_id: result.sessionId,
-                    message: `Session ${result.sessionId} started successfully`,
+                    status: "pending",
+                    message: `Session ${result.sessionId} created in pending state — awaiting user approval`,
                   }, null, 2),
                 },
               ],

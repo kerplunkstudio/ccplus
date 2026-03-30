@@ -215,6 +215,7 @@ setupSocketHandlers(io, {
   connectedClients,
   database,
   sdkSession,
+  sessionWorkspaces,
   ptyService,
   captain,
   scheduler,

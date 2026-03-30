@@ -50,6 +50,15 @@ describe('Fleet Monitor', () => {
       const detail = fleetMonitor.getSessionDetail('unknown');
       expect(detail).toBeNull();
     });
+
+    it('supports pending status', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+
+      fleetMonitor.updateSessionStatus('sess1', 'pending');
+
+      const afterUpdate = fleetMonitor.getSessionDetail('sess1');
+      expect(afterUpdate?.status).toBe('pending');
+    });
   });
 
   describe('incrementToolCount', () => {
@@ -213,9 +222,27 @@ describe('Fleet Monitor', () => {
       expect(state.sessions).toEqual([]);
       expect(state.aggregate.totalSessions).toBe(0);
       expect(state.aggregate.activeSessions).toBe(0);
+      expect(state.aggregate.pendingSessions).toBe(0);
       expect(state.aggregate.totalToolCalls).toBe(0);
       expect(state.aggregate.totalInputTokens).toBe(0);
       expect(state.aggregate.totalOutputTokens).toBe(0);
+    });
+
+    it('counts pending sessions in aggregate', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'pending');
+
+      fleetMonitor.registerSession('sess2', '/workspace/project2');
+      fleetMonitor.updateSessionStatus('sess2', 'pending');
+
+      fleetMonitor.registerSession('sess3', '/workspace/project3');
+      fleetMonitor.updateSessionStatus('sess3', 'running');
+
+      const state = fleetMonitor.getFleetState();
+
+      expect(state.aggregate.totalSessions).toBe(3);
+      expect(state.aggregate.activeSessions).toBe(1);
+      expect(state.aggregate.pendingSessions).toBe(2);
     });
   });
 

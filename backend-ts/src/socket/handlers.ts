@@ -4,6 +4,7 @@ import { log } from "../logger.js";
 import { validateCronExpression, type Scheduler } from "../scheduler.js";
 import type { RouteDependencies } from "../routes/types.js";
 import type { InteractiveMessage } from "../interactive-message.js";
+import * as sessionApi from "../session-api.js";
 
 // Helper: Join a session room and sync state
 function joinSession(
@@ -93,8 +94,8 @@ export function setupSocketHandlers(
     scheduler: Scheduler;
   }
 ): void {
-  const { connectedClients, database, sdkSession, ptyService, captain, scheduler, getWorkspaceForSession, buildSocketCallbacks } = deps;
-  if (!connectedClients || !database || !sdkSession || !getWorkspaceForSession || !buildSocketCallbacks) {
+  const { connectedClients, database, sdkSession, sessionWorkspaces, ptyService, captain, scheduler, getWorkspaceForSession, buildSocketCallbacks } = deps;
+  if (!connectedClients || !database || !sdkSession || !sessionWorkspaces || !getWorkspaceForSession || !buildSocketCallbacks) {
     throw new Error("Missing required dependencies");
   }
 
@@ -561,6 +562,55 @@ export function setupSocketHandlers(
 
       if (!responded) {
         socket.emit('captain_error', { message: `No pending interactive message with id: ${data.messageId}` });
+      }
+    });
+
+    // -- Pending Session Handlers --
+
+    socket.on('approve_session', async (data: { session_id: string }) => {
+      try {
+        if (!data.session_id || typeof data.session_id !== 'string') {
+          socket.emit('session_action_error', { error: 'session_id is required and must be a string' });
+          return;
+        }
+
+        const result = sessionApi.approvePendingSession(data.session_id, {
+          database,
+          sdkSession,
+          sessionWorkspaces,
+          io,
+          buildSocketCallbacks,
+          log,
+        });
+
+        if (result.success) {
+          socket.emit('session_approved', { session_id: result.sessionId });
+        } else {
+          socket.emit('session_action_error', { error: result.error });
+        }
+      } catch (error) {
+        log.error('Failed to approve session', { error: String(error) });
+        socket.emit('session_action_error', { error: String(error) });
+      }
+    });
+
+    socket.on('reject_session', (data: { session_id: string }) => {
+      try {
+        if (!data.session_id || typeof data.session_id !== 'string') {
+          socket.emit('session_action_error', { error: 'session_id is required and must be a string' });
+          return;
+        }
+
+        const result = sessionApi.rejectPendingSession(data.session_id);
+
+        if (result.success) {
+          socket.emit('session_rejected', { session_id: result.sessionId });
+        } else {
+          socket.emit('session_action_error', { error: result.error });
+        }
+      } catch (error) {
+        log.error('Failed to reject session', { error: String(error) });
+        socket.emit('session_action_error', { error: String(error) });
       }
     });
 
