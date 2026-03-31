@@ -15,6 +15,7 @@ import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
+import { isBriefMode } from './captain-tick.js';
 import type { InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 
 // ---- Types ----
@@ -40,6 +41,31 @@ interface CaptainDependencies {
   io: unknown;
   buildSocketCallbacks: (sessionId: string, projectPath?: string) => unknown;
   log: typeof log;
+}
+
+// ---- Brief Mode Output Filter ----
+
+const BRIEF_MODE_PASSTHROUGH_PATTERNS = [
+  /\bstuck\b/i,
+  /\berror\b/i,
+  /\bfailed\b/i,
+  /\bblocker\b/i,
+  /\bapprove\b/i,
+  /\bpending\b/i,
+  /\bstart_session\b/i,
+  /\bcancel_session\b/i,
+  /\bcompleted\b/i,
+  /\bdecision\b/i,
+];
+
+/**
+ * In brief mode (tick-originated queries), suppress output unless it contains
+ * actionable keywords. Tool calls (start_session, sleep, etc.) still execute
+ * normally — only chat text is filtered.
+ */
+export function shouldSuppressBriefOutput(text: string): boolean {
+  if (!isBriefMode()) return false;
+  return !BRIEF_MODE_PASSTHROUGH_PATTERNS.some(pattern => pattern.test(text));
 }
 
 // ---- State ----
@@ -284,16 +310,21 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 
         const fullText = textBlocks.join("");
         if (fullText.length > 0 && !isIdleMessage(fullText)) {
-          // Send to target callback(s)
-          for (const callback of getTargetCallbacks(routeToCallbackId)) {
-            try {
-              callback.onText(fullText, messageIndex);
-            } catch (error) {
-              log.error("Captain callback error (onText)", { error: String(error) });
+          // In brief mode (tick-originated), suppress non-actionable output from chat UI
+          const suppressFromChat = shouldSuppressBriefOutput(fullText);
+
+          if (!suppressFromChat) {
+            // Send to target callback(s)
+            for (const callback of getTargetCallbacks(routeToCallbackId)) {
+              try {
+                callback.onText(fullText, messageIndex);
+              } catch (error) {
+                log.error("Captain callback error (onText)", { error: String(error) });
+              }
             }
           }
 
-          // Save assistant message to DB (wrap in try/catch, never throw)
+          // Always save to DB for observability (even if suppressed from chat)
           try {
             const convId = database.getLatestCaptainConversationId() ?? `captain-conv-${Date.now()}`;
             database.saveCaptainMessage({
