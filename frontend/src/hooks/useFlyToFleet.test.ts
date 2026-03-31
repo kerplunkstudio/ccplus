@@ -35,7 +35,14 @@ describe('useFlyToFleet', () => {
 
     trigger(sourceElement);
 
+    // Transition is set synchronously before the requestAnimationFrame callbacks
     expect(sourceElement.style.transition).toContain('opacity');
+
+    // Flush nested requestAnimationFrame callbacks.
+    // Jest fakes rAF as setTimeout(fn, 1000/60) ≈ 16ms per frame.
+    // The hook uses two nested rAF calls, so advance 50ms to fire both frames.
+    jest.advanceTimersByTime(50);
+
     expect(sourceElement.style.opacity).toBe('0');
   });
 
@@ -55,9 +62,10 @@ describe('useFlyToFleet', () => {
     }));
     document.body.appendChild(sourceElement);
 
-    // Create fleet panel
+    // Create fleet panel — must match .captain-panel[data-fleet-panel]
     const fleetPanel = document.createElement('div');
-    fleetPanel.className = 'fleet-monitor';
+    fleetPanel.className = 'captain-panel';
+    fleetPanel.dataset.fleetPanel = 'true';
     fleetPanel.getBoundingClientRect = jest.fn(() => ({
       top: 500,
       left: 600,
@@ -104,7 +112,8 @@ describe('useFlyToFleet', () => {
     document.body.appendChild(sourceElement);
 
     const fleetPanel = document.createElement('div');
-    fleetPanel.className = 'fleet-monitor';
+    fleetPanel.className = 'captain-panel';
+    fleetPanel.dataset.fleetPanel = 'true';
     fleetPanel.getBoundingClientRect = jest.fn(() => ({
       top: 500,
       left: 600,
@@ -129,8 +138,8 @@ describe('useFlyToFleet', () => {
     // Fleet panel should have pulse class
     expect(fleetPanel.classList.contains('fleet-panel-pulse')).toBe(true);
 
-    // Fast-forward through pulse animation
-    jest.advanceTimersByTime(500);
+    // Fast-forward through pulse animation (800ms to match hook's setTimeout duration)
+    jest.advanceTimersByTime(800);
 
     // Pulse class should be removed
     expect(fleetPanel.classList.contains('fleet-panel-pulse')).toBe(false);
@@ -151,8 +160,10 @@ describe('useFlyToFleet', () => {
     }));
     document.body.appendChild(sourceElement);
 
+    // Create fleet panel — must match .captain-panel[data-fleet-panel]
     const fleetPanel = document.createElement('div');
-    fleetPanel.className = 'fleet-monitor';
+    fleetPanel.className = 'captain-panel';
+    fleetPanel.dataset.fleetPanel = 'true';
     fleetPanel.getBoundingClientRect = jest.fn(() => ({
       top: 500,
       left: 600,
@@ -172,9 +183,9 @@ describe('useFlyToFleet', () => {
 
     trigger(sourceElement);
 
-    // Fast-forward through both animations
+    // Fast-forward through fly animation then pulse animation (800ms to match hook)
     jest.advanceTimersByTime(600);
-    jest.advanceTimersByTime(500);
+    jest.advanceTimersByTime(800);
 
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -194,8 +205,10 @@ describe('useFlyToFleet', () => {
     }));
     document.body.appendChild(sourceElement);
 
+    // Create fleet panel — must match .captain-panel[data-fleet-panel]
     const fleetPanel = document.createElement('div');
-    fleetPanel.className = 'fleet-monitor';
+    fleetPanel.className = 'captain-panel';
+    fleetPanel.dataset.fleetPanel = 'true';
     fleetPanel.getBoundingClientRect = jest.fn(() => ({
       top: 500,
       left: 600,

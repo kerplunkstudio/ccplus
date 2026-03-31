@@ -18,17 +18,25 @@ export function useFlyToFleet(options: FlyToFleetOptions = {}) {
   const trigger = useCallback((sourceElement: HTMLElement | null) => {
     if (!sourceElement) return;
 
-    // Find the fleet monitor panel
-    const fleetPanel = document.querySelector('.fleet-monitor');
+    // Find the fleet panel using data attribute selector (robust to layout changes)
+    const fleetPanel = document.querySelector('.captain-panel[data-fleet-panel]');
+
     if (!fleetPanel) {
-      // Graceful fallback: just fade out the source
-      sourceElement.style.transition = 'opacity 300ms ease-out';
-      sourceElement.style.opacity = '0';
+      // Graceful fallback: "poof" animation (scale up + fade out)
+      sourceElement.style.transition = 'transform 400ms cubic-bezier(0.25, 0.1, 0.25, 1), opacity 400ms ease-out';
+      sourceElement.style.transformOrigin = 'center center';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          sourceElement.style.transform = 'scale(1.3)';
+          sourceElement.style.opacity = '0';
+        });
+      });
       setTimeout(() => {
+        sourceElement.style.transform = '';
         sourceElement.style.opacity = '';
         sourceElement.style.transition = '';
         onComplete?.();
-      }, 300);
+      }, 400);
       return;
     }
 
@@ -52,6 +60,7 @@ export function useFlyToFleet(options: FlyToFleetOptions = {}) {
     clone.style.pointerEvents = 'none';
     clone.style.transition = `transform ${duration}ms cubic-bezier(0.25, 0.1, 0.25, 1), opacity ${duration}ms ease-out`;
     clone.style.transformOrigin = 'center center';
+    clone.style.boxShadow = '0 0 20px rgba(99, 102, 241, 0.5)'; // Blue/purple glow (applied instantly)
 
     // Append to body
     document.body.appendChild(clone);
@@ -63,8 +72,9 @@ export function useFlyToFleet(options: FlyToFleetOptions = {}) {
     // Start animation on next frame
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.3) rotate(3deg)`;
-        clone.style.opacity = '0.4';
+        clone.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.5) rotate(5deg)`;
+        clone.style.opacity = '0.2';
+        clone.style.boxShadow = '0 0 30px rgba(99, 102, 241, 0.7)'; // Brighter glow during flight
       });
     });
 
@@ -74,7 +84,7 @@ export function useFlyToFleet(options: FlyToFleetOptions = {}) {
       sourceElement.style.opacity = '';
       sourceElement.style.transition = '';
 
-      // Trigger fleet panel pulse
+      // Trigger fleet panel pulse on the captain-panel container
       const fleetElement = fleetPanel as HTMLElement;
       fleetElement.classList.add('fleet-panel-pulse');
 
@@ -82,7 +92,7 @@ export function useFlyToFleet(options: FlyToFleetOptions = {}) {
       setTimeout(() => {
         fleetElement.classList.remove('fleet-panel-pulse');
         onComplete?.();
-      }, 500);
+      }, 800); // Match the new animation duration
     }, duration);
   }, [duration, onComplete]);
 

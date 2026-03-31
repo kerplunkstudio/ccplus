@@ -111,15 +111,27 @@
 /* Fly-to-fleet animation */
 
 @keyframes fleetPulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
-  50% {
-    box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.3);
+  30% {
+    box-shadow: 0 0 40px 15px rgba(99, 102, 241, 0.6);
+  }
+  60% {
+    box-shadow: 0 0 30px 10px rgba(99, 102, 241, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
 }
 
+.captain-panel.fleet-panel-pulse {
+  animation: fleetPulse 800ms ease-out;
+  border-radius: var(--radius-md);
+}
+
+/* Legacy support for direct fleet-monitor pulse */
 .fleet-monitor.fleet-panel-pulse {
-  animation: fleetPulse 500ms ease-out;
+  animation: fleetPulse 800ms ease-out;
   border-radius: var(--radius-md);
 }

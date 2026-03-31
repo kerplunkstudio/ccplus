@@ -93,7 +93,7 @@ export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, capt
 
       <div className="captain-divider" onMouseDown={handleMouseDown} />
 
-      <div className="captain-panel" style={{ width: `${100 - dividerPosition}%` }}>
+      <div className="captain-panel" data-fleet-panel="true" style={{ width: `${100 - dividerPosition}%` }}>
         {selectedSessionId ? (
           <FleetSessionDetail
             sessionId={selectedSessionId}
