@@ -195,6 +195,63 @@ describe('FleetSessionCard', () => {
     });
   });
 
+  describe('session number badge', () => {
+    it('shows #47 badge when sessionNumber is 47', () => {
+      const sessionWithNumber: FleetSession = {
+        ...baseSession,
+        sessionNumber: 47,
+      };
+      render(<FleetSessionCard session={sessionWithNumber} onClick={mockOnClick} />);
+      expect(screen.getByText('#47')).toBeInTheDocument();
+    });
+
+    it('shows badge with class fleet-session-number when sessionNumber is provided', () => {
+      const sessionWithNumber: FleetSession = {
+        ...baseSession,
+        sessionNumber: 3,
+      };
+      const { container } = render(
+        <FleetSessionCard session={sessionWithNumber} onClick={mockOnClick} />
+      );
+      const badge = container.querySelector('.fleet-session-number');
+      expect(badge).toBeInTheDocument();
+      expect(badge?.textContent).toBe('#3');
+    });
+
+    it('does not show number badge when sessionNumber is undefined', () => {
+      const sessionWithoutNumber: FleetSession = {
+        ...baseSession,
+        sessionNumber: undefined,
+      };
+      const { container } = render(
+        <FleetSessionCard session={sessionWithoutNumber} onClick={mockOnClick} />
+      );
+      expect(container.querySelector('.fleet-session-number')).not.toBeInTheDocument();
+    });
+
+    it('does not show number badge when sessionNumber is absent from session', () => {
+      // baseSession has no sessionNumber property set
+      const { container } = render(
+        <FleetSessionCard session={baseSession} onClick={mockOnClick} />
+      );
+      expect(container.querySelector('.fleet-session-number')).not.toBeInTheDocument();
+    });
+
+    it('badge appears inside fleet-card-header', () => {
+      const sessionWithNumber: FleetSession = {
+        ...baseSession,
+        sessionNumber: 12,
+      };
+      const { container } = render(
+        <FleetSessionCard session={sessionWithNumber} onClick={mockOnClick} />
+      );
+      const header = container.querySelector('.fleet-card-header');
+      const badge = header?.querySelector('.fleet-session-number');
+      expect(badge).toBeInTheDocument();
+      expect(badge?.textContent).toBe('#12');
+    });
+  });
+
   describe('label truncation', () => {
     it('truncates long labels', () => {
       const longLabel = 'a'.repeat(100);

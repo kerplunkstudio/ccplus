@@ -77,6 +77,9 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
       <div className="fleet-card-header">
+        {session.sessionNumber && (
+          <div className="fleet-session-number">#{session.sessionNumber}</div>
+        )}
         <div className="fleet-card-project" title={session.workspace}>
           {projectName}
         </div>
