@@ -1,7 +1,17 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { InteractiveCard } from './InteractiveCard';
 
+// Mock useFlyToFleet so we can assert calls without DOM side effects
+const mockTriggerFlyToFleet = jest.fn();
+jest.mock('../hooks/useFlyToFleet', () => ({
+  useFlyToFleet: () => mockTriggerFlyToFleet,
+}));
+
 describe('InteractiveCard', () => {
+  beforeEach(() => {
+    mockTriggerFlyToFleet.mockClear();
+  });
+
   const mockButtons = [
     { label: 'Yes', type: 'primary' as const },
     { label: 'No', type: 'danger' as const },
@@ -177,6 +187,133 @@ describe('InteractiveCard', () => {
 
     const noButton = screen.getByText('No').closest('button');
     expect(noButton).toHaveClass('interactive-card-btn--selected');
+  });
+
+  // --- Regression tests for fly-to-fleet animation guard (isSessionProposal) ---
+
+  describe('fly-to-fleet animation (isSessionProposal guard)', () => {
+    it('does NOT trigger animation when isSessionProposal is false and state changes pending → responded', () => {
+      const { rerender } = render(
+        <InteractiveCard
+          message="Do you want to continue?"
+          buttons={mockButtons}
+          state="pending"
+          isSessionProposal={false}
+        />
+      );
+
+      act(() => {
+        rerender(
+          <InteractiveCard
+            message="Do you want to continue?"
+            buttons={mockButtons}
+            state="responded"
+            selectedIndex={0}
+            isSessionProposal={false}
+          />
+        );
+      });
+
+      expect(mockTriggerFlyToFleet).not.toHaveBeenCalled();
+    });
+
+    it('does NOT trigger animation when isSessionProposal is undefined and state changes pending → responded', () => {
+      const { rerender } = render(
+        <InteractiveCard
+          message="Do you want to continue?"
+          buttons={mockButtons}
+          state="pending"
+        />
+      );
+
+      act(() => {
+        rerender(
+          <InteractiveCard
+            message="Do you want to continue?"
+            buttons={mockButtons}
+            state="responded"
+            selectedIndex={0}
+          />
+        );
+      });
+
+      expect(mockTriggerFlyToFleet).not.toHaveBeenCalled();
+    });
+
+    it('DOES trigger animation when isSessionProposal is true and state changes pending → responded', () => {
+      const { rerender } = render(
+        <InteractiveCard
+          message="Do you want to continue?"
+          buttons={mockButtons}
+          state="pending"
+          isSessionProposal={true}
+        />
+      );
+
+      act(() => {
+        rerender(
+          <InteractiveCard
+            message="Do you want to continue?"
+            buttons={mockButtons}
+            state="responded"
+            selectedIndex={0}
+            isSessionProposal={true}
+          />
+        );
+      });
+
+      expect(mockTriggerFlyToFleet).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT trigger animation when isSessionProposal is true but state changes responded → expired (not pending → responded)', () => {
+      const { rerender } = render(
+        <InteractiveCard
+          message="Do you want to continue?"
+          buttons={mockButtons}
+          state="responded"
+          selectedIndex={0}
+          isSessionProposal={true}
+        />
+      );
+
+      act(() => {
+        rerender(
+          <InteractiveCard
+            message="Do you want to continue?"
+            buttons={mockButtons}
+            state="expired"
+            isSessionProposal={true}
+          />
+        );
+      });
+
+      // prevState was 'responded' not 'pending', so no animation fires
+      expect(mockTriggerFlyToFleet).not.toHaveBeenCalled();
+    });
+
+    it('does NOT trigger animation when isSessionProposal is true but state stays pending → pending', () => {
+      const { rerender } = render(
+        <InteractiveCard
+          message="Do you want to continue?"
+          buttons={mockButtons}
+          state="pending"
+          isSessionProposal={true}
+        />
+      );
+
+      act(() => {
+        rerender(
+          <InteractiveCard
+            message="Do you want to continue?"
+            buttons={mockButtons}
+            state="pending"
+            isSessionProposal={true}
+          />
+        );
+      });
+
+      expect(mockTriggerFlyToFleet).not.toHaveBeenCalled();
+    });
   });
 
   it('applies correct data-state attribute', () => {

@@ -18,6 +18,7 @@ interface InteractiveCardProps {
   multiSelect?: boolean;
   minSelections?: number;
   maxSelections?: number;
+  isSessionProposal?: boolean;
 }
 
 export function InteractiveCard({
@@ -30,7 +31,8 @@ export function InteractiveCard({
   onMultiSelect,
   multiSelect = false,
   minSelections = 1,
-  maxSelections
+  maxSelections,
+  isSessionProposal = false
 }: InteractiveCardProps) {
   const [checkedIndices, setCheckedIndices] = useState<Set<number>>(new Set());
   const cardRef = useRef<HTMLDivElement>(null);
@@ -39,15 +41,13 @@ export function InteractiveCard({
 
   // Trigger animation when state changes from pending to responded (session approved)
   useEffect(() => {
-    if (prevStateRef.current === 'pending' && state === 'responded') {
-      // Check if this is a session approval (primary button)
-      const isPrimaryAction = buttons.some(btn => btn.type === 'primary');
-      if (isPrimaryAction && cardRef.current) {
+    if (prevStateRef.current === 'pending' && state === 'responded' && isSessionProposal) {
+      if (cardRef.current) {
         triggerFlyToFleet(cardRef.current);
       }
     }
     prevStateRef.current = state;
-  }, [state, buttons, triggerFlyToFleet]);
+  }, [state, isSessionProposal, triggerFlyToFleet]);
 
   const handleSingleClick = (index: number) => {
     if (state === 'pending' && onSelect) {

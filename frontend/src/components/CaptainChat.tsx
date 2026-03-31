@@ -201,6 +201,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                     state={state}
                     selectedIndex={selectedIndex}
                     onSelect={handleSelect}
+                    isSessionProposal={!!item.data.sessionId}
                   />
                 );
               }

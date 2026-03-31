@@ -30,7 +30,12 @@ jest.mock('./SessionProposalCard', () => ({
 }));
 
 jest.mock('./InteractiveCard', () => ({
-  InteractiveCard: () => <div data-testid="interactive-card" />,
+  InteractiveCard: ({ isSessionProposal }: any) => (
+    <div
+      data-testid="interactive-card"
+      data-is-session-proposal={String(!!isSessionProposal)}
+    />
+  ),
 }));
 
 jest.mock('./ThinkingIndicator', () => ({
@@ -217,6 +222,63 @@ describe('CaptainChat', () => {
       // Should not crash and should fall back to MessageBubble
       expect(screen.queryByTestId('session-proposal-card')).not.toBeInTheDocument();
       expect(screen.getByTestId('message-bubble')).toBeInTheDocument();
+    });
+  });
+
+  describe('isSessionProposal prop on InteractiveCard', () => {
+    it('passes isSessionProposal=true when interactive message has a sessionId', () => {
+      const interactiveWithSession = {
+        id: 'interactive-1',
+        text: 'Approve this session?',
+        actions: [
+          { id: 'action-approve', label: 'Approve', style: 'primary' },
+          { id: 'action-reject', label: 'Reject', style: 'danger' },
+        ],
+        responseState: 'pending' as const,
+        selectedActionId: undefined,
+        sessionId: 'sess-abc-123',
+        createdAt: Date.now(),
+      };
+
+      render(
+        <CaptainChat
+          {...defaultProps}
+          messages={[
+            { id: 'msg-1', role: 'user', content: 'Start a session', timestamp: Date.now() - 1000 },
+          ]}
+          interactiveMessages={[interactiveWithSession]}
+        />
+      );
+
+      const card = screen.getByTestId('interactive-card');
+      expect(card.getAttribute('data-is-session-proposal')).toBe('true');
+    });
+
+    it('passes isSessionProposal=false when interactive message has no sessionId', () => {
+      const interactiveNoSession = {
+        id: 'interactive-2',
+        text: 'Pick an option',
+        actions: [
+          { id: 'action-yes', label: 'Yes', style: 'primary' },
+          { id: 'action-no', label: 'No', style: 'danger' },
+        ],
+        responseState: 'pending' as const,
+        selectedActionId: undefined,
+        createdAt: Date.now(),
+      };
+
+      render(
+        <CaptainChat
+          {...defaultProps}
+          messages={[
+            { id: 'msg-1', role: 'user', content: 'Choose something', timestamp: Date.now() - 1000 },
+          ]}
+          interactiveMessages={[interactiveNoSession]}
+        />
+      );
+
+      const card = screen.getByTestId('interactive-card');
+      expect(card.getAttribute('data-is-session-proposal')).toBe('false');
     });
   });
 
