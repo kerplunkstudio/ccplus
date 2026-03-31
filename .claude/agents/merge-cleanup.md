@@ -35,13 +35,15 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
 
 4. **Remove worktree**
    - Determine the worktree path (you are running inside it — use `git worktree list` to find it)
-   - From the main repo: `git worktree remove <path> --force`
+   - Determine the main repo root from `git worktree list` (the first entry without a branch suffix)
+   - `cd` to the main repo root FIRST
+   - Then run `git worktree remove <path> --force`
 
 5. **Prune branch**
-   - Run `git branch -D <branch-name>` to delete the worktree branch
+   - From the main repo root: run `git branch -D <branch-name>` to delete the worktree branch
 
 6. **Report**
-   - List what was committed, cherry-picked, and cleaned up
+   - From the main repo root: list what was committed, cherry-picked, and cleaned up
    - If anything was skipped (no changes, no commits, conflicts), explain why
 
 ## Rules
