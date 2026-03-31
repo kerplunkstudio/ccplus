@@ -2178,26 +2178,11 @@ description: Project command
     it("should handle agent_start with agent_type from parameters", async () => {
       const toolEventCallback = vi.fn();
 
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
+      // Use a long-delay query so the session stays alive while we invoke hooks manually
       const queryMock = vi.mocked(
         await import("@anthropic-ai/claude-agent-sdk"),
       ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
+      queryMock.mockReturnValue(createMockQuery(5000));
 
       const callbacks = {
         onText: vi.fn(),
@@ -2240,31 +2225,18 @@ description: Project command
           description: "Test agent",
         })
       );
+
+      sdkSession.disconnectSession("agent-type-test");
     });
 
     it("should use default agent type when subagent_type not provided", async () => {
       const toolEventCallback = vi.fn();
 
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
+      // Use a long-delay query so the session stays alive while we invoke hooks manually
       const queryMock = vi.mocked(
         await import("@anthropic-ai/claude-agent-sdk"),
       ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
+      queryMock.mockReturnValue(createMockQuery(5000));
 
       const callbacks = {
         onText: vi.fn(),
@@ -2302,31 +2274,18 @@ description: Project command
           agent_type: "agent", // default value
         })
       );
+
+      sdkSession.disconnectSession("default-agent-test");
     });
 
     it("should include LOC parameters for Write/Edit tools in tool_complete", async () => {
       const toolEventCallback = vi.fn();
 
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
+      // Use a long-delay query so the session stays alive while we invoke hooks manually
       const queryMock = vi.mocked(
         await import("@anthropic-ai/claude-agent-sdk"),
       ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
+      queryMock.mockReturnValue(createMockQuery(5000));
 
       const callbacks = {
         onText: vi.fn(),
@@ -2380,6 +2339,8 @@ description: Project command
           }),
         })
       );
+
+      sdkSession.disconnectSession("loc-test");
     });
   });
 
@@ -2545,26 +2506,11 @@ description: Project command
     it("should emit user question and wait for response", async () => {
       const onUserQuestionCallback = vi.fn();
 
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
+      // Use a long-delay query so the session stays alive while canUseTool is awaiting a response
       const queryMock = vi.mocked(
         await import("@anthropic-ai/claude-agent-sdk"),
       ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
+      queryMock.mockReturnValue(createMockQuery(5000));
 
       const callbacks = {
         onText: vi.fn(),
@@ -2620,6 +2566,8 @@ description: Project command
           answers: { q1: "Alice" },
         }),
       });
+
+      sdkSession.disconnectSession("ask-question-test");
     });
 
     it("should allow non-question tools through canUseTool", async () => {
@@ -3150,26 +3098,11 @@ description: Project command
     it("should record agent summary on failure in postToolUseFailure", async () => {
       const toolEventCallback = vi.fn();
 
-      const mockQuery: Partial<Query> = {
-        interrupt: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn(),
-        [Symbol.asyncIterator]: async function* () {
-          yield {
-            type: "result",
-            session_id: "test",
-            total_cost_usd: 0,
-            duration_ms: 1,
-            is_error: false,
-            num_turns: 1,
-            usage: { input_tokens: 1, output_tokens: 1 },
-          } as any;
-        },
-      };
-
+      // Use a long-delay query so the session stays alive while we invoke hooks manually
       const queryMock = vi.mocked(
         await import("@anthropic-ai/claude-agent-sdk"),
       ).query as Mock;
-      queryMock.mockReturnValue(mockQuery);
+      queryMock.mockReturnValue(createMockQuery(5000));
 
       const callbacks = {
         onText: vi.fn(),
@@ -3255,6 +3188,8 @@ description: Project command
         expect.any(Number),
         "Agent failed due to error"
       );
+
+      sdkSession.disconnectSession("agent-failure-test");
     });
 
     it("should auto-transition workflow from review to complete when code-reviewer agent finishes successfully", async () => {

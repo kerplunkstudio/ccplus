@@ -53,11 +53,11 @@
 }
 
 .fleet-session-card.status-pending {
-  border-left-color: #d97706;
+  border-left-color: var(--warning, #d97706);
 }
 
 .fleet-session-card.status-pending:hover {
-  border-left-color: #d97706;
+  border-left-color: var(--warning, #d97706);
   box-shadow: 0 2px 16px rgba(217, 119, 6, 0.15);
 }
 
@@ -138,7 +138,7 @@
 }
 
 .fleet-status-pill.status-pending {
-  color: #d97706;
+  color: var(--warning, #d97706);
   background: rgba(217, 119, 6, 0.1);
   border-color: rgba(217, 119, 6, 0.3);
 }

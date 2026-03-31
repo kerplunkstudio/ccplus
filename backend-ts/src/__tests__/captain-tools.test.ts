@@ -502,7 +502,7 @@ describe('captain-tools', () => {
 
     it('returns success:false when startSession itself fails with force=true (after passing workflow validation)', async () => {
       vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature']);
-      vi.mocked(sessionApi.createPendingSession).mockReturnValue({
+      vi.mocked(sessionApi.startSession).mockReturnValue({
         success: false,
         error: 'workspace path does not exist or is not a directory',
       });
