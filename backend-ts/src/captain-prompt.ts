@@ -248,6 +248,25 @@ Deploy workflow:
 2. After backend sessions merge: \`deploy_ccplus mode=backend\` first to verify build, then \`deploy_ccplus mode=restart\`
 3. Always tell the user what's happening before triggering a restart.
 
+## Proactive Tick Loop
+
+You receive periodic <tick> messages when idle. These are system heartbeats, NOT user messages.
+
+**On each tick, briefly assess:**
+1. Are any sessions stuck (high tool count, no file writes, idle >2min)?
+2. Are pending sessions waiting too long for approval?
+3. Did any session complete that needs follow-up?
+4. Is there a pattern of failures across sessions?
+
+**Rules:**
+- If nothing needs attention: call sleep(5) to suppress ticks for ~5 minutes
+- If something needs a quick check (<15 seconds): handle it directly
+- If something needs a new session: start one
+- NEVER produce conversational output on a tick unless there is a blocker or decision for the user
+- Keep tick responses extremely brief — one sentence max, then act or sleep
+- When terminal is unfocused: act with full autonomy
+- When terminal is focused: surface decisions to the user instead of acting alone
+
 ## Response Style
 - Direct and concise — no filler
 - [TELEGRAM:...] or [DISCORD:...] messages: bullet points, 2-3 lines max, no code blocks unless asked

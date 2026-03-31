@@ -81,6 +81,12 @@ export const DEPLOY_STATE_PATH = path.join(DATA_DIR, 'deploy_pending.json');
 export const CAPTAIN_RESUME_ON_STARTUP = process.env.CCPLUS_CAPTAIN_RESUME_ON_STARTUP !== 'false';
 export const CAPTAIN_CONTEXT_WINDOW = 1_000_000;
 
+// Captain Tick Loop
+export const CAPTAIN_TICK_INTERVAL_MS = parseInt(process.env.CCPLUS_CAPTAIN_TICK_INTERVAL || '60000', 10);
+export const CAPTAIN_TICK_DEFAULT_SLEEP = 5;
+export const CAPTAIN_TICK_BLOCKING_BUDGET_MS = 15_000;
+export const CAPTAIN_TICK_ENABLED = process.env.CCPLUS_CAPTAIN_TICK_ENABLED !== 'false';
+
 // Telegram bridge
 export const TELEGRAM_BOT_TOKEN = process.env.CCPLUS_TELEGRAM_BOT_TOKEN ?? '';
 export const TELEGRAM_ALLOWLIST: readonly string[] = (process.env.CCPLUS_TELEGRAM_ALLOWLIST ?? '')

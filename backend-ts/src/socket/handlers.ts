@@ -7,6 +7,13 @@ import type { InteractiveMessage } from "../interactive-message.js";
 import * as sessionApi from "../session-api.js";
 import { getPendingSessionForMessage } from "../captain-tools.js";
 
+// Terminal focus tracking
+let terminalFocused = false;
+
+export function isTerminalFocused(): boolean {
+  return terminalFocused;
+}
+
 // Helper: Join a session room and sync state
 function joinSession(
   socket: Socket,
@@ -433,6 +440,10 @@ export function setupSocketHandlers(
       const { terminalId } = data;
       ptyService.killTerminal(terminalId);
       socketTerminals.delete(terminalId);
+    });
+
+    socket.on("terminal_focus", (data: { focused: boolean }) => {
+      terminalFocused = data.focused === true;
     });
 
     // -- Room handlers (for fleet monitor) --

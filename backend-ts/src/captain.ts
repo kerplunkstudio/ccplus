@@ -19,7 +19,7 @@ import type { InteractiveMessage, InteractiveResponse } from './interactive-mess
 
 // ---- Types ----
 
-export type MessageSource = 'web' | 'telegram' | 'discord' | 'fleet' | 'api';
+export type MessageSource = 'web' | 'telegram' | 'discord' | 'fleet' | 'api' | 'tick';
 
 export interface ResponseCallback {
   readonly onText: (text: string, messageIndex: number) => void;
@@ -713,6 +713,15 @@ export function getCaptainSessionId(): string | null {
  */
 export function isCaptainAlive(): boolean {
   return captainState.sessionId !== null;
+}
+
+/**
+ * Check if Captain is idle (alive but no active query, not starting).
+ */
+export function isCaptainIdle(): boolean {
+  return captainState.sessionId !== null
+    && captainState.activeQuery === null
+    && !captainState.isStarting;
 }
 
 /**

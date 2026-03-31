@@ -17,6 +17,8 @@ import * as captain from "./captain.js";
 import type { MessageSource } from "./captain.js";
 import { createCaptainRouter } from "./captain-router.js";
 import * as fleetMonitor from "./fleet-monitor.js";
+import { startTickLoop, stopTickLoop } from "./captain-tick.js";
+import { isTerminalFocused } from "./socket/handlers.js";
 import { log } from "./logger.js";
 import { scheduler } from "./scheduler.js";
 import { saveCaptainState, loadCaptainState, loadDeployState, removeDeployState } from './state-persistence.js';
@@ -276,27 +278,30 @@ async function gracefulShutdown(signal: string): Promise<void> {
   // 1. Stop Telegram bridge (deregisters polling with Telegram API)
   await stopTelegramBridge();
 
-  // 2. Stop fleet monitors
+  // 2. Stop Captain tick loop
+  stopTickLoop();
+
+  // 3. Stop fleet monitors
   fleetMonitor.stopZombieReaper();
   fleetMonitor.stopStuckDetector();
   fleetMonitor.stopPruner();
 
-  // 3. Stop accepting new connections
+  // 4. Stop accepting new connections
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   log.info("HTTP server closed");
 
-  // 4. Close all active Socket.IO connections
+  // 5. Close all active Socket.IO connections
   await new Promise<void>((resolve) => io.close(() => resolve()));
   log.info("Socket.IO server closed");
 
-  // 5. Close database connection
+  // 6. Close database connection
   database.close();
   log.info("Database closed");
 
-  // 6. Remove PID file
+  // 7. Remove PID file
   removePidFile();
 
-  // 7. Exit
+  // 8. Exit
   log.info("Shutdown complete");
   clearTimeout(forceExitTimeout);
   process.exit(0);
@@ -429,6 +434,36 @@ httpServer.listen(config.PORT, config.HOST, () => {
       )
         .then(({ sessionId }) => {
           log.info('Captain session started', { sessionId, resumed: !!persistedState })
+
+          // Start tick loop
+          startTickLoop({
+            isCaptainAlive: captain.isCaptainAlive,
+            isCaptainIdle: captain.isCaptainIdle,
+            sendTickMessage: (content: string) => {
+              captain.sendCaptainMessage(content, 'tick', 'system');
+            },
+            getFleetState: () => {
+              const state = fleetMonitor.getFleetState();
+              const now = Date.now();
+              const fiveMinutesAgo = now - 5 * 60 * 1000;
+              const recentlyCompleted = state.sessions.filter(s =>
+                (s.status === 'completed' || s.status === 'failed' || s.status === 'cancelled') &&
+                new Date(s.lastActivity).getTime() > fiveMinutesAgo
+              ).length;
+              return {
+                totalSessions: state.aggregate.totalSessions,
+                activeSessions: state.aggregate.activeSessions,
+                pendingSessions: state.sessions.filter(s => s.status === 'pending').length,
+                recentlyCompleted,
+                stuckSessions: state.sessions.filter(s => s.stuckDetectedAt).length,
+                sessions: state.sessions,
+              };
+            },
+            isTerminalFocused,
+            getTickIntervalMs: () => config.CAPTAIN_TICK_INTERVAL_MS,
+            isTickEnabled: () => config.CAPTAIN_TICK_ENABLED,
+          });
+          log.info('Captain tick loop started', { intervalMs: config.CAPTAIN_TICK_INTERVAL_MS });
 
           // Check for pending deploy confirmation
           const deployState = loadDeployState(config.DEPLOY_STATE_PATH)

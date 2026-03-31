@@ -21,6 +21,7 @@ import type { ActionStyle, InteractiveMessage, InteractiveResponse } from './int
 import { randomUUID } from 'crypto';
 import { PROJECT_ROOT, DEPLOY_STATE_PATH } from './config.js';
 import { saveDeployState } from './state-persistence.js';
+import { sleepTicks, getSleepRemaining } from './captain-tick.js';
 
 // ---- Pricing Constants ----
 
@@ -1119,6 +1120,44 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "new_query", message: "New query started with message" }, null, 2) }] };
         } catch (error) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: String(error) }, null, 2) }] };
+        }
+      }
+    ),
+
+    // sleep - Suppress proactive tick checks
+    tool(
+      "sleep",
+      "Suppress proactive tick checks for a number of intervals. Use when there's nothing to monitor. Default interval is 60s, so sleep(5) = ~5 minutes of quiet.",
+      {
+        duration_ticks: z.number().int().min(1).max(60).default(5)
+          .describe("Number of tick intervals to sleep (1-60). Default 5 (~5min)."),
+      },
+      async (args) => {
+        try {
+          const duration = args.duration_ticks ?? 5;
+          const result = sleepTicks(duration);
+          const remaining = getSleepRemaining();
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                success: true,
+                sleep_ticks: duration,
+                sleep_until_tick: result.sleepUntilTick,
+                remaining_ticks: remaining,
+              }, null, 2),
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                success: false,
+                error: String(error),
+              }, null, 2),
+            }],
+          };
         }
       }
     ),
