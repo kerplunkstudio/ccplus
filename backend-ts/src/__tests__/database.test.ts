@@ -1525,6 +1525,51 @@ describe("Database Tests", () => {
       expect(insights.summary.total_input_tokens).toBe(100);
       expect(insights.summary.total_output_tokens).toBe(50);
     });
+
+    it("should record source field with custom value", () => {
+      db.recordQueryUsage({
+        sessionId: "captain-test",
+        inputTokens: 500,
+        outputTokens: 250,
+        cacheReadInputTokens: 100,
+        cacheCreationInputTokens: 25,
+        costUsd: 0.025,
+        durationMs: 1500,
+        model: "claude-sonnet-4",
+        projectPath: "/path/to/project",
+        source: "captain",
+      });
+
+      // Verify source was recorded
+      const database = new Database(config.DATABASE_PATH);
+      const row = database.prepare("SELECT source FROM query_usage WHERE session_id = ?").get("captain-test") as { source: string };
+      database.close();
+
+      expect(row).toBeDefined();
+      expect(row.source).toBe("captain");
+    });
+
+    it("should default source to 'native' when not provided", () => {
+      db.recordQueryUsage({
+        sessionId: "default-source-test",
+        inputTokens: 500,
+        outputTokens: 250,
+        cacheReadInputTokens: 100,
+        cacheCreationInputTokens: 25,
+        costUsd: 0.025,
+        durationMs: 1500,
+        model: "claude-sonnet-4",
+        projectPath: "/path/to/project",
+      });
+
+      // Verify source defaults to 'native'
+      const database = new Database(config.DATABASE_PATH);
+      const row = database.prepare("SELECT source FROM query_usage WHERE session_id = ?").get("default-source-test") as { source: string };
+      database.close();
+
+      expect(row).toBeDefined();
+      expect(row.source).toBe("native");
+    });
   });
 
   describe("getInsights - Enhanced Metrics", () => {

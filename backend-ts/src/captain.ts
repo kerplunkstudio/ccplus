@@ -352,6 +352,29 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
           contextPct: Math.round(contextPct * 100) / 100,
         });
 
+        // Record query usage to database
+        try {
+          // Determine source based on lastQuerySource
+          const querySource = captainState.lastQuerySource;
+          const isTickQuery = querySource?.source === 'fleet' && querySource?.sourceId === 'tick';
+          const source = isTickQuery ? 'captain-tick' : 'captain';
+
+          database.recordQueryUsage({
+            sessionId,
+            inputTokens: usageObj.input_tokens || 0,
+            outputTokens: usageObj.output_tokens || 0,
+            cacheReadInputTokens: usageObj.cache_read_input_tokens || 0,
+            cacheCreationInputTokens: usageObj.cache_creation_input_tokens || 0,
+            costUsd: (result as any).total_cost_usd || 0,
+            durationMs: (result as any).duration_ms || 0,
+            model: config.getCaptainModel(),
+            projectPath: captainState.workspace,
+            source,
+          });
+        } catch (e) {
+          log.error('Failed to record Captain query usage', { sessionId, error: String(e) });
+        }
+
         // Send completion to target callback(s)
         for (const callback of getTargetCallbacks(routeToCallbackId)) {
           try {

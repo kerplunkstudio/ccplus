@@ -90,13 +90,14 @@ export function recordQueryUsage(params: {
   durationMs: number;
   model: string | null;
   projectPath: string | null;
+  source?: string;
 }): void {
   const d = getDb();
   d.prepare(`
     INSERT INTO query_usage
       (session_id, input_tokens, output_tokens, cache_read_input_tokens,
-       cache_creation_input_tokens, cost_usd, duration_ms, model, project_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       cache_creation_input_tokens, cost_usd, duration_ms, model, project_path, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     params.sessionId,
     params.inputTokens,
@@ -107,5 +108,6 @@ export function recordQueryUsage(params: {
     params.durationMs,
     params.model,
     params.projectPath,
+    params.source ?? 'native',
   );
 }
