@@ -105,6 +105,8 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
   - Acceptance criteria (what "done" looks like)
   - Constraints (don't touch X, must be backwards-compatible, etc.)
   - Context the agent won't have (why this change matters, related recent changes)
+  - Test files that assert on modified content (e.g., if changing prompt text, include the test file that asserts on that text)
+- **Agent selection for git operations**: For cherry-pick, merge, conflict resolution, or cross-branch operations, use merge-cleanup agent (NOT code_agent). code_agent is for implementing features and writing code within a single branch.
 - **Workspace**: Every session needs an absolute workspace path. Use the workspace from the user's context or from list_sessions output. When unsure, ask using request_user_input.
 - See Parallelization section below — this is NOT optional
 

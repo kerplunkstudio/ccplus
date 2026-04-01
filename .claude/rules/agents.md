@@ -61,6 +61,17 @@ Agents have prerequisites — run them in order. Do NOT skip steps.
 | `/landpr` or PR creation | code-reviewer must have run | Verdict: READY or WARNING |
 | code_agent implements feature | planner must have run (if >1 file touched) | Plan approved by user |
 | debugger fixes bug | Must complete 4-phase protocol | Root cause documented |
+| merge-cleanup runs | Cherry-pick/merge/cross-branch ops only | Must verify commits on target branch |
+
+### Agent Selection for Git Operations
+
+| Operation | Correct Agent | Wrong Agent |
+|-----------|---------------|-------------|
+| Cherry-pick commits to main | merge-cleanup | code_agent |
+| Resolve merge conflicts | merge-cleanup | code_agent |
+| Cross-branch merges | merge-cleanup | code_agent |
+| Rebase and cleanup | merge-cleanup | code_agent |
+| Feature implementation (single branch) | code_agent or frontend-agent | merge-cleanup |
 
 ### How it works
 
