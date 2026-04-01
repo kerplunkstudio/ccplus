@@ -33,11 +33,18 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
      * Only if resolution fails or produces broken code: abort with `git cherry-pick --abort` and report
    - On success: report which commits were cherry-picked
 
+3.5. **Verify commits landed on main**
+   - While still on `main` branch, run `git log --oneline -5` to see recent commits
+   - For each commit that was cherry-picked, verify its message appears in the log
+   - If ANY cherry-picked commit is missing from main's log: STOP and report failure. Do NOT proceed to worktree removal.
+   - This is a critical safety check — skipping it can cause silent data loss
+
 4. **Remove worktree**
    - Determine the worktree path (you are running inside it — use `git worktree list` to find it)
    - Determine the main repo root from `git worktree list` (the first entry without a branch suffix)
    - `cd` to the main repo root FIRST
    - Then run `git worktree remove <path> --force`
+   - CRITICAL: Only proceed with worktree removal if step 3.5 verified all commits landed on main
 
 5. **Prune branch**
    - From the main repo root: run `git branch -D <branch-name>` to delete the worktree branch
@@ -61,3 +68,5 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
 - Only cherry-pick commits from the current worktree branch
 - ALWAYS verify commits actually landed on main — never claim success without verification
 - If rebase fails, try merge fallback — if both fail, STOP with clear error
+- NEVER remove a worktree until you have verified (via `git log`) that all cherry-picked commits are on main
+- If verification fails, leave the worktree intact and report the error — the worktree is the only remaining copy of the work
