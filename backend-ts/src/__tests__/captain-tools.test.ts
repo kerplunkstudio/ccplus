@@ -56,9 +56,9 @@ describe('captain-tools', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 19 tools', () => {
+    it('builds 20 tools', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(19);
+      expect(tools).toHaveLength(20);
     });
   });
 
@@ -363,6 +363,86 @@ describe('captain-tools', () => {
 
       expect(parsed.sessions[0].workflow_phase).toBeNull();
       expect(parsed.sessions[0].workflow_name).toBeNull();
+    });
+  });
+
+  // ---- Tests for Bug Fix Correlation (KAIROS) ----
+  describe('start_session - KAIROS bug-fix correlation', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+      vi.clearAllMocks();
+    });
+
+    it('records KAIROS correlation when originating_session_id is provided', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature', 'bug-fix']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: true,
+        sessionId: 'fix-session-123',
+      });
+
+      const mockAddCorrelation = vi.fn();
+      vi.doMock('../db/kairos.js', () => ({
+        addCorrelation: mockAddCorrelation,
+      }));
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: '[BUG-FIX-FOR:feat-auth-login] Fix type error in validation',
+        workspace: '/tmp',
+        workflow: 'bug-fix',
+        force: true,
+        originating_session_id: 'feat-auth-login',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('fix-session-123');
+
+      // Wait a bit for the dynamic import to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+
+    it('does not record correlation when originating_session_id is omitted', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['feature']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: true,
+        sessionId: 'new-session-456',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: 'Regular feature work',
+        workspace: '/tmp',
+        workflow: 'feature',
+        force: true,
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('new-session-456');
+      // No correlation should be attempted
+    });
+
+    it('handles KAIROS correlation errors gracefully without failing session creation', async () => {
+      vi.mocked(workflowConfig.listWorkflows).mockReturnValue(['bug-fix']);
+      vi.mocked(sessionApi.startSession).mockReturnValue({
+        success: true,
+        sessionId: 'fix-session-789',
+      });
+
+      const handler = toolHandlers.get('start_session');
+      const result = await handler!({
+        prompt: '[BUG-FIX-FOR:nonexistent] Fix something',
+        workspace: '/tmp',
+        workflow: 'bug-fix',
+        force: true,
+        originating_session_id: 'nonexistent',
+      });
+      const parsed = JSON.parse(result.content[0].text);
+
+      // Session creation should succeed even if correlation recording fails
+      expect(parsed.success).toBe(true);
+      expect(parsed.session_id).toBe('fix-session-789');
     });
   });
 

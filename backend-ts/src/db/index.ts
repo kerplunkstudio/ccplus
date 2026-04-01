@@ -16,3 +16,4 @@ export * from "./memory-observability.js";
 export * from "./fleet-sessions.js";
 export * from "./workflows.js";
 export * from "./captain-messages.js";
+export * from "./kairos.js";

@@ -37,9 +37,11 @@ import { createDiffRoutes } from "./routes/diff.js";
 import { createAgentRoutes } from "./routes/agents.js";
 import workflowsRouter from "./routes/workflows.js";
 import { createMemoryRoutes } from "./routes/memory.js";
+import kairosRouter from "./routes/kairos.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
 import { isClaudeAuthenticated } from './captain-auth.js';
+import { startKairosDaemon, stopKairosDaemon } from './kairos-daemon.js';
 
 // Remove CLAUDECODE env var
 delete process.env.CLAUDECODE;
@@ -150,6 +152,7 @@ createDiffRoutes(app, { sessionWorkspaces, sdkSession, log });
 createAgentRoutes(app, { getWorkspaceForSession });
 app.use('/api/workflows', workflowsRouter);
 createMemoryRoutes(app);
+app.use('/api/kairos', kairosRouter);
 
 // Set workspace (requires mutation of server-level state)
 app.post("/api/set-workspace", (req: Request, res: Response) => {
@@ -286,6 +289,9 @@ async function gracefulShutdown(signal: string): Promise<void> {
   fleetMonitor.stopStuckDetector();
   fleetMonitor.stopPruner();
 
+  // 3a. Stop KAIROS daemon
+  stopKairosDaemon();
+
   // 4. Stop accepting new connections
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   log.info("HTTP server closed");
@@ -397,6 +403,14 @@ httpServer.listen(config.PORT, config.HOST, () => {
   log.info("Server ready", { url: `http://${config.HOST}:${config.PORT}` });
   scheduler.start();
 
+  // Start KAIROS daemon
+  const kairosLogAdapter = {
+    info: (...args: unknown[]) => log.info(String(args[0]), args[1] as Record<string, unknown> | undefined),
+    error: (...args: unknown[]) => log.error(String(args[0]), args[1] as Record<string, unknown> | undefined),
+    warn: (...args: unknown[]) => log.warn(String(args[0]), args[1] as Record<string, unknown> | undefined),
+  };
+  startKairosDaemon({ log: kairosLogAdapter });
+
   // Auto-start Captain if enabled
   if (config.CAPTAIN_AUTO_START) {
     if (!isClaudeAuthenticated()) {
@@ -441,6 +455,9 @@ httpServer.listen(config.PORT, config.HOST, () => {
             isCaptainIdle: captain.isCaptainIdle,
             sendTickMessage: (content: string) => {
               captain.sendCaptainMessage(content, 'tick', 'system');
+            },
+            sendCaptainMessage: (content: string, source: string, sourceId: string) => {
+              captain.sendCaptainMessage(content, source as MessageSource, sourceId);
             },
             getFleetState: () => {
               const state = fleetMonitor.getFleetState();

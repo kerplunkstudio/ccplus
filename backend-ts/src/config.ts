@@ -414,5 +414,13 @@ export function getCaptainAllowBash(): boolean {
   return settingsData.captain?.allow_bash ?? DEFAULT_SETTINGS.captain!.allow_bash!;
 }
 
+// KAIROS configuration
+export const KAIROS_ENABLED = process.env.CCPLUS_KAIROS_ENABLED !== 'false';
+export const KAIROS_MODEL = process.env.CCPLUS_KAIROS_MODEL ?? 'claude-opus-4-6';
+export const KAIROS_BATCH_SIZE = parseInt(process.env.CCPLUS_KAIROS_BATCH_SIZE ?? '5', 10);
+export const KAIROS_MAX_ANALYSIS_TURNS = parseInt(process.env.CCPLUS_KAIROS_MAX_TURNS ?? '5', 10);
+export const KAIROS_DAEMON_INTERVAL_MS = parseInt(process.env.CCPLUS_KAIROS_DAEMON_INTERVAL || '900000', 10); // 15 min default
+export const KAIROS_MIN_SESSIONS_FOR_RUN = parseInt(process.env.CCPLUS_KAIROS_MIN_SESSIONS ?? '5', 10);
+
 // Load settings on module initialization
 loadSettings();

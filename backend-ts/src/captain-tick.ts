@@ -1,5 +1,6 @@
 import type { EnrichedFleetSessionInfo } from './fleet-monitor.js';
 import { log } from './logger.js';
+import { checkKairos } from './kairos-daemon.js';
 
 // ---- Types ----
 
@@ -14,6 +15,7 @@ export interface TickLoopDependencies {
   isCaptainAlive: () => boolean;
   isCaptainIdle: () => boolean;
   sendTickMessage: (message: string) => void;
+  sendCaptainMessage: (content: string, source: string, sourceId: string) => void;
   getFleetState: () => {
     totalSessions: number;
     activeSessions: number;
@@ -284,6 +286,17 @@ function tick(): void {
 
     log.info('Tick fired', { tickNumber: tickState.tickNumber, fleetSummary });
     deps.sendTickMessage(message);
+
+    // KAIROS check -- tells Captain to start a kairos session if needed
+    try {
+      checkKairos({
+        sendCaptainMessage: deps.sendCaptainMessage,
+        isCaptainAlive: deps.isCaptainAlive,
+        log,
+      });
+    } catch (err) {
+      log.error('KAIROS check failed during tick', { error: String(err) });
+    }
   } catch (error) {
     log.error('Tick failed', { error: String(error), stack: (error as Error).stack });
   }

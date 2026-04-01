@@ -334,6 +334,65 @@ ALTER TABLE fleet_sessions ADD COLUMN description TEXT;
 ALTER TABLE fleet_sessions ADD COLUMN session_number INTEGER;
 `,
   },
+  {
+    version: 18,
+    sql: `
+-- KAIROS: Session analysis tracking
+CREATE TABLE IF NOT EXISTS kairos_analyses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  task_intent TEXT,
+  actual_outcome TEXT NOT NULL DEFAULT 'unknown',
+  outcome_reasoning TEXT,
+  follow_up_needed INTEGER NOT NULL DEFAULT 0,
+  correlated_with TEXT DEFAULT '[]',
+  prompt_issues TEXT,
+  recommendations TEXT,
+  analysis_model TEXT,
+  analysis_tokens INTEGER DEFAULT 0,
+  analysis_cost_usd REAL DEFAULT 0,
+  analysis_duration_ms INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  analyzed_at TEXT,
+  error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kairos_analyses_status ON kairos_analyses(status);
+CREATE INDEX IF NOT EXISTS idx_kairos_analyses_outcome ON kairos_analyses(actual_outcome);
+CREATE INDEX IF NOT EXISTS idx_kairos_analyses_created ON kairos_analyses(created_at);
+
+-- KAIROS: Session correlations (directed graph)
+CREATE TABLE IF NOT EXISTS kairos_correlations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_session_id TEXT NOT NULL,
+  target_session_id TEXT NOT NULL,
+  relation_type TEXT NOT NULL,
+  confidence REAL NOT NULL DEFAULT 1.0,
+  evidence TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  UNIQUE(source_session_id, target_session_id, relation_type)
+);
+CREATE INDEX IF NOT EXISTS idx_kairos_correlations_source ON kairos_correlations(source_session_id);
+CREATE INDEX IF NOT EXISTS idx_kairos_correlations_target ON kairos_correlations(target_session_id);
+
+-- KAIROS: Prompt change history (audit trail with rollback)
+CREATE TABLE IF NOT EXISTS kairos_prompt_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  diff_before TEXT NOT NULL,
+  diff_after TEXT NOT NULL,
+  evidence_session_ids TEXT NOT NULL,
+  reasoning TEXT NOT NULL,
+  applied INTEGER NOT NULL DEFAULT 1,
+  rolled_back_at TEXT,
+  rollback_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_kairos_prompt_changes_file ON kairos_prompt_changes(file_path);
+CREATE INDEX IF NOT EXISTS idx_kairos_prompt_changes_applied ON kairos_prompt_changes(applied);
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

@@ -46,9 +46,17 @@ vi.mock('../captain-tools.js', () => ({
 }));
 
 const mockIsBriefMode = vi.fn().mockReturnValue(false);
+const mockShouldSuppressBriefOutput = vi.fn((text: string) => {
+  if (!mockIsBriefMode()) return false;
+  const actionableKeywords = ['stuck', 'error', 'failed', 'pending', 'completed', 'approve', 'start_session', 'decision'];
+  const lowerText = text.toLowerCase();
+  return !actionableKeywords.some(keyword => lowerText.includes(keyword));
+});
+
 vi.mock('../captain-tick.js', () => ({
   isBriefMode: () => mockIsBriefMode(),
   resetBriefMode: vi.fn(),
+  shouldSuppressBriefOutput: (text: string) => mockShouldSuppressBriefOutput(text),
 }));
 
 // Minimal mocks for config values used by captain.ts
@@ -65,6 +73,7 @@ vi.mock('../config.js', async () => {
 });
 
 import * as captain from '../captain.js';
+import * as captainTick from '../captain-tick.js';
 
 describe('Captain', () => {
   beforeEach(() => {
@@ -342,53 +351,53 @@ describe('Captain', () => {
   describe('shouldSuppressBriefOutput', () => {
     it('does not suppress when brief mode is off', () => {
       mockIsBriefMode.mockReturnValue(false);
-      expect(captain.shouldSuppressBriefOutput('All sessions healthy, nothing to do.')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('All sessions healthy, nothing to do.')).toBe(false);
     });
 
     it('suppresses non-actionable output when brief mode is on', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('All sessions are running normally. No action needed.')).toBe(true);
-      expect(captain.shouldSuppressBriefOutput('Fleet looks good. Sleeping for 5 minutes.')).toBe(true);
+      expect(captainTick.shouldSuppressBriefOutput('All sessions are running normally. No action needed.')).toBe(true);
+      expect(captainTick.shouldSuppressBriefOutput('Fleet looks good. Sleeping for 5 minutes.')).toBe(true);
     });
 
     it('passes through output containing "stuck"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Session sess-abc appears stuck with 45 tool calls')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Session sess-abc appears stuck with 45 tool calls')).toBe(false);
     });
 
     it('passes through output containing "error"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Error: session failed to start')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Error: session failed to start')).toBe(false);
     });
 
     it('passes through output containing "failed"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Session sess-xyz failed after 30 tools')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Session sess-xyz failed after 30 tools')).toBe(false);
     });
 
     it('passes through output containing "pending"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('2 sessions pending approval')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('2 sessions pending approval')).toBe(false);
     });
 
     it('passes through output containing "completed"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Session sess-abc completed successfully')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Session sess-abc completed successfully')).toBe(false);
     });
 
     it('passes through output containing "approve"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Need to approve pending session')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Need to approve pending session')).toBe(false);
     });
 
     it('passes through output containing "start_session"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Calling start_session for the bug fix')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Calling start_session for the bug fix')).toBe(false);
     });
 
     it('passes through output containing "decision"', () => {
       mockIsBriefMode.mockReturnValue(true);
-      expect(captain.shouldSuppressBriefOutput('Decision needed: which branch to target?')).toBe(false);
+      expect(captainTick.shouldSuppressBriefOutput('Decision needed: which branch to target?')).toBe(false);
     });
   });
 

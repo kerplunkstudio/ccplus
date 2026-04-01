@@ -2,6 +2,7 @@ import type { Server as SocketIOServer } from "socket.io";
 import { upsertFleetSession, getAllFleetSessions, getNextSessionNumber } from "./db/fleet-sessions.js";
 import { getWorkflowState } from "./workflow-state.js";
 import { log } from "./logger.js";
+import { onKairosSessionComplete } from "./kairos-daemon.js";
 
 // ---- Types ----
 
@@ -123,6 +124,11 @@ export function updateSessionStatus(sessionId: string, status: FleetSessionInfo[
     upsertFleetSession(updated);
     const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled';
     emitFleetUpdate(isTerminal);
+
+    // Reset KAIROS analyzing flag when a kairos session finishes
+    if (isTerminal && sessionId.startsWith('kairos-')) {
+      onKairosSessionComplete();
+    }
   }
 }
 

@@ -1,0 +1,69 @@
+name: kairos
+description: KAIROS retrospective analysis workflow. Analyzes sessions, reviews prompt changes, and merges improvements.
+default_phase: analyze
+worktree: true
+phases:
+  - name: analyze
+    context: |
+      KAIROS agent analyzes batch of sessions and produces recommendations.
+      Read session data, correlate bug-fix chains, identify prompt deficiencies.
+      Output JSON with analyses and prompt change recommendations.
+    agent_hints:
+      - kairos
+    tool_rules:
+      - tool_name: Edit
+        action: block
+        conditions: []
+        message: "Analyze phase: KAIROS is read-only. Prompt changes are applied by the daemon after review."
+      - tool_name: Write
+        action: block
+        conditions: []
+        message: "Analyze phase: KAIROS is read-only. Prompt changes are applied by the daemon after review."
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Analyze phase: no commits. Output JSON analysis only."
+
+  - name: review
+    context: |
+      Code reviewer validates proposed prompt changes.
+      Verify changes are evidence-based, targeted, and won't introduce new issues.
+      Check that confidence scores are justified and evidence is solid.
+    agent_hints:
+      - code-reviewer
+    tool_rules:
+      - tool_name: Edit
+        action: block
+        conditions: []
+        message: "Review phase: report findings with file:line references."
+      - tool_name: Write
+        action: block
+        conditions: []
+        message: "Review phase: report findings with file:line references."
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Review phase: commits are blocked until review completes."
+
+  - name: merge
+    context: |
+      Apply approved prompt changes and commit.
+      Code agent applies the specific prompt modifications recommended by KAIROS.
+      Run verification checks before committing to ensure prompts are valid.
+    agent_hints:
+      - code_agent
+    tool_rules:
+      - tool_name: Bash
+        action: block
+        conditions: ["command_contains:git commit"]
+        message: "Merge phase: complete code review before committing. Transition to review phase first."
+
+transitions:
+  - from: analyze
+    to: review
+  - from: review
+    to: merge
+  - from: review
+    to: analyze
+  - from: merge
+    to: complete

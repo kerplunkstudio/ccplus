@@ -59,9 +59,9 @@ describe('captain-tools - sleep', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 19 tools (including sleep)', () => {
+    it('builds 20 tools (including sleep)', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(19);
+      expect(tools).toHaveLength(20);
     });
   });
 

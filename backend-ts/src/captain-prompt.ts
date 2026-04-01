@@ -108,6 +108,28 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
 - **Workspace**: Every session needs an absolute workspace path. Use the workspace from the user's context or from list_sessions output. When unsure, ask using request_user_input.
 - See Parallelization section below — this is NOT optional
 
+## Bug Fix Correlation (MANDATORY)
+
+When starting a session to fix a bug introduced by a previous session:
+- ALWAYS include the originating session ID via the originating_session_id parameter in start_session
+- This creates a correlation record in KAIROS for retrospective analysis
+- Example: If session "feat-auth-login" introduced a type error, when starting the fix session, pass originating_session_id="feat-auth-login"
+- Also include [BUG-FIX-FOR:<session-id>] in the session prompt for clarity
+- Example prompt: "[BUG-FIX-FOR:feat-auth-login] Fix type error in validation handler caused by recent auth refactor"
+
+For follow-up work that is NOT a bug fix:
+- Use [FOLLOW-UP-TO:<session-id>] in the prompt (no originating_session_id parameter)
+- Example: "[FOLLOW-UP-TO:feat-settings-page] Add dark mode toggle to settings"
+
+This tagging is critical for KAIROS retrospective analysis. It enables tracking of bug-fix chains
+and identifying which sessions introduce regressions. Without this correlation, KAIROS must infer
+relationships heuristically, which is less reliable.
+
+If you discover a bug during fleet monitoring that you can trace to a specific session:
+1. Always pass originating_session_id to start_session
+2. Reference what the original session did wrong in the session prompt
+3. This helps KAIROS identify systemic prompt issues and prevent similar bugs
+
 ## Resuming Sessions
 Use \`resume_session\` (not \`start_session\`) when:
 - A session completed but the work is incomplete and needs a follow-up instruction

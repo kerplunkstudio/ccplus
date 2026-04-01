@@ -127,6 +127,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         workflow: z.string().describe("REQUIRED. Workflow to use: 'feature', 'bug-fix', 'tdd', 'security-audit', or 'default'. See Workflow Selection section."),
         force: z.boolean().optional().describe("If true, bypass pending state and start session immediately. If false or omitted (default), session requires user approval before starting."),
         description: z.string().optional().describe("Optional 1-sentence description of what this session is working on (human-readable summary)."),
+        originating_session_id: z.string().optional().describe("Session ID that introduced the bug being fixed. Sets up correlation for KAIROS analysis. Only use when this session is fixing a bug caused by a specific prior session."),
       },
       async (args) => {
         try {
@@ -160,6 +161,30 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             : createPendingSession(sessionParams, deps);
 
           if (result.success && result.sessionId) {
+            // Record KAIROS correlation if originating_session_id is provided
+            if (args.originating_session_id) {
+              try {
+                const { addCorrelation } = await import('./db/kairos.js');
+                addCorrelation({
+                  sourceSessionId: args.originating_session_id,
+                  targetSessionId: result.sessionId,
+                  relationType: 'bug_fix_for',
+                  confidence: 1.0,
+                  evidence: `Captain tagged as bug fix for ${args.originating_session_id}`,
+                });
+                deps.log.info('Recorded KAIROS correlation', {
+                  sourceSessionId: args.originating_session_id,
+                  targetSessionId: result.sessionId,
+                });
+              } catch (err) {
+                deps.log.warn('Failed to record KAIROS correlation', {
+                  error: String(err),
+                  sourceSessionId: args.originating_session_id,
+                  targetSessionId: result.sessionId,
+                });
+              }
+            }
+
             // Emit session proposal event to fleet monitor room (only for pending sessions)
             if (args.force !== true) {
               const io = deps.io as any;
