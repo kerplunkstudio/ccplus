@@ -59,6 +59,28 @@ let tickInterval: ReturnType<typeof setInterval> | null = null;
 let tickStartTime: number | null = null;
 let deps: TickLoopDependencies | null = null;
 
+// ---- Actionable output patterns ----
+// Tick responses matching these patterns are NOT suppressed — they contain
+// meaningful output the user or fleet system should receive.
+const ACTIONABLE_PATTERNS = [
+  /start_session/i,
+  /starting session/i,
+  /session started/i,
+  /launching/i,
+  /\[fleet\]/i,
+  /error:/i,
+  /failed:/i,
+  /warning:/i,
+  /completed/i,
+  /cancelled/i,
+  /\bstuck\b/i,
+  /\bblocker\b/i,
+  /\bapprove\b/i,
+  /\bpending\b/i,
+  /\bcancel_session\b/i,
+  /\bdecision\b/i,
+];
+
 // ---- Public API ----
 
 export function startTickLoop(dependencies: TickLoopDependencies): void {
@@ -103,10 +125,86 @@ export function isBriefMode(): boolean {
   return tickState.briefMode;
 }
 
-export function resetBriefMode(): void {
+/**
+ * Activate brief mode for the current tick cycle.
+ * Called immediately before sendCaptainMessage for tick-originated prompts.
+ * Brief mode will suppress Captain responses that do not match actionable patterns.
+ */
+export function activateBriefMode(): void {
   tickState = {
     ...tickState,
-    briefMode: false,
+    briefMode: true,
+  };
+  log.debug('Captain: brief mode activated for tick cycle');
+}
+
+/**
+ * Deactivate brief mode.
+ * Called after a tick query completes, and also by sendCaptainMessage
+ * when any non-tick source sends a message (to guarantee user messages
+ * always get through).
+ */
+export function resetBriefMode(): void {
+  if (tickState.briefMode) {
+    tickState = {
+      ...tickState,
+      briefMode: false,
+    };
+    log.debug('Captain: brief mode reset');
+  }
+}
+
+/**
+ * Return true if the response text should be suppressed during brief mode.
+ *
+ * Suppression rules:
+ * - Brief mode must be active
+ * - Text must not match any actionable pattern
+ *
+ * Called in captain.ts processQueryResponse before routing text to callbacks.
+ */
+export function shouldSuppressBriefOutput(text: string): boolean {
+  if (!tickState.briefMode) return false;
+  const isActionable = ACTIONABLE_PATTERNS.some(pattern => pattern.test(text));
+  if (isActionable) {
+    log.debug('Captain: brief mode — actionable output, NOT suppressed');
+    return false;
+  }
+  log.debug('Captain: brief mode — non-actionable output suppressed');
+  return true;
+}
+
+/**
+ * Send a tick-originated message to Captain.
+ * Sets brief mode ON before sending and schedules auto-reset after the
+ * tick query completes (via the returned cleanup function).
+ *
+ * Usage:
+ *   const cleanup = sendTickMessage(content, sendCaptainMessageFn);
+ *   // ... when tick query completes:
+ *   cleanup();
+ *
+ * @param content - The tick prompt content
+ * @param sendMessage - The sendCaptainMessage function from captain.ts
+ * @returns A cleanup function that MUST be called after the tick query completes
+ */
+export function sendTickMessage(
+  content: string,
+  sendMessage: (content: string, source: 'fleet', sourceId: string) => void,
+): () => void {
+  activateBriefMode();
+
+  try {
+    sendMessage(content, 'fleet', 'tick');
+  } catch (error) {
+    // Reset immediately on send failure — don't leave brief mode stuck on
+    resetBriefMode();
+    throw error;
+  }
+
+  // Return cleanup that resets brief mode after query completes
+  return function cleanupBriefMode() {
+    resetBriefMode();
   };
 }
 

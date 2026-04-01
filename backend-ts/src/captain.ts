@@ -15,7 +15,7 @@ import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
-import { isBriefMode } from './captain-tick.js';
+import { resetBriefMode, shouldSuppressBriefOutput } from './captain-tick.js';
 import type { InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 
 // ---- Types ----
@@ -41,31 +41,6 @@ interface CaptainDependencies {
   io: unknown;
   buildSocketCallbacks: (sessionId: string, projectPath?: string) => unknown;
   log: typeof log;
-}
-
-// ---- Brief Mode Output Filter ----
-
-const BRIEF_MODE_PASSTHROUGH_PATTERNS = [
-  /\bstuck\b/i,
-  /\berror\b/i,
-  /\bfailed\b/i,
-  /\bblocker\b/i,
-  /\bapprove\b/i,
-  /\bpending\b/i,
-  /\bstart_session\b/i,
-  /\bcancel_session\b/i,
-  /\bcompleted\b/i,
-  /\bdecision\b/i,
-];
-
-/**
- * In brief mode (tick-originated queries), suppress output unless it contains
- * actionable keywords. Tool calls (start_session, sleep, etc.) still execute
- * normally — only chat text is filtered.
- */
-export function shouldSuppressBriefOutput(text: string): boolean {
-  if (!isBriefMode()) return false;
-  return !BRIEF_MODE_PASSTHROUGH_PATTERNS.some(pattern => pattern.test(text));
 }
 
 // ---- State ----
@@ -309,18 +284,13 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         }
 
         const fullText = textBlocks.join("");
-        if (fullText.length > 0 && !isIdleMessage(fullText)) {
-          // In brief mode (tick-originated), suppress non-actionable output from chat UI
-          const suppressFromChat = shouldSuppressBriefOutput(fullText);
-
-          if (!suppressFromChat) {
-            // Send to target callback(s)
-            for (const callback of getTargetCallbacks(routeToCallbackId)) {
-              try {
-                callback.onText(fullText, messageIndex);
-              } catch (error) {
-                log.error("Captain callback error (onText)", { error: String(error) });
-              }
+        if (fullText.length > 0 && !isIdleMessage(fullText) && !shouldSuppressBriefOutput(fullText)) {
+          // Send to target callback(s)
+          for (const callback of getTargetCallbacks(routeToCallbackId)) {
+            try {
+              callback.onText(fullText, messageIndex);
+            } catch (error) {
+              log.error("Captain callback error (onText)", { error: String(error) });
             }
           }
 
@@ -462,6 +432,16 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     });
   } catch (err) {
     log.error("Failed to save captain user message", { error: String(err) });
+  }
+
+  // Reset brief mode for any non-tick source.
+  // Tick-originated messages set brief mode ON via sendTickMessage() in captain-tick.ts
+  // before calling sendCaptainMessage. All other callers (user messages from web, Telegram,
+  // Discord, API, and non-tick fleet events) must clear brief mode so their responses are
+  // never silently suppressed.
+  const isTickSource = source === 'fleet' && sourceId === 'tick';
+  if (!isTickSource) {
+    resetBriefMode();
   }
 
   // Tag content by source

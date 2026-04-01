@@ -5,13 +5,26 @@ import {
   sleepTicks,
   getSleepRemaining,
   isBriefMode,
+  activateBriefMode,
   resetBriefMode,
+  shouldSuppressBriefOutput,
+  sendTickMessage,
   getTickState,
   _resetTickState,
   buildTickMessage,
 } from '../captain-tick.js';
 
-describe('captain-tick', () => {
+// Mock logger to suppress output during tests
+vi.mock('../logger.js', () => ({
+  log: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+describe('captain-tick: tick loop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     _resetTickState();
@@ -168,7 +181,7 @@ describe('captain-tick', () => {
     });
   });
 
-  describe('brief mode', () => {
+  describe('brief mode (tick loop integration)', () => {
     it('sets briefMode true during tick, can be reset', () => {
       expect(isBriefMode()).toBe(false);
 
@@ -253,5 +266,154 @@ describe('captain-tick', () => {
       expect(getTickState().tickNumber).toBe(0);
       expect(isBriefMode()).toBe(false);
     });
+  });
+});
+
+describe('captain-tick: brief mode state', () => {
+  beforeEach(() => {
+    // Always reset brief mode before each test to prevent state leakage
+    resetBriefMode();
+  });
+
+  it('starts with brief mode inactive', () => {
+    expect(isBriefMode()).toBe(false);
+  });
+
+  it('activateBriefMode() sets brief mode to true', () => {
+    activateBriefMode();
+    expect(isBriefMode()).toBe(true);
+  });
+
+  it('resetBriefMode() sets brief mode to false', () => {
+    activateBriefMode();
+    resetBriefMode();
+    expect(isBriefMode()).toBe(false);
+  });
+
+  it('resetBriefMode() is idempotent when already inactive', () => {
+    expect(isBriefMode()).toBe(false);
+    resetBriefMode(); // Should not throw
+    expect(isBriefMode()).toBe(false);
+  });
+
+  it('multiple activations do not stack — one reset clears it', () => {
+    activateBriefMode();
+    activateBriefMode();
+    resetBriefMode();
+    expect(isBriefMode()).toBe(false);
+  });
+});
+
+describe('captain-tick: shouldSuppressBriefOutput()', () => {
+  beforeEach(() => {
+    resetBriefMode();
+  });
+
+  it('returns false when brief mode is inactive (never suppresses user messages)', () => {
+    expect(isBriefMode()).toBe(false);
+    expect(shouldSuppressBriefOutput('Some idle text')).toBe(false);
+    expect(shouldSuppressBriefOutput('')).toBe(false);
+    expect(shouldSuppressBriefOutput('standing by')).toBe(false);
+  });
+
+  it('returns true for non-actionable text when brief mode is active', () => {
+    activateBriefMode();
+    expect(shouldSuppressBriefOutput('All looks good, nothing to do.')).toBe(true);
+    expect(shouldSuppressBriefOutput('Standing by for instructions.')).toBe(true);
+    expect(shouldSuppressBriefOutput('Fleet is healthy.')).toBe(true);
+  });
+
+  it('returns false for actionable text even when brief mode is active', () => {
+    activateBriefMode();
+    // Each actionable pattern should pass through
+    expect(shouldSuppressBriefOutput('I am calling start_session now')).toBe(false);
+    expect(shouldSuppressBriefOutput('Starting session for the user')).toBe(false);
+    expect(shouldSuppressBriefOutput('Session started: feat-auth-ts')).toBe(false);
+    expect(shouldSuppressBriefOutput('Launching three parallel sessions')).toBe(false);
+    expect(shouldSuppressBriefOutput('[FLEET] Session completed')).toBe(false);
+    expect(shouldSuppressBriefOutput('Error: session failed to start')).toBe(false);
+    expect(shouldSuppressBriefOutput('Failed: could not connect')).toBe(false);
+    expect(shouldSuppressBriefOutput('Warning: session is stuck')).toBe(false);
+    expect(shouldSuppressBriefOutput('Session completed successfully')).toBe(false);
+    expect(shouldSuppressBriefOutput('Session cancelled by user')).toBe(false);
+  });
+
+  it('is case-insensitive for actionable pattern matching', () => {
+    activateBriefMode();
+    expect(shouldSuppressBriefOutput('START_SESSION called')).toBe(false);
+    expect(shouldSuppressBriefOutput('ERROR: something went wrong')).toBe(false);
+    expect(shouldSuppressBriefOutput('COMPLETED task')).toBe(false);
+  });
+});
+
+describe('captain-tick: sendTickMessage()', () => {
+  beforeEach(() => {
+    resetBriefMode();
+  });
+
+  it('activates brief mode before sending, cleanup resets it', () => {
+    const mockSend = vi.fn();
+    expect(isBriefMode()).toBe(false);
+
+    const cleanup = sendTickMessage('do a fleet check', mockSend);
+
+    // Brief mode is active after sendTickMessage
+    expect(isBriefMode()).toBe(true);
+    expect(mockSend).toHaveBeenCalledOnce();
+    expect(mockSend).toHaveBeenCalledWith('do a fleet check', 'fleet', 'tick');
+
+    // After cleanup, brief mode is reset
+    cleanup();
+    expect(isBriefMode()).toBe(false);
+  });
+
+  it('sends message with source=fleet and sourceId=tick', () => {
+    const mockSend = vi.fn();
+    const cleanup = sendTickMessage('scheduled check', mockSend);
+    cleanup();
+
+    expect(mockSend).toHaveBeenCalledWith('scheduled check', 'fleet', 'tick');
+  });
+
+  it('resets brief mode immediately on send failure', () => {
+    const mockSend = vi.fn(() => {
+      throw new Error('Captain not active');
+    });
+
+    expect(() => sendTickMessage('check', mockSend)).toThrow('Captain not active');
+
+    // Brief mode must be reset even on error — the crucial invariant
+    expect(isBriefMode()).toBe(false);
+  });
+
+  it('REGRESSION: brief mode does not persist after tick completes', () => {
+    // This test documents the bug that would exist if cleanup were never called.
+    // After a tick fires and its cleanup runs, user messages must NOT be suppressed.
+    const mockSend = vi.fn();
+
+    // Simulate tick firing and completing
+    const cleanup = sendTickMessage('periodic check', mockSend);
+    expect(isBriefMode()).toBe(true); // active during tick
+    cleanup();
+    expect(isBriefMode()).toBe(false); // reset after tick
+
+    // Now simulate a Telegram user message arriving after the tick
+    // In captain.ts, sendCaptainMessage with source != 'fleet'+'tick' calls resetBriefMode()
+    // and brief mode is already false, so the user message is NOT suppressed
+    expect(shouldSuppressBriefOutput('What is the fleet status?')).toBe(false);
+  });
+
+  it('REGRESSION: user message after tick resets brief mode even if cleanup not called', () => {
+    // This simulates captain.ts calling resetBriefMode() in sendCaptainMessage
+    // for non-tick sources. Even if a tick activated brief mode and cleanup was
+    // somehow skipped, the next user message must clear it.
+    activateBriefMode();
+    expect(isBriefMode()).toBe(true);
+
+    // Simulate what captain.ts sendCaptainMessage does for web/telegram/discord/api
+    resetBriefMode();
+
+    expect(isBriefMode()).toBe(false);
+    expect(shouldSuppressBriefOutput('Any user message')).toBe(false);
   });
 });
