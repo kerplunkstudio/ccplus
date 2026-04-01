@@ -495,6 +495,9 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
     while (captainState.activeQuery && Date.now() - start < 5000) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    if (captainState.activeQuery) {
+      log.warn('[captain] interrupt timeout: activeQuery still set after 5s, proceeding anyway');
+    }
   }
 
   const captainPrompt = await buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE);
