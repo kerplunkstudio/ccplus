@@ -356,7 +356,7 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         try {
           // Determine source based on lastQuerySource
           const querySource = captainState.lastQuerySource;
-          const isTickQuery = querySource?.source === 'fleet' && querySource?.sourceId === 'tick';
+          const isTickQuery = querySource?.source === 'tick';
           const source = isTickQuery ? 'captain-tick' : 'captain';
 
           database.recordQueryUsage({
@@ -462,7 +462,7 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   // before calling sendCaptainMessage. All other callers (user messages from web, Telegram,
   // Discord, API, and non-tick fleet events) must clear brief mode so their responses are
   // never silently suppressed.
-  const isTickSource = source === 'fleet' && sourceId === 'tick';
+  const isTickSource = source === 'tick';
   if (!isTickSource) {
     resetBriefMode();
   }
