@@ -85,7 +85,7 @@ export const CAPTAIN_CONTEXT_WINDOW = 1_000_000;
 export const CAPTAIN_TICK_INTERVAL_MS = parseInt(process.env.CCPLUS_CAPTAIN_TICK_INTERVAL || '60000', 10);
 export const CAPTAIN_TICK_DEFAULT_SLEEP = 5;
 export const CAPTAIN_TICK_BLOCKING_BUDGET_MS = 15_000;
-export const CAPTAIN_TICK_ENABLED = process.env.CCPLUS_CAPTAIN_TICK_ENABLED !== 'false';
+export const CAPTAIN_TICK_ENABLED = process.env.CCPLUS_CAPTAIN_TICK_ENABLED === 'true';
 
 // Telegram bridge
 export const TELEGRAM_BOT_TOKEN = process.env.CCPLUS_TELEGRAM_BOT_TOKEN ?? '';
@@ -415,7 +415,7 @@ export function getCaptainAllowBash(): boolean {
 }
 
 // KAIROS configuration
-export const KAIROS_ENABLED = process.env.CCPLUS_KAIROS_ENABLED !== 'false';
+export const KAIROS_ENABLED = process.env.CCPLUS_KAIROS_ENABLED === 'true';
 export const KAIROS_MODEL = process.env.CCPLUS_KAIROS_MODEL ?? 'claude-opus-4-6';
 export const KAIROS_BATCH_SIZE = parseInt(process.env.CCPLUS_KAIROS_BATCH_SIZE ?? '5', 10);
 export const KAIROS_MAX_ANALYSIS_TURNS = parseInt(process.env.CCPLUS_KAIROS_MAX_TURNS ?? '5', 10);
