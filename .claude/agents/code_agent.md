@@ -103,6 +103,9 @@ Research documents provide:
 - ✅ Refactoring - Ensure tests pass before and after changes
 - ✅ API changes - Test all endpoints and error cases
 - ✅ Utility functions - Test edge cases, error handling, typical inputs
+- ✅ String/template changes - Search for tests asserting on modified strings (grep for key phrases) and update them
+
+**CRITICAL: Before committing, always run the full test suite.** If any test fails, fix the assertion or the code before committing. Do NOT commit with failing tests and rely on a follow-up session to fix them.
 
 **Test requirements**:
 1. **Location**: Follow the project's test conventions (see CLAUDE.md)
