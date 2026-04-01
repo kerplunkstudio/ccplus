@@ -505,6 +505,11 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
             timeoutPromise.then(() => []),
           ]);
 
+          // Check if timeout won
+          if (results.length === 0) {
+            log.debug('Memory search timed out, skipping prior knowledge injection');
+          }
+
           // Combine results - agent-specific first, then project-wide
           const combinedMemories = results.filter(r => r.length > 0).join('\n\n---\n\n');
           const durationMs = Math.round(performance.now() - memStartMs);
