@@ -1,4 +1,5 @@
 import type { EnrichedFleetSessionInfo } from './fleet-monitor.js';
+import { log } from './logger.js';
 
 // ---- Types ----
 
@@ -134,6 +135,10 @@ export function _resetTickState(): void {
 function tick(): void {
   if (!deps) return;
 
+  const enabled = deps.isTickEnabled();
+  const alive = deps.isCaptainAlive();
+  const idle = deps.isCaptainIdle();
+
   // Guard: tick enabled
   if (!deps.isTickEnabled()) return;
 
@@ -152,33 +157,38 @@ function tick(): void {
     return;
   }
 
-  // Fire tick
-  const now = new Date().toISOString();
-  const uptimeMs = tickStartTime ? Date.now() - tickStartTime : 0;
-  const terminalFocused = deps.isTerminalFocused();
-  const fleetState = deps.getFleetState();
+  try {
+    // Fire tick
+    const now = new Date().toISOString();
+    const uptimeMs = tickStartTime ? Date.now() - tickStartTime : 0;
+    const terminalFocused = deps.isTerminalFocused();
+    const fleetState = deps.getFleetState();
 
-  // Compute fleet summary
-  const fleetSummary = computeFleetSummary(fleetState.sessions);
+    // Compute fleet summary
+    const fleetSummary = computeFleetSummary(fleetState.sessions);
 
-  // Update tick state
-  tickState = {
-    ...tickState,
-    tickNumber: tickState.tickNumber + 1,
-    lastTickAt: now,
-    briefMode: true,
-  };
+    // Update tick state
+    tickState = {
+      ...tickState,
+      tickNumber: tickState.tickNumber + 1,
+      lastTickAt: now,
+      briefMode: true,
+    };
 
-  // Build and send tick message
-  const message = buildTickMessage({
-    timestamp: now,
-    uptimeMs,
-    terminalFocused,
-    fleetSummary,
-    tickNumber: tickState.tickNumber,
-  });
+    // Build and send tick message
+    const message = buildTickMessage({
+      timestamp: now,
+      uptimeMs,
+      terminalFocused,
+      fleetSummary,
+      tickNumber: tickState.tickNumber,
+    });
 
-  deps.sendTickMessage(message);
+    log.info('Tick fired', { tickNumber: tickState.tickNumber, fleetSummary });
+    deps.sendTickMessage(message);
+  } catch (error) {
+    log.error('Tick failed', { error: String(error), stack: (error as Error).stack });
+  }
 }
 
 function computeFleetSummary(sessions: EnrichedFleetSessionInfo[]): FleetTickSummary {
