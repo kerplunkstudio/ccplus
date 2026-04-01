@@ -969,6 +969,43 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       }
     ),
 
+    // check_file_overlaps - Check for file conflicts with running sessions
+    tool(
+      "check_file_overlaps",
+      "Check if specific files are currently being modified by any running session. Use before starting a session to avoid merge conflicts.",
+      {
+        files: z.array(z.string()).describe("List of file paths (relative to workspace) to check for overlaps"),
+        exclude_session_id: z.string().optional().describe("Session ID to exclude from the check (typically the caller's own session)"),
+      },
+      async (args) => {
+        try {
+          const overlaps = fleetMonitor.getFileOverlaps(args.files, args.exclude_session_id);
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                has_overlaps: overlaps.length > 0,
+                overlaps: overlaps.map(o => ({
+                  session_id: o.sessionId,
+                  overlapping_files: o.overlappingFiles,
+                })),
+                warning: overlaps.length > 0
+                  ? `WARNING: ${overlaps.length} running session(s) are touching the same files. Starting a new session on these files risks merge conflicts.`
+                  : null,
+              }, null, 2),
+            }],
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({ error: String(error) }, null, 2),
+            }],
+          };
+        }
+      }
+    ),
+
     // read_file - Read a file's contents with line numbers
     tool(
       "read_file",

@@ -264,6 +264,35 @@ export function getSessionDetail(sessionId: string): FleetSessionInfo | null {
   return sessions.get(sessionId) ?? null;
 }
 
+/**
+ * Check if a set of files overlaps with files being touched by running sessions.
+ * Returns a list of { sessionId, overlappingFiles } for any active sessions that touch the same files.
+ */
+export function getFileOverlaps(files: string[], excludeSessionId?: string): Array<{ sessionId: string; overlappingFiles: string[] }> {
+  const overlaps: Array<{ sessionId: string; overlappingFiles: string[] }> = [];
+
+  for (const [sessionId, info] of sessions.entries()) {
+    if (excludeSessionId && sessionId === excludeSessionId) continue;
+    if (info.status !== 'running' && info.status !== 'idle') continue;
+
+    // Normalize paths — strip worktree prefix to get relative paths
+    const normalizeFile = (f: string): string => {
+      const worktreeMatch = f.match(/\.claude\/worktrees\/[^/]+\/(.+)/);
+      return worktreeMatch ? worktreeMatch[1] : f;
+    };
+
+    const sessionFiles = info.filesTouched.map(normalizeFile);
+    const checkFiles = files.map(normalizeFile);
+
+    const common = checkFiles.filter(f => sessionFiles.includes(f));
+    if (common.length > 0) {
+      overlaps.push({ sessionId, overlappingFiles: common });
+    }
+  }
+
+  return overlaps;
+}
+
 export function setIOInstance(io: SocketIOServer): void {
   ioInstance = io;
 }

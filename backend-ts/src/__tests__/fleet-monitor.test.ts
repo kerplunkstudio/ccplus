@@ -753,3 +753,73 @@ describe('Fleet Monitor', () => {
       expect(fleetMonitor.getSessionDetail('cancel1')).toBeNull();
     });
   });
+
+  describe('getFileOverlaps', () => {
+    it('returns empty array when no sessions touch the checked files', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      fleetMonitor.addFileTouched('sess1', '/workspace/project1/src/file1.ts');
+      fleetMonitor.addFileTouched('sess1', '/workspace/project1/src/file2.ts');
+
+      fleetMonitor.registerSession('sess2', '/workspace/project2');
+      fleetMonitor.updateSessionStatus('sess2', 'running');
+      fleetMonitor.addFileTouched('sess2', '/workspace/project2/src/file3.ts');
+
+      const overlaps = fleetMonitor.getFileOverlaps(['/workspace/project1/src/file4.ts']);
+
+      expect(overlaps).toEqual([]);
+    });
+
+    it('normalizes paths correctly when checking overlaps', () => {
+      fleetMonitor.registerSession('alpha', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('alpha', 'running');
+      fleetMonitor.addFileTouched('alpha', '.claude/worktrees/alpha/src/server.ts');
+
+      const overlaps = fleetMonitor.getFileOverlaps(['.claude/worktrees/beta/src/server.ts']);
+
+      expect(overlaps).toHaveLength(1);
+      expect(overlaps[0].sessionId).toBe('alpha');
+      expect(overlaps[0].overlappingFiles).toContain('src/server.ts');
+    });
+
+    it('excludes terminal sessions from overlap detection', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'completed');
+      fleetMonitor.addFileTouched('sess1', '/workspace/project1/src/file1.ts');
+
+      const overlaps = fleetMonitor.getFileOverlaps(['/workspace/project1/src/file1.ts']);
+
+      expect(overlaps).toEqual([]);
+    });
+
+    it('excludes specified session when excludeSessionId is provided', () => {
+      fleetMonitor.registerSession('sess1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess1', 'running');
+      fleetMonitor.addFileTouched('sess1', '/workspace/project1/src/file1.ts');
+
+      fleetMonitor.registerSession('sess2', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('sess2', 'running');
+      fleetMonitor.addFileTouched('sess2', '/workspace/project1/src/file1.ts');
+
+      const overlaps = fleetMonitor.getFileOverlaps(['/workspace/project1/src/file1.ts'], 'sess1');
+
+      expect(overlaps).toHaveLength(1);
+      expect(overlaps[0].sessionId).toBe('sess2');
+    });
+
+    it('includes both running and idle sessions in overlap detection', () => {
+      fleetMonitor.registerSession('running1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('running1', 'running');
+      fleetMonitor.addFileTouched('running1', '/workspace/project1/src/shared.ts');
+
+      fleetMonitor.registerSession('idle1', '/workspace/project1');
+      fleetMonitor.updateSessionStatus('idle1', 'idle');
+      fleetMonitor.addFileTouched('idle1', '/workspace/project1/src/shared.ts');
+
+      const overlaps = fleetMonitor.getFileOverlaps(['/workspace/project1/src/shared.ts']);
+
+      expect(overlaps).toHaveLength(2);
+      const sessionIds = overlaps.map(o => o.sessionId).sort();
+      expect(sessionIds).toEqual(['idle1', 'running1']);
+    });
+  });
