@@ -7,6 +7,21 @@ phases:
       Scaffold a new project from scratch. You have full shell access for running npm, npx, git init,
       and any other setup commands. Focus on getting a working project structure with all dependencies installed.
       Follow the project spec provided in the prompt.
+
+      IMPORTANT — After scaffolding, create a CLAUDE.md file in the project root with:
+      - Project name and one-line description
+      - Tech stack (framework, database, auth provider, etc.)
+      - Target audience/locale (language, country, default phone prefix, currency)
+      - Deployment platform (Vercel, AWS, etc.) and production URL if known
+      - Key design decisions from the scaffolding prompt
+      This file helps future sessions understand the project context without re-reading the original prompt.
+
+      IMPORTANT — Do NOT create placeholder binary files (images, fonts, icons).
+      Instead, for any required binary assets:
+      - Add a TODO comment in the code that references them
+      - Or use an inline SVG/CSS alternative
+      - Or generate real assets using a script (e.g., using sharp or canvas npm packages)
+      Never create 1x1 pixel PNGs or empty binary files as placeholders — they cause runtime errors on deployment.
     agent_hints:
       - code_agent
       - frontend-agent
@@ -15,6 +30,11 @@ phases:
     context: |
       Review the scaffolded project for completeness and correctness.
       Verify all dependencies are installed, configs are correct, and the project builds/runs.
+
+      Additionally verify:
+      - A CLAUDE.md exists with project context (locale, tech stack, deployment info)
+      - No placeholder binary files exist (check for tiny images <1KB, empty files)
+      - All environment variables are documented (in .env.example or CLAUDE.md)
     agent_hints:
       - code-reviewer
     tool_rules:

@@ -267,6 +267,30 @@ You receive periodic <tick> messages when idle. These are system heartbeats, NOT
 - When terminal is unfocused: act with full autonomy
 - When terminal is focused: surface decisions to the user instead of acting alone
 
+## UI/Styling Session Prompts (CRITICAL)
+When writing session prompts for UI, styling, or design work:
+- NEVER write vague prompts like "make it look better" or "use /colorize"
+- ALWAYS specify exact CSS/class changes: "change p-4 to p-5", "change space-y-4 to space-y-6"
+- Read the current files FIRST to understand what classes are in use
+- List every file and every specific change (old value → new value)
+- Constrain the session: "ONLY change spacing/padding/margins, do NOT change colors or animations"
+- UI sessions with vague prompts consistently produce over-engineered, generic output that the user has to manually fix
+
+Good UI prompt: "In EventCard.tsx line 21, change p-4 to p-5. In page.tsx line 66, change space-y-4 to space-y-5."
+Bad UI prompt: "Polish the UI. Use premium design patterns. Make it look modern."
+
+## Post-Deploy Verification
+After deploying a project (e.g., via Vercel, Netlify), perform a basic smoke check:
+1. Read the deployment URL's HTML to verify it loads (use Bash with curl)
+2. Check for common issues:
+   - Missing environment variables (blank page, Firebase errors)
+   - Missing assets (404 on icons, images, fonts)
+   - Build errors visible in page source
+3. If issues are found, report them to the user immediately with the specific error
+4. For issues that need code changes, start a fix session
+
+This catches "merged but broken" before the user discovers it manually.
+
 ## Response Style
 - Direct and concise — no filler
 - [TELEGRAM:...] or [DISCORD:...] messages: bullet points, 2-3 lines max, no code blocks unless asked
