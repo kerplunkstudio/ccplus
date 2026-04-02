@@ -91,6 +91,16 @@ let captainState: CaptainState = {
 let captainDeps: CaptainDependencies | null = null;
 let fleetMcpServer: ReturnType<typeof createSdkMcpServer> | null = null;
 
+interface QueuedMessage {
+  readonly content: string;
+  readonly source: MessageSource;
+  readonly sourceId: string;
+  readonly imageIds?: string[];
+}
+
+const messageQueue: QueuedMessage[] = [];
+let isProcessingQueue = false;
+
 // ---- MCP Server ----
 
 /**
@@ -459,14 +469,14 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 
 /**
  * Send a message to the Captain session.
- * Tags content based on source and starts a new query immediately.
+ * Tags content based on source and enqueues for serial processing.
  */
 export function sendCaptainMessage(content: string, source: MessageSource, sourceId: string, imageIds?: string[]): void {
   if (!captainState.sessionId) {
     throw new Error("Captain session is not active");
   }
 
-  // Save user message to DB (wrap in try/catch, never throw)
+  // Save user message to DB
   try {
     const existingConvId = database.getLatestCaptainConversationId();
     const convId = existingConvId ?? `captain-conv-${Date.now()}`;
@@ -481,11 +491,7 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     log.error("Failed to save captain user message", { error: String(err) });
   }
 
-  // Reset brief mode for any non-tick source.
-  // Tick-originated messages set brief mode ON via sendTickMessage() in captain-tick.ts
-  // before calling sendCaptainMessage. All other callers (user messages from web, Telegram,
-  // Discord, API, and non-tick fleet events) must clear brief mode so their responses are
-  // never silently suppressed.
+  // Reset brief mode for any non-tick source
   const isTickSource = source === 'tick';
   if (!isTickSource) {
     resetBriefMode();
@@ -498,28 +504,54 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
   } else if (source === 'telegram' || source === 'discord') {
     taggedContent = `[${source.toUpperCase()}:${sourceId}] ${content}`;
   }
-  // 'web' and 'api' get no prefix
 
-  // Compute routing target
-  const queryCallbackId = (source === 'telegram' || source === 'discord')
-    ? `${source}:${sourceId}`
-    : null; // web/api → broadcast to all
-
-  // Store routing target, tick flag, and increment message count
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
-    lastQueryCallbackId: queryCallbackId,
-    lastQuerySource: { source, sourceId },
-    lastQueryIsTick: isTickSource,
   };
 
-  log.info("Captain message received", { source, sourceId, length: content.length });
+  log.info("Captain message queued", { source, sourceId, length: content.length, queueDepth: messageQueue.length });
 
-  // Start a new query immediately — SDK handles conversation continuity via resume
-  startCaptainQuery(taggedContent, imageIds).catch((error) => {
-    log.error("Captain query failed", { error: String(error) });
-  });
+  // Enqueue and kick off processing
+  messageQueue.push({ content: taggedContent, source, sourceId, imageIds });
+  processMessageQueue();
+}
+
+/**
+ * Process the message queue serially. Only one query runs at a time.
+ * Prevents MCP transport race when tick + fleet messages fire simultaneously.
+ */
+function processMessageQueue(): void {
+  if (isProcessingQueue || messageQueue.length === 0) {
+    return;
+  }
+
+  isProcessingQueue = true;
+  const msg = messageQueue.shift()!;
+
+  // Set routing state for THIS message (not at enqueue time)
+  const queryCallbackId = (msg.source === 'telegram' || msg.source === 'discord')
+    ? `${msg.source}:${msg.sourceId}`
+    : null;
+
+  captainState = {
+    ...captainState,
+    lastQueryCallbackId: queryCallbackId,
+    lastQuerySource: { source: msg.source, sourceId: msg.sourceId },
+    lastQueryIsTick: msg.source === 'tick',
+  };
+
+  startCaptainQuery(msg.content, msg.imageIds)
+    .catch((error) => {
+      log.error("Captain query failed", { error: String(error) });
+    })
+    .finally(() => {
+      isProcessingQueue = false;
+      // Process next message if any
+      if (messageQueue.length > 0) {
+        processMessageQueue();
+      }
+    });
 }
 
 /**
@@ -530,22 +562,16 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
     return;
   }
 
-  // Interrupt active query so the MCP server singleton is freed
+  // Queue guarantees serial execution, but if somehow activeQuery lingers, interrupt it
   if (captainState.activeQuery) {
-    log.info("Captain: interrupting active query for new message");
+    log.warn("Captain: activeQuery still set when queue dispatched, interrupting");
     try {
       await captainState.activeQuery.interrupt();
     } catch (error) {
-      log.error("Captain: failed to interrupt active query", { error: String(error) });
+      log.error("Captain: failed to interrupt lingering query", { error: String(error) });
     }
-    // Wait for processQueryResponse to clear activeQuery (up to 5s)
-    const start = Date.now();
-    while (captainState.activeQuery && Date.now() - start < 5000) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    if (captainState.activeQuery) {
-      log.warn('[captain] interrupt timeout: activeQuery still set after 5s, proceeding anyway');
-    }
+    // Brief wait for cleanup
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   const captainPrompt = await buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE);
