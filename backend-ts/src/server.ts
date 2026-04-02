@@ -101,7 +101,7 @@ const START_TIME = Date.now();
 // Mark orphaned tool events from previous run
 const orphanCount = database.markOrphanedToolEvents();
 if (orphanCount > 0) {
-  log.info(`Marked ${orphanCount} orphaned tool events from previous run`, { orphanCount });
+  log.info('Marked orphaned tool events from previous run', { orphanCount });
 }
 
 // Maps socket.id -> { session_id, sessions }
@@ -343,7 +343,7 @@ setInterval(() => {
   }
 
   if (staleCount > 0) {
-    log.info(`Swept ${staleCount} stale client(s) from connectedClients Map`);
+    log.info('Swept stale clients from connectedClients Map', { staleCount });
   }
 }, 5 * 60 * 1000); // 5 minutes
 
@@ -365,7 +365,7 @@ setInterval(() => {
       const readyTasks = scheduler.getReadyTasks(sessionId);
 
       for (const task of readyTasks) {
-        log.info(`Firing scheduled task ${task.id} for session ${sessionId}`, { taskId: task.id, prompt: task.prompt });
+        log.info('Firing scheduled task', { taskId: task.id, sessionId, prompt: task.prompt });
 
         // Record user message
         try {

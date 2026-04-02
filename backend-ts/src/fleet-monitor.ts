@@ -460,7 +460,7 @@ function pruneOldSessions(): void {
     }
   }
   if (pruneCount > 0) {
-    log.info(`Pruned ${pruneCount} old terminal session(s) from memory`);
+    log.info('Pruned old terminal sessions from memory', { pruneCount });
   }
 }
 

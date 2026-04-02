@@ -20,7 +20,7 @@ export function spawnTerminal(
   onExit: (code: number) => void
 ): void {
   if (terminals.has(terminalId)) {
-    log.warn(`Terminal ${terminalId} already exists, killing old instance`);
+    log.warn('Terminal already exists, killing old instance', { terminalId });
     killTerminal(terminalId);
   }
 
@@ -43,14 +43,14 @@ export function spawnTerminal(
     });
 
     ptyProcess.onExit(({ exitCode }) => {
-      log.info(`Terminal ${terminalId} exited with code ${exitCode}`);
+      log.info('Terminal exited', { terminalId, exitCode });
       terminals.delete(terminalId);
       onExit(exitCode);
     });
 
-    log.info(`Spawned terminal ${terminalId} with shell ${shell} in ${cwd}`);
+    log.info('Terminal spawned', { terminalId, shell, cwd });
   } catch (error) {
-    log.error(`Failed to spawn terminal ${terminalId}:`, { error: String(error) });
+    log.error('Failed to spawn terminal', { terminalId, error: String(error) });
     throw error;
   }
 }
@@ -61,14 +61,14 @@ export function spawnTerminal(
 export function writeTerminal(terminalId: string, data: string): void {
   const instance = terminals.get(terminalId);
   if (!instance) {
-    log.warn(`Attempted to write to non-existent terminal ${terminalId}`);
+    log.warn('Attempted to write to non-existent terminal', { terminalId });
     return;
   }
 
   try {
     instance.pty.write(data);
   } catch (error) {
-    log.error(`Failed to write to terminal ${terminalId}:`, { error: String(error) });
+    log.error('Failed to write to terminal', { terminalId, error: String(error) });
   }
 }
 
@@ -78,14 +78,14 @@ export function writeTerminal(terminalId: string, data: string): void {
 export function resizeTerminal(terminalId: string, cols: number, rows: number): void {
   const instance = terminals.get(terminalId);
   if (!instance) {
-    log.warn(`Attempted to resize non-existent terminal ${terminalId}`);
+    log.warn('Attempted to resize non-existent terminal', { terminalId });
     return;
   }
 
   try {
     instance.pty.resize(cols, rows);
   } catch (error) {
-    log.error(`Failed to resize terminal ${terminalId}:`, { error: String(error) });
+    log.error('Failed to resize terminal', { terminalId, error: String(error) });
   }
 }
 
@@ -101,9 +101,9 @@ export function killTerminal(terminalId: string): void {
   try {
     instance.pty.kill();
     terminals.delete(terminalId);
-    log.info(`Killed terminal ${terminalId}`);
+    log.info('Terminal killed', { terminalId });
   } catch (error) {
-    log.error(`Failed to kill terminal ${terminalId}:`, { error: String(error) });
+    log.error('Failed to kill terminal', { terminalId, error: String(error) });
   }
 }
 
@@ -112,7 +112,7 @@ export function killTerminal(terminalId: string): void {
  */
 export function killAllTerminals(): void {
   const terminalIds = Array.from(terminals.keys());
-  log.info(`Killing ${terminalIds.length} active terminals`);
+  log.info('Killing all active terminals', { count: terminalIds.length });
 
   for (const terminalId of terminalIds) {
     killTerminal(terminalId);

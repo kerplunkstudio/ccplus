@@ -1,18 +1,38 @@
 import { beforeEach, describe, it, expect, vi, afterEach } from "vitest";
-import { log } from "../logger.js";
+
+// vi.mock is hoisted before all imports — named imports in logger.ts will receive the mocked versions
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs")>();
+  return {
+    ...actual,
+    appendFileSync: vi.fn(),
+    statSync: vi.fn(() => {
+      throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+    }),
+    renameSync: vi.fn(),
+  };
+});
+
+// Import mocked fs functions and logger after vi.mock is declared
+import { appendFileSync, statSync, renameSync } from "fs";
+import { log, shutdownLogger } from "../logger.js";
 
 describe("Logger Tests", () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    // Spy on console.log to capture output
     consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.mocked(appendFileSync).mockClear();
+    vi.mocked(statSync).mockClear();
+    vi.mocked(renameSync).mockClear();
+    // Default: file doesn't exist (ENOENT — no rotation triggered)
+    vi.mocked(statSync).mockImplementation(() => {
+      throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+    });
   });
 
   afterEach(() => {
-    // Restore console.log
     consoleLogSpy.mockRestore();
-    // Reset LOG_LEVEL to default
     delete process.env.LOG_LEVEL;
   });
 
@@ -105,7 +125,6 @@ describe("Logger Tests", () => {
   describe("log.debug", () => {
     it("should output JSON with level 'debug' when LOG_LEVEL is debug", async () => {
       process.env.LOG_LEVEL = "debug";
-      // Need to re-import logger after changing env var
       vi.resetModules();
       const { log: debugLog } = await import("../logger.js");
 
@@ -266,6 +285,144 @@ describe("Logger Tests", () => {
 
       const output = JSON.parse(consoleLogSpy.mock.calls[0][0] as string);
       expect(output.msg).toBe("test\nmessage\twith\nspecial\tchars");
+    });
+  });
+
+  describe("File transport", () => {
+    // Each test obtains a fresh logger instance with CCPLUS_LOG_DIR set so that
+    // _logDir is resolved from the env var rather than requiring config.ts.
+    // This sidesteps the circular-dep lazy-require cache problem in tests.
+
+    async function freshLoggerWithDir(dir: string): Promise<typeof log> {
+      process.env.CCPLUS_LOG_DIR = dir;
+      vi.resetModules();
+      const { log: freshLog } = await import("../logger.js");
+      // Re-apply mocks since resetModules re-runs vi.mock hoisting
+      vi.mocked(appendFileSync).mockClear();
+      vi.mocked(statSync).mockClear();
+      vi.mocked(renameSync).mockClear();
+      vi.mocked(statSync).mockImplementation(() => {
+        throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+      });
+      return freshLog;
+    }
+
+    afterEach(() => {
+      delete process.env.CCPLUS_LOG_DIR;
+    });
+
+    it("should write each log entry to the log file", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+
+      freshLog.info("file transport test");
+
+      expect(vi.mocked(appendFileSync)).toHaveBeenCalledOnce();
+      const [filePath, content] = vi.mocked(appendFileSync).mock.calls[0] as [string, string];
+      expect(filePath).toBe("/tmp/test-logs/server.log");
+      const parsed = JSON.parse((content as string).trimEnd());
+      expect(parsed.level).toBe("info");
+      expect(parsed.msg).toBe("file transport test");
+    });
+
+    it("should append a newline after each entry", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+
+      freshLog.info("newline test");
+
+      const [, content] = vi.mocked(appendFileSync).mock.calls[0] as [string, string];
+      expect((content as string).endsWith("\n")).toBe(true);
+    });
+
+    it("should not write to file when level is filtered out", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+
+      freshLog.debug("filtered debug message"); // default level is info
+
+      expect(vi.mocked(appendFileSync)).not.toHaveBeenCalled();
+    });
+
+    it("should check file size before writing (rotation check)", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+
+      freshLog.info("size check test");
+
+      expect(vi.mocked(statSync)).toHaveBeenCalledOnce();
+      expect(vi.mocked(statSync).mock.calls[0][0]).toBe("/tmp/test-logs/server.log");
+    });
+
+    it("should rotate log when file exceeds 10MB", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+      vi.mocked(statSync).mockReturnValueOnce({ size: 10 * 1024 * 1024 + 1 } as ReturnType<typeof statSync>);
+
+      freshLog.info("trigger rotation");
+
+      expect(vi.mocked(renameSync)).toHaveBeenCalledOnce();
+      expect(vi.mocked(renameSync).mock.calls[0][0]).toBe("/tmp/test-logs/server.log");
+      expect(vi.mocked(renameSync).mock.calls[0][1]).toBe("/tmp/test-logs/server.log.1");
+      expect(vi.mocked(appendFileSync)).toHaveBeenCalledOnce();
+    });
+
+    it("should not rotate when file is exactly 10MB", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+      vi.mocked(statSync).mockReturnValueOnce({ size: 10 * 1024 * 1024 } as ReturnType<typeof statSync>);
+
+      freshLog.info("at limit — no rotation");
+
+      expect(vi.mocked(renameSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(appendFileSync)).toHaveBeenCalledOnce();
+    });
+
+    it("should not rotate when file is below 10MB", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+      vi.mocked(statSync).mockReturnValueOnce({ size: 5 * 1024 * 1024 } as ReturnType<typeof statSync>);
+
+      freshLog.info("no rotation needed");
+
+      expect(vi.mocked(renameSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(appendFileSync)).toHaveBeenCalledOnce();
+    });
+
+    it("should handle missing log file gracefully (ENOENT on stat)", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+      // Default mock throws ENOENT — no rotation, still appends
+
+      freshLog.info("first write to new file");
+
+      expect(vi.mocked(renameSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(appendFileSync)).toHaveBeenCalledOnce();
+    });
+
+    it("should silently fail when appendFileSync throws", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+      vi.mocked(appendFileSync).mockImplementationOnce(() => {
+        throw new Error("disk full");
+      });
+
+      expect(() => freshLog.info("disk full test")).not.toThrow();
+    });
+
+    it("should write the same JSON content to file as to console", async () => {
+      const freshLog = await freshLoggerWithDir("/tmp/test-logs");
+
+      freshLog.warn("consistency check", { sessionId: "s-1", detail: "test" });
+
+      const consoleOutput = consoleLogSpy.mock.calls[0][0] as string;
+      const [, fileContent] = vi.mocked(appendFileSync).mock.calls[0] as [string, string];
+      expect((fileContent as string).trimEnd()).toBe(consoleOutput);
+    });
+
+    it("should not write to file when CCPLUS_LOG_DIR is empty string", async () => {
+      const freshLog = await freshLoggerWithDir("");
+
+      freshLog.info("no file logging with empty dir");
+
+      expect(vi.mocked(appendFileSync)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("shutdownLogger", () => {
+    it("should be a no-op function that does not throw", () => {
+      expect(() => shutdownLogger()).not.toThrow();
     });
   });
 });

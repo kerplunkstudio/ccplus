@@ -72,7 +72,7 @@ class SchedulerImpl implements Scheduler {
     };
 
     this.tasks.set(task.id, task);
-    log.info(`Scheduled task ${task.id}: "${prompt}" with cron "${cronExpression}" for session ${sessionId}`);
+    log.info('Scheduled task created', { taskId: task.id, prompt, cronExpression, sessionId });
     return task;
   }
 
@@ -81,7 +81,7 @@ class SchedulerImpl implements Scheduler {
     if (!task) return false;
 
     this.tasks.delete(id);
-    log.info(`Removed scheduled task ${id}`);
+    log.info('Scheduled task removed', { taskId: id });
     return true;
   }
 
@@ -94,7 +94,7 @@ class SchedulerImpl implements Scheduler {
       paused: true,
     };
     this.tasks.set(id, updated);
-    log.info(`Paused scheduled task ${id}`);
+    log.info('Scheduled task paused', { taskId: id });
     return true;
   }
 
@@ -110,7 +110,7 @@ class SchedulerImpl implements Scheduler {
       nextRunAt,
     };
     this.tasks.set(id, updated);
-    log.info(`Resumed scheduled task ${id}`);
+    log.info('Scheduled task resumed', { taskId: id });
     return true;
   }
 
@@ -144,7 +144,7 @@ class SchedulerImpl implements Scheduler {
       nextRunAt,
     };
     this.tasks.set(id, updated);
-    log.info(`Fired task ${id}, next run at ${new Date(updated.nextRunAt).toISOString()}`);
+    log.info('Scheduled task fired', { taskId: id, nextRunAt: new Date(updated.nextRunAt).toISOString() });
   }
 
   start(): void {
@@ -158,7 +158,7 @@ class SchedulerImpl implements Scheduler {
       // This is just a heartbeat for logging
     }, this.tickIntervalMs);
 
-    log.info(`Scheduler started (tick interval: ${this.tickIntervalMs}ms)`);
+    log.info('Scheduler started', { tickIntervalMs: this.tickIntervalMs });
   }
 
   stop(): void {
@@ -175,7 +175,7 @@ class SchedulerImpl implements Scheduler {
       this.tasks.delete(id);
     }
     if (sessionTasks.length > 0) {
-      log.info(`Removed ${sessionTasks.length} scheduled tasks for session ${sessionId}`);
+      log.info('Scheduled session tasks removed', { count: sessionTasks.length, sessionId });
     }
   }
 }
