@@ -48,6 +48,15 @@ export interface SleepInfo {
   sleepUntilTick: number;
 }
 
+// ---- Backoff State ----
+
+export interface BackoffState {
+  multiplier: number;
+  rateLimitedUntil: number;
+}
+
+const MAX_BACKOFF_MS = 600_000; // 10 minutes
+
 // ---- State ----
 
 let tickState: TickState = {
@@ -57,7 +66,13 @@ let tickState: TickState = {
   briefMode: false,
 };
 
-let tickInterval: ReturnType<typeof setInterval> | null = null;
+let backoffState: BackoffState = {
+  multiplier: 1,
+  rateLimitedUntil: 0,
+};
+
+let tickTimeout: ReturnType<typeof setTimeout> | null = null;
+let tickRunning = false;
 let tickStartTime: number | null = null;
 let deps: TickLoopDependencies | null = null;
 
@@ -86,26 +101,50 @@ const ACTIONABLE_PATTERNS = [
 // ---- Public API ----
 
 export function startTickLoop(dependencies: TickLoopDependencies): void {
-  if (tickInterval) {
+  if (tickRunning) {
     stopTickLoop();
   }
 
   deps = dependencies;
   tickStartTime = Date.now();
+  tickRunning = true;
 
-  const intervalMs = dependencies.getTickIntervalMs();
-
-  tickInterval = setInterval(() => {
-    tick();
-  }, intervalMs);
+  scheduleNextTick();
 }
 
 export function stopTickLoop(): void {
-  if (tickInterval) {
-    clearInterval(tickInterval);
-    tickInterval = null;
+  tickRunning = false;
+  if (tickTimeout) {
+    clearTimeout(tickTimeout);
+    tickTimeout = null;
   }
   deps = null;
+}
+
+export function notifyRateLimit(retryAfterMs?: number): void {
+  const baseInterval = deps?.getTickIntervalMs() ?? 60_000;
+  const maxMultiplier = MAX_BACKOFF_MS / baseInterval;
+  backoffState = {
+    multiplier: Math.min(backoffState.multiplier * 2, maxMultiplier),
+    rateLimitedUntil: retryAfterMs && retryAfterMs > 0
+      ? Date.now() + retryAfterMs
+      : backoffState.rateLimitedUntil,
+  };
+  log.warn('Captain tick backoff increased', { multiplier: backoffState.multiplier, retryAfterMs });
+}
+
+export function resetBackoff(): void {
+  if (backoffState.multiplier > 1) {
+    log.info('Captain tick backoff reset to base interval');
+  }
+  backoffState = {
+    multiplier: 1,
+    rateLimitedUntil: 0,
+  };
+}
+
+export function getBackoffState(): BackoffState {
+  return { ...backoffState };
 }
 
 export function sleepTicks(count: number): SleepInfo {
@@ -227,17 +266,29 @@ export function _resetTickState(): void {
     sleepRemaining: 0,
     briefMode: false,
   };
+  backoffState = {
+    multiplier: 1,
+    rateLimitedUntil: 0,
+  };
   tickStartTime = null;
 }
 
 // ---- Internal Tick Logic ----
 
+function scheduleNextTick(): void {
+  if (!tickRunning || !deps) return;
+
+  const baseInterval = deps.getTickIntervalMs();
+  const interval = Math.min(baseInterval * backoffState.multiplier, MAX_BACKOFF_MS);
+
+  tickTimeout = setTimeout(() => {
+    tick();
+    if (tickRunning) scheduleNextTick();
+  }, interval);
+}
+
 function tick(): void {
   if (!deps) return;
-
-  const enabled = deps.isTickEnabled();
-  const alive = deps.isCaptainAlive();
-  const idle = deps.isCaptainIdle();
 
   // Guard: tick enabled
   if (!deps.isTickEnabled()) return;
@@ -247,6 +298,15 @@ function tick(): void {
 
   // Guard: Captain idle
   if (!deps.isCaptainIdle()) return;
+
+  // Guard: rate limit backoff
+  if (Date.now() < backoffState.rateLimitedUntil) {
+    log.warn('Captain tick skipped — rate limited', {
+      rateLimitedUntil: new Date(backoffState.rateLimitedUntil).toISOString(),
+      remainingMs: backoffState.rateLimitedUntil - Date.now(),
+    });
+    return;
+  }
 
   // Guard: not sleeping
   if (tickState.sleepRemaining > 0) {

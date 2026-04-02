@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MessageBubble } from './MessageBubble';
 import { Message, ImageAttachment } from '../types';
 
@@ -351,5 +351,142 @@ describe('MessageBubble', () => {
     const { container } = render(<MessageBubble message={longMessage} />);
     const bubble = container.querySelector('.message-bubble');
     expect(bubble).toBeInTheDocument();
+  });
+
+  describe('streaming debounce', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('shows streaming-tail span when streaming content has arrived beyond parsed content', () => {
+      const msg: Message = {
+        id: 'msg_stream_1',
+        content: 'Hello world',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+
+      render(<MessageBubble message={msg} />);
+
+      // Before the 150ms debounce fires, parsedContent is initialised to the first render content.
+      // Advance timer so the initial debounce fires.
+      act(() => {
+        jest.advanceTimersByTime(150);
+      });
+
+      // The markdown element should be present.
+      expect(screen.getByTestId('markdown')).toBeInTheDocument();
+    });
+
+    it('parses markdown immediately when streaming stops', () => {
+      const streamingMsg: Message = {
+        id: 'msg_stream_2',
+        content: 'Partial content',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+
+      const { rerender } = render(<MessageBubble message={streamingMsg} />);
+
+      // Simulate streaming completing with more content — no timer advance needed
+      const finalMsg: Message = {
+        ...streamingMsg,
+        content: 'Partial content — done',
+        streaming: false,
+      };
+
+      act(() => {
+        rerender(<MessageBubble message={finalMsg} />);
+      });
+
+      // Content should render immediately (no pending debounce)
+      expect(screen.getByTestId('markdown')).toBeInTheDocument();
+      expect(screen.getByText('Partial content — done')).toBeInTheDocument();
+    });
+
+    it('does not show streaming-tail for non-streaming assistant messages', () => {
+      const msg: Message = {
+        id: 'msg_stream_3',
+        content: 'Final content',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: false,
+      };
+
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-tail')).not.toBeInTheDocument();
+    });
+
+    it('does not show streaming-tail for user messages', () => {
+      const msg: Message = {
+        id: 'msg_stream_4',
+        content: 'User message',
+        role: 'user',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-tail')).not.toBeInTheDocument();
+    });
+
+    it('clears debounce timer when streaming stops before timeout fires', () => {
+      const streamingMsg: Message = {
+        id: 'msg_stream_5',
+        content: 'Growing content',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+
+      const { rerender } = render(<MessageBubble message={streamingMsg} />);
+
+      // Streaming stops before the 150ms debounce fires
+      act(() => {
+        rerender(<MessageBubble message={{ ...streamingMsg, streaming: false }} />);
+      });
+
+      // No timers should fire that cause issues
+      act(() => {
+        jest.advanceTimersByTime(200);
+      });
+
+      expect(screen.getByTestId('markdown')).toBeInTheDocument();
+    });
+
+    it('debounce fires after 150ms during streaming', async () => {
+      const streamingMsg: Message = {
+        id: 'msg_stream_6',
+        content: 'Initial text',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+
+      const { rerender } = render(<MessageBubble message={streamingMsg} />);
+
+      // Update content while still streaming (simulates new tokens arriving)
+      act(() => {
+        rerender(<MessageBubble message={{ ...streamingMsg, content: 'Initial text plus more' }} />);
+      });
+
+      // Before 150ms — parsedContent is still at the initialised value
+      act(() => {
+        jest.advanceTimersByTime(100);
+      });
+
+      // After 150ms — debounce should have fired
+      act(() => {
+        jest.advanceTimersByTime(60);
+      });
+
+      expect(screen.getByTestId('markdown')).toBeInTheDocument();
+    });
   });
 });

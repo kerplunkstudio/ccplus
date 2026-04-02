@@ -15,7 +15,7 @@ import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
-import { resetBriefMode, shouldSuppressBriefOutput } from './captain-tick.js';
+import { resetBriefMode, shouldSuppressBriefOutput, notifyRateLimit, resetBackoff } from './captain-tick.js';
 import type { InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 
 // ---- Types ----
@@ -254,7 +254,13 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
 
   try {
     for await (const message of q) {
-      if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
+      if ((message as any).type === 'rate_limit_event') {
+        const rateLimitMsg = message as any;
+        const retryAfterMs = rateLimitMsg.retry_after_ms ?? 0;
+        log.warn('Captain received rate_limit_event', { sessionId, retryAfterMs });
+        notifyRateLimit(retryAfterMs > 0 ? retryAfterMs : undefined);
+        continue;
+      } else if ((message as any).type === 'system' && (message as any).subtype === 'compact_boundary') {
         log.warn('Captain context compaction detected', {
           sessionId,
           lastInputTokens: captainState.lastInputTokens,
@@ -394,10 +400,15 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         log.info("Captain query completed", { sessionId, numTurns: result.num_turns });
       }
     }
+
+    // Loop completed normally — reset backoff so the next tick fires at the base interval
+    resetBackoff();
   } catch (error) {
     const errorStr = String(error).toLowerCase();
     const isContextOverflow = errorStr.includes('context') || errorStr.includes('token limit')
       || errorStr.includes('too many tokens') || errorStr.includes('max_tokens');
+    const isRateLimit = errorStr.includes('rate limit') || errorStr.includes('429')
+      || errorStr.includes('overloaded') || errorStr.includes('too many requests');
 
     if (isContextOverflow) {
       log.warn('Captain context overflow detected', {
@@ -407,6 +418,11 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         contextPct: (captainState.lastInputTokens / config.CAPTAIN_CONTEXT_WINDOW) * 100,
         error: String(error),
       });
+    }
+
+    if (isRateLimit) {
+      log.warn('Captain hit rate limit, activating backoff', { sessionId, error: errorStr });
+      notifyRateLimit();
     }
 
     log.error("Captain query error", { sessionId, error: String(error) });

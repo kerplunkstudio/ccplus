@@ -126,6 +126,14 @@
   margin-bottom: 0;
 }
 
+/* Streaming tail: un-parsed text that arrived since the last debounced markdown parse.
+   Inherits all font/color from the parent so it blends seamlessly with parsed content. */
+.streaming-tail {
+  white-space: pre-wrap;
+  font: inherit;
+  color: inherit;
+}
+
 /* Fade mask on last element during streaming for materialization effect */
 .message-bubble.streaming .message-markdown > *:last-child {
   -webkit-mask-image: linear-gradient(to right, black 0%, black 85%, rgba(0,0,0,0.3) 100%);

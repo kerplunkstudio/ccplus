@@ -12,6 +12,9 @@ import {
   getTickState,
   _resetTickState,
   buildTickMessage,
+  notifyRateLimit,
+  resetBackoff,
+  getBackoffState,
 } from '../captain-tick.js';
 
 // Mock logger to suppress output during tests
@@ -415,5 +418,161 @@ describe('captain-tick: sendTickMessage()', () => {
 
     expect(isBriefMode()).toBe(false);
     expect(shouldSuppressBriefOutput('Any user message')).toBe(false);
+  });
+});
+
+describe('captain-tick: exponential backoff', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    _resetTickState();
+  });
+
+  afterEach(() => {
+    stopTickLoop();
+    vi.useRealTimers();
+  });
+
+  describe('notifyRateLimit()', () => {
+    it('starts with multiplier 1 and rateLimitedUntil 0', () => {
+      const state = getBackoffState();
+      expect(state.multiplier).toBe(1);
+      expect(state.rateLimitedUntil).toBe(0);
+    });
+
+    it('doubles the multiplier on first call', () => {
+      notifyRateLimit();
+      expect(getBackoffState().multiplier).toBe(2);
+    });
+
+    it('doubles the multiplier on each successive call', () => {
+      notifyRateLimit();
+      notifyRateLimit();
+      expect(getBackoffState().multiplier).toBe(4);
+      notifyRateLimit();
+      expect(getBackoffState().multiplier).toBe(8);
+    });
+
+    it('caps multiplier at MAX_BACKOFF_MS / baseInterval (10 min / 60s = 10)', () => {
+      startTickLoop({
+        isCaptainAlive: () => true,
+        isCaptainIdle: () => true,
+        sendTickMessage: vi.fn(),
+        sendCaptainMessage: vi.fn(),
+        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        isTerminalFocused: () => false,
+        getTickIntervalMs: () => 60_000,
+        isTickEnabled: () => true,
+      });
+
+      // 10 doublings: 1 -> 2 -> 4 -> 8 -> 10 (capped)
+      for (let i = 0; i < 10; i++) notifyRateLimit();
+      expect(getBackoffState().multiplier).toBe(10);
+    });
+
+    it('sets rateLimitedUntil when retryAfterMs is provided', () => {
+      const before = Date.now();
+      notifyRateLimit(5000);
+      const state = getBackoffState();
+      expect(state.rateLimitedUntil).toBeGreaterThanOrEqual(before + 5000);
+    });
+
+    it('does not set rateLimitedUntil when retryAfterMs is 0', () => {
+      notifyRateLimit(0);
+      expect(getBackoffState().rateLimitedUntil).toBe(0);
+    });
+
+    it('does not set rateLimitedUntil when retryAfterMs is undefined', () => {
+      notifyRateLimit();
+      expect(getBackoffState().rateLimitedUntil).toBe(0);
+    });
+  });
+
+  describe('resetBackoff()', () => {
+    it('resets multiplier to 1', () => {
+      notifyRateLimit();
+      notifyRateLimit();
+      expect(getBackoffState().multiplier).toBe(4);
+      resetBackoff();
+      expect(getBackoffState().multiplier).toBe(1);
+    });
+
+    it('resets rateLimitedUntil to 0', () => {
+      notifyRateLimit(10000);
+      expect(getBackoffState().rateLimitedUntil).toBeGreaterThan(0);
+      resetBackoff();
+      expect(getBackoffState().rateLimitedUntil).toBe(0);
+    });
+
+    it('is idempotent when already at defaults', () => {
+      resetBackoff();
+      const state = getBackoffState();
+      expect(state.multiplier).toBe(1);
+      expect(state.rateLimitedUntil).toBe(0);
+    });
+  });
+
+  describe('getBackoffState()', () => {
+    it('returns a copy — mutations do not affect internal state', () => {
+      const state = getBackoffState();
+      state.multiplier = 999;
+      expect(getBackoffState().multiplier).toBe(1);
+    });
+  });
+
+  describe('tick skips when rateLimitedUntil is in the future', () => {
+    it('suppresses tick while rate limited', () => {
+      const sendTickMessage = vi.fn();
+      startTickLoop({
+        isCaptainAlive: () => true,
+        isCaptainIdle: () => true,
+        sendTickMessage,
+        sendCaptainMessage: vi.fn(),
+        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        isTerminalFocused: () => false,
+        getTickIntervalMs: () => 60_000,
+        isTickEnabled: () => true,
+      });
+
+      // Rate limited for 5 minutes
+      notifyRateLimit(300_000);
+
+      // Advance past one base interval
+      vi.advanceTimersByTime(60_000);
+      expect(sendTickMessage).not.toHaveBeenCalled();
+    });
+
+    it('fires tick once rate limit clears (rateLimitedUntil in the past)', () => {
+      const sendTickMessage = vi.fn();
+
+      // Set a rate limit that expires 30 seconds from "now" (fake time 0)
+      // Base interval = 60s, multiplier after one notifyRateLimit = 2 → interval = 120s
+      notifyRateLimit(30_000);
+
+      startTickLoop({
+        isCaptainAlive: () => true,
+        isCaptainIdle: () => true,
+        sendTickMessage,
+        sendCaptainMessage: vi.fn(),
+        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        isTerminalFocused: () => false,
+        getTickIntervalMs: () => 60_000,
+        isTickEnabled: () => true,
+      });
+
+      // After 120s (first doubled interval fires), rateLimitedUntil (30s) has passed
+      vi.advanceTimersByTime(120_000);
+      expect(sendTickMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('_resetTickState() resets backoff', () => {
+    it('resets both multiplier and rateLimitedUntil', () => {
+      notifyRateLimit(99999);
+      notifyRateLimit();
+      _resetTickState();
+      const state = getBackoffState();
+      expect(state.multiplier).toBe(1);
+      expect(state.rateLimitedUntil).toBe(0);
+    });
   });
 });

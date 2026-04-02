@@ -7,6 +7,47 @@ import type { RouteDependencies } from "../routes/types.js";
 // This ensures events continue to flow even after socket disconnects/reconnects
 // The session room persists across socket instances for the same browser tab
 
+const DELTA_COALESCE_MS = 30;
+
+interface DeltaBuffer {
+  text: string;
+  messageIndex: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const deltaBuffers = new Map<string, DeltaBuffer>();
+
+function flushDeltaBuffer(
+  sessionId: string,
+  io: SocketIOServer,
+  log: RouteDependencies["log"]
+): void {
+  const buf = deltaBuffers.get(sessionId);
+  if (!buf || !buf.text) return;
+
+  const payload = { session_id: sessionId, text: buf.text, message_index: buf.messageIndex };
+  try {
+    const event = eventLog.append(sessionId, 'text_delta', payload);
+    io.to(sessionId).emit("text_delta", { ...payload, seq: event.seq });
+  } catch (e) {
+    log?.error("Failed to flush delta buffer", { sessionId, error: String(e) });
+  }
+
+  buf.text = '';
+  if (buf.timer) {
+    clearTimeout(buf.timer);
+    buf.timer = null;
+  }
+}
+
+export function clearDeltaBuffer(sessionId: string): void {
+  const buf = deltaBuffers.get(sessionId);
+  if (buf?.timer) {
+    clearTimeout(buf.timer);
+  }
+  deltaBuffers.delete(sessionId);
+}
+
 export function buildSocketCallbacks(
   sessionId: string,
   projectPath: string | undefined,
@@ -17,9 +58,27 @@ export function buildSocketCallbacks(
 
   return {
     onText: (text: string, messageIndex: number) => {
-      const payload = { session_id: sessionId, text, message_index: messageIndex };
-      const event = eventLog.append(sessionId, 'text_delta', payload);
-      io.to(sessionId).emit("text_delta", { ...payload, seq: event.seq });
+      let buf = deltaBuffers.get(sessionId);
+
+      if (buf && buf.text && buf.messageIndex !== messageIndex) {
+        // Message boundary — flush immediately before starting new message
+        flushDeltaBuffer(sessionId, io, log);
+        buf = undefined;
+      }
+
+      if (!buf) {
+        buf = { text: '', messageIndex, timer: null };
+        deltaBuffers.set(sessionId, buf);
+      }
+
+      buf.text += text;
+      buf.messageIndex = messageIndex;
+
+      if (!buf.timer) {
+        buf.timer = setTimeout(() => {
+          flushDeltaBuffer(sessionId, io, log);
+        }, DELTA_COALESCE_MS);
+      }
     },
     onToolEvent: (event: Record<string, unknown>) => {
       const payload = { ...event, session_id: sessionId };
@@ -40,6 +99,10 @@ export function buildSocketCallbacks(
       }
     },
     onComplete: (result: Record<string, unknown>) => {
+      // Flush any pending text_delta buffer before emitting response_complete
+      flushDeltaBuffer(sessionId, io, log);
+      clearDeltaBuffer(sessionId);
+
       try {
         database.incrementUserStats(
           "local",
@@ -100,6 +163,10 @@ export function buildSocketCallbacks(
       io.to(sessionId).emit("response_complete", { ...payload, seq: event.seq });
     },
     onError: (message: string) => {
+      // Flush any pending text_delta buffer before emitting error
+      flushDeltaBuffer(sessionId, io, log);
+      clearDeltaBuffer(sessionId);
+
       const payload = { message, session_id: sessionId };
       const event = eventLog.append(sessionId, 'error', payload);
       io.to(sessionId).emit("error", { ...payload, seq: event.seq });

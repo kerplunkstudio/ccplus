@@ -69,16 +69,16 @@ function finalizeMessage(
   streamingContent: string,
   toolLog?: ToolEvent[]
 ): Message[] {
-  return messages.map((msg) =>
-    msg.id === activeStreamId
-      ? {
-          ...msg,
-          content: streamingContent || msg.content,
-          streaming: false,
-          toolLog: toolLog || msg.toolLog,
-        }
-      : msg
-  );
+  const idx = messages.findIndex((msg) => msg.id === activeStreamId);
+  if (idx === -1) return messages;
+  const updated = [...messages];
+  updated[idx] = {
+    ...updated[idx],
+    content: streamingContent || updated[idx].content,
+    streaming: false,
+    toolLog: toolLog || updated[idx].toolLog,
+  };
+  return updated;
 }
 
 export function streamReducer(state: StreamState, action: StreamAction): StreamState {
@@ -114,11 +114,9 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
           // Reuse existing streaming message
           newActiveStreamId = lastMessage.id;
           newStreamingContent = action.text;
-          newMessages = newMessages.map((msg) =>
-            msg.id === newActiveStreamId
-              ? { ...msg, content: newStreamingContent }
-              : msg
-          );
+          const reuseIdx = newMessages.length - 1;
+          newMessages = [...newMessages];
+          newMessages[reuseIdx] = { ...newMessages[reuseIdx], content: newStreamingContent };
         } else {
           // Create new message
           const newMessage: Message = {
@@ -136,11 +134,11 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       } else {
         // Append to existing stream
         newStreamingContent = state.streamingContent + action.text;
-        newMessages = newMessages.map((msg) =>
-          msg.id === newActiveStreamId
-            ? { ...msg, content: newStreamingContent }
-            : msg
-        );
+        const appendIdx = newMessages.findIndex((msg) => msg.id === newActiveStreamId);
+        if (appendIdx !== -1) {
+          newMessages = [...newMessages];
+          newMessages[appendIdx] = { ...newMessages[appendIdx], content: newStreamingContent };
+        }
       }
 
       return {
@@ -340,11 +338,13 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
           // We have streaming content to display
           if (lastMessage && lastMessage.role === 'assistant') {
             // Last message IS an assistant message — update it with streaming content
-            const messagesWithStreaming = action.messages.map((msg, idx) =>
-              idx === action.messages.length - 1
-                ? { ...msg, content: action.streamingContent, streaming: true }
-                : msg
-            );
+            const lastIdx = action.messages.length - 1;
+            const messagesWithStreaming = [...action.messages];
+            messagesWithStreaming[lastIdx] = {
+              ...messagesWithStreaming[lastIdx],
+              content: action.streamingContent,
+              streaming: true,
+            };
             return {
               ...state,
               messages: messagesWithStreaming,
@@ -376,9 +376,9 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
           // No streaming content yet, just mark as active
           if (lastMessage && lastMessage.role === 'assistant') {
             // Mark the last assistant message as streaming
-            const messagesWithStreaming = action.messages.map((msg, idx) =>
-              idx === action.messages.length - 1 ? { ...msg, streaming: true } : msg
-            );
+            const lastIdx = action.messages.length - 1;
+            const messagesWithStreaming = [...action.messages];
+            messagesWithStreaming[lastIdx] = { ...messagesWithStreaming[lastIdx], streaming: true };
             return {
               ...state,
               messages: messagesWithStreaming,
@@ -437,11 +437,11 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
 
       // If there's already an active stream, update it
       if (state.activeStreamId) {
-        newMessages = newMessages.map((msg) =>
-          msg.id === state.activeStreamId
-            ? { ...msg, content: action.content }
-            : msg
-        );
+        const syncIdx = newMessages.findIndex((msg) => msg.id === state.activeStreamId);
+        if (syncIdx !== -1) {
+          newMessages = [...newMessages];
+          newMessages[syncIdx] = { ...newMessages[syncIdx], content: action.content };
+        }
       } else {
         // Check if last message is a streaming assistant message
         const lastMessage = newMessages[newMessages.length - 1];
@@ -453,11 +453,9 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
         if (canReuseLastMessage) {
           // Reuse existing streaming message
           newActiveStreamId = lastMessage.id;
-          newMessages = newMessages.map((msg) =>
-            msg.id === newActiveStreamId
-              ? { ...msg, content: action.content }
-              : msg
-          );
+          const reuseIdx = newMessages.length - 1;
+          newMessages = [...newMessages];
+          newMessages[reuseIdx] = { ...newMessages[reuseIdx], content: action.content };
         } else {
           // Create new assistant message
           const newMessage: Message = {

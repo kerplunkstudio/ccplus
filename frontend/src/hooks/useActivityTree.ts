@@ -12,6 +12,12 @@ export type TreeAction =
   | { type: 'TOOL_PROGRESS'; toolUseId: string; elapsedSeconds: number }
   | { type: 'SET_TREE'; tree: ActivityNode[] };
 
+// Internal compound state: tree + O(1) path index
+interface TreeState {
+  tree: ActivityNode[];
+  index: Map<string, number[]>; // tool_use_id → path as array of child indices
+}
+
 export const ORCHESTRATOR_ID = '__orchestrator__';
 
 export function findAndInsert(nodes: ActivityNode[], parentId: string, child: ActivityNode): ActivityNode[] {
@@ -113,7 +119,91 @@ export function groupOrphanTools(nodes: ActivityNode[]): ActivityNode[] {
   return insertNodeChronologically(agentNodes, orchestratorNode);
 }
 
-export function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] {
+// ---------------------------------------------------------------------------
+// O(1) index helpers
+// ---------------------------------------------------------------------------
+
+// Build a flat path index from a tree. Walks the full tree once.
+function buildIndex(tree: ActivityNode[]): Map<string, number[]> {
+  const index = new Map<string, number[]>();
+
+  function walk(nodes: ActivityNode[], path: number[]) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const nodePath = [...path, i];
+      index.set(node.tool_use_id, nodePath);
+      if (isAgentNode(node)) {
+        walk(node.children, nodePath);
+      }
+    }
+  }
+
+  walk(tree, []);
+  return index;
+}
+
+// Update a node at path immutably, cloning only the spine from root to target.
+function updateNodeByPath(
+  tree: ActivityNode[],
+  path: number[],
+  updater: (node: ActivityNode) => ActivityNode
+): ActivityNode[] {
+  if (path.length === 0) return tree;
+
+  const newTree = [...tree];
+  if (path.length === 1) {
+    newTree[path[0]] = updater(newTree[path[0]]);
+    return newTree;
+  }
+
+  // Rebuild only the spine from root to target node
+  const parentNode = newTree[path[0]] as AgentNode;
+  newTree[path[0]] = {
+    ...parentNode,
+    children: updateNodeByPath(parentNode.children, path.slice(1), updater),
+  };
+  return newTree;
+}
+
+// Insert a child under the node at parentPath. Returns new tree and the child's path.
+function insertChildByPath(
+  tree: ActivityNode[],
+  parentPath: number[],
+  child: ActivityNode
+): { tree: ActivityNode[]; childPath: number[] } {
+  if (parentPath.length === 0) {
+    // Insert at root level
+    return { tree: [...tree, child], childPath: [tree.length] };
+  }
+
+  // Clone spine down to the parent, append child to parent's children array
+  const newTree = [...tree];
+  const rootIdx = parentPath[0];
+
+  if (parentPath.length === 1) {
+    const parentNode = newTree[rootIdx] as AgentNode;
+    const childPath = [...parentPath, parentNode.children.length];
+    newTree[rootIdx] = {
+      ...parentNode,
+      children: [...parentNode.children, child],
+    };
+    return { tree: newTree, childPath };
+  }
+
+  // Recurse into spine
+  const rootNode = newTree[rootIdx] as AgentNode;
+  const inner = insertChildByPath(rootNode.children, parentPath.slice(1), child);
+  newTree[rootIdx] = { ...rootNode, children: inner.tree };
+  return { tree: newTree, childPath: [rootIdx, ...inner.childPath] };
+}
+
+// ---------------------------------------------------------------------------
+// Internal reducer using TreeState
+// ---------------------------------------------------------------------------
+
+const INITIAL_TREE_STATE: TreeState = { tree: [], index: new Map() };
+
+function internalReducer(state: TreeState, action: TreeAction): TreeState {
   switch (action.type) {
     case 'AGENT_START': {
       const newAgent: AgentNode = {
@@ -126,10 +216,24 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
         status: 'running',
         sequence: action.sequence,
       };
+
       if (action.event.parent_agent_id) {
-        return findAndInsert(state, action.event.parent_agent_id, newAgent);
+        const parentPath = state.index.get(action.event.parent_agent_id);
+        if (parentPath !== undefined) {
+          const { tree: newTree, childPath } = insertChildByPath(state.tree, parentPath, newAgent);
+          const newIndex = new Map(state.index);
+          newIndex.set(newAgent.tool_use_id, childPath);
+          return { tree: newTree, index: newIndex };
+        }
+        // Fallback: parent not in index (should not happen in practice)
+        const newTree = findAndInsert(state.tree, action.event.parent_agent_id, newAgent);
+        return { tree: newTree, index: buildIndex(newTree) };
       }
-      return [...state, newAgent];
+
+      const newTree = [...state.tree, newAgent];
+      const newIndex = new Map(state.index);
+      newIndex.set(newAgent.tool_use_id, [state.tree.length]);
+      return { tree: newTree, index: newIndex };
     }
 
     case 'TOOL_START': {
@@ -142,14 +246,29 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
         parent_agent_id: action.event.parent_agent_id,
         sequence: action.sequence,
       };
+
       if (action.event.parent_agent_id) {
-        return findAndInsert(state, action.event.parent_agent_id, newTool);
+        const parentPath = state.index.get(action.event.parent_agent_id);
+        if (parentPath !== undefined) {
+          const { tree: newTree, childPath } = insertChildByPath(state.tree, parentPath, newTool);
+          const newIndex = new Map(state.index);
+          newIndex.set(newTool.tool_use_id, childPath);
+          return { tree: newTree, index: newIndex };
+        }
+        // Fallback
+        const newTree = findAndInsert(state.tree, action.event.parent_agent_id, newTool);
+        return { tree: newTree, index: buildIndex(newTree) };
       }
+
       // Orphan tool — route to Orchestrator virtual node
-      const orchExists = state.some(n => isAgentNode(n) && n.tool_use_id === ORCHESTRATOR_ID);
-      if (orchExists) {
-        return findAndInsert(state, ORCHESTRATOR_ID, newTool);
+      const orchPath = state.index.get(ORCHESTRATOR_ID);
+      if (orchPath !== undefined) {
+        const { tree: newTree, childPath } = insertChildByPath(state.tree, orchPath, newTool);
+        const newIndex = new Map(state.index);
+        newIndex.set(newTool.tool_use_id, childPath);
+        return { tree: newTree, index: newIndex };
       }
+
       // Create Orchestrator with this tool as its first child
       const orchestratorNode: AgentNode = {
         tool_use_id: ORCHESTRATOR_ID,
@@ -160,30 +279,63 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
         children: [newTool],
         status: 'running',
       };
-      return insertNodeChronologically(state, orchestratorNode);
+      const newTree = insertNodeChronologically(state.tree, orchestratorNode);
+      return { tree: newTree, index: buildIndex(newTree) };
     }
 
     case 'TOOL_COMPLETE': {
       const isWorkerRestart = action.event.error === 'Worker restarted';
-      const updated = findAndUpdate(state, action.event.tool_use_id, (node) => ({
-        ...node,
-        status: (action.event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
-        duration_ms: action.event.duration_ms,
-        error: isWorkerRestart ? undefined : action.event.error,
-      }));
-      return syncOrchestratorStatus(updated);
+      const path = state.index.get(action.event.tool_use_id);
+
+      let newTree: ActivityNode[];
+      if (path !== undefined) {
+        newTree = updateNodeByPath(state.tree, path, (node) => ({
+          ...node,
+          status: (action.event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
+          duration_ms: action.event.duration_ms,
+          error: isWorkerRestart ? undefined : action.event.error,
+        }));
+      } else {
+        // Fallback
+        newTree = findAndUpdate(state.tree, action.event.tool_use_id, (node) => ({
+          ...node,
+          status: (action.event.success === false && !isWorkerRestart) ? 'failed' : 'completed',
+          duration_ms: action.event.duration_ms,
+          error: isWorkerRestart ? undefined : action.event.error,
+        }));
+      }
+      // Sync orchestrator status (root-level O(n_root) scan — cheap)
+      newTree = syncOrchestratorStatus(newTree);
+      // Index paths don't change on update, reuse existing index
+      return { tree: newTree, index: state.index };
     }
 
     case 'AGENT_STOP': {
       const isWorkerRestart = action.event.error === 'Worker restarted';
-      return findAndUpdate(state, action.event.tool_use_id, (node) => ({
-        ...node,
-        status: (action.event.error && !isWorkerRestart) ? 'failed' : 'completed',
-        duration_ms: action.event.duration_ms,
-        error: isWorkerRestart ? undefined : action.event.error,
-        transcript_path: action.event.transcript_path,
-        summary: action.event.summary,
-      }));
+      const path = state.index.get(action.event.tool_use_id);
+
+      let newTree: ActivityNode[];
+      if (path !== undefined) {
+        newTree = updateNodeByPath(state.tree, path, (node) => ({
+          ...node,
+          status: (action.event.error && !isWorkerRestart) ? 'failed' : 'completed',
+          duration_ms: action.event.duration_ms,
+          error: isWorkerRestart ? undefined : action.event.error,
+          transcript_path: action.event.transcript_path,
+          summary: action.event.summary,
+        }));
+      } else {
+        // Fallback
+        newTree = findAndUpdate(state.tree, action.event.tool_use_id, (node) => ({
+          ...node,
+          status: (action.event.error && !isWorkerRestart) ? 'failed' : 'completed',
+          duration_ms: action.event.duration_ms,
+          error: isWorkerRestart ? undefined : action.event.error,
+          transcript_path: action.event.transcript_path,
+          summary: action.event.summary,
+        }));
+      }
+      return { tree: newTree, index: state.index };
     }
 
     case 'LOAD_HISTORY': {
@@ -234,29 +386,59 @@ export function treeReducer(state: ActivityNode[], action: TreeAction): Activity
           }));
         }
       }
-      return groupOrphanTools(newNodes);
+      const tree = groupOrphanTools(newNodes);
+      return { tree, index: buildIndex(tree) };
     }
 
     case 'CLEAR':
-      return [];
+      return INITIAL_TREE_STATE;
 
-    case 'MARK_ALL_STOPPED':
-      return markRunningAsStopped(state);
+    case 'MARK_ALL_STOPPED': {
+      const tree = markRunningAsStopped(state.tree);
+      // Rebuild index since markRunningAsStopped creates new node objects (paths unchanged,
+      // but safer to rebuild since it touches the whole tree anyway)
+      return { tree, index: buildIndex(tree) };
+    }
 
     case 'TOOL_PROGRESS': {
-      return findAndUpdate(state, action.toolUseId, (node) => ({
+      const path = state.index.get(action.toolUseId);
+      if (path !== undefined) {
+        const newTree = updateNodeByPath(state.tree, path, (node) => ({
+          ...node,
+          elapsed_seconds: action.elapsedSeconds,
+        }));
+        return { tree: newTree, index: state.index };
+      }
+      // Fallback
+      const newTree = findAndUpdate(state.tree, action.toolUseId, (node) => ({
         ...node,
         elapsed_seconds: action.elapsedSeconds,
       }));
+      return { tree: newTree, index: state.index };
     }
 
-    case 'SET_TREE':
-      return action.tree;
+    case 'SET_TREE': {
+      const tree = action.tree;
+      return { tree, index: buildIndex(tree) };
+    }
 
     default:
       return state;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Public treeReducer (backward-compatible: accepts and returns ActivityNode[])
+// ---------------------------------------------------------------------------
+
+export function treeReducer(state: ActivityNode[], action: TreeAction): ActivityNode[] {
+  const treeState: TreeState = { tree: state, index: buildIndex(state) };
+  return internalReducer(treeState, action).tree;
+}
+
+// ---------------------------------------------------------------------------
+// Remaining public helpers
+// ---------------------------------------------------------------------------
 
 // Helper to check if there are any running agents in the activity tree
 export function checkHasRunningAgents(nodes: ActivityNode[]): boolean {
@@ -272,22 +454,22 @@ export function checkHasRunningAgents(nodes: ActivityNode[]): boolean {
 }
 
 export function useActivityTree() {
-  const [activityTree, dispatchTree] = useReducer(treeReducer, []);
+  const [state, dispatchInternal] = useReducer(internalReducer, INITIAL_TREE_STATE);
   const activityTreeRef = useRef<ActivityNode[]>([]);
 
   // Keep ref in sync with state
   useEffect(() => {
-    activityTreeRef.current = activityTree;
-  }, [activityTree]);
+    activityTreeRef.current = state.tree;
+  }, [state.tree]);
 
   const hasRunningAgents = useCallback((nodes: ActivityNode[]): boolean => {
     return checkHasRunningAgents(nodes);
   }, []);
 
   return {
-    activityTree,
+    activityTree: state.tree,
     activityTreeRef,
-    dispatchTree,
+    dispatchTree: dispatchInternal,
     hasRunningAgents,
   };
 }

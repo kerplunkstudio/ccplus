@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -171,20 +171,61 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
     }
   }, [onLinkClick]);
 
-  // Memoize markdown rendering to prevent re-parsing when only streaming flag changes
+  // Two-tier markdown rendering: debounce parsing during active streaming to reduce CPU usage.
+  // During streaming (~60 fps), we throttle the full ReactMarkdown parse to every ~150ms.
+  // The "streaming tail" (unparsed content since last parse) is shown as a plain span for
+  // instant feedback while the full parse catches up.
+  const [parsedContent, setParsedContent] = useState(message.content ?? '');
+  const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!message.streaming) {
+      // Not streaming — parse immediately with no delay
+      if (parseTimerRef.current) {
+        clearTimeout(parseTimerRef.current);
+        parseTimerRef.current = null;
+      }
+      setParsedContent(message.content ?? '');
+      return;
+    }
+
+    // Streaming — debounce the parse to 150ms after last content change
+    if (parseTimerRef.current) {
+      clearTimeout(parseTimerRef.current);
+    }
+    parseTimerRef.current = setTimeout(() => {
+      setParsedContent(message.content ?? '');
+      parseTimerRef.current = null;
+    }, 150);
+
+    return () => {
+      if (parseTimerRef.current) {
+        clearTimeout(parseTimerRef.current);
+        parseTimerRef.current = null;
+      }
+    };
+  }, [message.content, message.streaming]);
+
+  // Memoize markdown rendering — now driven by parsedContent (throttled during streaming)
   const renderedMarkdown = useMemo(() => {
-    const linkedContent = linkifyFilePaths(message.content ?? '');
+    const linkedContent = linkifyFilePaths(parsedContent);
     return (
       <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
         {linkedContent}
       </ReactMarkdown>
     );
-  }, [message.content, markdownComponents, linkifyFilePaths]);
+  }, [parsedContent, markdownComponents, linkifyFilePaths]);
 
   // Memoize user message linkifyFilePaths call (parallel to renderedMarkdown)
   const linkedUserContent = useMemo(() => {
     return linkifyFilePaths(message.content || '');
   }, [message.content, linkifyFilePaths]);
+
+  // Tail content: text that has arrived since the last debounced parse.
+  // Only relevant for assistant streaming messages — shown as plain text for instant feedback.
+  const streamingTail = message.streaming && message.role === 'assistant'
+    ? (message.content ?? '').slice(parsedContent.length)
+    : '';
 
   // Handle compact boundary messages (after all hooks)
   if (message.isCompactBoundary) {
@@ -213,6 +254,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         {message.role === 'assistant' ? (
           <div className="message-markdown" onClick={handleContentClick}>
             {renderedMarkdown}
+            {streamingTail && (
+              <span className="streaming-tail">{streamingTail}</span>
+            )}
           </div>
         ) : (
           <>

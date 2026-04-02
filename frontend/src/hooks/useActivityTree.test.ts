@@ -1544,4 +1544,277 @@ describe('useActivityTree', () => {
       expect(result.current.activityTreeRef.current).toEqual(result.current.activityTree);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // O(1) index optimization — tests exercising internalReducer via the hook
+  // ---------------------------------------------------------------------------
+  describe('O(1) path index (internalReducer via useActivityTree hook)', () => {
+    it('AGENT_START under a parent uses index path', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      const parentEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'root_agent',
+        parent_agent_id: null,
+        agent_type: 'orchestrator',
+        timestamp: '2025-01-01T00:00:00Z',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: parentEvent, sequence: 1 });
+      });
+
+      const childEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'child_agent',
+        parent_agent_id: 'root_agent',
+        agent_type: 'code_agent',
+        timestamp: '2025-01-01T00:00:01Z',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: childEvent, sequence: 2 });
+      });
+
+      const tree = result.current.activityTree;
+      expect(tree).toHaveLength(1);
+      const root = tree[0] as AgentNode;
+      expect(root.children).toHaveLength(1);
+      expect(root.children[0].tool_use_id).toBe('child_agent');
+    });
+
+    it('TOOL_START under agent uses index path', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      const agentEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'agent_1',
+        parent_agent_id: null,
+        agent_type: 'code_agent',
+        timestamp: '2025-01-01T00:00:00Z',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: agentEvent, sequence: 1 });
+      });
+
+      const toolEvent: ToolEvent = {
+        type: 'tool_start',
+        tool_name: 'Read',
+        tool_use_id: 'tool_1',
+        parent_agent_id: 'agent_1',
+        timestamp: '2025-01-01T00:00:01Z',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'TOOL_START', event: toolEvent, sequence: 2 });
+      });
+
+      const tree = result.current.activityTree;
+      const agent = tree[0] as AgentNode;
+      expect(agent.children).toHaveLength(1);
+      expect(agent.children[0].tool_use_id).toBe('tool_1');
+    });
+
+    it('TOOL_COMPLETE uses index path (O(1) update on deep node)', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      const agentEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'agent_1',
+        parent_agent_id: null,
+        agent_type: 'code_agent',
+        timestamp: '2025-01-01T00:00:00Z',
+      };
+      const toolStartEvent: ToolEvent = {
+        type: 'tool_start',
+        tool_name: 'Bash',
+        tool_use_id: 'tool_1',
+        parent_agent_id: 'agent_1',
+        timestamp: '2025-01-01T00:00:01Z',
+      };
+
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: agentEvent, sequence: 1 });
+        result.current.dispatchTree({ type: 'TOOL_START', event: toolStartEvent, sequence: 2 });
+      });
+
+      const toolCompleteEvent: ToolEvent = {
+        type: 'tool_complete',
+        tool_name: 'Bash',
+        tool_use_id: 'tool_1',
+        parent_agent_id: 'agent_1',
+        timestamp: '2025-01-01T00:00:02Z',
+        success: true,
+        duration_ms: 500,
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'TOOL_COMPLETE', event: toolCompleteEvent });
+      });
+
+      const agent = result.current.activityTree[0] as AgentNode;
+      expect(agent.children[0].status).toBe('completed');
+      expect(agent.children[0].duration_ms).toBe(500);
+    });
+
+    it('TOOL_PROGRESS uses index path (hottest dispatch)', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      const agentEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'agent_1',
+        parent_agent_id: null,
+        agent_type: 'code_agent',
+        timestamp: '2025-01-01T00:00:00Z',
+      };
+      const toolEvent: ToolEvent = {
+        type: 'tool_start',
+        tool_name: 'Bash',
+        tool_use_id: 'tool_1',
+        parent_agent_id: 'agent_1',
+        timestamp: '2025-01-01T00:00:01Z',
+      };
+
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: agentEvent, sequence: 1 });
+        result.current.dispatchTree({ type: 'TOOL_START', event: toolEvent, sequence: 2 });
+      });
+
+      act(() => {
+        result.current.dispatchTree({ type: 'TOOL_PROGRESS', toolUseId: 'tool_1', elapsedSeconds: 42 });
+      });
+
+      const agent = result.current.activityTree[0] as AgentNode;
+      expect((agent.children[0] as ToolNode).elapsed_seconds).toBe(42);
+    });
+
+    it('AGENT_STOP uses index path', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      const agentEvent: ToolEvent = {
+        type: 'agent_start',
+        tool_name: 'Agent',
+        tool_use_id: 'agent_1',
+        parent_agent_id: null,
+        agent_type: 'code_agent',
+        timestamp: '2025-01-01T00:00:00Z',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_START', event: agentEvent, sequence: 1 });
+      });
+
+      const stopEvent: ToolEvent = {
+        type: 'agent_stop',
+        tool_name: 'Agent',
+        tool_use_id: 'agent_1',
+        parent_agent_id: null,
+        timestamp: '2025-01-01T00:00:05Z',
+        duration_ms: 5000,
+        summary: 'Done',
+      };
+      act(() => {
+        result.current.dispatchTree({ type: 'AGENT_STOP', event: stopEvent });
+      });
+
+      expect(result.current.activityTree[0].status).toBe('completed');
+      expect((result.current.activityTree[0] as AgentNode).summary).toBe('Done');
+    });
+
+    it('deeply nested TOOL_PROGRESS updates only the spine (immutability check)', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      // Build: root_agent → child_agent → grandchild_tool
+      act(() => {
+        result.current.dispatchTree({
+          type: 'AGENT_START',
+          event: {
+            type: 'agent_start', tool_name: 'Agent', tool_use_id: 'root_agent',
+            parent_agent_id: null, agent_type: 'orchestrator', timestamp: '2025-01-01T00:00:00Z',
+          },
+          sequence: 1,
+        });
+        result.current.dispatchTree({
+          type: 'AGENT_START',
+          event: {
+            type: 'agent_start', tool_name: 'Agent', tool_use_id: 'child_agent',
+            parent_agent_id: 'root_agent', agent_type: 'code_agent', timestamp: '2025-01-01T00:00:01Z',
+          },
+          sequence: 2,
+        });
+        result.current.dispatchTree({
+          type: 'TOOL_START',
+          event: {
+            type: 'tool_start', tool_name: 'Bash', tool_use_id: 'grandchild_tool',
+            parent_agent_id: 'child_agent', timestamp: '2025-01-01T00:00:02Z',
+          },
+          sequence: 3,
+        });
+      });
+
+      const beforeRoot = result.current.activityTree[0];
+      const beforeChild = (beforeRoot as AgentNode).children[0];
+
+      act(() => {
+        result.current.dispatchTree({ type: 'TOOL_PROGRESS', toolUseId: 'grandchild_tool', elapsedSeconds: 7 });
+      });
+
+      // Spine nodes must be new references (immutability)
+      const afterRoot = result.current.activityTree[0];
+      const afterChild = (afterRoot as AgentNode).children[0];
+      const afterGrandchild = (afterChild as AgentNode).children[0];
+
+      expect(afterRoot).not.toBe(beforeRoot);
+      expect(afterChild).not.toBe(beforeChild);
+      expect((afterGrandchild as ToolNode).elapsed_seconds).toBe(7);
+    });
+
+    it('index is maintained correctly across multiple sequential dispatches', () => {
+      const { result } = renderHook(() => useActivityTree());
+
+      // Add 3 agents and 3 tools, then update each tool
+      act(() => {
+        for (let i = 1; i <= 3; i++) {
+          result.current.dispatchTree({
+            type: 'AGENT_START',
+            event: {
+              type: 'agent_start', tool_name: 'Agent', tool_use_id: `agent_${i}`,
+              parent_agent_id: null, agent_type: 'code_agent',
+              timestamp: `2025-01-01T00:00:0${i}Z`,
+            },
+            sequence: i,
+          });
+        }
+      });
+
+      act(() => {
+        for (let i = 1; i <= 3; i++) {
+          result.current.dispatchTree({
+            type: 'TOOL_START',
+            event: {
+              type: 'tool_start', tool_name: 'Read', tool_use_id: `tool_${i}`,
+              parent_agent_id: `agent_${i}`, timestamp: `2025-01-01T00:00:0${i + 3}Z`,
+            },
+            sequence: i + 3,
+          });
+        }
+      });
+
+      act(() => {
+        for (let i = 1; i <= 3; i++) {
+          result.current.dispatchTree({
+            type: 'TOOL_PROGRESS',
+            toolUseId: `tool_${i}`,
+            elapsedSeconds: i * 10,
+          });
+        }
+      });
+
+      const tree = result.current.activityTree;
+      for (let i = 0; i < 3; i++) {
+        const agent = tree[i] as AgentNode;
+        expect((agent.children[0] as ToolNode).elapsed_seconds).toBe((i + 1) * 10);
+      }
+    });
+  });
 });
