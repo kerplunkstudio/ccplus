@@ -100,6 +100,13 @@ Agents must treat these as BLOCK-worthy until disproven:
 - Only docs/comments changed for a runtime bug claim
 - Vague rationale without concrete file:line evidence
 
+### Worktree Pre-Flight (All Agents)
+When working in a git worktree, verify these before starting:
+1. **CWD is valid**: If you get "Working directory no longer exists", switch to absolute paths from the main repo. After 2 consecutive CWD failures, stop retrying and report to orchestrator.
+2. **Branch is current**: Run `git log --oneline HEAD..main | wc -l`. If behind >5 commits and the task references recent features/files, merge main first.
+3. **Dependencies installed**: Worktrees do NOT share `node_modules/`. Run `npm install` in `backend-ts/` and `frontend/` before any build or test command.
+4. **Large files**: If Read fails with "exceeds maximum allowed tokens", use `offset`/`limit` parameters or Grep to target specific sections. Never retry the same Read without parameters.
+
 ### Dep Install Retry-Once
 If a command fails due to missing deps (`not found`, `MODULE_NOT_FOUND`, `command not found`):
 1. Run the project's install command (`npm install` in the right directory)
