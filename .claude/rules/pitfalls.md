@@ -101,3 +101,27 @@ Run this in both `backend-ts/` and `frontend/` if needed. If `npm install` fails
 1. Use `offset` and `limit` to read specific sections (e.g., `offset: 1, limit: 200`)
 2. Use Grep to find the specific lines you need, then Read with a targeted range
 3. For files over ~400 lines, always start with Grep or a targeted Read range
+
+## 13. Merge phase deadlock when code review finds issues
+
+**Problem**: The merge phase blocks Edit and Write tools (git-only operations). If code review finds a BLOCK issue that requires code changes, the agent cannot fix the code or proceed with the merge, creating a deadlock.
+
+**Fix**: If you are in merge phase and code review reports issues requiring code fixes:
+1. Transition back to execute phase (`merge -> execute` is a valid transition)
+2. Fix the issues in execute phase
+3. Run code review again
+4. Transition through review -> merge once review passes
+
+Do NOT attempt to fix code using only Bash (e.g., `sed` commands) to work around the Edit block. The proper path is always: transition back to execute.
+
+## 14. Worktree CWD failures must be caught immediately
+
+**Problem**: When a worktree is deleted mid-session, every subsequent Bash call fails with "Working directory no longer exists." Agents have been observed retrying up to 9 times despite the 2-retry limit in pitfall 9, wasting all remaining tool budget.
+
+**Fix**: This is a hard rule, not a guideline. After the FIRST "Working directory no longer exists" error:
+1. IMMEDIATELY switch all paths to the main repo: `/Users/matifuentes/Workspace/ccplus/`
+2. Do NOT retry any command targeting the deleted worktree path
+3. If the task requires worktree-specific uncommitted changes, they are lost -- report to orchestrator and stop
+4. If the work was already committed, continue from the main repo using absolute paths
+
+The 2-retry limit from pitfall 9 is the MAXIMUM. Prefer 0 retries -- switch immediately on first CWD failure.

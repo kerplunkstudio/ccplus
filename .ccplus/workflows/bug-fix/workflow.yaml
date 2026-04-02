@@ -72,6 +72,8 @@ transitions:
   - from: review
     to: merge
   - from: merge
+    to: execute
+  - from: merge
     to: complete
   - from: test
     to: execute
