@@ -253,6 +253,7 @@ export function buildSocketCallbacks(
     onCaptureScreenshot: (): Promise<{ image?: string; url?: string; error?: string }> => {
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {
+          io.off("screenshot_result", handleScreenshotResult);
           resolve({ error: "Screenshot timeout - no browser tab responded within 10 seconds" });
         }, 10000);
 
