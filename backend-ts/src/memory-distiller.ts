@@ -210,12 +210,20 @@ export async function distillSession(
     // Store memories split by type for better targeted retrieval
     const storePromises: Promise<string | null>[] = [];
 
-    // 1. Task summary memory (goal + outcome)
+    // 1. Task summary memory (goal + outcome + approach context)
+    const lastMessages = conversations.slice(-3).filter(m => m.role === 'assistant');
+    const approachContext = lastMessages.length > 0
+      ? truncate(lastMessages.map(m => m.content as string).join(' '), 300)
+      : '';
+
     const taskSummary = [
       `Session ${sessionId} in ${projectName}`,
       `Goal: ${goal}`,
       `Outcome: ${outcome}`,
-    ].join("\n");
+      ...(approachContext ? [`Approach: ${approachContext}`] : []),
+      `Files: ${filePaths.length > 0 ? filePaths.map(f => path.basename(f)).join(', ') : 'none'}`,
+      `Status: ${errors.length === 0 ? 'success' : `completed with ${errors.length} error(s)`}`,
+    ].join('\n');
 
     storePromises.push(
       storeMemory(
@@ -274,6 +282,33 @@ export async function distillSession(
         storeMemory(
           agentsMemory,
           [...baseTags, "type:agents-used"].join(","),
+          baseMetadata
+        )
+      );
+    }
+
+    // 5. Decisions and lessons memory (extract from conversation patterns)
+    const corrections = conversations.filter((msg) => {
+      if (msg.role !== 'user') return false;
+      const content = (msg.content as string).toLowerCase();
+      return content.includes('no,') || content.includes("don't") || content.includes('stop') ||
+             content.includes('wrong') || content.includes('instead') || content.includes('actually') ||
+             content.includes('not that') || content.includes('revert');
+    });
+
+    if (corrections.length > 0) {
+      const correctionTexts = corrections.map(c => truncate(c.content as string, 150));
+      const lessonsMemory = [
+        `Session ${sessionId} in ${projectName}`,
+        `User corrections during session:`,
+        ...correctionTexts.map(c => `- ${c}`),
+        `Context: ${goal}`,
+      ].join('\n');
+
+      storePromises.push(
+        storeMemory(
+          lessonsMemory,
+          [...baseTags, 'type:decisions-lessons'].join(','),
           baseMetadata
         )
       );

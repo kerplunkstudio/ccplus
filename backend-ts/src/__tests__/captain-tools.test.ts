@@ -10,6 +10,7 @@ vi.mock('../sdk-session.js');
 vi.mock('../logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('../captain-memory.js');
 
 // Mock the SDK tool function to capture handlers
 const toolHandlers = new Map<string, Function>();
@@ -26,6 +27,7 @@ import * as workflowState from '../workflow-state.js';
 import * as workflowConfig from '../workflow-config.js';
 import * as sessionApi from '../session-api.js';
 import { log } from '../logger.js';
+import * as captainMemory from '../captain-memory.js';
 
 describe('captain-tools', () => {
   const mockDeps: CaptainToolDependencies = {
@@ -56,9 +58,9 @@ describe('captain-tools', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 20 tools', () => {
+    it('builds 23 tools', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(20);
+      expect(tools).toHaveLength(23);
     });
   });
 
@@ -951,6 +953,102 @@ describe('captain-tools', () => {
       expect(parsed.estimated_cost_usd).toBe(0.045);
       expect(parsed.cost_breakdown.input_cost_usd).toBe(0.015);
       expect(parsed.cost_breakdown.output_cost_usd).toBe(0.03);
+    });
+  });
+
+  describe('memory_update', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns success message with char count on successful update', async () => {
+      const mockBlock = { user: 'Updated user content', project: '', lessons: '' };
+      vi.mocked(captainMemory.updateCoreMemoryBlock).mockReturnValue({
+        success: true,
+        block: mockBlock,
+      });
+
+      const handler = toolHandlers.get('memory_update');
+      const result = await handler!({ label: 'user', old_content: 'old text', new_content: 'Updated user content' });
+
+      expect(result).toBe('Updated "user" block. [20 chars used]');
+      expect(vi.mocked(captainMemory.updateCoreMemoryBlock)).toHaveBeenCalledWith('user', 'old text', 'Updated user content');
+    });
+
+    it('returns error message when update fails', async () => {
+      vi.mocked(captainMemory.updateCoreMemoryBlock).mockReturnValue({
+        success: false,
+        error: 'Text not found in block',
+      });
+
+      const handler = toolHandlers.get('memory_update');
+      const result = await handler!({ label: 'project', old_content: 'missing text', new_content: 'replacement' });
+
+      expect(result).toBe('Error: Text not found in block');
+    });
+  });
+
+  describe('memory_append', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns success message with char count on successful append', async () => {
+      const mockBlock = { user: '', project: 'existing\nnew line', lessons: '' };
+      vi.mocked(captainMemory.appendCoreMemory).mockReturnValue({
+        success: true,
+        block: mockBlock,
+      });
+
+      const handler = toolHandlers.get('memory_append');
+      const result = await handler!({ label: 'project', content: 'new line' });
+
+      expect(result).toBe('Appended to "project" block. [17 chars used]');
+      expect(vi.mocked(captainMemory.appendCoreMemory)).toHaveBeenCalledWith('project', 'new line');
+    });
+
+    it('returns error message when append fails', async () => {
+      vi.mocked(captainMemory.appendCoreMemory).mockReturnValue({
+        success: false,
+        error: 'Block not found',
+      });
+
+      const handler = toolHandlers.get('memory_append');
+      const result = await handler!({ label: 'lessons', content: 'some text' });
+
+      expect(result).toBe('Error: Block not found');
+    });
+  });
+
+  describe('memory_rethink', () => {
+    beforeEach(() => {
+      buildFleetMcpTools(mockDeps);
+    });
+
+    it('returns success message with char count on successful rethink', async () => {
+      const mockBlock = { user: '', project: '', lessons: 'Brand new lessons content here.' };
+      vi.mocked(captainMemory.rethinkCoreMemory).mockReturnValue({
+        success: true,
+        block: mockBlock,
+      });
+
+      const handler = toolHandlers.get('memory_rethink');
+      const result = await handler!({ label: 'lessons', content: 'Brand new lessons content here.' });
+
+      expect(result).toBe('Rewrote "lessons" block. [31 chars used]');
+      expect(vi.mocked(captainMemory.rethinkCoreMemory)).toHaveBeenCalledWith('lessons', 'Brand new lessons content here.');
+    });
+
+    it('returns error message when rethink fails', async () => {
+      vi.mocked(captainMemory.rethinkCoreMemory).mockReturnValue({
+        success: false,
+        error: 'Content exceeds max size',
+      });
+
+      const handler = toolHandlers.get('memory_rethink');
+      const result = await handler!({ label: 'user', content: 'x'.repeat(10000) });
+
+      expect(result).toBe('Error: Content exceeds max size');
     });
   });
 });

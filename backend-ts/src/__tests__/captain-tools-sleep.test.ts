@@ -13,6 +13,7 @@ vi.mock('../fleet-monitor.js');
 vi.mock('../database.js');
 vi.mock('../session-api.js');
 vi.mock('../sdk-session.js');
+vi.mock('../captain-memory.js');
 vi.mock('../logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -59,9 +60,9 @@ describe('captain-tools - sleep', () => {
   });
 
   describe('buildFleetMcpTools', () => {
-    it('builds 20 tools (including sleep)', () => {
+    it('builds 23 tools (including sleep)', () => {
       const tools = buildFleetMcpTools(mockDeps);
-      expect(tools).toHaveLength(20);
+      expect(tools).toHaveLength(23);
     });
   });
 

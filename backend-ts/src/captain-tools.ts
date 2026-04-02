@@ -22,6 +22,8 @@ import { randomUUID } from 'crypto';
 import { PROJECT_ROOT, DEPLOY_STATE_PATH } from './config.js';
 import { saveDeployState } from './state-persistence.js';
 import { sleepTicks, getSleepRemaining } from './captain-tick.js';
+import { updateCoreMemoryBlock, appendCoreMemory, rethinkCoreMemory, renderCoreMemory, loadCoreMemory, type CoreMemoryBlock } from './captain-memory.js';
+import { invalidatePromptCache } from './captain-prompt.js';
 
 // ---- Pricing Constants ----
 
@@ -1272,5 +1274,67 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         }
       }
     ),
+
+    // memory_update - Replace specific text in a core memory block
+    tool(
+      'memory_update',
+      'Replace specific text in a core memory block. Use this for precise edits — like updating a preference or changing a project detail. The old_content must appear exactly once in the block.',
+      {
+        label: z.enum(['user', 'project', 'lessons']).describe('Which memory block to edit'),
+        old_content: z.string().describe('The exact text to find and replace'),
+        new_content: z.string().describe('The replacement text'),
+      },
+      async ({ label, old_content, new_content }) => {
+        const result = updateCoreMemoryBlock(label, old_content, new_content);
+        if (!result.success) {
+          return `Error: ${result.error}`;
+        }
+        invalidatePromptCache();
+        return `Updated "${label}" block. ${renderBlockStatus(result.block, label)}`;
+      }
+    ),
+
+    // memory_append - Append text to a core memory block
+    tool(
+      'memory_append',
+      'Append text to a core memory block. Use this to add new information without modifying existing content.',
+      {
+        label: z.enum(['user', 'project', 'lessons']).describe('Which memory block to append to'),
+        content: z.string().describe('Text to append (will be added on a new line)'),
+      },
+      async ({ label, content }) => {
+        const result = appendCoreMemory(label, content);
+        if (!result.success) {
+          return `Error: ${result.error}`;
+        }
+        invalidatePromptCache();
+        return `Appended to "${label}" block. ${renderBlockStatus(result.block, label)}`;
+      }
+    ),
+
+    // memory_rethink - Wholesale replacement of a core memory block
+    tool(
+      'memory_rethink',
+      'Replace the entire content of a core memory block. Use this when the block needs reorganization or has become cluttered. Write a complete, coherent replacement that integrates old and new information.',
+      {
+        label: z.enum(['user', 'project', 'lessons']).describe('Which memory block to rewrite'),
+        content: z.string().describe('The complete new content for the block'),
+      },
+      async ({ label, content }) => {
+        const result = rethinkCoreMemory(label, content);
+        if (!result.success) {
+          return `Error: ${result.error}`;
+        }
+        invalidatePromptCache();
+        return `Rewrote "${label}" block. ${renderBlockStatus(result.block, label)}`;
+      }
+    ),
   ];
+}
+
+// ---- Memory Tool Helpers ----
+
+function renderBlockStatus(block: CoreMemoryBlock, label: string): string {
+  const content = block[label as keyof CoreMemoryBlock] as string;
+  return `[${content.length} chars used]`;
 }

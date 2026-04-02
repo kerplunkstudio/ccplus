@@ -9,6 +9,7 @@ import { loadAllAgents } from './agent-config.js';
 import { listWorkflows, getWorkflowByName } from './workflow-config.js';
 import { formatAgentCatalogForCaptain, formatPhaseEnforcement } from './agent-catalog.js';
 import { log } from './logger.js';
+import { renderCoreMemory } from './captain-memory.js';
 
 // ---- Prompt Caching ----
 
@@ -20,6 +21,10 @@ interface PromptCache {
 
 let promptCache: PromptCache | null = null;
 const PROMPT_CACHE_TTL_MS = 60_000;
+
+export function invalidatePromptCache(): void {
+  promptCache = null;
+}
 
 // ---- Idle Message Filtering ----
 
@@ -213,10 +218,28 @@ Classify the failure and act accordingly:
 Report your diagnosis and proposed action to the user. NEVER just say "Session X failed" without investigating the root cause first.
 
 ## Memory
-- Before starting work, search memory for: project name, feature area, recent decisions, and known issues
+
+You have two memory systems:
+
+### Core Memory (always present)
+Your core memory block is injected into this prompt and is always visible. It has three sections:
+- **user**: Who the user is, their preferences, communication style, role
+- **project**: Active project state, current goals, key decisions, constraints
+- **lessons**: Corrections from the user, patterns that work/fail, things to remember
+
+**You MUST actively maintain your core memory.** When you learn something important:
+- User corrects you or expresses a preference → update the "user" block
+- Project state changes (new feature started, decision made, blocker found) → update "project" block
+- A session fails or succeeds in a notable way → update "lessons" block
+- A block gets cluttered → use memory_rethink to rewrite it cleanly
+
+Use memory_update for precise edits, memory_append to add new info, memory_rethink for full rewrites.
+Core memory is your working memory — keep it current and concise.
+
+### Long-term Memory (searchable)
+- Call mcp__memory__memory_search for detailed context: past session outcomes, file histories, error patterns
+- Use this for deep dives, not for frequently-needed facts (those belong in core memory)
 - Example searches: the component being changed, the feature name, error messages mentioned
-- If memory returns relevant context (file paths, past decisions, prior session outcomes), include it in the session prompt
-- Memory is the source of truth for project context — never guess or assume
 
 ## MCP Tool Failures
 MCP tools (fleet-control, memory) can fail transiently with "Stream closed", timeout, or connection errors — the server auto-respawns within seconds.
@@ -380,7 +403,18 @@ export async function buildCaptainSystemPrompt(workspace: string): Promise<strin
     log.warn('Failed to load phase enforcement for captain prompt', { error: String(error) });
   }
 
-  const result = CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection + agentSection + enforcementSection;
+  // 4. Inject core memory block
+  let coreMemorySection = '';
+  try {
+    const coreMemory = renderCoreMemory();
+    if (coreMemory) {
+      coreMemorySection = '\n\n' + coreMemory;
+    }
+  } catch (error) {
+    log.warn('Failed to render core memory for captain prompt', { error: String(error) });
+  }
+
+  const result = CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection + agentSection + enforcementSection + coreMemorySection;
 
   // Cache the result
   promptCache = { workspace, prompt: result, builtAt: now };
