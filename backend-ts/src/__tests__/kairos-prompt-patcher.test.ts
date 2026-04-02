@@ -91,7 +91,29 @@ describe('kairos-prompt-patcher', () => {
     // Create a test agent file if none exist (CI environment)
     if (existingAgents.length === 0) {
       const testFile = path.join(agentsDir, '_kairos-test-agent.md');
-      fs.writeFileSync(testFile, '# Test Agent\n\n## Instructions\n\nTest instructions.\n', 'utf-8');
+      // Content must be large enough that test additions stay within 20% size increase limit
+      const stubContent = [
+        '# Test Agent',
+        '',
+        '## Instructions',
+        '',
+        'You are a test agent used for KAIROS prompt patcher integration tests.',
+        'Follow all instructions carefully and report results accurately.',
+        'Always verify changes before committing them to the repository.',
+        'Use immutable patterns and avoid mutation of shared state.',
+        'Handle errors comprehensively with descriptive messages.',
+        'Validate all inputs before processing.',
+        '',
+        '## Guidelines',
+        '',
+        'When working on tasks, break them into small, focused steps.',
+        'Each step should be independently verifiable and reversible.',
+        'Document your reasoning for non-obvious decisions.',
+        'Prefer additive changes over modifications to existing code.',
+        'Test thoroughly before marking work as complete.',
+        '',
+      ].join('\n');
+      fs.writeFileSync(testFile, stubContent, 'utf-8');
       existingAgents = ['_kairos-test-agent.md'];
     }
 
@@ -181,15 +203,7 @@ phases:
     }
 
     it('accepts valid addition change', () => {
-      const change = createBaseChange();
-      const modifiable = getModifiablePromptFiles();
-      console.log('DEBUG: testAgentFile =', change.targetFile);
-      console.log('DEBUG: modifiable files =', JSON.stringify(modifiable));
-      console.log('DEBUG: file exists =', fs.existsSync(change.targetFile));
-      const result = validatePromptChange(change);
-      if (!result.valid) {
-        console.log('DEBUG: validation reason =', result.reason);
-      }
+      const result = validatePromptChange(createBaseChange());
       expect(result.valid).toBe(true);
     });
 
