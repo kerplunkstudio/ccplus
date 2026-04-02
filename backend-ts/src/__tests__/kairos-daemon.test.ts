@@ -114,6 +114,21 @@ describe("kairos-daemon", () => {
       expect(state.totalBatchesTriggered).toBe(1);
     });
 
+    it("marks sessions analyzed at trigger time (before sending Captain message)", () => {
+      const deps = makeDeps();
+      startKairosDaemon({ log: deps.log });
+      const sessionIds = ["s1", "s2", "s3", "s4", "s5"];
+      vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(sessionIds);
+
+      checkKairos(deps);
+
+      expect(kairosDb.markSessionsAnalyzed).toHaveBeenCalledWith(sessionIds);
+      // markSessionsAnalyzed must be called before sendCaptainMessage
+      const markOrder = vi.mocked(kairosDb.markSessionsAnalyzed).mock.invocationCallOrder[0];
+      const sendOrder = vi.mocked(deps.sendCaptainMessage).mock.invocationCallOrder[0];
+      expect(markOrder).toBeLessThan(sendOrder);
+    });
+
     it("skips when analysis is already in progress", () => {
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
@@ -163,6 +178,19 @@ describe("kairos-daemon", () => {
 
       onKairosSessionComplete();
       expect(getKairosState().analyzing).toBe(false);
+    });
+
+    it("does not call markSessionsAnalyzed on complete (already done at trigger time)", () => {
+      const deps = makeDeps();
+      startKairosDaemon({ log: deps.log });
+      vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
+
+      checkKairos(deps);
+      vi.clearAllMocks();
+
+      onKairosSessionComplete();
+
+      expect(kairosDb.markSessionsAnalyzed).not.toHaveBeenCalled();
     });
   });
 

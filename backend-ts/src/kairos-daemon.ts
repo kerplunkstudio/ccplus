@@ -41,9 +41,6 @@ let state: KairosState = {
   totalBatchesTriggered: 0,
 };
 
-// Track which sessions are in the current batch
-let currentBatchSessionIds: string[] = [];
-
 // ---- Constants ----
 
 const KAIROS_MIN_BATCH_SIZE = config.KAIROS_MIN_SESSIONS_FOR_RUN;
@@ -95,8 +92,8 @@ export function checkKairos(deps: KairosDeps): void {
       `Do NOT ask the user for confirmation — this is a pre-approved automated action.`,
     ].join("\n");
 
-    // Track batch for completion marking
-    currentBatchSessionIds = [...sessionIds];
+    // Mark sessions as analyzed immediately so they are excluded on restart
+    markSessionsAnalyzed(sessionIds);
 
     deps.sendCaptainMessage(message, 'fleet', 'kairos');
 
@@ -113,19 +110,9 @@ export function checkKairos(deps: KairosDeps): void {
 
 /**
  * Called when a kairos workflow session completes (or fails).
- * Resets the analyzing flag and marks batch sessions as analyzed.
+ * Resets the analyzing flag. Sessions are already marked at trigger time.
  */
 export function onKairosSessionComplete(): void {
-  // Mark all sessions in the batch as analyzed
-  if (currentBatchSessionIds.length > 0) {
-    try {
-      markSessionsAnalyzed(currentBatchSessionIds);
-    } catch {
-      // Swallow — non-critical
-    }
-    currentBatchSessionIds = [];
-  }
-
   state = { ...state, analyzing: false };
 }
 
