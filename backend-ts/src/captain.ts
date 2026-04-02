@@ -67,6 +67,7 @@ interface CaptainState {
   readonly workspace: string | null;
   readonly lastQueryCallbackId: string | null;
   readonly lastQuerySource: { source: string; sourceId: string } | null;
+  readonly lastQueryIsTick: boolean;
   readonly lastInputTokens: number;
   readonly totalInputTokens: number;
 }
@@ -81,6 +82,7 @@ let captainState: CaptainState = {
   workspace: null,
   lastQueryCallbackId: null,
   lastQuerySource: null,
+  lastQueryIsTick: false,
   lastInputTokens: 0,
   totalInputTokens: 0,
 };
@@ -205,6 +207,7 @@ export async function startCaptainSession(
       workspace,
       lastQueryCallbackId: null,
       lastQuerySource: null,
+      lastQueryIsTick: false,
       lastInputTokens: 0,
       totalInputTokens: 0,
     };
@@ -244,8 +247,9 @@ function getTargetCallbacks(routeToId: string | null): ResponseCallback[] {
  * No auto-restart - Captain stays alive with stored sdkSessionId.
  */
 async function processQueryResponse(q: Query, sessionId: string): Promise<void> {
-  // Capture routing target at the START (before any awaits)
+  // Capture routing target and tick flag at the START (before any awaits)
   const routeToCallbackId = captainState.lastQueryCallbackId;
+  const isTickQuery = captainState.lastQueryIsTick;
   let messageIndex = 0;
 
   try {
@@ -284,17 +288,8 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
         }
 
         const fullText = textBlocks.join("");
-        if (fullText.length > 0 && !isIdleMessage(fullText) && !shouldSuppressBriefOutput(fullText)) {
-          // Send to target callback(s)
-          for (const callback of getTargetCallbacks(routeToCallbackId)) {
-            try {
-              callback.onText(fullText, messageIndex);
-            } catch (error) {
-              log.error("Captain callback error (onText)", { error: String(error) });
-            }
-          }
-
-          // Always save to DB for observability (even if suppressed from chat)
+        if (fullText.length > 0) {
+          // Always save to DB for observability
           try {
             const convId = database.getLatestCaptainConversationId() ?? `captain-conv-${Date.now()}`;
             database.saveCaptainMessage({
@@ -305,6 +300,18 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
             });
           } catch (err) {
             log.error("Failed to save captain assistant message", { error: String(err) });
+          }
+
+          // Stealth mode: tick responses NEVER reach chat UI
+          // Non-tick responses still filter idle messages
+          if (!isTickQuery && !isIdleMessage(fullText)) {
+            for (const callback of getTargetCallbacks(routeToCallbackId)) {
+              try {
+                callback.onText(fullText, messageIndex);
+              } catch (error) {
+                log.error("Captain callback error (onText)", { error: String(error) });
+              }
+            }
           }
         }
       } else if (message.type === "result") {
@@ -481,12 +488,13 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     ? `${source}:${sourceId}`
     : null; // web/api → broadcast to all
 
-  // Store routing target and increment message count
+  // Store routing target, tick flag, and increment message count
   captainState = {
     ...captainState,
     messageCount: captainState.messageCount + 1,
     lastQueryCallbackId: queryCallbackId,
     lastQuerySource: { source, sourceId },
+    lastQueryIsTick: isTickSource,
   };
 
   log.info("Captain message received", { source, sourceId, length: content.length });
