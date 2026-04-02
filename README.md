@@ -74,7 +74,7 @@ Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macO
 
 You tell Captain: "fix the auth bug". Captain starts a bug-fix workflow → Debugger investigates → Code Agent patches → TDD Guide writes regression test → Code Reviewer approves → merged to main. You get a summary.
 
-The process is automatic. No manual intervention needed. Captain manages workflow state, retries on failure, and adapts to blockers.
+The process is automatic. No manual intervention needed. Captain manages workflow state, retries on failure, and adapts to blockers. Between tasks, a periodic tick keeps Captain aware of your projects — brief mode suppresses noise unless something needs your attention.
 
 ---
 
@@ -103,6 +103,12 @@ Real-time activity trees. Every agent spawn, tool call, and file edit, structure
 ## Cross-Session Memory
 
 Persistent knowledge across sessions.
+
+---
+
+## KAIROS
+
+Automatic retrospective analysis across sessions. When enough completed sessions accumulate, KAIROS reviews patterns and prompt effectiveness — then recommends improvements.
 
 ---
 
@@ -157,6 +163,9 @@ The result: you get full transparency into what your agents are doing, and the p
 - Image attachments
 - Themes
 - Crash recovery
+- Scaffolding workflows (project creation with full tool access)
+- File overlap detection across sessions
+- Post-deploy smoke checks
 
 </details>
 
