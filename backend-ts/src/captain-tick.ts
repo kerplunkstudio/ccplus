@@ -1,6 +1,7 @@
 import type { EnrichedFleetSessionInfo } from './fleet-monitor.js';
 import { log } from './logger.js';
 import { checkKairos } from './kairos-daemon.js';
+import { runPromotionSweep } from './memory-promotion.js';
 import {
   createCircuitBreaker,
   recordSuccess as cbRecordSuccess,
@@ -88,6 +89,13 @@ let backoffState: BackoffState = {
   multiplier: 1,
   rateLimitedUntil: 0,
 };
+
+// Consolidation tracking
+let lastConsolidationAt = 0;
+let sessionsCompletedSinceConsolidation = 0;
+let recentCompletions: Array<{ sessionId: string; outcome: string; filesTouched: string[] }> = [];
+const CONSOLIDATION_MIN_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const CONSOLIDATION_MIN_SESSIONS = 1; // at least 1 completed session
 
 let captainCircuitBreaker: CircuitBreakerState = createCircuitBreaker();
 
@@ -281,10 +289,55 @@ export function getTickState(): TickState {
   return { ...tickState };
 }
 
+/**
+ * Notify that a session completed — increments the counter for consolidation hint.
+ */
+export function notifySessionCompleted(sessionId: string, outcome: string, filesTouched: string[]): void {
+  sessionsCompletedSinceConsolidation++;
+  recentCompletions = [
+    ...recentCompletions,
+    { sessionId, outcome, filesTouched: filesTouched.slice(0, 5) },
+  ].slice(-10);
+}
+
+/**
+ * Mark consolidation as done (called after Captain processes a consolidation hint).
+ */
+export function markConsolidationDone(): void {
+  lastConsolidationAt = Date.now();
+  sessionsCompletedSinceConsolidation = 0;
+  recentCompletions = [];
+}
+
+function shouldConsolidate(): boolean {
+  if (sessionsCompletedSinceConsolidation < CONSOLIDATION_MIN_SESSIONS) return false;
+  if (Date.now() - lastConsolidationAt < CONSOLIDATION_MIN_INTERVAL_MS) return false;
+  return true;
+}
+
+function buildConsolidationHint(): string {
+  if (!shouldConsolidate()) return '';
+
+  const timeSinceLast = lastConsolidationAt > 0
+    ? `${Math.round((Date.now() - lastConsolidationAt) / 60000)} min ago`
+    : 'never';
+
+  const sessionCount = sessionsCompletedSinceConsolidation;
+  const sessionSummaries = recentCompletions
+    .map(s => `${s.sessionId} (${s.outcome}, ${s.filesTouched.length} files)`)
+    .join(', ');
+
+  // Auto-mark as done so the hint doesn't repeat every tick
+  markConsolidationDone();
+
+  return `\n  <consolidation_hint>${sessionCount} session(s) completed since last consolidation (${timeSinceLast}). Review your core memory — update project state, capture any lessons. Sessions: ${sessionSummaries}</consolidation_hint>`;
+}
+
 export function buildTickMessage(context: TickMessageContext): string {
   const { timestamp, uptimeMs, terminalFocused, fleetSummary, tickNumber } = context;
+  const consolidationHint = buildConsolidationHint();
 
-  return `<tick number="${tickNumber}" timestamp="${timestamp}" uptime_ms="${uptimeMs}" terminal_focused="${terminalFocused}" active="${fleetSummary.activeSessions}" pending="${fleetSummary.pendingSessions}" recently_completed="${fleetSummary.recentlyCompleted}" stuck="${fleetSummary.stuckSessions}"></tick>`;
+  return `<tick number="${tickNumber}" timestamp="${timestamp}" uptime_ms="${uptimeMs}" terminal_focused="${terminalFocused}" active="${fleetSummary.activeSessions}" pending="${fleetSummary.pendingSessions}" recently_completed="${fleetSummary.recentlyCompleted}" stuck="${fleetSummary.stuckSessions}">${consolidationHint}</tick>`;
 }
 
 export function _resetTickState(): void {
@@ -300,6 +353,9 @@ export function _resetTickState(): void {
   };
   captainCircuitBreaker = createCircuitBreaker();
   tickStartTime = null;
+  lastConsolidationAt = 0;
+  sessionsCompletedSinceConsolidation = 0;
+  recentCompletions = [];
 }
 
 // ---- Internal Tick Logic ----
@@ -397,6 +453,16 @@ function tick(): void {
       });
     } catch (err) {
       log.error('KAIROS check failed during tick', { error: String(err) });
+    }
+
+    // Memory promotion sweep (piggybacks on tick)
+    try {
+      const promoResult = runPromotionSweep();
+      if (promoResult.promoted > 0 || promoResult.demoted > 0) {
+        log.info('Memory promotion sweep', promoResult);
+      }
+    } catch (err) {
+      log.error('Memory promotion sweep failed during tick', { error: String(err) });
     }
 
     captainCircuitBreaker = cbRecordSuccess(captainCircuitBreaker);

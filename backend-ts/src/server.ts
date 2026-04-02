@@ -38,6 +38,7 @@ import { createAgentRoutes } from "./routes/agents.js";
 import workflowsRouter from "./routes/workflows.js";
 import { createMemoryRoutes } from "./routes/memory.js";
 import { runMemoryGC } from "./memory-gc.js";
+import { initMemoryAccessLog } from "./memory-promotion.js";
 import kairosRouter from "./routes/kairos.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
@@ -98,6 +99,9 @@ fleetMonitor.onSessionStuck((sessionId, info) => {
 const upload = multer({ storage: multer.memoryStorage() });
 
 const START_TIME = Date.now();
+
+// Initialize memory access log table
+initMemoryAccessLog();
 
 // Mark orphaned tool events from previous run
 const orphanCount = database.markOrphanedToolEvents();

@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { searchMemories, deleteMemory, isMemoryAvailable } from '../memory-client.js';
 import { getDistillationStats, getRecentDistillations } from '../db/memory-observability.js';
+import { recordMemoryAccess } from '../memory-promotion.js';
 import { log } from '../logger.js';
 
 interface ParsedMemory {
@@ -118,6 +119,16 @@ export function createMemoryRoutes(app: Express): void {
     try {
       const rawText = await searchMemories(q, parsedLimit, undefined, effectiveMode);
       const memories = parseMemoryText(rawText);
+
+      // Track access for retrieved memories (best-effort, never blocks search)
+      for (const mem of memories) {
+        try {
+          recordMemoryAccess(mem.hash, mem.preview, mem.tags.join(','));
+        } catch {
+          // Never block search on tracking failure
+        }
+      }
+
       res.json({
         success: true,
         data: memories,

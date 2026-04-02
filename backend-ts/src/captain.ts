@@ -15,7 +15,8 @@ import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
-import { resetBriefMode, shouldSuppressBriefOutput, notifyRateLimit, resetBackoff } from './captain-tick.js';
+import { resetBriefMode, shouldSuppressBriefOutput, notifyRateLimit, resetBackoff, notifySessionCompleted } from './captain-tick.js';
+import { incrementSessionStaleness } from './memory-promotion.js';
 import type { InteractiveMessage, InteractiveResponse } from './interactive-message.js';
 
 // ---- Types ----
@@ -863,6 +864,20 @@ export function notifySessionComplete(sessionId: string, info: { requestedBy?: {
   const fleetMessage = `Session "${sessionId}" completed. Files changed: ${filesChanged}. Send a brief success summary to [${source.toUpperCase()}:${sourceId}].`;
 
   log.info("Notifying Captain of session completion", { sessionId, source, sourceId });
+
+  // Decay recent memory access counts on session completion
+  try {
+    incrementSessionStaleness();
+  } catch {
+    // Never throw from notification handlers
+  }
+
+  // Notify consolidation hint tracker
+  try {
+    notifySessionCompleted(sessionId, 'completed', info.filesTouched ?? []);
+  } catch {
+    // Never throw from notification handlers
+  }
 
   // Send as a fleet message (will be tagged with [FLEET] prefix)
   sendCaptainMessage(fleetMessage, 'fleet', 'system');

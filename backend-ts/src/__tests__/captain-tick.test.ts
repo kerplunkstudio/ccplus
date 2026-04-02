@@ -17,6 +17,8 @@ import {
   getBackoffState,
   getCaptainCircuitBreakerState,
   resetCaptainCircuitBreaker,
+  notifySessionCompleted,
+  markConsolidationDone,
 } from '../captain-tick.js';
 
 // Mock logger to suppress output during tests
@@ -772,5 +774,147 @@ describe('captain-tick: circuit breaker', () => {
     expect(getCaptainCircuitBreakerState().consecutiveFailures).toBeGreaterThanOrEqual(1);
     // Backoff multiplier should still be whatever notifyRateLimit set
     expect(getBackoffState().multiplier).toBe(2);
+  });
+});
+
+describe('captain-tick: consolidation hints', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    _resetTickState();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const BASE_CONTEXT = {
+    timestamp: '2026-04-02T10:00:00Z',
+    uptimeMs: 3600000,
+    terminalFocused: false,
+    fleetSummary: { activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0 },
+    tickNumber: 1,
+  };
+
+  it('buildTickMessage produces no consolidation_hint when no sessions completed', () => {
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).not.toContain('consolidation_hint');
+    expect(msg).toBe('<tick number="1" timestamp="2026-04-02T10:00:00Z" uptime_ms="3600000" terminal_focused="false" active="0" pending="0" recently_completed="0" stuck="0"></tick>');
+  });
+
+  it('buildTickMessage produces no consolidation_hint when sessions completed but interval not met', () => {
+    notifySessionCompleted('feat-auth', 'completed', ['auth.ts', 'server.ts']);
+
+    // Do NOT advance time past CONSOLIDATION_MIN_INTERVAL_MS (30 min)
+    // lastConsolidationAt is 0 (never), but current time is also ~0 so interval check passes.
+    // We need to set lastConsolidationAt just now to simulate recent consolidation.
+    markConsolidationDone(); // sets lastConsolidationAt = now
+    notifySessionCompleted('feat-b', 'completed', ['b.ts']); // new completion after mark
+
+    // Only 0ms elapsed since last consolidation — below 30-min threshold
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).not.toContain('consolidation_hint');
+  });
+
+  it('buildTickMessage includes consolidation_hint when sessions completed and interval met', () => {
+    notifySessionCompleted('feat-auth', 'completed', ['auth.ts', 'server.ts']);
+
+    // Advance 31 minutes to exceed CONSOLIDATION_MIN_INTERVAL_MS
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('<consolidation_hint>');
+    expect(msg).toContain('</consolidation_hint>');
+    expect(msg).toContain('1 session(s) completed since last consolidation');
+    expect(msg).toContain('feat-auth');
+    expect(msg).toContain('completed');
+  });
+
+  it('consolidation_hint shows "never" when consolidation has never run', () => {
+    notifySessionCompleted('feat-x', 'completed', []);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('never');
+  });
+
+  it('consolidation_hint shows elapsed minutes when consolidation ran before', () => {
+    markConsolidationDone();
+
+    // Advance 45 minutes
+    vi.advanceTimersByTime(45 * 60 * 1000);
+    notifySessionCompleted('feat-y', 'completed', []);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('45 min ago');
+  });
+
+  it('notifySessionCompleted increments session count', () => {
+    notifySessionCompleted('s1', 'completed', []);
+    notifySessionCompleted('s2', 'failed', ['x.ts']);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('2 session(s) completed since last consolidation');
+  });
+
+  it('notifySessionCompleted keeps max 10 recent completions (immutable slice)', () => {
+    for (let i = 0; i < 15; i++) {
+      notifySessionCompleted(`session-${i}`, 'completed', []);
+    }
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    // Should have sessions 5-14 (last 10), not session-0 through session-4
+    expect(msg).not.toContain('session-0 (');
+    expect(msg).toContain('session-14');
+  });
+
+  it('notifySessionCompleted truncates filesTouched to 5', () => {
+    const manyFiles = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts'];
+    notifySessionCompleted('feat-big', 'completed', manyFiles);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    const msg = buildTickMessage(BASE_CONTEXT);
+    // filesTouched.length in the hint should be 5 (truncated)
+    expect(msg).toContain('feat-big (completed, 5 files)');
+  });
+
+  it('markConsolidationDone resets counter and completions', () => {
+    notifySessionCompleted('s1', 'completed', []);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    // Verify hint is present before marking done
+    let msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('consolidation_hint');
+
+    // Mark done and verify hint disappears
+    markConsolidationDone();
+    msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).not.toContain('consolidation_hint');
+  });
+
+  it('_resetTickState clears consolidation state', () => {
+    notifySessionCompleted('feat-z', 'completed', []);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+
+    _resetTickState();
+
+    // After reset, no hint should appear
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).not.toContain('consolidation_hint');
+  });
+
+  it('tick message format remains backward-compatible (all attributes present)', () => {
+    const msg = buildTickMessage(BASE_CONTEXT);
+    expect(msg).toContain('<tick');
+    expect(msg).toContain('number="1"');
+    expect(msg).toContain('timestamp="2026-04-02T10:00:00Z"');
+    expect(msg).toContain('uptime_ms="3600000"');
+    expect(msg).toContain('terminal_focused="false"');
+    expect(msg).toContain('active="0"');
+    expect(msg).toContain('pending="0"');
+    expect(msg).toContain('recently_completed="0"');
+    expect(msg).toContain('stuck="0"');
+    expect(msg).toContain('</tick>');
   });
 });
