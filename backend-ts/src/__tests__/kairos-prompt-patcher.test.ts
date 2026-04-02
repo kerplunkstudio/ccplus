@@ -24,10 +24,19 @@ describe('kairos-prompt-patcher', () => {
   beforeEach(() => {
     // Use a real agent file that exists in the allowlist
     const agentsDir = path.join(homedir(), '.claude', 'agents');
-    const existingAgents = fs.readdirSync(agentsDir).filter(f => f.endsWith('.md'));
 
+    // Ensure directory exists (CI may not have it)
+    if (!fs.existsSync(agentsDir)) {
+      fs.mkdirSync(agentsDir, { recursive: true });
+    }
+
+    let existingAgents = fs.readdirSync(agentsDir).filter(f => f.endsWith('.md'));
+
+    // Create a test agent file if none exist (CI environment)
     if (existingAgents.length === 0) {
-      throw new Error('No agent files found for testing');
+      const testFile = path.join(agentsDir, '_kairos-test-agent.md');
+      fs.writeFileSync(testFile, '# Test Agent\n\n## Instructions\n\nTest instructions.\n', 'utf-8');
+      existingAgents = ['_kairos-test-agent.md'];
     }
 
     testAgentFile = path.join(agentsDir, existingAgents[0]);
@@ -61,11 +70,11 @@ phases:
       fs.rmdirSync(TEST_WORKFLOW_DIR);
     }
 
-    // Clean up any temp files
+    // Clean up any temp files and CI-created test agents
     const agentsDir = path.join(homedir(), '.claude', 'agents');
     if (fs.existsSync(agentsDir)) {
-      const tempFiles = fs.readdirSync(agentsDir).filter(f => f.includes('.tmp.'));
-      for (const f of tempFiles) {
+      const cleanupFiles = fs.readdirSync(agentsDir).filter(f => f.includes('.tmp.') || f === '_kairos-test-agent.md');
+      for (const f of cleanupFiles) {
         const fullPath = path.join(agentsDir, f);
         if (fs.existsSync(fullPath)) {
           fs.unlinkSync(fullPath);
