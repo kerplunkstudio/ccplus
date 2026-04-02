@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { homedir } from 'os';
@@ -12,9 +12,63 @@ import {
   type PromptChangeRequest
 } from '../kairos-prompt-patcher.js';
 
-const testAgentFile = path.join(homedir(), '.claude', 'agents', 'test-agent.md');
+vi.mock('../db/kairos.js', () => {
+  let changeIdCounter = 0;
+  const changes: Array<{
+    id: number;
+    file_path: string;
+    change_type: string;
+    diff_before: string;
+    diff_after: string;
+    evidence_session_ids: string;
+    reasoning: string;
+    created_at: string;
+    rolled_back_at: string | null;
+  }> = [];
+
+  return {
+    recordPromptChange: vi.fn((params: {
+      filePath: string;
+      changeType: string;
+      diffBefore: string;
+      diffAfter: string;
+      evidenceSessionIds: string[];
+      reasoning: string;
+    }) => {
+      changeIdCounter++;
+      changes.push({
+        id: changeIdCounter,
+        file_path: params.filePath,
+        change_type: params.changeType,
+        diff_before: params.diffBefore,
+        diff_after: params.diffAfter,
+        evidence_session_ids: JSON.stringify(params.evidenceSessionIds),
+        reasoning: params.reasoning,
+        created_at: new Date().toISOString(),
+        rolled_back_at: null,
+      });
+      return changeIdCounter;
+    }),
+    getActivePromptChanges: vi.fn(() =>
+      changes.filter(c => c.rolled_back_at === null)
+    ),
+    getPromptChangeHistory: vi.fn(() => [...changes]),
+    markPromptChangeRolledBack: vi.fn((changeId: number, _reason: string) => {
+      const change = changes.find(c => c.id === changeId);
+      if (change) {
+        change.rolled_back_at = new Date().toISOString();
+      }
+    }),
+    __resetForTesting: () => {
+      changeIdCounter = 0;
+      changes.length = 0;
+    },
+  };
+});
+
+import { __resetForTesting } from '../db/kairos.js';
+
 const TEST_WORKFLOW_DIR = path.resolve(import.meta.dirname, '../../../.ccplus/workflows/test-workflow');
-const testWorkflowFile = path.join(TEST_WORKFLOW_DIR, 'workflow.yaml');
 
 describe('kairos-prompt-patcher', () => {
   let testAgentFile: string;
@@ -22,6 +76,8 @@ describe('kairos-prompt-patcher', () => {
   let agentBackup: string;
 
   beforeEach(() => {
+    (__resetForTesting as () => void)();
+
     // Use a real agent file that exists in the allowlist
     const agentsDir = path.join(homedir(), '.claude', 'agents');
 
