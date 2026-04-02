@@ -50,8 +50,9 @@ export function getUnanalyzedSessionIds(limit: number): string[] {
   const d = getDb();
   const rows = d.prepare(`
     SELECT session_id FROM fleet_sessions
-    WHERE status IN ('completed', 'failed', 'cancelled')
+    WHERE status IN ('failed', 'cancelled')
       AND session_id NOT IN (SELECT session_id FROM kairos_analyses)
+      AND session_id NOT LIKE 'kairos-%'
     ORDER BY started_at ASC
     LIMIT ?
   `).all(limit) as Array<{ session_id: string }>;
@@ -74,6 +75,21 @@ export function markAnalysisStarted(sessionId: string, model: string): void {
     SET status = 'analyzing', analysis_model = ?
     WHERE session_id = ?
   `).run(model, sessionId);
+}
+
+/**
+ * Mark a batch of sessions as analyzed (prevents re-processing).
+ * Called by the daemon when a kairos session completes.
+ */
+export function markSessionsAnalyzed(sessionIds: readonly string[]): void {
+  const d = getDb();
+  const stmt = d.prepare(`
+    INSERT OR IGNORE INTO kairos_analyses (session_id, status, analyzed_at)
+    VALUES (?, 'completed', datetime('now', 'localtime'))
+  `);
+  for (const id of sessionIds) {
+    stmt.run(id);
+  }
 }
 
 export function markAnalysisCompleted(

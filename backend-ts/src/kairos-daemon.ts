@@ -7,7 +7,7 @@
  */
 
 import * as config from "./config.js";
-import { getUnanalyzedSessionIds } from "./db/kairos.js";
+import { getUnanalyzedSessionIds, markSessionsAnalyzed } from "./db/kairos.js";
 
 // ---- Types ----
 
@@ -40,6 +40,9 @@ let state: KairosState = {
   lastAnalysisAt: null,
   totalBatchesTriggered: 0,
 };
+
+// Track which sessions are in the current batch
+let currentBatchSessionIds: string[] = [];
 
 // ---- Constants ----
 
@@ -91,6 +94,9 @@ export function checkKairos(deps: KairosDeps): void {
       `Include the full session ID list in the prompt so the KAIROS agent knows which sessions to review.`,
     ].join("\n");
 
+    // Track batch for completion marking
+    currentBatchSessionIds = [...sessionIds];
+
     deps.sendCaptainMessage(message, 'fleet', 'kairos');
 
     state = {
@@ -106,9 +112,19 @@ export function checkKairos(deps: KairosDeps): void {
 
 /**
  * Called when a kairos workflow session completes (or fails).
- * Resets the analyzing flag so the next tick can trigger again.
+ * Resets the analyzing flag and marks batch sessions as analyzed.
  */
 export function onKairosSessionComplete(): void {
+  // Mark all sessions in the batch as analyzed
+  if (currentBatchSessionIds.length > 0) {
+    try {
+      markSessionsAnalyzed(currentBatchSessionIds);
+    } catch {
+      // Swallow — non-critical
+    }
+    currentBatchSessionIds = [];
+  }
+
   state = { ...state, analyzing: false };
 }
 
