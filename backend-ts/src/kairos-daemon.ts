@@ -14,6 +14,7 @@ import { getUnanalyzedSessionIds, markSessionsAnalyzed } from "./db/kairos.js";
 export interface KairosDeps {
   readonly sendCaptainMessage: (content: string, source: string, sourceId: string) => void;
   readonly isCaptainAlive: () => boolean;
+  readonly isCaptainIdle: () => boolean;
   readonly log: {
     info: (msg: string, context?: Record<string, unknown>) => void;
     error: (msg: string, context?: Record<string, unknown>) => void;
@@ -41,6 +42,12 @@ let state: KairosState = {
   totalBatchesTriggered: 0,
 };
 
+// Track which sessions are in the current batch
+let currentBatchSessionIds: string[] = [];
+
+// Track when Captain first became idle (for 10-minute threshold)
+let idleSince: number | null = null;
+
 // ---- Constants ----
 
 const KAIROS_MIN_BATCH_SIZE = config.KAIROS_MIN_SESSIONS_FOR_RUN;
@@ -64,6 +71,21 @@ export function checkKairos(deps: KairosDeps): void {
 
   // Guard: Captain not alive
   if (!deps.isCaptainAlive()) return;
+
+  // Guard: Captain not idle (reset idle timer)
+  if (!deps.isCaptainIdle()) {
+    idleSince = null;
+    return;
+  }
+
+  // Track idle duration
+  if (idleSince === null) {
+    idleSince = Date.now();
+  }
+  const idleMs = Date.now() - idleSince;
+
+  // Guard: Not idle long enough (10 minutes)
+  if (idleMs < 10 * 60 * 1000) return;
 
   // Guard: Already triggered an analysis that hasn't completed
   if (state.analyzing) return;
@@ -114,6 +136,7 @@ export function checkKairos(deps: KairosDeps): void {
  */
 export function onKairosSessionComplete(): void {
   state = { ...state, analyzing: false };
+  idleSince = null; // Reset idle timer to prevent immediate re-trigger
 }
 
 // ---- Public API ----
@@ -133,6 +156,7 @@ export function startKairosDaemon(deps: { log: KairosDeps['log'] }): void {
 
 export function stopKairosDaemon(): void {
   state = { ...state, enabled: false };
+  idleSince = null;
 }
 
 export function getKairosDaemonState(): KairosState {
@@ -152,4 +176,6 @@ export function __resetStateForTesting(): void {
     lastAnalysisAt: null,
     totalBatchesTriggered: 0,
   };
+  idleSince = null;
+  currentBatchSessionIds = [];
 }
