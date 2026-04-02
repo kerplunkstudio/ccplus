@@ -31,12 +31,14 @@ describe("KAIROS Database Layer", () => {
     applyMigrations(testDb);
 
     // Insert test fleet sessions
+    // Note: getUnanalyzedSessionIds filters for 'failed' and 'cancelled' only
     testDb.prepare(`
       INSERT INTO fleet_sessions (session_id, status, workspace, started_at, last_activity)
       VALUES
-        ('session-1', 'completed', '/test', '2026-01-01 10:00:00', '2026-01-01 10:05:00'),
-        ('session-2', 'failed', '/test', '2026-01-01 11:00:00', '2026-01-01 11:05:00'),
-        ('session-3', 'running', '/test', '2026-01-01 12:00:00', '2026-01-01 12:05:00')
+        ('session-1', 'failed', '/test', '2026-01-01 10:00:00', '2026-01-01 10:05:00'),
+        ('session-2', 'cancelled', '/test', '2026-01-01 11:00:00', '2026-01-01 11:05:00'),
+        ('session-3', 'running', '/test', '2026-01-01 12:00:00', '2026-01-01 12:05:00'),
+        ('session-4', 'completed', '/test', '2026-01-01 13:00:00', '2026-01-01 13:05:00')
     `).run();
   });
 
@@ -47,6 +49,7 @@ describe("KAIROS Database Layer", () => {
       expect(unanalyzed).toContain("session-1");
       expect(unanalyzed).toContain("session-2");
       expect(unanalyzed).not.toContain("session-3"); // running status excluded
+      expect(unanalyzed).not.toContain("session-4"); // completed status excluded
     });
 
     it("should ensure analysis record exists", () => {
