@@ -15,6 +15,8 @@ import {
   notifyRateLimit,
   resetBackoff,
   getBackoffState,
+  getCaptainCircuitBreakerState,
+  resetCaptainCircuitBreaker,
 } from '../captain-tick.js';
 
 // Mock logger to suppress output during tests
@@ -574,5 +576,201 @@ describe('captain-tick: exponential backoff', () => {
       expect(state.multiplier).toBe(1);
       expect(state.rateLimitedUntil).toBe(0);
     });
+  });
+});
+
+describe('captain-tick: circuit breaker', () => {
+  const DEFAULT_DEPS = {
+    isCaptainAlive: () => true,
+    isCaptainIdle: () => true,
+    sendCaptainMessage: vi.fn(),
+    getFleetState: () => ({
+      totalSessions: 0,
+      activeSessions: 0,
+      pendingSessions: 0,
+      recentlyCompleted: 0,
+      stuckSessions: 0,
+      sessions: [],
+    }),
+    isTerminalFocused: () => false,
+    getTickIntervalMs: () => 60_000,
+    isTickEnabled: () => true,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    _resetTickState();
+  });
+
+  afterEach(() => {
+    stopTickLoop();
+    vi.useRealTimers();
+  });
+
+  it('starts closed (zero failures)', () => {
+    const state = getCaptainCircuitBreakerState();
+    expect(state.consecutiveFailures).toBe(0);
+    expect(state.circuitOpenUntil).toBe(0);
+  });
+
+  it('getCaptainCircuitBreakerState() returns a copy — mutations do not affect internal state', () => {
+    const state = getCaptainCircuitBreakerState();
+    state.consecutiveFailures = 999;
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBe(0);
+  });
+
+  it('_resetTickState() resets circuit breaker', () => {
+    resetCaptainCircuitBreaker();
+    _resetTickState();
+    const state = getCaptainCircuitBreakerState();
+    expect(state.consecutiveFailures).toBe(0);
+    expect(state.circuitOpenUntil).toBe(0);
+  });
+
+  it('resetCaptainCircuitBreaker() closes the circuit immediately', () => {
+    // Manually open the circuit by forcing 5 failures via a throwing sendTickMessage
+    const throwingDeps = {
+      ...DEFAULT_DEPS,
+      sendTickMessage: vi.fn(() => {
+        throw new Error('Simulated SDK crash');
+      }),
+    };
+
+    startTickLoop(throwingDeps);
+
+    // Fire 5 ticks — each should increment failures (threshold = 5)
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(60_000);
+    }
+
+    // Circuit should now be open
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBeGreaterThanOrEqual(5);
+
+    // Now reset it
+    resetCaptainCircuitBreaker();
+    const state = getCaptainCircuitBreakerState();
+    expect(state.consecutiveFailures).toBe(0);
+    expect(state.circuitOpenUntil).toBe(0);
+  });
+
+  it('records a failure when tick throws a non-rate-limit error', () => {
+    const throwingDeps = {
+      ...DEFAULT_DEPS,
+      sendTickMessage: vi.fn(() => {
+        throw new Error('Network error');
+      }),
+    };
+
+    startTickLoop(throwingDeps);
+    vi.advanceTimersByTime(60_000); // one failing tick
+
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBe(1);
+  });
+
+  it('circuit opens after 5 consecutive failures (threshold=5)', () => {
+    const throwingDeps = {
+      ...DEFAULT_DEPS,
+      sendTickMessage: vi.fn(() => {
+        throw new Error('Repeated crash');
+      }),
+    };
+
+    startTickLoop(throwingDeps);
+
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(60_000);
+    }
+
+    const state = getCaptainCircuitBreakerState();
+    expect(state.consecutiveFailures).toBeGreaterThanOrEqual(5);
+    expect(state.circuitOpenUntil).toBeGreaterThan(0);
+  });
+
+  it('suppresses ticks while circuit is open', () => {
+    const sendTickMessage = vi.fn(() => {
+      throw new Error('crash');
+    });
+
+    startTickLoop({ ...DEFAULT_DEPS, sendTickMessage });
+
+    // Trip the circuit (5 failures)
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(60_000);
+    }
+
+    const callsAfterTrip = sendTickMessage.mock.calls.length;
+
+    // Advance more — ticks should be blocked now
+    vi.advanceTimersByTime(60_000);
+    expect(sendTickMessage.mock.calls.length).toBe(callsAfterTrip);
+  });
+
+  it('auto-resets after cooldown and allows tick to fire again', () => {
+    const errors = { throw: true };
+    const sendTickMessage = vi.fn(() => {
+      if (errors.throw) throw new Error('crash');
+    });
+
+    startTickLoop({ ...DEFAULT_DEPS, sendTickMessage });
+
+    // Trip the circuit
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(60_000);
+    }
+
+    const callsAtTrip = sendTickMessage.mock.calls.length;
+
+    // Stop throwing — simulate recovery
+    errors.throw = false;
+
+    // Advance past 2-minute cooldown
+    vi.advanceTimersByTime(120_001);
+
+    // One more tick interval should allow a tick through
+    vi.advanceTimersByTime(60_000);
+
+    expect(sendTickMessage.mock.calls.length).toBeGreaterThan(callsAtTrip);
+  });
+
+  it('resets failure count on successful tick', () => {
+    let shouldThrow = true;
+    const sendTickMessage = vi.fn(() => {
+      if (shouldThrow) throw new Error('temporary failure');
+    });
+
+    startTickLoop({ ...DEFAULT_DEPS, sendTickMessage });
+
+    // One failure
+    vi.advanceTimersByTime(60_000);
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBe(1);
+
+    // Next tick succeeds — failure count should reset
+    shouldThrow = false;
+    vi.advanceTimersByTime(60_000);
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBe(0);
+  });
+
+  it('circuit breaker is independent of rate-limit backoff', () => {
+    // Trigger rate limit (backoff), verify circuit is still closed
+    notifyRateLimit(10_000);
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBe(0);
+    expect(getCaptainCircuitBreakerState().circuitOpenUntil).toBe(0);
+
+    // Trigger circuit failures, verify backoff multiplier is unaffected
+    const throwingDeps = {
+      ...DEFAULT_DEPS,
+      sendTickMessage: vi.fn(() => {
+        throw new Error('crash');
+      }),
+    };
+    startTickLoop(throwingDeps);
+
+    // Advance past rate limit window (10s) — but backoff multiplier is 2 so interval is 120s
+    vi.advanceTimersByTime(120_000);
+
+    // One tick should fire and fail (rate limit window has passed)
+    expect(getCaptainCircuitBreakerState().consecutiveFailures).toBeGreaterThanOrEqual(1);
+    // Backoff multiplier should still be whatever notifyRateLimit set
+    expect(getBackoffState().multiplier).toBe(2);
   });
 });

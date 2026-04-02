@@ -1,6 +1,14 @@
 import type { EnrichedFleetSessionInfo } from './fleet-monitor.js';
 import { log } from './logger.js';
 import { checkKairos } from './kairos-daemon.js';
+import {
+  createCircuitBreaker,
+  recordSuccess as cbRecordSuccess,
+  recordFailure as cbRecordFailure,
+  isOpen as cbIsOpen,
+  type CircuitBreakerState,
+  type CircuitBreakerConfig,
+} from './circuit-breaker.js';
 
 // ---- Types ----
 
@@ -57,6 +65,16 @@ export interface BackoffState {
 
 const MAX_BACKOFF_MS = 600_000; // 10 minutes
 
+// ---- Circuit Breaker Config ----
+// Separate from exponential backoff (which handles rate limits / 429s).
+// Circuit breaker handles repeated non-rate-limit failures: crashes, network
+// errors, SDK bugs. After 5 consecutive failures, block ticks for 2 minutes.
+
+const CAPTAIN_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
+  threshold: 5,
+  cooldownMs: 120_000, // 2 minutes
+};
+
 // ---- State ----
 
 let tickState: TickState = {
@@ -70,6 +88,8 @@ let backoffState: BackoffState = {
   multiplier: 1,
   rateLimitedUntil: 0,
 };
+
+let captainCircuitBreaker: CircuitBreakerState = createCircuitBreaker();
 
 let tickTimeout: ReturnType<typeof setTimeout> | null = null;
 let tickRunning = false;
@@ -145,6 +165,14 @@ export function resetBackoff(): void {
 
 export function getBackoffState(): BackoffState {
   return { ...backoffState };
+}
+
+export function getCaptainCircuitBreakerState(): CircuitBreakerState {
+  return { ...captainCircuitBreaker };
+}
+
+export function resetCaptainCircuitBreaker(): void {
+  captainCircuitBreaker = createCircuitBreaker();
 }
 
 export function sleepTicks(count: number): SleepInfo {
@@ -270,6 +298,7 @@ export function _resetTickState(): void {
     multiplier: 1,
     rateLimitedUntil: 0,
   };
+  captainCircuitBreaker = createCircuitBreaker();
   tickStartTime = null;
 }
 
@@ -304,6 +333,18 @@ function tick(): void {
     log.warn('Captain tick skipped — rate limited', {
       rateLimitedUntil: new Date(backoffState.rateLimitedUntil).toISOString(),
       remainingMs: backoffState.rateLimitedUntil - Date.now(),
+    });
+    return;
+  }
+
+  // Guard: circuit breaker (non-rate-limit failures)
+  const { open, nextState } = cbIsOpen(captainCircuitBreaker);
+  captainCircuitBreaker = nextState;
+  if (open) {
+    log.warn('Captain tick skipped — circuit breaker open', {
+      consecutiveFailures: captainCircuitBreaker.consecutiveFailures,
+      circuitOpenUntil: new Date(captainCircuitBreaker.circuitOpenUntil).toISOString(),
+      remainingMs: captainCircuitBreaker.circuitOpenUntil - Date.now(),
     });
     return;
   }
@@ -357,8 +398,19 @@ function tick(): void {
     } catch (err) {
       log.error('KAIROS check failed during tick', { error: String(err) });
     }
+
+    captainCircuitBreaker = cbRecordSuccess(captainCircuitBreaker);
   } catch (error) {
     log.error('Tick failed', { error: String(error), stack: (error as Error).stack });
+
+    captainCircuitBreaker = cbRecordFailure(captainCircuitBreaker, CAPTAIN_CIRCUIT_BREAKER_CONFIG);
+    const failures = captainCircuitBreaker.consecutiveFailures;
+    if (failures >= CAPTAIN_CIRCUIT_BREAKER_CONFIG.threshold) {
+      log.warn('Captain circuit breaker opened', {
+        failures,
+        cooldownMs: CAPTAIN_CIRCUIT_BREAKER_CONFIG.cooldownMs,
+      });
+    }
   }
 }
 

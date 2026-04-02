@@ -1,6 +1,14 @@
 import type { Server as SocketIOServer } from "socket.io";
 import { eventLog } from "../event-log.js";
 import type { RouteDependencies } from "../routes/types.js";
+import {
+  startWithholding,
+  bufferEvent,
+  flushWithheld,
+  discardWithheld,
+  clearWithholdingState,
+  getWithholdingState,
+} from "./withholding.js";
 
 // ---- Helper: Build callbacks that emit to Socket.IO room ----
 // CRITICAL: All emissions MUST use io.to(sessionId).emit() (room-based, not socket-based)
@@ -27,8 +35,14 @@ function flushDeltaBuffer(
 
   const payload = { session_id: sessionId, text: buf.text, message_index: buf.messageIndex };
   try {
-    const event = eventLog.append(sessionId, 'text_delta', payload);
-    io.to(sessionId).emit("text_delta", { ...payload, seq: event.seq });
+    const logEvent = eventLog.append(sessionId, 'text_delta', payload);
+    const fullPayload = { ...payload, seq: logEvent.seq };
+
+    if (getWithholdingState(sessionId).active) {
+      bufferEvent(sessionId, "text_delta", fullPayload);
+    } else {
+      io.to(sessionId).emit("text_delta", fullPayload);
+    }
   } catch (e) {
     log?.error("Failed to flush delta buffer", { sessionId, error: String(e) });
   }
@@ -48,6 +62,11 @@ export function clearDeltaBuffer(sessionId: string): void {
   deltaBuffers.delete(sessionId);
 }
 
+export function clearSessionState(sessionId: string): void {
+  clearDeltaBuffer(sessionId);
+  clearWithholdingState(sessionId);
+}
+
 export function buildSocketCallbacks(
   sessionId: string,
   projectPath: string | undefined,
@@ -58,6 +77,12 @@ export function buildSocketCallbacks(
 
   return {
     onText: (text: string, messageIndex: number) => {
+      // If withholding was active, new text signals recovery success — discard the buffer
+      // so the fresh (clean) response goes through to the frontend without the broken partial
+      if (getWithholdingState(sessionId).active) {
+        discardWithheld(sessionId);
+      }
+
       let buf = deltaBuffers.get(sessionId);
 
       if (buf && buf.text && buf.messageIndex !== messageIndex) {
@@ -83,7 +108,13 @@ export function buildSocketCallbacks(
     onToolEvent: (event: Record<string, unknown>) => {
       const payload = { ...event, session_id: sessionId };
       const logEvent = eventLog.append(sessionId, 'tool_event', payload);
-      io.to(sessionId).emit("tool_event", { ...payload, seq: logEvent.seq });
+      const fullPayload = { ...payload, seq: logEvent.seq };
+
+      if (getWithholdingState(sessionId).active) {
+        bufferEvent(sessionId, "tool_event", fullPayload);
+      } else {
+        io.to(sessionId).emit("tool_event", fullPayload);
+      }
       // Count lines of code
       if (event.type === "tool_complete" && (event.tool_name === "Write" || event.tool_name === "Edit")) {
         const params = event.parameters as Record<string, unknown> | undefined;
@@ -99,6 +130,9 @@ export function buildSocketCallbacks(
       }
     },
     onComplete: (result: Record<string, unknown>) => {
+      // Recovery succeeded — discard any withheld events (they are from a partial/failed attempt)
+      discardWithheld(sessionId);
+
       // Flush any pending text_delta buffer before emitting response_complete
       flushDeltaBuffer(sessionId, io, log);
       clearDeltaBuffer(sessionId);
@@ -163,6 +197,9 @@ export function buildSocketCallbacks(
       io.to(sessionId).emit("response_complete", { ...payload, seq: event.seq });
     },
     onError: (message: string) => {
+      // Recovery failed — flush any withheld events so the frontend sees the broken partial
+      flushWithheld(sessionId, io);
+
       // Flush any pending text_delta buffer before emitting error
       flushDeltaBuffer(sessionId, io, log);
       clearDeltaBuffer(sessionId);
@@ -189,6 +226,12 @@ export function buildSocketCallbacks(
       io.to(sessionId).emit("tool_progress", { ...payload, seq: event.seq });
     },
     onRateLimit: (data: { retryAfterMs: number; rateLimitedAt: string }) => {
+      // Rate limits are recoverable — start withholding subsequent text_delta/tool_event
+      startWithholding(sessionId, () => {
+        log?.warn?.('Withholding safety timeout reached, flushing buffered events', { sessionId });
+        flushWithheld(sessionId, io);
+      });
+
       const payload = { ...data, session_id: sessionId };
       const event = eventLog.append(sessionId, 'rate_limit', payload);
       io.to(sessionId).emit("rate_limit", { ...payload, seq: event.seq });

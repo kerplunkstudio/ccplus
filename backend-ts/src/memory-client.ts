@@ -6,6 +6,14 @@ import { existsSync } from 'fs';
 import { log } from './logger.js';
 import { getUserMcpServers } from './mcp-config.js';
 import { MEMORY_SEARCH_TIMEOUT_MS, MEMORY_INIT_TIMEOUT_MS } from './config.js';
+import {
+  createCircuitBreaker,
+  recordSuccess as cbRecordSuccess,
+  recordFailure as cbRecordFailure,
+  isOpen as cbIsOpen,
+  type CircuitBreakerState,
+  type CircuitBreakerConfig,
+} from './circuit-breaker.js';
 
 interface JsonRpcRequest {
   jsonrpc: '2.0';
@@ -47,33 +55,31 @@ let requestId = 0;
 let pendingRequests = new Map<number, PendingRequest>();
 let buffer = '';
 
-// Circuit breaker state
-let consecutiveFailures = 0;
-let circuitOpenUntil = 0;
-const CIRCUIT_BREAKER_THRESHOLD = 3;
-const CIRCUIT_BREAKER_COOLDOWN_MS = 60000;
+// Circuit breaker (uses shared utility from circuit-breaker.ts)
+const MEMORY_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
+  threshold: 3,
+  cooldownMs: 60_000,
+};
+
+let memoryCircuitBreaker: CircuitBreakerState = createCircuitBreaker();
 
 function isCircuitOpen(): boolean {
-  if (consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) return false;
-  if (Date.now() > circuitOpenUntil) {
-    // Allow one retry after cooldown
-    consecutiveFailures = 0;
-    return false;
-  }
-  return true;
+  const { open, nextState } = cbIsOpen(memoryCircuitBreaker);
+  memoryCircuitBreaker = nextState;
+  return open;
 }
 
 function recordSuccess(): void {
-  consecutiveFailures = 0;
+  memoryCircuitBreaker = cbRecordSuccess(memoryCircuitBreaker);
 }
 
 function recordFailure(): void {
-  consecutiveFailures++;
-  if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-    circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+  memoryCircuitBreaker = cbRecordFailure(memoryCircuitBreaker, MEMORY_CIRCUIT_BREAKER_CONFIG);
+  const failures = memoryCircuitBreaker.consecutiveFailures;
+  if (failures >= MEMORY_CIRCUIT_BREAKER_CONFIG.threshold) {
     log.warn('Memory circuit breaker opened', {
-      failures: consecutiveFailures,
-      cooldownMs: CIRCUIT_BREAKER_COOLDOWN_MS,
+      failures,
+      cooldownMs: MEMORY_CIRCUIT_BREAKER_CONFIG.cooldownMs,
     });
   }
 }
@@ -531,8 +537,7 @@ export function shutdownMemoryClient(): void {
   buffer = '';
 
   // Reset circuit breaker
-  consecutiveFailures = 0;
-  circuitOpenUntil = 0;
+  memoryCircuitBreaker = createCircuitBreaker();
 
   // Clear all pending requests
   for (const [id, pending] of pendingRequests.entries()) {
