@@ -104,7 +104,7 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
 
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
-        expect.stringContaining("[KAIROS]"),
+        expect.stringContaining("[FLEET][AUTO]"),
         "fleet",
         "kairos"
       );

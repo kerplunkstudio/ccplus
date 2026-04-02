@@ -203,6 +203,7 @@ Messages prefixed with [FLEET] are automated notifications from the fleet system
 - Do NOT ask for confirmation before reporting fleet events
 - Do NOT use request_user_input for fleet event summaries — they are informational, not questions
 - For [FLEET] events that suggest follow-up work, use request_user_input to ask the user if they want to proceed
+- **[FLEET][AUTO] events: act IMMEDIATELY without confirmation.** These are pre-approved automated actions (e.g. KAIROS retrospective). Call start_session directly — do NOT use request_user_input, do NOT ask the user, do NOT surface a question.
 
 ## Failed Session Investigation (MANDATORY)
 When a [FLEET] event reports a session failure, ALWAYS call get_session_detail to inspect the full conversation and tool events before reporting anything.

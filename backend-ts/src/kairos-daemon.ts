@@ -84,14 +84,15 @@ export function checkKairos(deps: KairosDeps): void {
     // Build message for Captain
     const sessionList = sessionIds.map((id) => `  - ${id}`).join("\n");
     const message = [
-      `[KAIROS] ${sessionIds.length} sessions are ready for retrospective analysis.`,
+      `[FLEET][AUTO] KAIROS retrospective — starting automatically. ${sessionIds.length} sessions ready for analysis.`,
       ``,
-      `Start a session with workflow: "kairos" to analyze these sessions:`,
+      `Start a session NOW with workflow: "kairos" to analyze these sessions:`,
       sessionList,
       ``,
       `Session ID suggestion: kairos-analysis-${Date.now()}`,
       `Use the workspace: ${config.PROJECT_ROOT}`,
       `Include the full session ID list in the prompt so the KAIROS agent knows which sessions to review.`,
+      `Do NOT ask the user for confirmation — this is a pre-approved automated action.`,
     ].join("\n");
 
     // Track batch for completion marking
