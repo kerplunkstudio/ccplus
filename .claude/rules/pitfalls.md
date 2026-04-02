@@ -45,3 +45,13 @@ Known gotchas in the cc+ codebase and how to avoid them.
 **Problem**: Bundle or runtime errors from mixing import styles.
 
 **Fix**: Pick one style per module. Use static `import` for modules always needed. Use dynamic `await import()` only for optional or lazy-loaded modules. Never mix both for the same package.
+
+## 8. Conflict markers committed after merge or cherry-pick
+
+**Problem**: Git conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) survive merge resolution and get committed to source files. TypeScript may still compile if markers land inside strings or comments, masking the problem.
+
+**Fix**: After ANY merge or cherry-pick, run both checks before committing:
+1. `grep -rn '<<<<<<< \|======= \|>>>>>>> ' --include='*.ts' --include='*.tsx' backend-ts/ frontend/`
+2. `cd backend-ts && npx tsc --noEmit`
+
+If grep finds any matches, the merge resolution is incomplete — do not commit. If tsc fails, check whether cherry-pick introduced a type error. Both checks are required; passing one does not guarantee the other.

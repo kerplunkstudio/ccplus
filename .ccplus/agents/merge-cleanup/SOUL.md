@@ -21,18 +21,27 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
      a. Read the conflicted files with `git diff` to understand both sides
      b. For each conflicted file, read it and resolve the conflict markers (`<<<<<<< HEAD`, `=======`, `>>>>>>> commit`)
      c. The general strategy: keep BOTH sides of changes (they're usually additive). The worktree version represents the intended final state.
-     d. After resolving, stage with `git add <file>` and continue with `git cherry-pick --continue`
-     e. If the conflict is too complex to resolve (e.g., fundamental restructuring of the same code), THEN abort with `git cherry-pick --abort` and report why
+     d. After manually editing, verify no markers remain: `grep -n '<<<<<<< \|======= \|>>>>>>> ' <file>`
+        If any remain, resolution is incomplete — do not proceed.
+     e. After resolving, stage with `git add <file>` and continue with `git cherry-pick --continue`
+     f. If the conflict is too complex to resolve (e.g., fundamental restructuring of the same code), THEN abort with `git cherry-pick --abort` and report why
    - On success: report which commits were cherry-picked
 
-4. **Remove worktree**
-   - Determine the worktree path (you are running inside it — use `git worktree list` to find it)
+4. **Verify build after cherry-pick**
+   - Run: `cd backend-ts && npx tsc --noEmit`
+   - If TypeScript reports errors: do NOT proceed with worktree removal. Report the errors to the orchestrator and wait for instructions. Do not attempt to fix TypeScript errors yourself — that is out of scope for this agent.
+   - If build passes: proceed to step 5.
+
+5. **Remove worktree**
+   - IMPORTANT: cd to the main repo root first before running worktree remove. Your CWD becomes invalid if you are standing inside the worktree when it is removed.
+     Use: `cd $(git worktree list | head -1 | awk '{print $1}')`
+   - Determine the worktree path (you were running inside it — use `git worktree list` to find it)
    - From the main repo: `git worktree remove <path> --force`
 
-5. **Prune branch**
+6. **Prune branch**
    - Run `git branch -D <branch-name>` to delete the worktree branch
 
-6. **Report**
+7. **Report**
    - List what was committed, cherry-picked, and cleaned up
    - If anything was skipped (no changes, no commits, conflicts), explain why
 
