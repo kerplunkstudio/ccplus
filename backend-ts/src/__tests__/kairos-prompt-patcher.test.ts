@@ -181,7 +181,15 @@ phases:
     }
 
     it('accepts valid addition change', () => {
-      const result = validatePromptChange(createBaseChange());
+      const change = createBaseChange();
+      const modifiable = getModifiablePromptFiles();
+      console.log('DEBUG: testAgentFile =', change.targetFile);
+      console.log('DEBUG: modifiable files =', JSON.stringify(modifiable));
+      console.log('DEBUG: file exists =', fs.existsSync(change.targetFile));
+      const result = validatePromptChange(change);
+      if (!result.valid) {
+        console.log('DEBUG: validation reason =', result.reason);
+      }
       expect(result.valid).toBe(true);
     });
 
