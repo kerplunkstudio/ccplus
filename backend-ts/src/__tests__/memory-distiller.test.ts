@@ -10,6 +10,7 @@ vi.mock("../database.js", () => ({
 
 vi.mock("../memory-client.js", () => ({
   storeMemory: vi.fn(),
+  searchMemories: vi.fn().mockResolvedValue(''),
 }));
 
 vi.mock("../config.js", () => ({

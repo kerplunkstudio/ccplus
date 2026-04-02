@@ -471,6 +471,70 @@ export async function storeMemory(
 }
 
 /**
+ * List all memories, optionally filtered by tags
+ * Returns raw text from MCP response
+ */
+export async function listMemories(tags?: string, limit?: number): Promise<string> {
+  const startMs = performance.now();
+
+  if (isCircuitOpen()) {
+    log.debug('Memory circuit breaker is open, skipping list');
+    return '';
+  }
+
+  if (!available && !memoryConfig) {
+    memoryConfig = loadMemoryConfig();
+    if (!memoryConfig) {
+      return '';
+    }
+  }
+
+  try {
+    if (!initialized) {
+      const success = await initialize();
+      if (!success) {
+        return '';
+      }
+    }
+
+    const args: Record<string, unknown> = {};
+    if (tags) {
+      args.tags = tags;
+    }
+    if (limit !== undefined) {
+      args.limit = limit;
+    }
+
+    const response = await sendRequest('tools/call', {
+      name: 'memory_list',
+      arguments: args,
+    });
+
+    let text = '';
+    if (typeof response === 'object' && response !== null && 'content' in response) {
+      const content = (response as { content: unknown[] }).content;
+      if (Array.isArray(content) && content.length > 0) {
+        const firstItem = content[0];
+        if (typeof firstItem === 'object' && firstItem !== null && 'text' in firstItem) {
+          text = (firstItem as { text: string }).text;
+        }
+      }
+    }
+
+    const durationMs = Math.round(performance.now() - startMs);
+    log.debug('Memory list', { durationMs, tags, limit, success: true });
+
+    recordSuccess();
+    return text;
+  } catch (error) {
+    const durationMs = Math.round(performance.now() - startMs);
+    log.error('Memory list failed', { error: String(error), durationMs, success: false });
+    recordFailure();
+    return '';
+  }
+}
+
+/**
  * Delete a memory by its hash
  */
 export async function deleteMemory(hash: string): Promise<boolean> {

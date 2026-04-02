@@ -37,6 +37,7 @@ import { createDiffRoutes } from "./routes/diff.js";
 import { createAgentRoutes } from "./routes/agents.js";
 import workflowsRouter from "./routes/workflows.js";
 import { createMemoryRoutes } from "./routes/memory.js";
+import { runMemoryGC } from "./memory-gc.js";
 import kairosRouter from "./routes/kairos.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
@@ -402,6 +403,16 @@ httpServer.listen(config.PORT, config.HOST, () => {
 
   log.info("Server ready", { url: `http://${config.HOST}:${config.PORT}` });
   scheduler.start();
+
+  // Schedule memory GC: first run after 5 minutes, then every 24 hours
+  const MEMORY_GC_STARTUP_DELAY_MS = 5 * 60 * 1000;
+  const MEMORY_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  setTimeout(() => {
+    runMemoryGC().catch((err) => log.error('Memory GC startup run failed', { error: String(err) }));
+    setInterval(() => {
+      runMemoryGC().catch((err) => log.error('Memory GC interval run failed', { error: String(err) }));
+    }, MEMORY_GC_INTERVAL_MS);
+  }, MEMORY_GC_STARTUP_DELAY_MS);
 
   // Start KAIROS daemon
   const kairosLogAdapter = {

@@ -44,6 +44,7 @@ vi.mock('../config.js', async (importOriginal) => {
 const {
   searchMemories,
   storeMemory,
+  listMemories,
   isMemoryAvailable,
   shutdownMemoryClient,
 } = await import('../memory-client.js');
@@ -432,6 +433,124 @@ describe('memory-client', () => {
 
       const result = await storeMemory('Test content', 'tag1');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('listMemories', () => {
+    it('returns raw text from MCP memory_list response', async () => {
+      const responseText = 'Hash: abc123\nTags: type:task-summary\nCreated: 2024-01-01T00:00:00Z\n---\nHash: def456\nTags: type:files-modified\nCreated: 2024-02-01T00:00:00Z';
+
+      const listPromise = listMemories();
+      await new Promise((r) => setImmediate(r));
+
+      const proc = currentMockProcess;
+
+      // Initialize
+      const initId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({ jsonrpc: '2.0', id: initId, result: { protocolVersion: '2024-11-05' } }) + '\n'
+        )
+      );
+
+      await new Promise((r) => setImmediate(r));
+
+      // List response
+      const opId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: opId,
+            result: { content: [{ type: 'text', text: responseText }], isError: false },
+          }) + '\n'
+        )
+      );
+
+      const result = await listPromise;
+      expect(result).toBe(responseText);
+
+      // Verify correct MCP tool name was used
+      const calls = proc.stdin.write.mock.calls.map((c: any) => c[0]);
+      const listCall = calls.find((c: string) => c.includes('"name":"memory_list"'));
+      expect(listCall).toBeDefined();
+    });
+
+    it('passes tags and limit arguments when provided', async () => {
+      const listPromise = listMemories('type:task-summary', 10);
+      await new Promise((r) => setImmediate(r));
+
+      const proc = currentMockProcess;
+
+      const initId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({ jsonrpc: '2.0', id: initId, result: { protocolVersion: '2024-11-05' } }) + '\n'
+        )
+      );
+
+      await new Promise((r) => setImmediate(r));
+
+      const opId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: opId,
+            result: { content: [{ type: 'text', text: 'results' }] },
+          }) + '\n'
+        )
+      );
+
+      await listPromise;
+
+      const calls = proc.stdin.write.mock.calls.map((c: any) => c[0]);
+      const listCall = calls.find((c: string) => c.includes('"name":"memory_list"'));
+      expect(listCall).toBeDefined();
+      const parsed = JSON.parse(listCall!.trim());
+      expect(parsed.params.arguments.tags).toBe('type:task-summary');
+      expect(parsed.params.arguments.limit).toBe(10);
+    });
+
+    it('returns empty string when not configured', async () => {
+      shutdownMemoryClient();
+      mockGetUserMcpServers.mockReturnValue([]);
+
+      const result = await listMemories();
+      expect(result).toBe('');
+    });
+
+    it('returns empty string on MCP error', async () => {
+      const listPromise = listMemories();
+      await new Promise((r) => setImmediate(r));
+
+      const proc = currentMockProcess;
+
+      const initId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({ jsonrpc: '2.0', id: initId, result: { protocolVersion: '2024-11-05' } }) + '\n'
+        )
+      );
+
+      await new Promise((r) => setImmediate(r));
+
+      const opId = getLastRequestId(proc);
+      proc.stdout.emit(
+        'data',
+        Buffer.from(
+          JSON.stringify({ jsonrpc: '2.0', id: opId, error: { code: -32001, message: 'List failed' } }) + '\n'
+        )
+      );
+
+      const result = await listPromise;
+      expect(result).toBe('');
+      expect(mockLog.error).toHaveBeenCalledWith('Memory list failed', expect.any(Object));
     });
   });
 

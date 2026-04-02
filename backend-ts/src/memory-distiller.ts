@@ -2,7 +2,7 @@ import path from "path";
 import * as database from "./database.js";
 import * as config from "./config.js";
 import { log } from "./logger.js";
-import { storeMemory } from './memory-client.js';
+import { storeMemory, searchMemories } from './memory-client.js';
 
 // Debounce tracking: sessionId -> lastDistilledAt timestamp
 const distillationTimestamps = new Map<string, number>();
@@ -135,6 +135,38 @@ function truncate(text: string, maxLength: number): string {
 }
 
 /**
+ * Store a memory only if no highly-similar memory already exists.
+ * Uses session tag + type tag for exact-match dedup (same session+type = skip).
+ */
+async function dedupStore(
+  content: string,
+  tags: string,
+  metadata?: Record<string, string>
+): Promise<string | null> {
+  const tagParts = tags.split(',');
+  const sessionTag = tagParts.find(t => t.trim().startsWith('session:'));
+  const typeTag = tagParts.find(t => t.trim().startsWith('type:'));
+
+  if (sessionTag && typeTag) {
+    const existing = await searchMemories(
+      sessionTag.trim(),
+      3,
+      `${sessionTag.trim()},${typeTag.trim()}`
+    );
+
+    if (existing && existing.trim().length > 0) {
+      log.debug('Skipping duplicate memory', {
+        sessionTag: sessionTag.trim(),
+        typeTag: typeTag.trim(),
+      });
+      return null;
+    }
+  }
+
+  return storeMemory(content, tags, metadata);
+}
+
+/**
  * Extract structured knowledge from session and store via memory client
  */
 export async function distillSession(
@@ -151,6 +183,9 @@ export async function distillSession(
       log.debug("Skipping distillation (debounce)", { sessionId });
       return;
     }
+
+    // Update debounce tracking immediately so concurrent calls don't both pass the guard
+    distillationTimestamps.set(sessionId, Date.now());
 
     // Gather session data
     const conversations = database.getConversationHistory(sessionId, 1000);
@@ -226,7 +261,7 @@ export async function distillSession(
     ].join('\n');
 
     storePromises.push(
-      storeMemory(
+      dedupStore(
         taskSummary,
         [...baseTags, "type:task-summary"].join(","),
         baseMetadata
@@ -242,7 +277,7 @@ export async function distillSession(
       ].join("\n");
 
       storePromises.push(
-        storeMemory(
+        dedupStore(
           filesMemory,
           [...baseTags, "type:files-modified"].join(","),
           baseMetadata
@@ -260,7 +295,7 @@ export async function distillSession(
       ].join("\n");
 
       storePromises.push(
-        storeMemory(
+        dedupStore(
           errorsMemory,
           [...baseTags, "type:errors-encountered"].join(","),
           baseMetadata
@@ -279,7 +314,7 @@ export async function distillSession(
       ].join("\n");
 
       storePromises.push(
-        storeMemory(
+        dedupStore(
           agentsMemory,
           [...baseTags, "type:agents-used"].join(","),
           baseMetadata
@@ -306,16 +341,13 @@ export async function distillSession(
       ].join('\n');
 
       storePromises.push(
-        storeMemory(
+        dedupStore(
           lessonsMemory,
           [...baseTags, 'type:decisions-lessons'].join(','),
           baseMetadata
         )
       );
     }
-
-    // Update debounce tracking BEFORE store (so we don't retry immediately on failure)
-    distillationTimestamps.set(sessionId, Date.now());
 
     // Store all memories concurrently
     const results = await Promise.allSettled(storePromises);
