@@ -32,6 +32,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 vi.mock('../captain-prompt.js', () => ({
   buildCaptainSystemPrompt: vi.fn().mockResolvedValue('mocked system prompt'),
   isIdleMessage: vi.fn().mockReturnValue(false),
+  prewarmPromptCache: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock state-persistence to avoid DB access

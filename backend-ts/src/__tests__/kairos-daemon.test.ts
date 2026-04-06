@@ -137,11 +137,18 @@ describe("kairos-daemon", () => {
     });
 
     it("marks sessions analyzed at trigger time (before sending Captain message)", () => {
+      vi.useFakeTimers();
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
       const sessionIds = ["s1", "s2", "s3", "s4", "s5"];
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(sessionIds);
 
+      // First tick — start idle timer
+      checkKairos(deps);
+      expect(kairosDb.markSessionsAnalyzed).not.toHaveBeenCalled();
+
+      // Advance past 10 minutes — trigger fires
+      vi.advanceTimersByTime(11 * 60 * 1000);
       checkKairos(deps);
 
       expect(kairosDb.markSessionsAnalyzed).toHaveBeenCalledWith(sessionIds);

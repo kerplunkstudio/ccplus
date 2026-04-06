@@ -596,7 +596,8 @@ describe("Server HTTP Routes", () => {
       });
 
       // Should fail because destination doesn't exist, but validates URL format
-      expect([400, 500]).toContain(response.status);
+      // 409 is also valid if the derived repo name already exists in the workspace
+      expect([400, 409, 500]).toContain(response.status);
     }, 10000); // 10 second timeout for git operations
   });
 
@@ -731,7 +732,8 @@ describe("Server HTTP Routes", () => {
       });
 
       // Should fail or succeed depending on default destination handling
-      expect([200, 400, 500]).toContain(response.status);
+      // 409 is also valid if the derived repo name already exists in the workspace
+      expect([200, 400, 409, 500]).toContain(response.status);
     }, 10000); // 10 second timeout for git operations
   });
 
