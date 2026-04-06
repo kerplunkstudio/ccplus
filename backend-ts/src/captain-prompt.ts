@@ -369,69 +369,106 @@ This catches "merged but broken" before the user discovers it manually.
  * Build the Captain system prompt with dynamic workflow list, agent catalog, and phase enforcement.
  */
 export async function buildCaptainSystemPrompt(workspace: string): Promise<string> {
+  const buildStart = performance.now();
+
   // Check cache first
   const now = Date.now();
   if (promptCache && promptCache.workspace === workspace && now - promptCache.builtAt < PROMPT_CACHE_TTL_MS) {
+    log.info('Captain prompt: cache hit', { age_ms: now - promptCache.builtAt });
     return promptCache.prompt;
   }
 
-  // 1. Build workflow section (existing logic)
-  const workflowNames = listWorkflows(workspace);
-  const workflowDescriptions = workflowNames.map(name => {
-    const wf = getWorkflowByName(name, workspace);
-    if (!wf) return null;
-    const description = wf.description || `${name} workflow`;
-    const phases = wf.phases && wf.phases.length > 0
-      ? wf.phases.map(p => p.name).join(' → ')
-      : 'no phases';
-    return `- **${name}** (${description}): ${phases}`;
-  }).filter((s): s is string => s !== null);
+  // Run all independent operations in parallel
+  const [workflowSection, agentSection, enforcementSection, coreMemorySection] = await Promise.all([
+    // 1. Build workflow section
+    (async () => {
+      const t0 = performance.now();
+      const workflowNames = listWorkflows(workspace);
+      const workflowDescriptions = workflowNames.map(name => {
+        const wf = getWorkflowByName(name, workspace);
+        if (!wf) return null;
+        const description = wf.description || `${name} workflow`;
+        const phases = wf.phases && wf.phases.length > 0
+          ? wf.phases.map(p => p.name).join(' → ')
+          : 'no phases';
+        return `- **${name}** (${description}): ${phases}`;
+      }).filter((s): s is string => s !== null);
+      const section = workflowDescriptions.length > 0
+        ? `\n## Available Workflows\n${workflowDescriptions.join('\n')}\n`
+        : '';
+      log.info('Captain prompt: workflows loaded', { duration_ms: Math.round(performance.now() - t0), count: workflowNames.length });
+      return section;
+    })(),
 
-  const workflowSection = workflowDescriptions.length > 0
-    ? `\n## Available Workflows\n${workflowDescriptions.join('\n')}\n`
-    : '';
-
-  // 2. Build agent catalog section (using Captain-specific formatting)
-  let agentSection = '';
-  try {
-    const agents = await loadAllAgents(workspace);
-    agentSection = formatAgentCatalogForCaptain(agents);
-    if (agentSection) {
-      agentSection = '\n' + agentSection + '\n';
-    }
-  } catch (error) {
-    log.warn('Failed to load agent catalog for captain prompt', { error: String(error) });
-  }
-
-  // 3. Build phase enforcement section (pick the 'feature' workflow as reference)
-  let enforcementSection = '';
-  try {
-    const featureWf = getWorkflowByName('feature', workspace);
-    if (featureWf) {
-      enforcementSection = formatPhaseEnforcement(featureWf);
-      if (enforcementSection) {
-        enforcementSection = '\n' + enforcementSection + '\n\nNote: Phase enforcement applies to sessions, not to Captain. When a session is in a specific phase, these tools are blocked/warned within that session.\n';
+    // 2. Build agent catalog section
+    (async () => {
+      const t0 = performance.now();
+      try {
+        const agents = await loadAllAgents(workspace);
+        let section = formatAgentCatalogForCaptain(agents);
+        if (section) {
+          section = '\n' + section + '\n';
+        }
+        log.info('Captain prompt: agents loaded', { duration_ms: Math.round(performance.now() - t0), count: agents.length });
+        return section;
+      } catch (error) {
+        log.warn('Failed to load agent catalog for captain prompt', { error: String(error), duration_ms: Math.round(performance.now() - t0) });
+        return '';
       }
-    }
-  } catch (error) {
-    log.warn('Failed to load phase enforcement for captain prompt', { error: String(error) });
-  }
+    })(),
 
-  // 4. Inject core memory block
-  let coreMemorySection = '';
-  try {
-    const coreMemory = renderCoreMemory();
-    if (coreMemory) {
-      coreMemorySection = '\n\n' + coreMemory;
-    }
-  } catch (error) {
-    log.warn('Failed to render core memory for captain prompt', { error: String(error) });
-  }
+    // 3. Build phase enforcement section
+    (async () => {
+      const t0 = performance.now();
+      try {
+        const featureWf = getWorkflowByName('feature', workspace);
+        let section = '';
+        if (featureWf) {
+          section = formatPhaseEnforcement(featureWf);
+          if (section) {
+            section = '\n' + section + '\n\nNote: Phase enforcement applies to sessions, not to Captain. When a session is in a specific phase, these tools are blocked/warned within that session.\n';
+          }
+        }
+        log.info('Captain prompt: phase enforcement loaded', { duration_ms: Math.round(performance.now() - t0) });
+        return section;
+      } catch (error) {
+        log.warn('Failed to load phase enforcement for captain prompt', { error: String(error), duration_ms: Math.round(performance.now() - t0) });
+        return '';
+      }
+    })(),
+
+    // 4. Inject core memory block
+    (async () => {
+      const t0 = performance.now();
+      try {
+        const coreMemory = renderCoreMemory();
+        const section = coreMemory ? '\n\n' + coreMemory : '';
+        log.info('Captain prompt: core memory loaded', { duration_ms: Math.round(performance.now() - t0) });
+        return section;
+      } catch (error) {
+        log.warn('Failed to render core memory for captain prompt', { error: String(error), duration_ms: Math.round(performance.now() - t0) });
+        return '';
+      }
+    })(),
+  ]);
 
   const result = CAPTAIN_SYSTEM_PROMPT_TEMPLATE + workflowSection + agentSection + enforcementSection + coreMemorySection;
 
   // Cache the result
   promptCache = { workspace, prompt: result, builtAt: now };
 
+  const totalMs = Math.round(performance.now() - buildStart);
+  log.info('Captain prompt: built', { duration_ms: totalMs, size_chars: result.length, size_tokens_approx: Math.round(result.length / 4) });
+
   return result;
+}
+
+/**
+ * Pre-warm the prompt cache so the first user message doesn't pay the build cost.
+ * Call this after captain boot completes.
+ */
+export async function prewarmPromptCache(workspace: string): Promise<void> {
+  const t0 = performance.now();
+  await buildCaptainSystemPrompt(workspace);
+  log.info('Captain prompt: cache pre-warmed', { duration_ms: Math.round(performance.now() - t0) });
 }

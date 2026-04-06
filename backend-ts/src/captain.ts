@@ -13,7 +13,7 @@ import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import { saveCaptainState as persistCaptainState, removeCaptainState } from './state-persistence.js';
-import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
+import { buildCaptainSystemPrompt, isIdleMessage, prewarmPromptCache } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
 import { resetBriefMode, shouldSuppressBriefOutput, notifyRateLimit, resetBackoff, notifySessionCompleted } from './captain-tick.js';
 import { incrementSessionStaleness } from './memory-promotion.js';
@@ -184,7 +184,9 @@ export async function startCaptainSession(
     log.info("Starting Captain session", { sessionId, workspace });
 
     // Start boot query
+    const bootStart = performance.now();
     const captainPrompt = await buildCaptainSystemPrompt(workspace);
+    log.info("Captain boot: prompt ready", { duration_ms: Math.round(performance.now() - bootStart) });
     const q = query({
       prompt: bootMessage,
       options: {
@@ -228,6 +230,13 @@ export async function startCaptainSession(
       log.error("Captain boot query error", { sessionId, error: String(error) });
     });
 
+    // Pre-warm prompt cache in background so first user message hits cache
+    prewarmPromptCache(workspace).catch((error) => {
+      log.warn("Captain: failed to pre-warm prompt cache", { error: String(error) });
+    });
+
+    log.info("Captain boot: total setup", { duration_ms: Math.round(performance.now() - bootStart) });
+
     return { sessionId };
   } catch (error) {
     captainState = {
@@ -262,9 +271,15 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
   const routeToCallbackId = captainState.lastQueryCallbackId;
   const isTickQuery = captainState.lastQueryIsTick;
   let messageIndex = 0;
+  const responseStart = performance.now();
+  let firstTokenLogged = false;
 
   try {
     for await (const message of q) {
+      if (!firstTokenLogged) {
+        log.info("Captain query: time to first message", { duration_ms: Math.round(performance.now() - responseStart), sessionId });
+        firstTokenLogged = true;
+      }
       if ((message as any).type === 'rate_limit_event') {
         const rateLimitMsg = message as any;
         const retryAfterMs = rateLimitMsg.retry_after_ms ?? 0;
@@ -408,7 +423,7 @@ async function processQueryResponse(q: Query, sessionId: string): Promise<void> 
           }
         }
 
-        log.info("Captain query completed", { sessionId, numTurns: result.num_turns });
+        log.info("Captain query completed", { sessionId, numTurns: result.num_turns, total_duration_ms: Math.round(performance.now() - responseStart) });
       }
     }
 
@@ -558,6 +573,7 @@ function processMessageQueue(): void {
  * Start a new Captain query with the given content, resuming the conversation.
  */
 async function startCaptainQuery(content: string, imageIds?: string[]): Promise<void> {
+  const queryStart = performance.now();
   if (!captainState.sessionId || !captainDeps) {
     return;
   }
@@ -574,7 +590,9 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
+  const promptStart = performance.now();
   const captainPrompt = await buildCaptainSystemPrompt(captainState.workspace ?? config.CAPTAIN_WORKSPACE);
+  log.info("Captain query: prompt ready", { duration_ms: Math.round(performance.now() - promptStart) });
 
   // Build prompt — plain string, or an AsyncIterable message stream when images are attached
   let promptArg: string | AsyncIterable<Record<string, unknown>> = content;
@@ -603,6 +621,7 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
     promptArg = messageStream();
   }
 
+  const sdkStart = performance.now();
   const q = query({
     prompt: promptArg as any,
     options: {
@@ -624,6 +643,7 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
       allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
     },
   });
+  log.info("Captain query: SDK query created", { duration_ms: Math.round(performance.now() - sdkStart) });
 
   const sessionId = captainState.sessionId;
 
@@ -632,6 +652,7 @@ async function startCaptainQuery(content: string, imageIds?: string[]): Promise<
     activeQuery: q,
   };
 
+  log.info("Captain query: total setup", { duration_ms: Math.round(performance.now() - queryStart) });
   await processQueryResponse(q, sessionId);
 }
 
