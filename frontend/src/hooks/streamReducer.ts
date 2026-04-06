@@ -1,9 +1,10 @@
-import { Message, ToolEvent } from '../types';
+import { Message, ToolEvent, SessionStatus } from '../types';
 
 // State that the reducer manages
 export interface StreamState {
   messages: Message[];
-  streaming: boolean;
+  status: SessionStatus;
+  streaming: boolean; // Derived: status === 'streaming' || status === 'submitted' (kept for backward compat)
   backgroundProcessing: boolean;
   thinking: string;
   isThinking: boolean;
@@ -16,6 +17,7 @@ export interface StreamState {
 
 export const initialStreamState: StreamState = {
   messages: [],
+  status: 'idle',
   streaming: false,
   backgroundProcessing: false,
   thinking: '',
@@ -57,7 +59,9 @@ export type StreamAction =
   | { type: 'CLEAR' }
   | { type: 'SET_STREAMING'; value: boolean }
   | { type: 'SET_BACKGROUND_PROCESSING'; value: boolean }
-  | { type: 'STREAM_CONTENT_SYNC'; content: string; seq: number };
+  | { type: 'STREAM_CONTENT_SYNC'; content: string; seq: number }
+  | { type: 'SAFETY_TIMEOUT' }
+  | { type: 'DISCONNECT_RESET' };
 
 function generateMessageId(): string {
   return `stream_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -144,8 +148,10 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: newMessages,
+        status: 'streaming',
         streaming: true,
         backgroundProcessing: false,
+        isThinking: false, // Fix A5: text arriving means thinking is over
         lastSeq: action.seq,
         activeStreamId: newActiveStreamId,
         streamingContent: newStreamingContent,
@@ -176,6 +182,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
         return {
           ...state,
           messages: newMessages,
+          status: 'idle',
           streaming: false,
           backgroundProcessing: false,
           thinking: '',
@@ -187,11 +194,13 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
           intermediateCompletion: false,
         };
       } else {
-        // Intermediate completion
+        // Intermediate completion - Fix A4: also clear isThinking
         return {
           ...state,
           messages: newMessages,
+          status: 'idle',
           streaming: false,
+          isThinking: false,
           lastSeq: action.seq,
           activeStreamId: null,
           streamingContent: '',
@@ -208,6 +217,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
 
       return {
         ...state,
+        status: 'streaming',
         streaming: true,
         lastSeq: action.seq,
       };
@@ -230,6 +240,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: [...state.messages, errorMessage],
+        status: 'error',
         streaming: false,
         backgroundProcessing: false,
         isThinking: false,
@@ -300,7 +311,8 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: [...state.messages, action.message],
-        streaming: true,
+        status: 'submitted',
+        streaming: true, // submitted counts as streaming for backward compat
         isThinking: false,
         activeStreamId: null,
         streamingContent: '',
@@ -321,6 +333,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: newMessages,
+        status: 'idle',
         streaming: false,
         backgroundProcessing: false,
         isThinking: false,
@@ -348,6 +361,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
             return {
               ...state,
               messages: messagesWithStreaming,
+              status: 'streaming',
               streaming: true,
               activeStreamId: lastMessage.id,
               streamingContent: action.streamingContent || '',
@@ -366,6 +380,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
             return {
               ...state,
               messages: [...action.messages, newMessage],
+              status: 'streaming',
               streaming: true,
               activeStreamId: newMessage.id,
               streamingContent: action.streamingContent || '',
@@ -382,6 +397,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
             return {
               ...state,
               messages: messagesWithStreaming,
+              status: 'streaming',
               streaming: true,
               activeStreamId: lastMessage.id,
               streamingContent: '',
@@ -392,6 +408,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
             return {
               ...state,
               messages: action.messages,
+              status: 'streaming',
               streaming: true,
               streamingContent: '',
               lastSeq: 0,
@@ -414,6 +431,7 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
     case 'SET_STREAMING': {
       return {
         ...state,
+        status: action.value ? 'streaming' : 'idle',
         streaming: action.value,
       };
     }
@@ -473,10 +491,48 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
       return {
         ...state,
         messages: newMessages,
+        status: 'streaming',
         streaming: true,
         activeStreamId: newActiveStreamId,
         streamingContent: newStreamingContent,
         lastSeq: action.seq > state.lastSeq ? action.seq : state.lastSeq,
+      };
+    }
+
+    case 'SAFETY_TIMEOUT': {
+      // Safety timeout fired — force back to idle to unblock the UI
+      let newMessages = state.messages;
+      if (state.activeStreamId) {
+        newMessages = finalizeMessage(newMessages, state.activeStreamId, state.streamingContent);
+      }
+      return {
+        ...state,
+        messages: newMessages,
+        status: 'idle',
+        streaming: false,
+        backgroundProcessing: false,
+        isThinking: false,
+        activeStreamId: null,
+        streamingContent: '',
+        intermediateCompletion: false,
+      };
+    }
+
+    case 'DISCONNECT_RESET': {
+      // Socket disconnected — reset transient streaming state
+      let newMessages = state.messages;
+      if (state.activeStreamId) {
+        newMessages = finalizeMessage(newMessages, state.activeStreamId, state.streamingContent);
+      }
+      return {
+        ...state,
+        messages: newMessages,
+        status: 'idle',
+        streaming: false,
+        isThinking: false,
+        activeStreamId: null,
+        streamingContent: '',
+        intermediateCompletion: false,
       };
     }
 

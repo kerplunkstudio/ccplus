@@ -131,15 +131,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     previousSessionIdRef.current = sessionId;
   }, [sessionId, input, pendingInput]);
 
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 200);
-      textareaRef.current.style.height = `${newHeight}px`;
-    }
-  }, [input]);
-
   // Keep textarea always focused and ready for input
   useEffect(() => {
     const isTerminalActive = () => {
@@ -216,9 +207,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setUploadedImages([]);
       historyIndexRef.current = -1;
       savedDraftRef.current = '';
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
       if (sessionId) {
         inputDraftsRef.current = {
           ...inputDraftsRef.current,
@@ -249,9 +237,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setShowAutocomplete(false);
     historyIndexRef.current = -1; // Reset history navigation
     savedDraftRef.current = ''; // Clear saved draft
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
     // Clear draft for current session
     if (sessionId) {
       inputDraftsRef.current = {

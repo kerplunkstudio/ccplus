@@ -1,8 +1,10 @@
-import { useState, useEffect, useReducer, MutableRefObject } from 'react';
+import { useState, useEffect, useReducer, useRef, MutableRefObject } from 'react';
 import { Socket } from 'socket.io-client';
 import { Message, UsageStats, ToolEvent, ActivityNode } from '../types';
 import { streamReducer, initialStreamState } from './streamReducer';
 import { SOCKET_URL } from '../config';
+
+const SAFETY_TIMEOUT_MS = 90_000;
 
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-sonnet-4-6': 1_000_000,
@@ -59,6 +61,9 @@ export function useStreamingMessages({
   // Use reducer for stream state
   const [state, dispatch] = useReducer(streamReducer, initialStreamState);
 
+  // Safety timeout ref — reset on every incoming event, fires if nothing arrives for 90s
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Independent state (not in reducer)
   const [usageStats, setUsageStats] = useState<UsageStats>({
     totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0,
@@ -71,6 +76,33 @@ export function useStreamingMessages({
   useEffect(() => {
     fetchUserStats().then(setUsageStats);
   }, []);
+
+  // Safety timeout: force back to idle if no events arrive within 90s while active
+  useEffect(() => {
+    const isActive = state.status === 'submitted' || state.status === 'streaming';
+    if (!isActive) {
+      if (safetyTimerRef.current) {
+        clearTimeout(safetyTimerRef.current);
+        safetyTimerRef.current = null;
+      }
+      return;
+    }
+    // (Re)start the timer; it resets whenever status changes (i.e., on every event)
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+    }
+    safetyTimerRef.current = setTimeout(() => {
+      dispatch({ type: 'SAFETY_TIMEOUT' });
+      safetyTimerRef.current = null;
+    }, SAFETY_TIMEOUT_MS);
+
+    return () => {
+      if (safetyTimerRef.current) {
+        clearTimeout(safetyTimerRef.current);
+        safetyTimerRef.current = null;
+      }
+    };
+  }, [state.status]);
 
   // Safety cleanup: Clear backgroundProcessing if no agents are running
   useEffect(() => {
@@ -271,6 +303,7 @@ export function useStreamingMessages({
   return {
     // From reducer state
     messages: state.messages,
+    status: state.status,
     streaming: state.streaming,
     backgroundProcessing: state.backgroundProcessing,
     thinking: state.thinking,

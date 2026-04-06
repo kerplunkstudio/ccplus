@@ -1,8 +1,15 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatPanel } from './ChatPanel';
-import { Message, UsageStats } from '../types';
+import { Message, UsageStats, SessionStatus } from '../types';
 import { Socket } from 'socket.io-client';
+
+// JSDOM does not implement Element.scrollTo — mock it globally for this suite
+beforeAll(() => {
+  if (!Element.prototype.scrollTo) {
+    Element.prototype.scrollTo = jest.fn();
+  }
+});
 
 // Mock sub-components that make fetch calls or have complex deps
 jest.mock('./NewSessionDashboard', () => ({
@@ -319,5 +326,32 @@ describe('ChatPanel', () => {
     // Switch to session_50 (should still have draft "Draft 50")
     rerender(<ChatPanel {...defaultProps} sessionId="session_50" />);
     expect(textarea.value).toBe('Draft 50'); // Draft preserved
+  });
+
+  describe('C1: Optimistic message', () => {
+    it('calls onSendMessage with correct args when sending', () => {
+      render(<ChatPanel {...defaultProps} />);
+      const textarea = screen.getByPlaceholderText(/Send a message/) as HTMLTextAreaElement;
+      fireEvent.change(textarea, { target: { value: 'Hello optimistic' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+      expect(defaultProps.onSendMessage).toHaveBeenCalledWith(
+        'Hello optimistic', undefined, undefined, undefined, undefined
+      );
+    });
+  });
+
+  describe('C2: sessionStatus prop', () => {
+    it('accepts sessionStatus prop without error', () => {
+      const statuses: SessionStatus[] = ['idle', 'submitted', 'streaming', 'complete', 'error'];
+      statuses.forEach(status => {
+        const { unmount } = render(<ChatPanel {...defaultProps} sessionStatus={status} />);
+        unmount();
+      });
+    });
+
+    it('renders without crashing when sessionStatus is submitted', () => {
+      render(<ChatPanel {...defaultProps} sessionStatus="submitted" />);
+      expect(screen.getByRole('log', { name: 'Chat messages' })).toBeInTheDocument();
+    });
   });
 });

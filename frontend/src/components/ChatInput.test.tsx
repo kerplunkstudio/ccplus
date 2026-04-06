@@ -388,6 +388,30 @@ describe('ChatInput', () => {
     expect(screen.getByLabelText(/Attach image/i)).toBeInTheDocument();
   });
 
+  it('does not manipulate textarea height via JS (relies on CSS field-sizing)', async () => {
+    renderWithToast(<ChatInput {...defaultProps} />);
+    const textarea = screen.getByPlaceholderText(/Send a message/i) as HTMLTextAreaElement;
+
+    // Spy on style.height setter — it must never be called
+    const heightSetter = jest.fn();
+    Object.defineProperty(textarea.style, 'height', {
+      set: heightSetter,
+      get: () => '',
+      configurable: true,
+    });
+
+    // Type multiline content
+    await userEvent.type(textarea, 'Line one{Shift>}{Enter}{/Shift}Line two');
+
+    expect(heightSetter).not.toHaveBeenCalled();
+  });
+
+  it('textarea has message-input class for CSS field-sizing to apply', () => {
+    renderWithToast(<ChatInput {...defaultProps} />);
+    const textarea = screen.getByPlaceholderText(/Send a message/i);
+    expect(textarea).toHaveClass('message-input');
+  });
+
   it('resets history index after sending message', async () => {
     const messages: Message[] = [
       { id: '1', content: 'Old message', role: 'user', timestamp: Date.now() },

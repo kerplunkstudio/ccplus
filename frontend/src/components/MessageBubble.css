@@ -4,6 +4,17 @@
   width: 100%;
   overflow-wrap: break-word;
   min-width: 0;
+  /* CSS containment: nothing inside affects layout outside, reduces paint scope during streaming */
+  contain: content;
+  /* Opt out of scroll anchoring so the browser doesn't try to anchor to mid-conversation nodes */
+  overflow-anchor: none;
+}
+
+/* Allow the browser to skip rendering off-screen messages (non-last, non-streaming) */
+.message-bubble:not(:last-child) {
+  content-visibility: auto;
+  /* Hint: typical message height estimate keeps scroll height stable */
+  contain-intrinsic-size: 0 80px;
 }
 
 /* Enhanced organic message entrance animations */
@@ -23,12 +34,10 @@
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.98);
-    filter: blur(0.5px);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
 
@@ -532,4 +541,33 @@
   color: var(--success);
   border-color: var(--success);
   opacity: 1;
+}
+
+/* C1: Pending (optimistic) user message — slightly dimmed until server ack */
+.message-bubble.pending {
+  opacity: 0.7;
+  transition: opacity 0.2s ease-out;
+}
+
+/* C3: Streaming cursor — blinking block cursor at end of streaming text */
+.streaming-cursor {
+  display: inline;
+  color: var(--accent);
+  animation: cursorBlink 1s step-end infinite;
+  font-size: 1em;
+  line-height: 1;
+  vertical-align: baseline;
+  margin-left: 1px;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-cursor {
+    animation: none !important;
+    opacity: 1;
+  }
 }

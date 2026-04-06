@@ -83,6 +83,7 @@ function AppContent() {
     socket,
     connected,
     messages,
+    sessionStatus,
     streaming,
     backgroundProcessing,
     currentTool,
@@ -761,6 +762,7 @@ function AppContent() {
                   <ChatPanel
                     socket={socket}
                     messages={messages}
+                    sessionStatus={sessionStatus}
                     connected={connected}
                     streaming={streaming}
                     backgroundProcessing={backgroundProcessing}

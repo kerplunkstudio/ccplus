@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useOptimistic } from 'react';
 import { Socket } from 'socket.io-client';
-import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, ImageAttachment } from '../types';
+import { Message, ToolEvent, UsageStats, SignalState, ActivityNode, TodoItem, ImageAttachment, SessionStatus } from '../types';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { SOCKET_URL } from '../config';
@@ -20,6 +20,7 @@ export interface ScheduledTask {
 interface ChatPanelProps {
   socket: Socket | null;
   messages: Message[];
+  sessionStatus?: SessionStatus;
   connected: boolean;
   streaming: boolean;
   backgroundProcessing?: boolean;
@@ -67,6 +68,7 @@ interface ChatPanelProps {
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   socket,
   messages,
+  sessionStatus = 'idle',
   connected,
   streaming,
   backgroundProcessing = false,
@@ -104,6 +106,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 }) => {
   const [pastSessions, setPastSessions] = useState<Array<{session_id: string; last_user_message: string | null; last_activity: string}>>([]);
 
+  // C1: Optimistic messages — show user message immediately before server ack
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (current: Message[], newMsg: Message) => [...current, newMsg]
+  );
+
   // Fetch past sessions when empty state is shown
   useEffect(() => {
     if (messages.length > 0 || !projectPath) {
@@ -119,11 +127,28 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       });
   }, [messages.length, projectPath]);
 
+  // C1: Wrap onSendMessage to also show message optimistically before server ack
+  const handleSendMessage = (content: string, workspace?: string, model?: string, imageIds?: string[], images?: ImageAttachment[]) => {
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    addOptimisticMessage({
+      id,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      pending: true,
+      images: images || [],
+    });
+    onSendMessage(content, workspace, model, imageIds, images);
+  };
+
   return (
     <>
       <div className="chat-panel">
         <MessageList
-          messages={messages}
+          messages={optimisticMessages}
+          sessionStatus={sessionStatus}
           streaming={streaming}
           isRestoringSession={isRestoringSession}
           projectPath={projectPath}
@@ -147,7 +172,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           connected={connected}
           streaming={streaming}
           backgroundProcessing={backgroundProcessing}
-          onSendMessage={onSendMessage}
+          onSendMessage={handleSendMessage}
           onCancel={onCancel}
           sessionId={sessionId}
           projectPath={projectPath}

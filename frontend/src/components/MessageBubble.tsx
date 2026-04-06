@@ -236,7 +236,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
   const bubbleClasses = [
     'message-bubble',
     message.role,
-    message.streaming && 'streaming'
+    message.streaming && 'streaming',
+    message.pending && 'pending'
   ].filter(Boolean).join(' ');
 
   return (
@@ -256,6 +257,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
             {renderedMarkdown}
             {streamingTail && (
               <span className="streaming-tail">{streamingTail}</span>
+            )}
+            {/* C3: Blinking cursor at end of streaming content */}
+            {message.streaming && (message.content || streamingTail) && (
+              <span className="streaming-cursor" aria-hidden="true">▌</span>
             )}
           </div>
         ) : (

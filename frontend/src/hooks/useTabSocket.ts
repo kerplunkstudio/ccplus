@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { ToolEvent, UsageStats } from '../types';
 import { useActivityTree } from './useActivityTree';
 import { useSocketConnection } from './useSocketConnection';
@@ -106,6 +106,21 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     clearToolTimerRef,
   });
 
+  // Fix A3: Reset streaming state on socket disconnect
+  const { streamDispatch } = streamingHook;
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleDisconnect = () => {
+      streamDispatch({ type: 'DISCONNECT_RESET' });
+    };
+
+    socket.on('disconnect', handleDisconnect);
+    return () => {
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [socket, streamDispatch]);
+
   // Scheduler hook
   const scheduler = useScheduler({ socket, sessionId });
 
@@ -114,6 +129,7 @@ export function useTabSocket(sessionId: string, props?: UseTabSocketProps) {
     socket,
     connected,
     messages: streamingHook.messages,
+    sessionStatus: streamingHook.status,
     streaming: streamingHook.streaming,
     backgroundProcessing: streamingHook.backgroundProcessing,
     thinking: streamingHook.thinking,

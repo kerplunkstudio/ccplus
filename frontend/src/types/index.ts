@@ -12,6 +12,7 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: number;
   streaming?: boolean;
+  pending?: boolean;
   toolLog?: ToolEvent[];
   images?: ImageAttachment[];
   isCompactBoundary?: boolean;
@@ -313,3 +314,5 @@ export interface TrustMetrics {
 
 export * from './workspace';
 export * from './diff';
+
+export type SessionStatus = 'idle' | 'submitted' | 'streaming' | 'complete' | 'error';

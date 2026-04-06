@@ -489,4 +489,88 @@ describe('MessageBubble', () => {
       expect(screen.getByTestId('markdown')).toBeInTheDocument();
     });
   });
+
+  describe('C3: Streaming cursor', () => {
+    it('shows streaming cursor when message is streaming with content', () => {
+      const msg: Message = {
+        id: 'cursor_1',
+        content: 'Partial response',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-cursor')).toBeInTheDocument();
+    });
+
+    it('does not show streaming cursor when message is not streaming', () => {
+      const msg: Message = {
+        id: 'cursor_2',
+        content: 'Final response',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: false,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-cursor')).not.toBeInTheDocument();
+    });
+
+    it('does not show streaming cursor when streaming message has no content', () => {
+      const msg: Message = {
+        id: 'cursor_3',
+        content: '',
+        role: 'assistant',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-cursor')).not.toBeInTheDocument();
+    });
+
+    it('does not show streaming cursor for user messages', () => {
+      const msg: Message = {
+        id: 'cursor_4',
+        content: 'User says hi',
+        role: 'user',
+        timestamp: Date.now(),
+        streaming: true,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      expect(container.querySelector('.streaming-cursor')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('C1: Pending (optimistic) message styling', () => {
+    it('adds pending class to bubble when message has pending: true', () => {
+      const msg: Message = {
+        id: 'pending_1',
+        content: 'Optimistic message',
+        role: 'user',
+        timestamp: Date.now(),
+        pending: true,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      const bubble = container.querySelector('.message-bubble');
+      expect(bubble).toHaveClass('pending');
+    });
+
+    it('does not add pending class when message has pending: false', () => {
+      const msg: Message = {
+        id: 'pending_2',
+        content: 'Confirmed message',
+        role: 'user',
+        timestamp: Date.now(),
+        pending: false,
+      };
+      const { container } = render(<MessageBubble message={msg} />);
+      const bubble = container.querySelector('.message-bubble');
+      expect(bubble).not.toHaveClass('pending');
+    });
+
+    it('does not add pending class when pending is undefined', () => {
+      const { container } = render(<MessageBubble message={userMessage} />);
+      const bubble = container.querySelector('.message-bubble');
+      expect(bubble).not.toHaveClass('pending');
+    });
+  });
 });
