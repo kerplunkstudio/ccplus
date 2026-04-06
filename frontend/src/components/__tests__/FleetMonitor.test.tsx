@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FleetMonitor } from '../FleetMonitor';
 import { FleetState } from '../../types';
 
@@ -48,6 +48,13 @@ describe('FleetMonitor — cancelled session regression', () => {
 
   beforeEach(() => {
     onSessionClick.mockClear();
+
+    // Mock fetch for Past tab API calls
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   /**
@@ -59,14 +66,40 @@ describe('FleetMonitor — cancelled session regression', () => {
    *
    * This test FAILS on code that lacks the fix and PASSES after the fix.
    */
-  it('shows cancelled sessions in the Past tab', () => {
+  it('shows cancelled sessions in the Past tab', async () => {
     const cancelledSession = makeSession({
       sessionId: 'cancelled-1',
       status: 'cancelled',
       label: 'Cancelled Session',
     });
 
-    const fleetState = makeFleetState([cancelledSession]);
+    const fleetState = makeFleetState([]);
+
+    // Mock API responses for Past tab
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: ['/home/user/project'],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [cancelledSession],
+            total: 1,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     render(<FleetMonitor fleetState={fleetState} onSessionClick={onSessionClick} />);
 
@@ -74,8 +107,10 @@ describe('FleetMonitor — cancelled session regression', () => {
     const pastButton = screen.getByRole('button', { name: /Past/i });
     fireEvent.click(pastButton);
 
-    // The cancelled session card must be present
-    expect(screen.getByTestId('session-card-cancelled-1')).toBeInTheDocument();
+    // Wait for the API call and rendering
+    await waitFor(() => {
+      expect(screen.getByTestId('session-card-cancelled-1')).toBeInTheDocument();
+    });
     expect(screen.getByText('Cancelled Session')).toBeInTheDocument();
   });
 
@@ -87,49 +122,135 @@ describe('FleetMonitor — cancelled session regression', () => {
    *
    * This test FAILS on code that lacks the fix and PASSES after the fix.
    */
-  it('includes cancelled sessions in the Past button count', () => {
+  it('includes cancelled sessions in the Past button count', async () => {
     const cancelledSession = makeSession({
       sessionId: 'cancelled-2',
       status: 'cancelled',
       label: 'Another Cancelled Session',
     });
 
-    const fleetState = makeFleetState([cancelledSession]);
+    const fleetState = makeFleetState([]);
+
+    // Mock API to return total: 1
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [cancelledSession],
+            total: 1,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     render(<FleetMonitor fleetState={fleetState} onSessionClick={onSessionClick} />);
 
-    // pastCount > 0 causes the button to render "Past (N)"
-    expect(screen.getByRole('button', { name: /Past \(1\)/i })).toBeInTheDocument();
+    // Switch to Past tab to trigger API call
+    const pastButton = screen.getByRole('button', { name: /Past/i });
+    fireEvent.click(pastButton);
+
+    // Wait for the API call to complete and the count to update
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Past \(1\)/i })).toBeInTheDocument();
+    });
   });
 
   // ── Baseline / non-regression tests ─────────────────────────────────────
 
-  it('shows completed sessions in the Past tab', () => {
+  it('shows completed sessions in the Past tab', async () => {
     const completedSession = makeSession({
       sessionId: 'completed-1',
       status: 'completed',
       label: 'Completed Session',
     });
 
-    render(<FleetMonitor fleetState={makeFleetState([completedSession])} onSessionClick={onSessionClick} />);
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [completedSession],
+            total: 1,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
+
+    render(<FleetMonitor fleetState={makeFleetState([])} onSessionClick={onSessionClick} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Past/i }));
 
-    expect(screen.getByTestId('session-card-completed-1')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('session-card-completed-1')).toBeInTheDocument();
+    });
   });
 
-  it('shows failed sessions in the Past tab', () => {
+  it('shows failed sessions in the Past tab', async () => {
     const failedSession = makeSession({
       sessionId: 'failed-1',
       status: 'failed',
       label: 'Failed Session',
     });
 
-    render(<FleetMonitor fleetState={makeFleetState([failedSession])} onSessionClick={onSessionClick} />);
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [failedSession],
+            total: 1,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
+
+    render(<FleetMonitor fleetState={makeFleetState([])} onSessionClick={onSessionClick} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Past/i }));
 
-    expect(screen.getByTestId('session-card-failed-1')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('session-card-failed-1')).toBeInTheDocument();
+    });
   });
 
   it('does NOT show cancelled sessions in the Active tab', () => {
@@ -155,39 +276,126 @@ describe('FleetMonitor — cancelled session regression', () => {
     expect(screen.getByTestId('session-card-idle-1')).toBeInTheDocument();
   });
 
-  it('pastCount reflects all three terminal statuses together', () => {
+  it('pastCount reflects all three terminal statuses together', async () => {
     const sessions = [
       makeSession({ sessionId: 'c-1', status: 'completed', label: 'C1', startedAt: '2026-01-01T10:00:00.000Z' }),
       makeSession({ sessionId: 'f-1', status: 'failed', label: 'F1', startedAt: '2026-01-01T09:00:00.000Z' }),
       makeSession({ sessionId: 'x-1', status: 'cancelled', label: 'X1', startedAt: '2026-01-01T08:00:00.000Z' }),
     ];
 
-    render(<FleetMonitor fleetState={makeFleetState(sessions)} onSessionClick={onSessionClick} />);
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions,
+            total: 3,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
+
+    render(<FleetMonitor fleetState={makeFleetState([])} onSessionClick={onSessionClick} />);
+
+    // Switch to Past tab to trigger API call
+    fireEvent.click(screen.getByRole('button', { name: /Past/i }));
 
     // All three terminal sessions must be counted → "Past (3)"
-    expect(screen.getByRole('button', { name: /Past \(3\)/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Past \(3\)/i })).toBeInTheDocument();
+    });
   });
 
-  it('shows empty state message when no past sessions exist', () => {
+  it('shows empty state message when no past sessions exist', async () => {
     const runningSession = makeSession({ sessionId: 'running-2', status: 'running', label: 'Running' });
+
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [],
+            total: 0,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
 
     render(<FleetMonitor fleetState={makeFleetState([runningSession])} onSessionClick={onSessionClick} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Past/i }));
 
-    expect(screen.getByText(/No history yet/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/No sessions found/i)).toBeInTheDocument();
+    });
   });
 
-  it('calls onSessionClick with the session id when a card is clicked', () => {
+  it('calls onSessionClick with the session id when a card is clicked', async () => {
     const cancelledSession = makeSession({
       sessionId: 'cancelled-click',
       status: 'cancelled',
       label: 'Clickable Cancelled',
     });
 
-    render(<FleetMonitor fleetState={makeFleetState([cancelledSession])} onSessionClick={onSessionClick} />);
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('/api/fleet/filters')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            statuses: ['completed', 'failed', 'cancelled'],
+            workspaces: [],
+            workflowNames: [],
+          }),
+        });
+      }
+      if (url.includes('/api/fleet/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [cancelledSession],
+            total: 1,
+            page: 1,
+            limit: 20,
+          }),
+        });
+      }
+      return Promise.reject(new Error('Unknown URL'));
+    });
+
+    render(<FleetMonitor fleetState={makeFleetState([])} onSessionClick={onSessionClick} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Past/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('session-card-cancelled-click')).toBeInTheDocument();
+    });
+
     fireEvent.click(screen.getByTestId('session-card-cancelled-click'));
 
     expect(onSessionClick).toHaveBeenCalledTimes(1);

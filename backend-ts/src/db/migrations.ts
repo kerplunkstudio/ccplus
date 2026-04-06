@@ -393,6 +393,13 @@ CREATE INDEX IF NOT EXISTS idx_kairos_prompt_changes_file ON kairos_prompt_chang
 CREATE INDEX IF NOT EXISTS idx_kairos_prompt_changes_applied ON kairos_prompt_changes(applied);
 `,
   },
+  {
+    version: 19,
+    sql: `
+-- Migration v19: Add workflow_name to fleet_sessions for filtering/pagination
+ALTER TABLE fleet_sessions ADD COLUMN workflow_name TEXT;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

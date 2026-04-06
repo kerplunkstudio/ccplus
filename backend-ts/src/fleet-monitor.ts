@@ -24,6 +24,7 @@ export interface FleetSessionInfo {
   stuckDetectedAt?: number;
   description?: string;
   sessionNumber?: number;
+  workflowName?: string;
 }
 
 export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
@@ -114,11 +115,19 @@ export function updateSessionStatus(sessionId: string, status: FleetSessionInfo[
       durationMs = Date.now() - startTime;
     }
 
+    // Get workflow name from workflow state if not already set
+    let workflowName = session.workflowName;
+    if (!workflowName) {
+      const workflowState = getWorkflowState(sessionId);
+      workflowName = workflowState.workflowName;
+    }
+
     const updated: FleetSessionInfo = {
       ...session,
       status,
       durationMs,
       lastActivity: now,
+      workflowName,
     };
     sessions.set(sessionId, updated);
     upsertFleetSession(updated);

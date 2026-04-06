@@ -4,6 +4,7 @@ import { getWorkflowState, skipToPhase, type WorkflowPhase } from "../workflow-s
 import { WORKFLOW_ENABLED } from "../config.js";
 import { fetchDiscoveredServers } from '../mcp-discovery.js';
 import type { RouteDependencies } from "./types.js";
+import { getFilteredFleetSessions, getFleetFilterValues, type FleetSessionFilters } from "../db/fleet-sessions.js";
 
 // Exported for testing — prevents tests from duplicating (and potentially diverging from) production validation
 export const SAFE_PACKAGE_NAME_RE = /^@?[a-zA-Z0-9][a-zA-Z0-9._\-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._\-]*)?$/;
@@ -205,6 +206,54 @@ export function createMiscRoutes(app: Express, deps: RouteDependencies): void {
   app.get('/api/fleet/state', (_req: Request, res: Response) => {
     const state = fleetMonitor.getFleetState();
     res.json(state);
+  });
+
+  // -- Fleet Sessions Filtered/Paginated --
+
+  app.get('/api/fleet/sessions', (req: Request, res: Response) => {
+    try {
+      const filters: FleetSessionFilters = {};
+
+      // Parse status array (comma-separated)
+      if (req.query.status && typeof req.query.status === 'string') {
+        filters.status = req.query.status.split(',').map(s => s.trim()).filter(Boolean);
+      }
+
+      // Parse workspace (partial match)
+      if (req.query.workspace && typeof req.query.workspace === 'string') {
+        filters.workspace = req.query.workspace;
+      }
+
+      // Parse workflow name
+      if (req.query.workflow && typeof req.query.workflow === 'string') {
+        filters.workflowName = req.query.workflow;
+      }
+
+      // Parse pagination
+      const page = parseInt(String(req.query.page ?? '1'), 10);
+      const limit = parseInt(String(req.query.limit ?? '20'), 10);
+
+      filters.page = isNaN(page) || page < 1 ? 1 : page;
+      filters.limit = isNaN(limit) || limit < 1 || limit > 100 ? 20 : limit;
+
+      const result = getFilteredFleetSessions(filters);
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // -- Fleet Filter Values --
+
+  app.get('/api/fleet/filters', (_req: Request, res: Response) => {
+    try {
+      const filterValues = getFleetFilterValues();
+      res.json(filterValues);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: message });
+    }
   });
 
   // -- Captain Routes --
