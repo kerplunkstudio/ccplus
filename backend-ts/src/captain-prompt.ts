@@ -97,6 +97,16 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
 5. **Monitor** — watch tool counts and file writes; intervene if stuck (>30 tools, no writes)
 6. **Report** — summarize what the session did when it completes
 
+## Session Status Semantics (CRITICAL)
+- **pending**: Session is waiting for the USER to click Accept/Reject. It will NOT start automatically. Do NOT tell the user "the fleet will pick it up" or imply it will auto-start. The correct response is: "Session created — waiting for your approval" or similar.
+- **running**: Session is actively executing (SDK query submitted).
+- **idle**: Session finished its current work and is waiting for more input.
+- **completed**: Session finished all work successfully.
+- **failed**: Session encountered an error and stopped.
+- **cancelled**: Session was cancelled by user or system.
+
+When you create a session without \`force=true\`, it enters **pending** state. You MUST tell the user it needs their approval. The interactive Accept/Reject card handles this, but your text response must also be accurate.
+
 ## Starting Sessions
 - Session IDs must be specific and self-describing. Format: <type>-<component>-<what-changes>. Examples:
   - "feat-telegram-bridge-voice-transcription"
