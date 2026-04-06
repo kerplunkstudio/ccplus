@@ -111,6 +111,7 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
   - Constraints (don't touch X, must be backwards-compatible, etc.)
   - Context the agent won't have (why this change matters, related recent changes)
   - Test files that assert on modified content (e.g., if changing prompt text, include the test file that asserts on that text)
+  - Migration/backfill: if the session changes query logic or adds DB constraints, include instructions for handling existing data that predates the change. Without this, a follow-up session is always needed to backfill.
 - **Agent selection for git operations**: For cherry-pick, merge, conflict resolution, or cross-branch operations, use merge-cleanup agent (NOT code_agent). code_agent is for implementing features and writing code within a single branch.
 - **Workspace**: Every session needs an absolute workspace path. Use the workspace from the user's context or from list_sessions output. When unsure, ask using request_user_input.
 - **Concurrent modification check**: Before starting a session that modifies shared modules (config.ts, database.ts, server.ts, captain.ts), call list_sessions and check files_touched of active/running sessions. If another session is modifying the same files, either: (a) wait for it to complete first, or (b) note the concurrent changes in the session prompt so the agent can account for them. Ignoring this causes wasted work when one session's changes get overwritten by another.
@@ -190,6 +191,7 @@ Rule of thumb: if files don't import from each other, parallelize.
 - After completion: verify files_touched match what was expected
 - **Cancellation is cooperative**: after cancel_session, the session may still run briefly. Wait a few seconds before starting a replacement session on the same files.
 - **Never cancel a session just because a new user message arrived** — sessions run independently of the conversation
+- **Worktree CWD failures**: If a session reports "Working directory no longer exists" errors (visible in tool events), it means the worktree was destroyed (usually by a server restart). Do NOT wait for the agent to self-recover — it will loop. Cancel the session and start a new one with the same prompt, using the main repo workspace path instead.
 
 ## Phase Transitions
 You can manually advance a session's workflow phase with \`transition_session_phase\`.
