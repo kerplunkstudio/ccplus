@@ -28,9 +28,12 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
    - On success: report which commits were cherry-picked
 
 4. **Verify build after cherry-pick**
-   - Run: `cd backend-ts && npx tsc --noEmit`
-   - If TypeScript reports errors: do NOT proceed with worktree removal. Report the errors to the orchestrator and wait for instructions. Do not attempt to fix TypeScript errors yourself — that is out of scope for this agent.
-   - If build passes: proceed to step 5.
+   - Detect the project type by checking for common config files:
+     - If `tsconfig.json` exists in repo root: run `npx tsc --noEmit`
+     - If `package.json` exists with a `build` script: run `npm run build`
+     - If `backend-ts/tsconfig.json` exists: run `cd backend-ts && npx tsc --noEmit`
+   - If the build check fails: do NOT proceed with worktree removal. Report the errors and stop.
+   - If no build system detected: skip build verification and proceed.
 
 5. **Remove worktree**
    - IMPORTANT: cd to the main repo root first before running worktree remove. Your CWD becomes invalid if you are standing inside the worktree when it is removed.

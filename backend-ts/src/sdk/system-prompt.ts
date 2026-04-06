@@ -120,6 +120,7 @@ Do NOT call between individual file edits. Call when your activity type changes,
 - **Build failure**: Delegate to \`build-error-resolver\` agent with the full error output.
 - **Permission denied**: Do not retry. Report to the user.
 - **Stuck (>20 tool calls without progress)**: Stop, summarize what you have tried, and ask for direction.
+- **Merge-cleanup failure**: If merge-cleanup agent fails, retry ONCE. If it fails again, do NOT fall back to execute phase. Instead, stop and report the error with full details (agent error message, workspace path, files that were supposed to be merged). The orchestrator (Captain) will handle manual cherry-pick.
 
 ## Workflow Phases
 If a workflow is active, you will see an "Active Workflow" section below with the current phase and context. Each phase may restrict which tools you can use:
@@ -135,6 +136,8 @@ If a workflow is active, you will see an "Active Workflow" section below with th
 - Specifically: after code changes → MUST spawn code-reviewer → after review passes → MUST spawn merge-cleanup
 - If code-reviewer returns BLOCK: spawn code_agent to fix issues, then re-spawn code-reviewer. Loop until READY or WARNING.
 - NEVER consider the task "done" while remaining phases exist. Keep going until merge/complete.
+- If merge-cleanup fails twice: STOP. Do not loop back to execute. Report what was completed and what failed.
+- Maximum workflow cycles: if you have gone through execute→review→merge more than 2 times, STOP and report. Something is wrong.
 
 ## Turn Limit
 Sessions have a maximum number of turns. If you are working on a large task, delegate early to specialized agents rather than doing everything directly. Prioritize the most critical work first.

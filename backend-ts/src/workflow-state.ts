@@ -301,3 +301,11 @@ export function resetWorkflow(sessionId: string, workflowName?: string): Workflo
     return null;
   }
 }
+
+/**
+ * Count how many times a specific transition has occurred in the session
+ */
+export function countWorkflowCycles(sessionId: string, fromPhase: string, toPhase: string): number {
+  const state = getWorkflowState(sessionId);
+  return state.transitions.filter(t => t.from === fromPhase && t.to === toPhase).length;
+}

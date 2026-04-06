@@ -4,7 +4,7 @@ import { sessions } from "./session-manager.js";
 import * as database from "../database.js";
 import { log } from "../logger.js";
 import * as config from "../config.js";
-import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase, getNextPhase } from '../workflow-state.js';
+import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAgent, transitionPhase, getNextPhase, countWorkflowCycles } from '../workflow-state.js';
 import { WORKFLOW_ENABLED } from '../config.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import { searchMemories, storeMemory } from '../memory-client.js';
@@ -59,6 +59,16 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
       : undefined;
 
     if (isAgent) {
+      // Log agent spawn attempt before it happens
+      if (toolParams.subagent_type || toolParams.description) {
+        log.info(`[AGENT SPAWN] Attempting to spawn agent`, {
+          sessionId,
+          agentType: (toolParams.subagent_type as string) ?? 'default',
+          description: toolParams.description,
+          workspace: workspace,
+        });
+      }
+
       pendingAgentToolUseIds.push(actualToolUseId);
       agentTypeByToolUseId.set(actualToolUseId, (toolParams.subagent_type as string) ?? 'agent');
       emitToolEvent({
@@ -238,6 +248,19 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
             if (targetPhase) {
               const newState = transitionPhase(sessionId, targetPhase, `agent_complete:${agentType}`, workspace);
               if (newState) {
+                // Check for infinite loops (merge → execute cycles)
+                if (currentState.phase === 'merge' && targetPhase === 'execute') {
+                  const cycleCount = countWorkflowCycles(sessionId, 'merge', 'execute');
+                  if (cycleCount > 2) {
+                    log.warn(`[WORKFLOW] Session ${sessionId} has cycled through merge→execute ${cycleCount} times — possible infinite loop`, {
+                      sessionId,
+                      cycleCount,
+                      fromPhase: currentState.phase,
+                      toPhase: targetPhase,
+                    });
+                  }
+                }
+
                 const session = sessions.get(sessionId);
                 if (session?.callbacks) {
                   session.callbacks.onSignal?.({
@@ -356,7 +379,8 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     const input = hookInput as Record<string, unknown>;
     const toolName = (input.tool_name as string) ?? "unknown";
     const actualToolUseId = toolUseId ?? (input.tool_use_id as string) ?? "";
-    const errorMsg = String(input.error ?? "Unknown error");
+    const error = input.error;
+    const errorMsg = String(error ?? "Unknown error");
 
     const start = toolTimers.get(actualToolUseId);
     toolTimers.delete(actualToolUseId);
@@ -364,11 +388,23 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
 
     const isAgent = toolName === "Agent" || toolName === "Task";
     const parentId = input.agent_id as string | undefined;
+    const toolParams = (input.tool_input as Record<string, unknown>) ?? {};
 
     const session = sessions.get(sessionId);
     if (!session?.callbacks) return {};
 
     if (isAgent) {
+      // Log agent spawn failure with full details
+      log.error(`[AGENT SPAWN FAILURE] Agent failed to spawn or execute`, {
+        sessionId,
+        agentType: (toolParams.subagent_type as string) ?? 'unknown',
+        description: toolParams.description,
+        workspace: workspace,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        durationMs,
+      });
+
       const stopData = agentStopData.get(actualToolUseId);
       emitToolEvent({
         type: "agent_stop",
@@ -405,6 +441,17 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
         log.error("Database write failed (postToolUseFailure agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
       }
     } else {
+      // Log tool failure details
+      log.error(`[TOOL FAILURE] Tool execution failed`, {
+        sessionId,
+        toolName,
+        toolUseId: actualToolUseId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        durationMs,
+        params: safeParams(toolParams),
+      });
+
       emitToolEvent({
         type: "tool_complete",
         tool_name: toolName,
