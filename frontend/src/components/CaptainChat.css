@@ -231,3 +231,73 @@
   background: var(--border-primary);
   border-radius: 2px;
 }
+
+/* Context status bar */
+.captain-context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--space-xl);
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.captain-context-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.captain-context-track {
+  width: 60px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.captain-context-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.6s ease-out;
+}
+
+.captain-context-fill.warning {
+  background: var(--warning, #e6a817);
+}
+
+.captain-context-fill.danger {
+  background: var(--danger);
+}
+
+.captain-context-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.captain-context-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.captain-context-action {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color 0.15s ease;
+}
+
+.captain-context-action:hover {
+  color: var(--accent);
+}

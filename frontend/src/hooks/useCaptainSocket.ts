@@ -68,6 +68,7 @@ export function useCaptainSocket(socket: Socket | null) {
   const [isModelThinking, setIsModelThinking] = useState(false);
   const [interactiveMessages, setInteractiveMessages] = useState<InteractiveMessage[]>([]);
   const [toolActivity, setToolActivity] = useState<string | null>(null);
+  const [contextPct, setContextPct] = useState(0);
   const currentSessionIdRef = useRef<string>('');
   const messageIndexRef = useRef<number>(-1);
   const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,6 +123,25 @@ export function useCaptainSocket(socket: Socket | null) {
     };
 
     startCaptainSession();
+  }, []);
+
+  // Poll Captain status for context percentage
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${SOCKET_URL}/api/captain/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setContextPct(data.contextPct ?? 0);
+        }
+      } catch {
+        // Status fetch failed, keep current value
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Persist messages to localStorage whenever they change
@@ -428,6 +448,7 @@ export function useCaptainSocket(socket: Socket | null) {
     clearHistory,
     interactiveMessages,
     respondToInteractive,
+    contextPct,
   };
 }
 

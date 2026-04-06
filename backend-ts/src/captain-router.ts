@@ -35,6 +35,7 @@ interface CaptainRouterDependencies {
   };
   readonly sendCaptainMessage: (content: string, source: string, sourceId: string) => void;
   readonly startCaptainSession: (workspace: string) => Promise<{ sessionId: string }>;
+  readonly resetCaptainSession: () => Promise<{ sessionId: string }>;
   readonly workspace: string;
   readonly getCaptainMessages: (conversationId?: string, limit?: number) => CaptainMessage[];
   readonly getLatestCaptainConversationId: () => string | null;
@@ -142,13 +143,13 @@ export function createCaptainRouter(deps: CaptainRouterDependencies): Router {
     }
   });
 
-  // POST /api/captain/messages/clear - Clear Captain messages
-  router.post("/messages/clear", (req: Request, res: Response) => {
+  // POST /api/captain/messages/clear - Clear Captain messages and reset session
+  router.post("/messages/clear", async (req: Request, res: Response) => {
     try {
-      const newConversationId = `captain-conv-${Date.now()}`;
-      res.json({ success: true, conversation_id: newConversationId });
+      const result = await deps.resetCaptainSession();
+      res.json({ success: true, session_id: result.sessionId });
     } catch (error) {
-      log.error("Failed to clear Captain messages", { error: String(error) });
+      log.error("Failed to reset Captain session", { error: String(error) });
       res.status(500).json({
         success: false,
         error: String(error),

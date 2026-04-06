@@ -12,7 +12,7 @@ import * as database from "./database.js";
 import * as sdkSession from "./sdk-session.js";
 import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
-import { saveCaptainState as persistCaptainState } from './state-persistence.js';
+import { saveCaptainState as persistCaptainState, removeCaptainState } from './state-persistence.js';
 import { buildCaptainSystemPrompt, isIdleMessage } from './captain-prompt.js';
 import { buildFleetMcpTools, type CaptainToolDependencies } from './captain-tools.js';
 import { resetBriefMode, shouldSuppressBriefOutput, notifyRateLimit, resetBackoff, notifySessionCompleted } from './captain-tick.js';
@@ -817,6 +817,44 @@ export function isCaptainIdle(): boolean {
  */
 export function isCaptainSession(sessionId: string): boolean {
   return sessionId.startsWith("captain-");
+}
+
+/**
+ * Reset Captain session - interrupts active query, clears state, removes persisted state,
+ * and starts a fresh session with no context.
+ */
+export async function resetCaptainSession(): Promise<{ sessionId: string }> {
+  const workspace = captainState.workspace ?? config.CAPTAIN_WORKSPACE ?? process.cwd();
+
+  // Interrupt active query if running
+  if (captainState.activeQuery) {
+    try {
+      await captainState.activeQuery.interrupt();
+    } catch (error) {
+      log.error('Failed to interrupt Captain query during reset', { error: String(error) });
+    }
+    // Give time for interruption to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  // Clear SDK session ID so startCaptainSession won't resume
+  captainState = {
+    ...captainState,
+    sdkSessionId: null,
+    activeQuery: null,
+    sessionId: null, // Allow startCaptainSession to create new
+    lastInputTokens: 0,
+    totalInputTokens: 0,
+    messageCount: 0,
+  };
+
+  // Remove persisted state file
+  removeCaptainState(config.CAPTAIN_STATE_PATH);
+
+  log.info('Captain session reset — starting fresh');
+
+  // Start fresh (no resumeSdkSessionId)
+  return startCaptainSession(workspace, captainDeps ?? undefined);
 }
 
 /**

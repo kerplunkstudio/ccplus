@@ -210,6 +210,7 @@ const captainRouter = createCaptainRouter({
     captain.sendCaptainMessage(content, source as MessageSource, sourceId);
   },
   startCaptainSession: (workspace) => captain.startCaptainSession(workspace, captainDeps),
+  resetCaptainSession: () => captain.resetCaptainSession(),
   workspace: config.WORKSPACE_PATH ?? process.cwd(),
   getCaptainMessages: database.getCaptainMessages,
   getLatestCaptainConversationId: database.getLatestCaptainConversationId,

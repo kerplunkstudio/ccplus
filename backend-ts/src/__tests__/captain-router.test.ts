@@ -43,6 +43,7 @@ function buildTestDeps(convId: string) {
     }),
     sendCaptainMessage: () => {},
     startCaptainSession: async (_workspace: string) => ({ sessionId: "test-session" }),
+    resetCaptainSession: async () => ({ sessionId: "test-reset-session" }),
     workspace: "/tmp/test",
     getCaptainMessages: (conversationId?: string, limit?: number) =>
       getCaptainMessages(conversationId ?? convId, limit),

@@ -27,6 +27,7 @@ interface CaptainChatProps {
   onClearHistory: () => void;
   interactiveMessages: InteractiveMessage[];
   onRespondToInteractive: (messageId: string, actionId: string) => void;
+  contextPct?: number;
 }
 
 function formatConversationDate(timestamp: number): string {
@@ -62,6 +63,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   onClearHistory,
   interactiveMessages,
   onRespondToInteractive,
+  contextPct,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
@@ -131,6 +133,30 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {messages.length > 0 && (
+        <div className="captain-context-bar">
+          <div className="captain-context-usage">
+            <div className="captain-context-track">
+              <div
+                className={`captain-context-fill${(contextPct ?? 0) > 90 ? ' danger' : (contextPct ?? 0) > 75 ? ' warning' : ''}`}
+                style={{ width: `${Math.min(contextPct ?? 0, 100)}%` }}
+              />
+            </div>
+            <span className="captain-context-label">{Math.round(contextPct ?? 0)}% context</span>
+          </div>
+          <div className="captain-context-actions">
+            {hasArchive && (
+              <button className="captain-context-action" onClick={handleToggleHistory}>
+                History
+              </button>
+            )}
+            <button className="captain-context-action" onClick={() => onSendMessage('/clear')}>
+              New conversation
+            </button>
           </div>
         </div>
       )}
