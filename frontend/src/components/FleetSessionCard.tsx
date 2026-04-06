@@ -69,7 +69,6 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
 
   // Use description if available, otherwise fall back to label
   const primaryText = session.description || truncatedLabel;
-  const showSecondaryId = !!session.description;
 
   const elapsedDisplay = formatDuration(elapsed);
 
@@ -89,9 +88,6 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
       </div>
 
       <div className="fleet-card-label">{primaryText}</div>
-      {showSecondaryId && (
-        <div className="fleet-card-session-id">{truncatedLabel}</div>
-      )}
 
       {showWorkflow && (
         <div className="fleet-card-workflow">{session.workflowName}</div>
