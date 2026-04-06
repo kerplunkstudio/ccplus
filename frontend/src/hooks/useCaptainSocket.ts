@@ -397,6 +397,7 @@ export function useCaptainSocket(socket: Socket | null) {
         setMessages([]);
         saveMessages([]);
         setInteractiveMessages([]);
+        setContextPct(0);
 
         // Notify backend to start new conversation
         try {
