@@ -215,30 +215,16 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 ],
                 responseState: 'pending',
                 sessionId: result.sessionId,
-                timeoutMs: 120_000,
                 createdAt: Date.now(),
-                expiresAt: Date.now() + 120_000,
               };
 
               // Store mapping for response handling
               storePendingSessionInteractive(messageId, result.sessionId);
 
-              // Register timeout handler
-              const timer = setTimeout(() => {
-                captain.respondToInteractiveMessage(messageId, {
-                  messageId,
-                  actionId: '__expired__',
-                  respondedAt: Date.now(),
-                  source: 'api',
-                });
-                removePendingSessionInteractive(messageId);
-              }, 120_000);
-
-              // Register pending interactive message
+              // Register pending interactive message (no timeout — stays indefinitely)
               captain.registerPendingInteractiveMessage(messageId, {
                 message: interactiveMessage,
                 resolve: (response: InteractiveResponse) => {
-                  clearTimeout(timer);
                   removePendingSessionInteractive(messageId);
 
                   // Handle approve/reject
@@ -248,7 +234,6 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                     deps.log.info('Session proposal rejected via interactive card', { sessionId: result.sessionId });
                   }
                 },
-                timer,
               });
 
               // Emit to Captain chat

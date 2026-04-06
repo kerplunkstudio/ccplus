@@ -48,11 +48,11 @@ interface CaptainDependencies {
 
 const responseCallbacks = new Map<string, ResponseCallback>();
 
-// Map of messageId -> { message, resolve, timer }
+// Map of messageId -> { message, resolve, timer? }
 const pendingInteractiveMessages = new Map<string, {
   readonly message: InteractiveMessage
   readonly resolve: (response: InteractiveResponse) => void
-  readonly timer: ReturnType<typeof setTimeout>
+  readonly timer?: ReturnType<typeof setTimeout>
 }>();
 
 // Interactive message broadcast callbacks (web sockets register here)
@@ -742,7 +742,7 @@ export function registerPendingInteractiveMessage(
   entry: {
     readonly message: InteractiveMessage
     readonly resolve: (response: InteractiveResponse) => void
-    readonly timer: ReturnType<typeof setTimeout>
+    readonly timer?: ReturnType<typeof setTimeout>
   }
 ): void {
   pendingInteractiveMessages.set(messageId, entry);

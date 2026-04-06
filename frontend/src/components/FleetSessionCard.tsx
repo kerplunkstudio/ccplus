@@ -46,7 +46,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (session.status === 'running' && session.startedAt) {
+    if ((session.status === 'running' || session.status === 'pending') && session.startedAt) {
       const startTime = new Date(session.startedAt).getTime();
       // Guard against invalid dates (returns NaN)
       if (!isNaN(startTime)) {
@@ -71,8 +71,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   const primaryText = session.description || truncatedLabel;
   const showSecondaryId = !!session.description;
 
-  // Check if session is pending
-  const elapsedDisplay = session.status === 'pending' ? 'Awaiting approval' : formatDuration(elapsed);
+  const elapsedDisplay = formatDuration(elapsed);
 
   return (
     <div className={`fleet-session-card ${statusClass}`} onClick={() => onClick(session.sessionId)}>
