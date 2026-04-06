@@ -872,6 +872,14 @@ export async function resetCaptainSession(): Promise<{ sessionId: string }> {
   // Remove persisted state file
   removeCaptainState(config.CAPTAIN_STATE_PATH);
 
+  // Clear current conversation messages from DB so refresh doesn't reload old messages
+  try {
+    const deleted = database.clearCurrentCaptainConversation();
+    log.info('Captain reset: cleared DB messages', { deleted });
+  } catch (err) {
+    log.error('Failed to clear captain messages on reset', { error: String(err) });
+  }
+
   log.info('Captain session reset — starting fresh');
 
   // Start fresh (no resumeSdkSessionId)

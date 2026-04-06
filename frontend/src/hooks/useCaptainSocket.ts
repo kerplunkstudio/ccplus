@@ -396,13 +396,21 @@ export function useCaptainSocket(socket: Socket | null) {
         // Clear local state
         setMessages([]);
         saveMessages([]);
+        setInteractiveMessages([]);
 
         // Notify backend to start new conversation
         try {
-          await fetch(`${SOCKET_URL}/api/captain/messages/clear`, {
+          const clearRes = await fetch(`${SOCKET_URL}/api/captain/messages/clear`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
           });
+          if (clearRes.ok) {
+            const clearData = await clearRes.json();
+            if (clearData.session_id) {
+              setCaptainSessionId(clearData.session_id);
+              currentSessionIdRef.current = clearData.session_id;
+            }
+          }
         } catch (error) {
           // Clear request failed, but local state is already cleared
         }

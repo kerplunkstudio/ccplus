@@ -94,6 +94,19 @@ export function getLatestCaptainConversationId(): string | null {
 }
 
 /**
+ * Clear all Captain messages for the current (latest) conversation.
+ * Called on /clear to prevent stale messages from reloading on refresh.
+ */
+export function clearCurrentCaptainConversation(): number {
+  const db = getDb();
+  const convId = getLatestCaptainConversationId();
+  if (!convId) return 0;
+
+  const result = db.prepare('DELETE FROM captain_messages WHERE conversation_id = ?').run(convId);
+  return result.changes;
+}
+
+/**
  * Get a list of all Captain conversations with metadata.
  * Returns conversations in reverse chronological order (newest first).
  */
