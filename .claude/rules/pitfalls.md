@@ -125,3 +125,12 @@ Do NOT attempt to fix code using only Bash (e.g., `sed` commands) to work around
 4. If the work was already committed, continue from the main repo using absolute paths
 
 The 2-retry limit from pitfall 9 is the MAXIMUM. Prefer 0 retries -- switch immediately on first CWD failure.
+
+## 15. Concurrent sessions modifying the same shared module
+
+**Problem**: Two sessions modify the same file (e.g., config.ts) concurrently. One session's changes get overwritten or reverted by the other's merge. The fix is correct when written but broken after the other session merges. Real example: a bug-fix session added a `getBypassPermissions()` getter to `config.ts`, but a concurrent refactor session removed all getters from config.ts during a settings migration. The fix was effectively undone.
+
+**Fix**: Before starting a session that modifies shared modules (config.ts, database.ts, server.ts, captain.ts, sdk-session.ts), check for active sessions touching the same files:
+1. Captain should call `list_sessions` and compare `files_touched` before launching
+2. If overlap detected: wait for the other session to complete, or include the concurrent changes in the session prompt
+3. After merge, verify the fix is still present by checking the committed diff on main
