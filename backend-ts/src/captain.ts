@@ -491,19 +491,21 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     throw new Error("Captain session is not active");
   }
 
-  // Save user message to DB
-  try {
-    const existingConvId = database.getLatestCaptainConversationId();
-    const convId = existingConvId ?? `captain-conv-${Date.now()}`;
-    database.saveCaptainMessage({
-      conversationId: convId,
-      role: "user",
-      content,
-      source,
-      sourceId,
-    });
-  } catch (err) {
-    log.error("Failed to save captain user message", { error: String(err) });
+  // Save user message to DB (skip tick messages — they're noise and pollute refresh)
+  if (source !== 'tick') {
+    try {
+      const existingConvId = database.getLatestCaptainConversationId();
+      const convId = existingConvId ?? `captain-conv-${Date.now()}`;
+      database.saveCaptainMessage({
+        conversationId: convId,
+        role: "user",
+        content,
+        source,
+        sourceId,
+      });
+    } catch (err) {
+      log.error("Failed to save captain user message", { error: String(err) });
+    }
   }
 
   // Reset brief mode for any non-tick source

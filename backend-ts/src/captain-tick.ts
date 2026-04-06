@@ -424,6 +424,22 @@ function tick(): void {
     // Compute fleet summary
     const fleetSummary = computeFleetSummary(fleetState.sessions);
 
+    // Skip tick if nothing actionable: no active/pending/stuck sessions,
+    // no recent completions, and no consolidation hint pending
+    const hasActivity = fleetSummary.activeSessions > 0
+      || fleetSummary.stuckSessions > 0
+      || shouldConsolidate();
+
+    if (!hasActivity) {
+      log.debug('Tick skipped — nothing actionable', { tickNumber: tickState.tickNumber + 1, fleetSummary });
+      tickState = {
+        ...tickState,
+        tickNumber: tickState.tickNumber + 1,
+        lastTickAt: now,
+      };
+      return;
+    }
+
     // Update tick state
     tickState = {
       ...tickState,

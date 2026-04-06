@@ -31,6 +31,16 @@ vi.mock('../logger.js', () => ({
   },
 }));
 
+// Fleet state with one active session so ticks have something actionable and actually fire.
+// Tests for "no activity = skip tick" belong in their own describe block.
+const ACTIVE_FLEET = () => ({
+  totalSessions: 1, activeSessions: 1, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0,
+  sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString() }] as any[],
+});
+const EMPTY_FLEET = () => ({
+  totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [],
+});
+
 describe('captain-tick: tick loop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -49,7 +59,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -68,7 +78,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -87,7 +97,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => false,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -103,7 +113,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => false,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -119,7 +129,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => false,
@@ -127,6 +137,25 @@ describe('captain-tick: tick loop', () => {
 
       vi.advanceTimersByTime(60000);
       expect(sendTickMessage).not.toHaveBeenCalled();
+    });
+
+    it('skips tick when nothing actionable (empty fleet, no consolidation)', () => {
+      const sendTickMessage = vi.fn();
+      startTickLoop({
+        isCaptainAlive: () => true,
+        isCaptainIdle: () => true,
+        sendTickMessage,
+        getFleetState: EMPTY_FLEET,
+        isTerminalFocused: () => false,
+        getTickIntervalMs: () => 60000,
+        isTickEnabled: () => true,
+      });
+
+      vi.advanceTimersByTime(60000);
+      expect(sendTickMessage).not.toHaveBeenCalled();
+
+      // tickNumber still increments even when skipped
+      expect(getTickState().tickNumber).toBe(1);
     });
   });
 
@@ -137,7 +166,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -176,7 +205,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -197,7 +226,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -239,7 +268,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -255,7 +284,7 @@ describe('captain-tick: tick loop', () => {
         isCaptainAlive: () => true,
         isCaptainIdle: () => true,
         sendTickMessage,
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60000,
         isTickEnabled: () => true,
@@ -462,7 +491,7 @@ describe('captain-tick: exponential backoff', () => {
         isCaptainIdle: () => true,
         sendTickMessage: vi.fn(),
         sendCaptainMessage: vi.fn(),
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60_000,
         isTickEnabled: () => true,
@@ -531,7 +560,7 @@ describe('captain-tick: exponential backoff', () => {
         isCaptainIdle: () => true,
         sendTickMessage,
         sendCaptainMessage: vi.fn(),
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60_000,
         isTickEnabled: () => true,
@@ -557,7 +586,7 @@ describe('captain-tick: exponential backoff', () => {
         isCaptainIdle: () => true,
         sendTickMessage,
         sendCaptainMessage: vi.fn(),
-        getFleetState: () => ({ totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [] }),
+        getFleetState: ACTIVE_FLEET,
         isTerminalFocused: () => false,
         getTickIntervalMs: () => 60_000,
         isTickEnabled: () => true,
@@ -587,12 +616,12 @@ describe('captain-tick: circuit breaker', () => {
     isCaptainIdle: () => true,
     sendCaptainMessage: vi.fn(),
     getFleetState: () => ({
-      totalSessions: 0,
-      activeSessions: 0,
+      totalSessions: 1,
+      activeSessions: 1,
       pendingSessions: 0,
       recentlyCompleted: 0,
       stuckSessions: 0,
-      sessions: [],
+      sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString() }] as any[],
     }),
     isTerminalFocused: () => false,
     getTickIntervalMs: () => 60_000,
