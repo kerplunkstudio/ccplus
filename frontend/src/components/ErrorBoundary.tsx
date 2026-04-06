@@ -7,6 +7,11 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  errorInfo?: string;
+}
+
+interface ErrorInfo {
+  componentStack: string;
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -17,6 +22,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary caught an error:', error);
+    console.error('Component stack:', errorInfo.componentStack);
+    this.setState({ errorInfo: errorInfo.componentStack });
   }
 
   handleReload = () => {
@@ -55,6 +66,29 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           }}>
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
+          {this.state.errorInfo && (
+            <details style={{
+              fontSize: '11px',
+              color: 'var(--text-secondary)',
+              maxWidth: '600px',
+              marginTop: '12px',
+              textAlign: 'left',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>Stack trace</summary>
+              <pre style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                background: 'var(--bg-secondary)',
+                padding: '8px',
+                borderRadius: '4px',
+                maxHeight: '200px',
+                overflow: 'auto',
+              }}>
+                {this.state.errorInfo}
+              </pre>
+            </details>
+          )}
           <button
             onClick={this.handleReload}
             style={{

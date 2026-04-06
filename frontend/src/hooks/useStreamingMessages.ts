@@ -302,7 +302,7 @@ export function useStreamingMessages({
 
   return {
     // From reducer state
-    messages: state.messages,
+    messages: state.messages ?? [],
     status: state.status,
     streaming: state.streaming,
     backgroundProcessing: state.backgroundProcessing,

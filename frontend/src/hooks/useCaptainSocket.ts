@@ -93,7 +93,7 @@ export function useCaptainSocket(socket: Socket | null) {
         const messagesResponse = await fetch(`${SOCKET_URL}/api/captain/messages`);
         if (messagesResponse.ok) {
           const messagesData = await messagesResponse.json();
-          if (messagesData.success && messagesData.messages.length > 0) {
+          if (messagesData.success && messagesData.messages?.length > 0) {
             // Map DB messages to Message format
             const dbMessages: Message[] = messagesData.messages.map((m: {
               id: string;

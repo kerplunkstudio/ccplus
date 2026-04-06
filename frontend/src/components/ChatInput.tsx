@@ -172,7 +172,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       window.removeEventListener('focus', focusTextarea);
       document.removeEventListener('click', handleClick);
     };
-  }, [messages.length, streaming, connected, sessionId]);
+  }, [messages, streaming, connected, sessionId]);
 
   const handleSubmit = () => {
     const trimmed = input.trim();

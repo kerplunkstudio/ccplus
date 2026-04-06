@@ -88,7 +88,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
     setExpandedConvId((prev) => (prev === convId ? null : convId));
   };
 
-  const hasArchive = archivedConversations.length > 0;
+  const hasArchive = archivedConversations?.length > 0;
 
   // Merge messages and interactive messages, sorted by timestamp
   type TimelineItem =
@@ -96,8 +96,8 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
     | { type: 'interactive'; data: InteractiveMessage; timestamp: number };
 
   const timeline: TimelineItem[] = [
-    ...messages.map((msg) => ({ type: 'message' as const, data: msg, timestamp: msg.timestamp })),
-    ...interactiveMessages.map((msg) => ({ type: 'interactive' as const, data: msg, timestamp: msg.createdAt })),
+    ...(messages ?? []).map((msg) => ({ type: 'message' as const, data: msg, timestamp: msg.timestamp })),
+    ...(interactiveMessages ?? []).map((msg) => ({ type: 'interactive' as const, data: msg, timestamp: msg.createdAt })),
   ].sort((a, b) => a.timestamp - b.timestamp);
 
   return (

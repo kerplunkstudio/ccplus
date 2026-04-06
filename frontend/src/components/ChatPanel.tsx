@@ -108,7 +108,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   // C1: Optimistic messages — show user message immediately before server ack
   const [optimisticMessages, addOptimisticMessage] = useOptimistic(
-    messages,
+    messages ?? [],
     (current: Message[], newMsg: Message) => [...current, newMsg]
   );
 
