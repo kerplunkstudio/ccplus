@@ -217,9 +217,26 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
         if (inferredPhase) {
           const currentState = getWorkflowState(sessionId);
           if (currentState.phase === inferredPhase) {
-            const nextPhase = getNextPhase(sessionId, workspace);
-            if (nextPhase) {
-              const newState = transitionPhase(sessionId, nextPhase, `agent_complete:${agentType}`, workspace);
+            // Check if this is a reviewer agent that found blocking issues.
+            // If the reviewer's last message contains a BLOCK verdict or CRITICAL/HIGH
+            // severity indicators, transition back to execute instead of forward.
+            const reviewerLastMessage = stopData?.lastMessage ?? '';
+            const isReviewPhase = inferredPhase === 'review';
+            const reviewerBlocked =
+              isReviewPhase &&
+              /\bBLOCK\b/.test(reviewerLastMessage);
+
+            let targetPhase: string | null;
+            if (reviewerBlocked) {
+              // Reviewer found blocking issues — send back to execute
+              targetPhase = 'execute';
+              log.info('Workflow: review BLOCK detected, transitioning back to execute', { sessionId, agentType });
+            } else {
+              targetPhase = getNextPhase(sessionId, workspace);
+            }
+
+            if (targetPhase) {
+              const newState = transitionPhase(sessionId, targetPhase, `agent_complete:${agentType}`, workspace);
               if (newState) {
                 const session = sessions.get(sessionId);
                 if (session?.callbacks) {
@@ -230,6 +247,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
                       previous: currentState.phase,
                       sessionId,
                       agent_hints: workflow?.phases.find((p: { name: string }) => p.name === newState.phase)?.agent_hints ?? [],
+                      ...(reviewerBlocked ? { review_blocked: true } : {}),
                     },
                   });
                 }
