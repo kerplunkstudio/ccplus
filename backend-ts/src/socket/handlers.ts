@@ -498,6 +498,15 @@ export function setupSocketHandlers(
       }
     });
 
+    socket.on('captain_cancel', () => {
+      if (!captain.isCaptainAlive()) {
+        socket.emit('captain_error', { message: 'Captain is not active' });
+        return;
+      }
+      captain.cancelCaptainQuery();
+      socket.emit('captain_cancelled', { status: 'ok' });
+    });
+
     socket.on('captain_message', (data: { content: string; image_ids?: string[] }) => {
       if (!captain.isCaptainAlive()) {
         socket.emit('captain_error', { message: 'Captain is not active' });

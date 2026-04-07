@@ -429,6 +429,15 @@ export function useCaptainSocket(socket: Socket | null) {
 
       setMessages((prev) => [...prev, userMessage]);
 
+      // Clear any pending interactive questions — the new message supersedes them
+      setInteractiveMessages((prev) =>
+        prev.map((msg) =>
+          msg.responseState === 'pending'
+            ? { ...msg, responseState: 'expired' as const }
+            : msg
+        )
+      );
+
       socket.emit('captain_message', { content: content || '[Image]', image_ids: imageIds?.length ? imageIds : undefined });
 
       setIsStreaming(true);
@@ -445,6 +454,11 @@ export function useCaptainSocket(socket: Socket | null) {
     saveArchive([]);
   }, []);
 
+  const cancelQuery = useCallback(() => {
+    if (!socket) return;
+    socket.emit('captain_cancel');
+  }, [socket]);
+
   return {
     captainSessionId,
     messages,
@@ -453,6 +467,7 @@ export function useCaptainSocket(socket: Socket | null) {
     isModelThinking,
     toolActivity,
     sendMessage,
+    cancelQuery,
     archivedConversations,
     clearHistory,
     interactiveMessages,

@@ -491,6 +491,16 @@ export function sendCaptainMessage(content: string, source: MessageSource, sourc
     throw new Error("Captain session is not active");
   }
 
+  // If captain is waiting on an interactive question, cancel it so the new message can proceed.
+  // Expire pending interactive messages (resolves their promises) and interrupt the active query.
+  if (pendingInteractiveMessages.size > 0 && captainState.activeQuery) {
+    log.info("Captain: new message while interactive question pending, cancelling question", { source });
+    expirePendingInteractiveMessages('cancelled');
+    captainState.activeQuery.interrupt().catch((error: Error) => {
+      log.error("Failed to interrupt Captain query for new message", { error: String(error) });
+    });
+  }
+
   // Save user message to DB (skip tick messages — they're noise and pollute refresh)
   if (source !== 'tick') {
     try {
@@ -840,6 +850,20 @@ export function isCaptainIdle(): boolean {
  */
 export function isCaptainSession(sessionId: string): boolean {
   return sessionId.startsWith("captain-");
+}
+
+/**
+ * Cancel the active Captain query by interrupting it.
+ * Returns true if a query was interrupted, false if nothing was running.
+ */
+export function cancelCaptainQuery(): boolean {
+  if (!captainState.activeQuery) {
+    return false;
+  }
+  captainState.activeQuery.interrupt().catch((error: Error) => {
+    log.error("Failed to interrupt Captain query during cancellation", { error: String(error) });
+  });
+  return true;
 }
 
 /**

@@ -27,6 +27,7 @@ interface CaptainChatProps {
   onClearHistory: () => void;
   interactiveMessages: InteractiveMessage[];
   onRespondToInteractive: (messageId: string, actionId: string) => void;
+  onCancel: () => void;
   contextPct?: number;
 }
 
@@ -63,6 +64,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   onClearHistory,
   interactiveMessages,
   onRespondToInteractive,
+  onCancel,
   contextPct,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -244,7 +246,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
           connected={true}
           streaming={isStreaming}
           backgroundProcessing={false}
-          onCancel={() => {}}
+          onCancel={onCancel}
           messages={messages}
           sessionId={sessionId}
         />

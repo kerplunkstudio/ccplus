@@ -58,6 +58,7 @@ const defaultProps = {
   onClear: jest.fn(),
   interactiveMessages: [],
   onRespondToInteractive: jest.fn(),
+  onCancel: jest.fn(),
   contextPct: 0,
 };
 
