@@ -258,9 +258,10 @@ describe('ChatPanel', () => {
       },
     });
 
-    expect(textarea.value).toContain('/Users/test/file1.txt');
-    expect(textarea.value).toContain('/Users/test/file2.js');
-    expect(textarea.value).toContain('Here are my files:');
+    // Files should appear as chips, not in textarea
+    expect(screen.getByText('file1.txt')).toBeInTheDocument();
+    expect(screen.getByText('file2.js')).toBeInTheDocument();
+    expect(textarea.value).toBe('Here are my files:');
   });
 
   it('handles drop with no files gracefully', () => {

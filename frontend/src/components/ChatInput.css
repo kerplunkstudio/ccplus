@@ -181,6 +181,57 @@
   color: var(--bg-primary);
 }
 
+.attached-files-preview {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  flex-wrap: wrap;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.file-attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  max-width: 200px;
+}
+
+.file-attachment-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.file-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.file-attachment-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.file-attachment-remove:hover {
+  opacity: 1;
+  color: var(--error);
+}
+
 .attach-btn {
   display: flex;
   align-items: center;

@@ -76,6 +76,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; filename: string; url: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ path: string; name: string }>>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const historyIndexRef = useRef<number>(-1);
   const savedDraftRef = useRef<string>('');
@@ -176,7 +177,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = () => {
     const trimmed = input.trim();
-    if ((!trimmed && uploadedImages.length === 0) || !connected) return;
+    if ((!trimmed && uploadedImages.length === 0 && attachedFiles.length === 0) || !connected) return;
 
     // Check for /loop command
     if (trimmed.startsWith('/loop')) {
@@ -205,6 +206,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       showToast(`Scheduled task created: "${prompt}" every ${interval}`, 'success');
       setInput('');
       setUploadedImages([]);
+      setAttachedFiles([]);
       historyIndexRef.current = -1;
       savedDraftRef.current = '';
       if (sessionId) {
@@ -217,6 +219,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     // Send message (works during streaming too via backend injection)
+    const filePathPrefix = attachedFiles.length > 0
+      ? attachedFiles.map(f => f.path).join('\n') + '\n'
+      : '';
+    const fallback = uploadedImages.length > 0 ? '[Image]' : '';
+    const messageContent = filePathPrefix + (trimmed || fallback);
     const imageIds = uploadedImages.map(img => img.id);
     const images = uploadedImages.map(img => ({
       id: img.id,
@@ -226,7 +233,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       url: img.url,
     }));
     onSendMessage(
-      trimmed || '[Image]',
+      messageContent,
       undefined,
       undefined,
       imageIds.length > 0 ? imageIds : undefined,
@@ -234,6 +241,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     );
     setInput('');
     setUploadedImages([]);
+    setAttachedFiles([]);
     setShowAutocomplete(false);
     historyIndexRef.current = -1; // Reset history navigation
     savedDraftRef.current = ''; // Clear saved draft
@@ -289,7 +297,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    await uploadFiles(Array.from(files));
+    const allFiles = Array.from(files);
+    const imageFiles = allFiles.filter(f => f.type.startsWith('image/'));
+    const nonImageFiles = allFiles.filter(f => !f.type.startsWith('image/'));
+
+    if (imageFiles.length > 0) {
+      await uploadFiles(imageFiles);
+    }
+
+    if (nonImageFiles.length > 0) {
+      const newAttachments = nonImageFiles.map(f => {
+        const fileWithPath = f as { path?: string; name: string };
+        const filePath = fileWithPath.path || f.name;
+        return { path: filePath, name: f.name };
+      });
+      setAttachedFiles(prev => [...prev, ...newAttachments]);
+    }
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -298,6 +321,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleRemoveImage = (imageId: string) => {
     setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // Get filtered autocomplete suggestions
@@ -653,10 +680,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (paths.length > 0) {
-      const currentValue = input;
-      const separator = currentValue && !currentValue.endsWith('\n') && !currentValue.endsWith(' ') ? '\n' : '';
-      const newValue = currentValue + separator + paths.join('\n');
-      setInput(newValue);
+      const newFiles = paths.map(p => ({
+        path: p,
+        name: p.split('/').pop() || p,
+      }));
+      setAttachedFiles(prev => [...prev, ...newFiles]);
     }
 
     textareaRef.current?.focus();
@@ -715,6 +743,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ))}
         </div>
       )}
+      {attachedFiles.length > 0 && (
+        <div className="attached-files-preview">
+          {attachedFiles.map((file, index) => (
+            <div key={`${file.path}-${index}`} className="file-attachment-chip">
+              <svg className="file-attachment-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span className="file-attachment-name" title={file.path}>{file.name}</span>
+              <button
+                className="file-attachment-remove"
+                onClick={() => handleRemoveFile(index)}
+                aria-label={`Remove ${file.name}`}
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
       {promptSuggestions.length > 0 && !streaming && (
         <div className="prompt-suggestions">
           {promptSuggestions.map((suggestion, i) => (
@@ -740,53 +786,50 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             disabled={!connected}
             rows={1}
           />
-          <div className="input-toolbar">
-            <div className="toolbar-left">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-                multiple
-                style={{ display: 'none' }}
-              />
-              <button
-                className={`attach-btn ${uploading ? 'uploading' : ''}`}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!connected || uploading}
-                aria-label="Attach image"
-                title="Attach image"
-              >
-                {uploading ? (
-                  <div className="attach-spinner" aria-hidden="true" />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                )}
-              </button>
-            </div>
-            <div className="toolbar-right">
-              {streaming && !backgroundProcessing && (
-                <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-                  </svg>
-                </button>
-              )}
-              <button
-                className="send-btn"
-                onClick={handleSubmit}
-                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
-                aria-label="Send message"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="M22 2L11 13" />
-                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-                </svg>
-              </button>
-            </div>
-          </div>
+        </div>
+        <div className="input-actions">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept="*/*"
+            multiple
+            style={{ display: 'none' }}
+          />
+          <button
+            className={`attach-btn ${uploading ? 'uploading' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!connected || uploading}
+            aria-label="Attach file"
+            title="Attach file"
+          >
+            {uploading ? (
+              <div className="attach-spinner" aria-hidden="true" />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            )}
+          </button>
+          {streaming && !backgroundProcessing && (
+            <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+              </svg>
+            </button>
+          )}
+          <button
+            className="send-btn"
+            onClick={handleSubmit}
+            disabled={(!input.trim() && uploadedImages.length === 0 && attachedFiles.length === 0) || !connected}
+            aria-label="Send message"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M22 2L11 13" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+            </svg>
+          </button>
+
         </div>
       </div>
       {backgroundProcessing && !streaming && (
