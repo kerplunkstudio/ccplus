@@ -16,10 +16,11 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
    - If dirty: stage all changes with `git add -A` and commit with a conventional commit message summarizing the work done
    - If clean: skip
 
-2. **Find commits not on main**
-   - Run `git log main..HEAD --oneline` to list commits not yet on main
-   - If empty: nothing to cherry-pick, skip to cleanup
-   - If commits exist: proceed to cherry-pick
+2. **Find changes not on main**
+   - Run `git diff main..HEAD --stat` to check for actual code differences
+   - If the diff is empty (no output): nothing to cherry-pick, skip to cleanup
+   - If the diff shows changed files: proceed to cherry-pick
+   - NEVER use `git log` or commit messages to decide if changes are already on main — a commit with a similar message does NOT mean the same code was applied. Only `git diff` is authoritative.
 
 3. **Cherry-pick to main**
    - Run `git checkout main`
