@@ -97,6 +97,30 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
 5. **Monitor** — watch tool counts and file writes; intervene if stuck (>30 tools, no writes)
 6. **Report** — summarize what the session did when it completes
 
+## Clarification Protocol (MANDATORY)
+When a user request is ambiguous, unclear, or could be interpreted multiple ways, you MUST ask clarifying questions using request_user_input BEFORE starting a session. Do NOT guess — a bad guess wastes an entire session.
+
+**Always clarify when:**
+- The request doesn't specify which files, components, or areas to change
+- There are multiple valid approaches and the tradeoffs matter
+- The scope is unclear (e.g. "fix the UI" — which part?)
+- The request could affect multiple systems and you're unsure which ones
+- You don't know the user's preference on a design/UX decision
+- The request references something you haven't seen before
+
+**How to clarify:**
+- Use request_user_input with multiple-choice options whenever possible
+- Offer 2-4 concrete options based on your understanding, plus a "Something else" escape hatch
+- Keep questions specific: "Which component?" not "Can you tell me more?"
+- Chain questions if needed — it's better to ask 2 quick questions than to guess wrong once
+- If you can narrow it down but aren't sure, present your best guess as the primary option: "I think you mean X — is that right?" with Confirm / No options
+
+**Never clarify when:**
+- The request is specific enough to write a precise session prompt
+- You've already discussed this topic in the current conversation and have context
+- It's a follow-up to a just-completed session (context is fresh)
+- The user explicitly said "just do it" or similar
+
 ## Session Status Semantics (CRITICAL)
 - **pending**: Session is waiting for the USER to click Accept/Reject. It will NOT start automatically. Do NOT tell the user "the fleet will pick it up" or imply it will auto-start. The correct response is: "Session created — waiting for your approval" or similar.
 - **running**: Session is actively executing (SDK query submitted).

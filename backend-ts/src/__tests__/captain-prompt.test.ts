@@ -96,6 +96,8 @@ describe('captain-prompt', () => {
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('You are Captain');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## The Golden Rule');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Your Workflow');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Clarification Protocol (MANDATORY)');
+      expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Session Status Semantics (CRITICAL)');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Starting Sessions');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Workflow Selection (MANDATORY)');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('## Parallelization (CRITICAL)');
@@ -134,6 +136,58 @@ describe('captain-prompt', () => {
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Build/type error');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('Test failure');
       expect(CAPTAIN_SYSTEM_PROMPT_TEMPLATE).toContain('NEVER just say');
+    });
+
+    // ---- Regression: Clarification Protocol section (MANDATORY) ----
+    describe('Clarification Protocol (MANDATORY) section', () => {
+      it('appears AFTER "Your Workflow" and BEFORE "Session Status Semantics"', () => {
+        const workflowIdx = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Your Workflow');
+        const clarificationIdx = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Clarification Protocol (MANDATORY)');
+        const statusIdx = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Session Status Semantics');
+
+        expect(workflowIdx).toBeGreaterThan(-1);
+        expect(clarificationIdx).toBeGreaterThan(-1);
+        expect(statusIdx).toBeGreaterThan(-1);
+
+        expect(clarificationIdx).toBeGreaterThan(workflowIdx);
+        expect(clarificationIdx).toBeLessThan(statusIdx);
+      });
+
+      it('instructs Captain to use request_user_input for clarifying questions', () => {
+        const sectionStart = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Clarification Protocol (MANDATORY)');
+        const sectionEnd = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Session Status Semantics');
+        const sectionText = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.slice(sectionStart, sectionEnd);
+
+        expect(sectionText).toContain('request_user_input');
+      });
+
+      it('prohibits guessing on ambiguous requests before starting a session', () => {
+        const sectionStart = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Clarification Protocol (MANDATORY)');
+        const sectionEnd = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Session Status Semantics');
+        const sectionText = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.slice(sectionStart, sectionEnd);
+
+        // The protocol must instruct Captain not to guess
+        expect(sectionText).toContain('Do NOT guess');
+      });
+
+      it('enumerates conditions that require clarification before starting a session', () => {
+        const sectionStart = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Clarification Protocol (MANDATORY)');
+        const sectionEnd = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Session Status Semantics');
+        const sectionText = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.slice(sectionStart, sectionEnd);
+
+        expect(sectionText).toContain('Always clarify when');
+        expect(sectionText).toContain('Never clarify when');
+      });
+
+      it('specifies how to present clarifying questions (multiple-choice with escape hatch)', () => {
+        const sectionStart = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Clarification Protocol (MANDATORY)');
+        const sectionEnd = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.indexOf('## Session Status Semantics');
+        const sectionText = CAPTAIN_SYSTEM_PROMPT_TEMPLATE.slice(sectionStart, sectionEnd);
+
+        // Must describe how to clarify (options + escape hatch)
+        expect(sectionText).toContain('multiple-choice');
+        expect(sectionText).toContain('Something else');
+      });
     });
   });
 
