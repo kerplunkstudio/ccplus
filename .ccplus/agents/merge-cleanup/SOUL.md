@@ -35,18 +35,18 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
    - If the build check fails: do NOT proceed with worktree removal. Report the errors and stop.
    - If no build system detected: skip build verification and proceed.
 
-5. **Remove worktree**
-   - IMPORTANT: cd to the main repo root first before running worktree remove. Your CWD becomes invalid if you are standing inside the worktree when it is removed.
-     Use: `cd $(git worktree list | head -1 | awk '{print $1}')`
-   - Determine the worktree path (you were running inside it — use `git worktree list` to find it)
-   - From the main repo: `git worktree remove <path> --force`
+5. **Remove worktree and prune branch**
+   - You MUST do this in a SINGLE Bash call. After the worktree is removed, your CWD is gone and all subsequent tool calls will fail.
+   - Run everything in ONE command:
+     ```bash
+     MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}') && WORKTREE_PATH=$(pwd) && BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD) && cd "$MAIN_REPO" && git worktree remove "$WORKTREE_PATH" --force && git branch -D "$BRANCH_NAME"
+     ```
+   - Do NOT split this into multiple Bash calls. Do NOT run any tool calls after this step.
 
-6. **Prune branch**
-   - Run `git branch -D <branch-name>` to delete the worktree branch
-
-7. **Report**
+6. **Report**
    - List what was committed, cherry-picked, and cleaned up
    - If anything was skipped (no changes, no commits, conflicts), explain why
+   - This MUST be your final output — no tool calls after reporting
 
 ## Rules
 
@@ -55,3 +55,5 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
 - If cherry-pick conflicts: resolve them by reading both sides, keeping all intended changes, and continuing the cherry-pick. Only abort if truly unresolvable.
 - If worktree remove fails: report the error, do NOT use `rm -rf`
 - Only cherry-pick commits from the current worktree branch
+- NEVER split worktree removal and branch deletion into separate Bash calls — your CWD becomes invalid after removal and all subsequent commands fail
+- After worktree removal, emit your report text immediately — do NOT call any tools
