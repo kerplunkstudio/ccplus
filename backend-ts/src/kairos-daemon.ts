@@ -86,8 +86,14 @@ export function checkKairos(deps: KairosDeps): void {
   }
   const idleMs = Date.now() - idleSince;
 
-  // Guard: Not idle long enough (10 minutes)
-  if (idleMs < 10 * 60 * 1000) return;
+  // Guard: Not idle long enough (30 minutes)
+  if (idleMs < 30 * 60 * 1000) return;
+
+  // Guard: Cooldown — at most once every 3 hours
+  if (state.lastAnalysisAt) {
+    const msSinceLastAnalysis = Date.now() - new Date(state.lastAnalysisAt).getTime();
+    if (msSinceLastAnalysis < 3 * 60 * 60 * 1000) return;
+  }
 
   // Guard: Already triggered an analysis that hasn't completed
   if (state.analyzing) return;

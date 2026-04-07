@@ -110,7 +110,7 @@ describe("kairos-daemon", () => {
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
     });
 
-    it("triggers analysis when enough sessions exist and idle > 10 min", () => {
+    it("triggers analysis when enough sessions exist and idle > 30 min", () => {
       vi.useFakeTimers();
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
@@ -120,8 +120,8 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance past 10 minutes
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Advance past 30 minutes
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
 
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
@@ -147,8 +147,8 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(kairosDb.markSessionsAnalyzed).not.toHaveBeenCalled();
 
-      // Advance past 10 minutes — trigger fires
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Advance past 30 minutes — trigger fires
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
 
       expect(kairosDb.markSessionsAnalyzed).toHaveBeenCalledWith(sessionIds);
@@ -164,9 +164,9 @@ describe("kairos-daemon", () => {
       startKairosDaemon({ log: deps.log });
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
 
-      // First tick and wait 11 minutes to trigger
+      // First tick and wait 31 minutes to trigger
       checkKairos(deps);
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps); // triggers
 
       checkKairos(deps); // should skip
@@ -196,7 +196,7 @@ describe("kairos-daemon", () => {
       });
 
       checkKairos(deps);
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
 
       expect(deps.log.error).toHaveBeenCalledWith("KAIROS: check failed", {
@@ -205,7 +205,7 @@ describe("kairos-daemon", () => {
 
     });
 
-    it("does not trigger before 10 minutes of idle time", () => {
+    it("does not trigger before 30 minutes of idle time", () => {
       vi.useFakeTimers();
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
@@ -215,14 +215,14 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance 9 minutes — still should not trigger
-      vi.advanceTimersByTime(9 * 60 * 1000);
+      // Advance 29 minutes — still should not trigger
+      vi.advanceTimersByTime(29 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
     });
 
-    it("triggers after 10 minutes of continuous idle time", () => {
+    it("triggers after 30 minutes of continuous idle time", () => {
       vi.useFakeTimers();
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
@@ -232,8 +232,8 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance 11 minutes — should trigger
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Advance 31 minutes — should trigger
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
         expect.stringContaining("[FLEET][AUTO]"),
@@ -265,12 +265,12 @@ describe("kairos-daemon", () => {
       getActiveSessionCountMock.mockReturnValue(0);
       checkKairos(deps);
 
-      // Advance 9 minutes (should not trigger yet because timer was reset)
-      vi.advanceTimersByTime(9 * 60 * 1000);
+      // Advance 29 minutes (should not trigger yet because timer was reset)
+      vi.advanceTimersByTime(29 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance 2 more minutes (total 11 minutes since last idle)
+      // Advance 2 more minutes (total 31 minutes since last idle)
       vi.advanceTimersByTime(2 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
@@ -305,8 +305,8 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance past 10-minute idle threshold
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Advance past 30-minute idle threshold
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
 
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
@@ -329,7 +329,7 @@ describe("kairos-daemon", () => {
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
 
       checkKairos(deps);
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
       expect(getKairosState().analyzing).toBe(true);
 
@@ -338,7 +338,7 @@ describe("kairos-daemon", () => {
 
     });
 
-    it("resets idle timer so KAIROS requires another 10 minutes before re-triggering", () => {
+    it("resets idle timer and respects 3-hour cooldown before re-triggering", () => {
       vi.useFakeTimers();
       const deps = makeDeps();
       startKairosDaemon({ log: deps.log });
@@ -348,8 +348,8 @@ describe("kairos-daemon", () => {
       checkKairos(deps);
       expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
 
-      // Advance 11 minutes — KAIROS triggers
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      // Advance 31 minutes — KAIROS triggers
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).toHaveBeenCalledTimes(1);
       expect(getKairosState().analyzing).toBe(true);
@@ -358,17 +358,16 @@ describe("kairos-daemon", () => {
       onKairosSessionComplete();
       expect(getKairosState().analyzing).toBe(false);
 
-      // First post-completion check — Captain still idle, idle timer starts fresh from here
+      // Advance 31 minutes idle — should NOT re-trigger (3h cooldown)
+      checkKairos(deps);
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).toHaveBeenCalledTimes(1);
 
-      // Advance 9 minutes from the post-completion check — should NOT re-trigger
-      vi.advanceTimersByTime(9 * 60 * 1000);
-      checkKairos(deps);
-      expect(deps.sendCaptainMessage).toHaveBeenCalledTimes(1);
-
-      // Advance 2 more minutes (total 11 since idle timer restarted) — SHOULD re-trigger
-      vi.advanceTimersByTime(2 * 60 * 1000);
+      // Advance past 3-hour cooldown total, then idle for 31 minutes
+      vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+      checkKairos(deps); // restart idle timer
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
       expect(deps.sendCaptainMessage).toHaveBeenCalledTimes(2);
       expect(getKairosState().totalBatchesTriggered).toBe(2);
@@ -396,7 +395,7 @@ describe("kairos-daemon", () => {
       startKairosDaemon({ log: deps.log });
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
       checkKairos(deps);
-      vi.advanceTimersByTime(11 * 60 * 1000);
+      vi.advanceTimersByTime(31 * 60 * 1000);
       checkKairos(deps);
 
       __resetStateForTesting();

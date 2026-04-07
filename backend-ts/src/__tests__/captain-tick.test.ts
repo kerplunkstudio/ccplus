@@ -34,8 +34,8 @@ vi.mock('../logger.js', () => ({
 // Fleet state with one active session so ticks have something actionable and actually fire.
 // Tests for "no activity = skip tick" belong in their own describe block.
 const ACTIVE_FLEET = () => ({
-  totalSessions: 1, activeSessions: 1, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0,
-  sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString() }] as any[],
+  totalSessions: 1, activeSessions: 1, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 1,
+  sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString(), stuckDetectedAt: new Date().toISOString() }] as any[],
 });
 const EMPTY_FLEET = () => ({
   totalSessions: 0, activeSessions: 0, pendingSessions: 0, recentlyCompleted: 0, stuckSessions: 0, sessions: [],
@@ -620,8 +620,8 @@ describe('captain-tick: circuit breaker', () => {
       activeSessions: 1,
       pendingSessions: 0,
       recentlyCompleted: 0,
-      stuckSessions: 0,
-      sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString() }] as any[],
+      stuckSessions: 1,
+      sessions: [{ status: 'running', sessionId: 'test-active', lastActivity: new Date().toISOString(), stuckDetectedAt: new Date().toISOString() }] as any[],
     }),
     isTerminalFocused: () => false,
     getTickIntervalMs: () => 60_000,

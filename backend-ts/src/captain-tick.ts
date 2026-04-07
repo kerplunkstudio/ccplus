@@ -428,6 +428,28 @@ function tick(): void {
     // no recent completions, and no consolidation hint pending
     const hasActivity = fleetSummary.stuckSessions > 0;
 
+    // KAIROS check — runs independently of whether tick reaches captain
+    try {
+      checkKairos({
+        sendCaptainMessage: deps.sendCaptainMessage,
+        isCaptainAlive: deps.isCaptainAlive,
+        getActiveSessionCount: () => fleetSummary.activeSessions,
+        log,
+      });
+    } catch (err) {
+      log.error('KAIROS check failed during tick', { error: String(err) });
+    }
+
+    // Memory promotion sweep — runs independently of whether tick reaches captain
+    try {
+      const promoResult = runPromotionSweep();
+      if (promoResult.promoted > 0 || promoResult.demoted > 0) {
+        log.info('Memory promotion sweep', promoResult);
+      }
+    } catch (err) {
+      log.error('Memory promotion sweep failed during tick', { error: String(err) });
+    }
+
     if (!hasActivity) {
       log.debug('Tick skipped — nothing actionable', { tickNumber: tickState.tickNumber + 1, fleetSummary });
       tickState = {
@@ -457,28 +479,6 @@ function tick(): void {
 
     log.info('Tick fired', { tickNumber: tickState.tickNumber, fleetSummary });
     deps.sendTickMessage(message);
-
-    // KAIROS check -- tells Captain to start a kairos session if needed
-    try {
-      checkKairos({
-        sendCaptainMessage: deps.sendCaptainMessage,
-        isCaptainAlive: deps.isCaptainAlive,
-        getActiveSessionCount: () => fleetSummary.activeSessions,
-        log,
-      });
-    } catch (err) {
-      log.error('KAIROS check failed during tick', { error: String(err) });
-    }
-
-    // Memory promotion sweep (piggybacks on tick)
-    try {
-      const promoResult = runPromotionSweep();
-      if (promoResult.promoted > 0 || promoResult.demoted > 0) {
-        log.info('Memory promotion sweep', promoResult);
-      }
-    } catch (err) {
-      log.error('Memory promotion sweep failed during tick', { error: String(err) });
-    }
 
     captainCircuitBreaker = cbRecordSuccess(captainCircuitBreaker);
   } catch (error) {
