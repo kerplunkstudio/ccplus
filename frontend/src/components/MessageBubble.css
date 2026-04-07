@@ -44,6 +44,7 @@
 
 .message-bubble.user {
   margin: var(--space-xl) 0 var(--space-md);
+  align-items: flex-end;
 }
 
 .message-bubble.assistant {
@@ -89,17 +90,24 @@
 
 .message-bubble.user .message-bubble-inner {
   position: relative;
-  color: var(--text-secondary);
-  font-style: italic;
-  border-left: 2px solid var(--accent);
-  padding-left: var(--space-md);
+  color: var(--text-primary);
+  font-style: normal;
+  border-left: none;
+  padding: var(--space-sm) var(--space-md);
   font-size: var(--text-base);
+  background: color-mix(in oklch, var(--accent) 15%, var(--bg-secondary));
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  max-width: 80%;
+  width: fit-content;
 }
 
 
 .message-bubble.assistant .message-bubble-inner {
   color: var(--text-primary);
   font-size: var(--text-base);
+  padding: 0;
+  background: none;
+  max-width: 100%;
 }
 
 /* Chat font customization */

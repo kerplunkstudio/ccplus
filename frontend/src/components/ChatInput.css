@@ -28,9 +28,9 @@
   align-items: flex-end;
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-md) var(--space-md);
-  box-shadow: none;
+  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: border-color var(--duration-normal) var(--ease-default), box-shadow var(--duration-normal) var(--ease-default);
   flex: 1;
 }
@@ -43,8 +43,8 @@
 }
 
 .input-wrapper:focus-within {
-  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
-  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 10%, transparent);
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent);
 }
 
 .message-input {
@@ -182,7 +182,7 @@
   cursor: pointer;
   transition: all var(--transition-normal);
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
 }
 
 .attach-btn:hover:not(:disabled) {
@@ -238,7 +238,7 @@
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--transition-normal);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
 }
 
 .send-btn {
@@ -449,7 +449,7 @@
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--transition-normal);
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
 }
 
 .queue-send-btn:hover:not(:disabled) {
@@ -487,6 +487,7 @@
   .queue-send-btn {
     width: 40px;
     height: 40px;
+    border-radius: 50%;
   }
 
   .message-input {
