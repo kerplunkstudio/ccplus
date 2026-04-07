@@ -17,12 +17,67 @@ import { log } from "../logger.js";
 import { distillSession } from '../memory-distiller.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import * as captain from '../captain.js';
-import { getAgent, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
+import { getAgent, loadAllAgents, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
 import { loadWorkflow } from '../workflow-config.js';
 
 // ---- Internal streaming logic ----
 
 const execAsync = promisify(exec);
+
+type SdkAgentMap = Record<string, { description: string; prompt: string; tools?: string[]; model?: string; maxTurns?: number }>;
+
+// Cached built-in agents (loaded once at startup, reused across sessions)
+let builtInSdkAgents: SdkAgentMap | null = null;
+
+/**
+ * Convert ccplus ResolvedAgent catalog into SDK AgentDefinition records.
+ */
+function toSdkAgents(agents: ResolvedAgent[]): SdkAgentMap {
+  const result: SdkAgentMap = {};
+
+  for (const agent of agents) {
+    const prompt = agent.soulContent ?? agent.system_prompt ?? agent.description ?? '';
+    if (!prompt) continue;
+
+    result[agent.id] = {
+      description: agent.description ?? agent.name,
+      prompt,
+      ...(agent.tools?.allowed ? { tools: agent.tools.allowed } : {}),
+      ...(agent.model ? { model: agent.model } : {}),
+      ...(agent.maxTurns ? { maxTurns: agent.maxTurns } : {}),
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Load ccplus built-in agents once and cache. Called at server startup.
+ * This makes all ccplus agents (merge-cleanup, code_agent, etc.)
+ * available as subagent_type values in the SDK's Agent tool, regardless
+ * of which project workspace the session targets.
+ */
+export async function initBuiltInAgents(): Promise<void> {
+  const agents = await loadAllAgents(config.PROJECT_ROOT);
+  builtInSdkAgents = toSdkAgents(agents);
+  log.info('Built-in SDK agents loaded', { count: Object.keys(builtInSdkAgents).length, agents: Object.keys(builtInSdkAgents) });
+}
+
+/**
+ * Get SDK agents map, merging cached built-ins with any project-specific agents.
+ */
+async function getSdkAgents(workspace: string): Promise<SdkAgentMap> {
+  // If workspace is the ccplus project itself, built-ins are sufficient
+  if (workspace === config.PROJECT_ROOT) {
+    return builtInSdkAgents ?? {};
+  }
+
+  // For other projects, load project-specific agents and merge (project wins on collision)
+  const projectAgents = await loadAllAgents(workspace);
+  const projectSdkAgents = toSdkAgents(projectAgents);
+
+  return { ...(builtInSdkAgents ?? {}), ...projectSdkAgents };
+}
 
 /**
  * Filter installed plugins to only those matching agent's skills.required or skills.available lists.
@@ -342,6 +397,9 @@ export async function streamQuery(
     const mcpServerEntries = filterMcpServersByAgent(allMcpServerEntries, agentConfig);
     const userMcpServers = buildSdkMcpServers(mcpServerEntries);
 
+    // Get ccplus agents (cached built-ins + any project-specific ones)
+    const sdkAgents = await getSdkAgents(workspace);
+
     // Determine if worktree should be enabled
     let worktreeEnabled = config.getWorktreeEnabled();
     if (workflow) {
@@ -382,6 +440,7 @@ export async function streamQuery(
           ...userMcpServers,
         } as any,
         resume: resumeId ?? undefined,
+        agents: sdkAgents as any,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",

@@ -42,6 +42,7 @@ import { initMemoryAccessLog } from "./memory-promotion.js";
 import kairosRouter from "./routes/kairos.js";
 import { stopTelegramBridge } from './telegram-bridge.js';
 import { seedWorkflows } from './workflow-config.js';
+import { initBuiltInAgents } from './sdk/stream-query.js';
 import { isClaudeAuthenticated } from './captain-auth.js';
 import { startKairosDaemon, stopKairosDaemon } from './kairos-daemon.js';
 
@@ -405,6 +406,9 @@ setInterval(() => {
 httpServer.listen(config.PORT, config.HOST, () => {
   // Seed workflows from YAML files into database (on server start)
   seedWorkflows();
+
+  // Cache built-in agents so SDK sessions can find them (merge-cleanup, etc.)
+  initBuiltInAgents().catch((err) => log.error('Failed to init built-in agents', { error: String(err) }));
 
   log.info("Server ready", { url: `http://${config.HOST}:${config.PORT}` });
   scheduler.start();
