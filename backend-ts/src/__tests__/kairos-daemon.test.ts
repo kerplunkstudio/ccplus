@@ -91,8 +91,8 @@ describe("kairos-daemon", () => {
       expect(kairosDb.getUnanalyzedSessionIds).not.toHaveBeenCalled();
     });
 
-    it("does nothing when Captain is not idle", () => {
-      const deps = makeDeps({ isCaptainIdle: vi.fn(() => false) });
+    it("does nothing when fleet has active sessions", () => {
+      const deps = makeDeps({ getActiveSessionCount: vi.fn(() => 3) });
       startKairosDaemon({ log: deps.log });
 
       checkKairos(deps);
@@ -243,26 +243,26 @@ describe("kairos-daemon", () => {
 
     });
 
-    it("resets idle timer when Captain becomes busy", () => {
+    it("resets idle timer when fleet has active sessions", () => {
       vi.useFakeTimers();
-      const isCaptainIdleMock = vi.fn(() => true);
-      const deps = makeDeps({ isCaptainIdle: isCaptainIdleMock });
+      const getActiveSessionCountMock = vi.fn(() => 0);
+      const deps = makeDeps({ getActiveSessionCount: getActiveSessionCountMock });
       startKairosDaemon({ log: deps.log });
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
 
-      // First tick — Captain becomes idle
+      // First tick — fleet idle
       checkKairos(deps);
 
       // Advance 5 minutes
       vi.advanceTimersByTime(5 * 60 * 1000);
       checkKairos(deps);
 
-      // Captain becomes busy
-      isCaptainIdleMock.mockReturnValue(false);
+      // Fleet becomes busy (active sessions)
+      getActiveSessionCountMock.mockReturnValue(2);
       checkKairos(deps);
 
-      // Captain becomes idle again
-      isCaptainIdleMock.mockReturnValue(true);
+      // Fleet becomes idle again
+      getActiveSessionCountMock.mockReturnValue(0);
       checkKairos(deps);
 
       // Advance 9 minutes (should not trigger yet because timer was reset)
@@ -296,10 +296,17 @@ describe("kairos-daemon", () => {
     });
 
     it("triggers when no active sessions and all other conditions met", () => {
+      vi.useFakeTimers();
       const deps = makeDeps({ getActiveSessionCount: vi.fn(() => 0) });
       startKairosDaemon({ log: deps.log });
       vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
 
+      // First tick starts idle timer
+      checkKairos(deps);
+      expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
+
+      // Advance past 10-minute idle threshold
+      vi.advanceTimersByTime(11 * 60 * 1000);
       checkKairos(deps);
 
       expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
@@ -310,6 +317,7 @@ describe("kairos-daemon", () => {
 
       const state = getKairosState();
       expect(state.analyzing).toBe(true);
+      vi.useRealTimers();
     });
   });
 

@@ -72,13 +72,15 @@ export function checkKairos(deps: KairosDeps): void {
   // Guard: Captain not alive
   if (!deps.isCaptainAlive()) return;
 
-  // Guard: Captain not idle (reset idle timer)
-  if (!deps.isCaptainIdle()) {
+  // Guard: Other sessions are still running (reset idle timer)
+  const activeCount = deps.getActiveSessionCount();
+  if (activeCount > 0) {
+    deps.log.info("KAIROS: skipping — fleet has active sessions", { activeCount });
     idleSince = null;
     return;
   }
 
-  // Track idle duration
+  // Track idle duration (starts when fleet has zero active sessions)
   if (idleSince === null) {
     idleSince = Date.now();
   }
@@ -89,13 +91,6 @@ export function checkKairos(deps: KairosDeps): void {
 
   // Guard: Already triggered an analysis that hasn't completed
   if (state.analyzing) return;
-
-  // Guard: Other sessions are still running
-  const activeCount = deps.getActiveSessionCount();
-  if (activeCount > 0) {
-    deps.log.info("KAIROS: skipping — fleet has active sessions", { activeCount });
-    return;
-  }
 
   try {
     const sessionIds = getUnanalyzedSessionIds(KAIROS_MAX_BATCH_SIZE);

@@ -93,7 +93,7 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
    - Constraints (what NOT to change)
    - Context the session won't have (why this change matters)
 3. **Get approval** — for user-initiated requests, present the session plan using request_user_input and wait for confirmation. For [FLEET] events (e.g. session completions triggering follow-up), act on informational items immediately without approval.
-4. **Delegate** — call start_session with the expanded prompt. ALWAYS use `force=true` when you have already obtained approval via request_user_input. This starts the session immediately in running state, skipping the redundant pending→accept flow.
+4. **Delegate** — call start_session with the expanded prompt. ALWAYS use \`force=true\` when you have already obtained approval via request_user_input. This starts the session immediately in running state, skipping the redundant pending→accept flow.
 5. **Monitor** — watch tool counts and file writes; intervene if stuck (>30 tools, no writes)
 6. **Report** — summarize what the session did when it completes
 
