@@ -16,7 +16,6 @@
 .input-row {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-sm);
   max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
@@ -25,7 +24,7 @@
 
 .input-wrapper {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -35,11 +34,23 @@
   flex: 1;
 }
 
-.input-actions {
+.input-toolbar {
   display: flex;
-  align-items: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-sm);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
   gap: var(--space-xs);
-  flex-shrink: 0;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
 }
 
 .input-wrapper:focus-within {
@@ -174,10 +185,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-normal);
@@ -186,7 +197,7 @@
 }
 
 .attach-btn:hover:not(:disabled) {
-  border-color: var(--text-primary);
+  background: color-mix(in oklch, var(--text-secondary) 10%, transparent);
   color: var(--text-primary);
 }
 
@@ -227,8 +238,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: 1px solid var(--text-primary);
   background: var(--text-primary);
   color: var(--bg-primary);
@@ -441,8 +452,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: 1px solid color-mix(in oklch, var(--accent) 60%, var(--border));
   background: transparent;
   color: var(--accent);
@@ -473,20 +484,12 @@
     padding: 6px 8px 8px;
   }
 
-  .input-row {
-    gap: var(--space-sm);
-  }
-
-  .input-actions {
-    gap: var(--space-xs);
-  }
-
   .attach-btn,
   .send-btn,
   .cancel-btn,
   .queue-send-btn {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
   }
 

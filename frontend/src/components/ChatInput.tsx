@@ -740,49 +740,53 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             disabled={!connected}
             rows={1}
           />
-        </div>
-        <div className="input-actions">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
-            multiple
-            style={{ display: 'none' }}
-          />
-          <button
-            className={`attach-btn ${uploading ? 'uploading' : ''}`}
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!connected || uploading}
-            aria-label="Attach image"
-            title="Attach image"
-          >
-            {uploading ? (
-              <div className="attach-spinner" aria-hidden="true" />
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-              </svg>
-            )}
-          </button>
-          {streaming && !backgroundProcessing && (
-            <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-              </svg>
-            </button>
-          )}
-          <button
-            className="send-btn"
-            onClick={handleSubmit}
-            disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
-            aria-label="Send message"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M22 2L11 13" />
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-            </svg>
-          </button>
+          <div className="input-toolbar">
+            <div className="toolbar-left">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                multiple
+                style={{ display: 'none' }}
+              />
+              <button
+                className={`attach-btn ${uploading ? 'uploading' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!connected || uploading}
+                aria-label="Attach image"
+                title="Attach image"
+              >
+                {uploading ? (
+                  <div className="attach-spinner" aria-hidden="true" />
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            <div className="toolbar-right">
+              {streaming && !backgroundProcessing && (
+                <button className="cancel-btn" onClick={onCancel} aria-label="Cancel streaming">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+                  </svg>
+                </button>
+              )}
+              <button
+                className="send-btn"
+                onClick={handleSubmit}
+                disabled={(!input.trim() && uploadedImages.length === 0) || !connected}
+                aria-label="Send message"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M22 2L11 13" />
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       {backgroundProcessing && !streaming && (
