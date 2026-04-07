@@ -14,7 +14,7 @@ import { getUnanalyzedSessionIds, markSessionsAnalyzed } from "./db/kairos.js";
 export interface KairosDeps {
   readonly sendCaptainMessage: (content: string, source: string, sourceId: string) => void;
   readonly isCaptainAlive: () => boolean;
-  readonly isCaptainIdle: () => boolean;
+  readonly getActiveSessionCount: () => number;
   readonly log: {
     info: (msg: string, context?: Record<string, unknown>) => void;
     error: (msg: string, context?: Record<string, unknown>) => void;
@@ -89,6 +89,13 @@ export function checkKairos(deps: KairosDeps): void {
 
   // Guard: Already triggered an analysis that hasn't completed
   if (state.analyzing) return;
+
+  // Guard: Other sessions are still running
+  const activeCount = deps.getActiveSessionCount();
+  if (activeCount > 0) {
+    deps.log.info("KAIROS: skipping — fleet has active sessions", { activeCount });
+    return;
+  }
 
   try {
     const sessionIds = getUnanalyzedSessionIds(KAIROS_MAX_BATCH_SIZE);

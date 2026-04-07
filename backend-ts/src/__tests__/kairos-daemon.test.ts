@@ -17,7 +17,7 @@ function makeDeps(overrides?: Partial<KairosDeps>): KairosDeps {
   return {
     sendCaptainMessage: vi.fn(),
     isCaptainAlive: vi.fn(() => true),
-    isCaptainIdle: vi.fn(() => true),
+    getActiveSessionCount: vi.fn(() => 0),
     log: {
       info: vi.fn(),
       error: vi.fn(),
@@ -279,6 +279,37 @@ describe("kairos-daemon", () => {
         "kairos"
       );
 
+    });
+
+    it("skips when active sessions exist", () => {
+      const deps = makeDeps({ getActiveSessionCount: vi.fn(() => 2) });
+      startKairosDaemon({ log: deps.log });
+      vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
+
+      checkKairos(deps);
+
+      expect(deps.log.info).toHaveBeenCalledWith(
+        "KAIROS: skipping — fleet has active sessions",
+        { activeCount: 2 }
+      );
+      expect(deps.sendCaptainMessage).not.toHaveBeenCalled();
+    });
+
+    it("triggers when no active sessions and all other conditions met", () => {
+      const deps = makeDeps({ getActiveSessionCount: vi.fn(() => 0) });
+      startKairosDaemon({ log: deps.log });
+      vi.mocked(kairosDb.getUnanalyzedSessionIds).mockReturnValue(["s1", "s2", "s3", "s4", "s5"]);
+
+      checkKairos(deps);
+
+      expect(deps.sendCaptainMessage).toHaveBeenCalledWith(
+        expect.stringContaining("[FLEET][AUTO]"),
+        "fleet",
+        "kairos"
+      );
+
+      const state = getKairosState();
+      expect(state.analyzing).toBe(true);
     });
   });
 

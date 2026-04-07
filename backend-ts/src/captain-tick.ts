@@ -465,7 +465,7 @@ function tick(): void {
       checkKairos({
         sendCaptainMessage: deps.sendCaptainMessage,
         isCaptainAlive: deps.isCaptainAlive,
-        isCaptainIdle: deps.isCaptainIdle,
+        getActiveSessionCount: () => fleetSummary.activeSessions,
         log,
       });
     } catch (err) {
