@@ -114,6 +114,17 @@ function createResultQuery(is_error: boolean): Partial<Query> {
   };
 }
 
+// Build a mock query that throws mid-iteration (simulates cwd invalidation)
+function createThrowingQuery(errorMessage: string): Partial<Query> {
+  return {
+    interrupt: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn(),
+    [Symbol.asyncIterator]: async function* () {
+      throw new Error(errorMessage);
+    },
+  };
+}
+
 const BASE_CALLBACKS = {
   onText: vi.fn(),
   onToolEvent: vi.fn(),
@@ -209,6 +220,76 @@ describe('stream-query session status regression', () => {
 
       // Captain should NOT be notified for error completions
       expect(mockCaptain.notifySessionComplete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Bug Fix 3: merge-cleanup cwd invalidation must not cause false "failed" status', () => {
+    /**
+     * Root cause: merge-cleanup agent previously removed the worktree BEFORE reporting success.
+     * The removed worktree invalidated the cwd, so any subsequent Bash call threw
+     * "Working directory no longer exists". That exception propagated as is_error: true
+     * through the SDK result message, landing in the catch block of stream-query.ts
+     * which set status = 'failed' even though the cherry-pick had succeeded.
+     *
+     * Fix: "Report success" step moved BEFORE worktree removal so the final Bash call
+     * (cd <main_repo_root> && git worktree remove ...) uses an absolute path that
+     * is always valid, preventing the exception.
+     *
+     * These tests verify the two sides of that contract:
+     * 1. When the SDK iterator throws (cwd gone mid-session), status ends up 'failed'.
+     * 2. When the SDK iterator completes cleanly (cwd valid for last command), status ends up 'completed'.
+     *
+     * The fix prevents scenario 1 from occurring in merge-cleanup by reordering the steps.
+     */
+    it('marks session "failed" when the SDK iterator throws (cwd-invalidation scenario)', async () => {
+      mockCaptain.notifySessionComplete.mockImplementation(() => {});
+      mockQuery.mockReturnValue(
+        createThrowingQuery('Working directory no longer exists')
+      );
+
+      const sessionId = 'cwd-invalidation-throws-test';
+      const callbacks = { ...BASE_CALLBACKS, onText: vi.fn(), onComplete: vi.fn(), onError: vi.fn() };
+
+      sdkSession.submitQuery(sessionId, 'merge cleanup', '/tmp/workspace', callbacks);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const detail = fleetMonitor.getSessionDetail(sessionId);
+      expect(detail?.status).toBe('failed');
+      expect(callbacks.onError).toHaveBeenCalled();
+      expect(callbacks.onError.mock.calls[0][0]).toContain('Working directory no longer exists');
+    });
+
+    it('marks session "completed" when the SDK iterator finishes without throwing (clean last command)', async () => {
+      mockCaptain.notifySessionComplete.mockImplementation(() => {});
+      // Simulates the fixed ordering: last Bash call uses absolute path, succeeds, no exception
+      mockQuery.mockReturnValue(createResultQuery(false));
+
+      const sessionId = 'clean-last-command-test';
+      const callbacks = { ...BASE_CALLBACKS, onText: vi.fn(), onComplete: vi.fn(), onError: vi.fn() };
+
+      sdkSession.submitQuery(sessionId, 'merge cleanup', '/tmp/workspace', callbacks);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const detail = fleetMonitor.getSessionDetail(sessionId);
+      expect(detail?.status).toBe('completed');
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it('calls onError with the cwd error message so the orchestrator can diagnose the failure', async () => {
+      mockCaptain.notifySessionComplete.mockImplementation(() => {});
+      mockQuery.mockReturnValue(
+        createThrowingQuery('Working directory no longer exists: /path/to/worktree')
+      );
+
+      const sessionId = 'cwd-error-message-test';
+      const callbacks = { ...BASE_CALLBACKS, onText: vi.fn(), onComplete: vi.fn(), onError: vi.fn() };
+
+      sdkSession.submitQuery(sessionId, 'merge cleanup', '/path/to/worktree', callbacks);
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(callbacks.onError).toHaveBeenCalledTimes(1);
+      const errorMsg: string = callbacks.onError.mock.calls[0][0];
+      expect(errorMsg).toContain('Working directory no longer exists');
     });
   });
 });

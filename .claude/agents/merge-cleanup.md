@@ -40,19 +40,21 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
    - If ANY cherry-picked commit is missing from main's log: STOP and report failure. Do NOT proceed to worktree removal.
    - This is a critical safety check — skipping it can cause silent data loss
 
-4. **Remove worktree**
-   - Determine the worktree path (you are running inside it — use `git worktree list` to find it)
+4. **Report success** (BEFORE removing the worktree)
+   - Output a summary of what was committed, cherry-picked, and is ready for cleanup
+   - Include the worktree path and branch name you are about to delete
+   - This step MUST run while the worktree directory still exists (before step 5)
+
+5. **Remove worktree and prune branch in one Bash call**
+   - Determine the worktree path (you are running inside it — use `git worktree list` if needed)
    - Determine the main repo root from `git worktree list` (the first entry without a branch suffix)
-   - `cd` to the main repo root FIRST
-   - Then run `git worktree remove <path> --force`
-   - CRITICAL: Only proceed with worktree removal if step 3.5 verified all commits landed on main
-
-5. **Prune branch**
-   - From the main repo root: run `git branch -D <branch-name>` to delete the worktree branch
-
-6. **Report**
-   - From the main repo root: list what was committed, cherry-picked, and cleaned up
-   - If anything was skipped (no changes, no commits, conflicts), explain why
+   - Run the following as a SINGLE Bash command (so the shell starts while the worktree still exists, cds away immediately, then cleans up):
+     ```
+     cd <main_repo_root> && git worktree remove <worktree_path> --force && git branch -D <branch_name>
+     ```
+   - CRITICAL: Only run this if step 3.5 verified all commits landed on main
+   - CRITICAL: This must be the LAST Bash call you make. Do NOT run any more Bash commands after this, because the worktree directory will be gone and subsequent Bash calls will fail (the session cwd is the worktree path).
+   - If this command fails: report the cleanup error. The merge itself succeeded (verified in step 3.5), so this is a non-critical cleanup failure.
 
 ## Rules
 
