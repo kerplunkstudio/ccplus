@@ -1,6 +1,6 @@
 # cc+ — Watch your agents work.
 
-Fleet orchestration for Claude Code — run parallel AI coding sessions with real-time observability and multi-agent workflows.
+Fleet orchestration for Claude Code. Run parallel AI coding sessions with full observability, autonomous workflows, and a self-improving agent system.
 
 <p align="center">
   <a href="https://github.com/kerplunkstudio/ccplus/actions"><img src="https://img.shields.io/github/actions/workflow/status/kerplunkstudio/ccplus/ci.yml?branch=main&style=for-the-badge" alt="CI"></a>
@@ -17,7 +17,9 @@ Fleet orchestration for Claude Code — run parallel AI coding sessions with rea
 
 ## Who is this for
 
-You're a developer who uses Claude Code daily. You want to run 5 sessions in parallel, each on a different feature, with automated testing and code review. cc+ does that. See every tool call, every agent, every token — in real-time. Fleet monitor shows all sessions at once. Captain orchestrates workflows autonomously.
+You use Claude Code daily. You want to see what your agents are actually doing — every tool call, every file edit, every decision — in real time. cc+ gives you that out of the box, with multi-tab sessions and a fleet monitor.
+
+Want more? Captain is right there. It orchestrates workflows, spins up sessions in isolated worktrees, and monitors everything autonomously. Message it from the app, from Telegram on your phone, or through the API. KAIROS makes the whole system smarter over time.
 
 ---
 
@@ -72,15 +74,15 @@ Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). macO
 
 ## How It Works
 
-You tell Captain: "fix the auth bug". Captain starts a bug-fix workflow → Debugger investigates → Code Agent patches → TDD Guide writes regression test → Code Reviewer approves → merged to main. You get a summary.
+At its core, cc+ is a real-time observability layer for Claude Code. Open a session, send a message, and watch the activity tree light up with every agent spawn, tool call, and file edit. Multiple tabs, multiple projects, full visibility.
 
-The process is automatic. No manual intervention needed. Captain manages workflow state, retries on failure, and adapts to blockers. Between tasks, a periodic tick keeps Captain aware of your projects — brief mode suppresses noise unless something needs your attention.
+Captain sits alongside your sessions. Tell it what to do — it picks the workspace, writes the prompt, starts a session in an isolated git worktree, assigns a workflow, and monitors progress. If something fails, it retries. If something blocks, it adapts. A periodic tick keeps Captain aware of your projects. Stealth mode suppresses noise — you only hear about things that need your attention.
 
 ---
 
 ## The Model
 
-You talk to Captain. Captain runs workflows. You watch.
+Run sessions yourself, or let Captain run them for you.
 
 Each session is fully isolated. Multi-tab interface. Desktop app (Electron) for macOS/Linux, web UI at localhost for remote access. Real-time activity trees show every agent spawn, tool call, and file edit as a hierarchy.
 
@@ -102,27 +104,33 @@ Real-time activity trees. Every agent spawn, tool call, and file edit, structure
 
 ## Cross-Session Memory
 
-Persistent knowledge across sessions.
+Inspired by Letta's architecture. Captain has tiered memory — core facts persist across sessions, patterns get promoted from long-term storage, stale knowledge decays automatically, and duplicates get consolidated. It remembers what matters and forgets what doesn't.
 
 ---
 
 ## KAIROS
 
-Automatic retrospective analysis across sessions. When enough completed sessions accumulate, KAIROS reviews patterns and prompt effectiveness — then recommends improvements.
+Automatic retrospective analysis. When sessions complete or fail, KAIROS reviews what happened — what worked, what broke, what patterns emerged. It then patches agent prompts directly so the same mistakes don't repeat.
+
+The system evolves while you sleep. Failed sessions become training data for better future sessions.
+
+---
+
+## Streaming Performance
+
+Debounced markdown parsing, coalesced WebSocket deltas, O(1) activity tree lookups, exponential backoff on reconnect. The UI stays smooth even with multiple agents running in parallel across different sessions.
 
 ---
 
 ## Scheduled Tasks
 
-Cron-based recurring prompts.
-
----
+Cron-based recurring prompts. Schedule Captain to run health checks, deploy monitors, or periodic code reviews on any interval. Manage them from the app or the API.
 
 ---
 
 ## Access Anywhere
 
-Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge: message Captain from your phone, get status updates, start sessions remotely. For Telegram setup details, see [docs](docs/).
+Desktop app (Electron, macOS + Linux). Web UI at localhost. Telegram bridge — message Captain from your phone, start sessions remotely, get status updates pushed to you. API access for automation.
 
 ---
 
@@ -143,7 +151,8 @@ cc+ adds:
 - Real-time WebSocket updates to the UI
 - Desktop app + web interface
 - Captain AI orchestration
-- Telegram bridge
+- Telegram bridge + API access
+- KAIROS self-improvement loop
 
 The result: you get full transparency into what your agents are doing, and the power to run them at scale.
 
@@ -166,6 +175,9 @@ The result: you get full transparency into what your agents are doing, and the p
 - Scaffolding workflows (project creation with full tool access)
 - File overlap detection across sessions
 - Post-deploy smoke checks
+- Optimistic UI — messages appear instantly before server acknowledgment
+- Prevents macOS idle sleep while agents are working
+- Captain query usage tracking with source tagging
 
 </details>
 
