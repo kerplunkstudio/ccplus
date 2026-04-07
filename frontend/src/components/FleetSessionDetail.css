@@ -72,6 +72,9 @@
   flex-shrink: 0;
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
 }
 
 .fleet-prompt-text {
@@ -87,6 +90,7 @@
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  flex: 1;
 }
 
 .fleet-prompt-loading,
@@ -96,10 +100,38 @@
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  flex: 1;
 }
 
 .fleet-prompt-error {
   color: var(--danger);
+}
+
+/* View toggle button */
+.fleet-view-toggle {
+  flex-shrink: 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.fleet-view-toggle:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.fleet-view-toggle:active {
+  background: var(--bg-secondary);
 }
 
 /* Activity tree - full width */

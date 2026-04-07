@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTabSocket } from '../hooks/useTabSocket';
 import { ActivityTree } from './ActivityTree';
+import { DiffViewer } from './DiffViewer';
 import './FleetSessionDetail.css';
 
 interface FleetSessionDetailProps {
@@ -36,9 +37,14 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
   }, [messages]);
 
   const projectName = getProjectName(workspace);
+  const [viewMode, setViewMode] = useState<'activity' | 'diff'>('activity');
 
   const handleOpenAsTab = () => {
     onOpenAsTab(sessionId, workspace);
+  };
+
+  const toggleViewMode = () => {
+    setViewMode(viewMode === 'activity' ? 'diff' : 'activity');
   };
 
   return (
@@ -66,10 +72,17 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
         ) : (
           <div className="fleet-prompt-empty">Waiting for prompt...</div>
         )}
+        <button className="fleet-view-toggle" onClick={toggleViewMode}>
+          {viewMode === 'activity' ? 'View Diff' : 'View Activity'}
+        </button>
       </div>
 
       <div className="fleet-session-detail-activity">
-        <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} variant="split" />
+        {viewMode === 'activity' ? (
+          <ActivityTree tree={activityTree} usageStats={usageStats} contextTokens={contextTokens} variant="split" />
+        ) : (
+          <DiffViewer sessionId={sessionId} />
+        )}
       </div>
 
       <button className="fleet-session-detail-open-btn" onClick={handleOpenAsTab}>
