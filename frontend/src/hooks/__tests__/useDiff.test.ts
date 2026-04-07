@@ -59,7 +59,7 @@ describe('useDiff', () => {
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => mockDiffResult,
+      json: async () => ({ success: true, data: mockDiffResult }),
     });
 
     const { result } = renderHook(() => useDiff('test-session-id'));
@@ -109,6 +109,24 @@ describe('useDiff', () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it('handles success: false response', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ success: false, error: 'Session not found' }),
+    });
+
+    const { result } = renderHook(() => useDiff('test-session-id'));
+
+    result.current.fetchDiff();
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Session not found');
+    });
+
+    expect(result.current.diffResult).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
   it('selectFile updates selectedFile', async () => {
     const mockDiffResult: DiffResult = {
       files: [
@@ -133,7 +151,7 @@ describe('useDiff', () => {
 
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
-      json: async () => mockDiffResult,
+      json: async () => ({ success: true, data: mockDiffResult }),
     });
 
     const { result } = renderHook(() => useDiff('test-session-id'));
@@ -168,7 +186,7 @@ describe('useDiff', () => {
 
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
-      json: async () => mockDiffResult,
+      json: async () => ({ success: true, data: mockDiffResult }),
     });
 
     const { result, rerender } = renderHook(

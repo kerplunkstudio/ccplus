@@ -44,7 +44,7 @@ export const FleetSessionDetail: React.FC<FleetSessionDetailProps> = ({
   };
 
   const toggleViewMode = () => {
-    setViewMode(viewMode === 'activity' ? 'diff' : 'activity');
+    setViewMode(prev => prev === 'activity' ? 'diff' : 'activity');
   };
 
   return (

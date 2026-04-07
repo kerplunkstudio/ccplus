@@ -64,7 +64,11 @@ export function useDiff(sessionId: string): UseDiffReturn {
       if (!response.ok) {
         throw new Error(`Failed to fetch diff: ${response.status} ${response.statusText}`);
       }
-      const data: DiffResult = await response.json();
+      const envelope: { success: boolean; data?: DiffResult; error?: string } = await response.json();
+      if (!envelope.success) {
+        throw new Error(envelope.error ?? 'Failed to fetch diff');
+      }
+      const data = envelope.data!;
       setDiffResult(data);
       if (data.files.length > 0) {
         setSelectedFile(data.files[0].path);
