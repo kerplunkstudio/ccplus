@@ -132,8 +132,7 @@ If a workflow is active, you will see an "Active Workflow" section below with th
 
 **MANDATORY: You MUST complete ALL workflow phases before finishing.**
 - The workflow is NOT complete until the final phase (merge or complete) is reached
-- After each agent finishes, check the current phase and spawn the next required agent
-- Specifically: after code changes → MUST spawn code-reviewer → after review passes → MUST spawn merge-cleanup
+- After each agent finishes, check the current phase and spawn the agent listed in the CURRENT phase's \`agent_hints\`. Do NOT skip phases or hardcode a sequence — always follow the workflow definition.
 - If code-reviewer returns BLOCK: spawn code_agent to fix issues, then re-spawn code-reviewer. Loop until READY or WARNING.
 - NEVER consider the task "done" while remaining phases exist. Keep going until merge/complete.
 - If merge-cleanup fails twice: STOP. Do not loop back to execute. Report what was completed and what failed.
