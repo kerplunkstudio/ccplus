@@ -69,28 +69,42 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
     // list_sessions - Get all sessions from fleet monitor
     tool(
       "list_sessions",
-      "List all active and recent sessions in the fleet with status, tool counts, duration, and workspace information",
-      {},
-      async () => {
+      "List sessions in the fleet. Defaults to running/pending/idle only. Pass status filter to include completed/failed/cancelled. files_touched is capped at 5 per session — use get_session_detail for the full list.",
+      {
+        status: z.array(z.enum(["running", "pending", "idle", "completed", "failed", "cancelled"])).optional()
+          .describe("Filter by status. Defaults to ['running', 'pending', 'idle'] to keep output compact. Pass ['running', 'pending', 'idle', 'completed', 'failed', 'cancelled'] to see all."),
+      },
+      async (args) => {
+        const MAX_FILES_TOUCHED = 5;
+        const allowedStatuses = new Set(args.status ?? ['running', 'pending', 'idle']);
+
         try {
           const fleetState = fleetMonitor.getFleetState();
-          const sessions = fleetState.sessions.map((s: fleetMonitor.EnrichedFleetSessionInfo) => ({
-            session_id: s.sessionId,
-            session_number: s.sessionNumber,
-            status: s.status,
-            workspace: s.workspace,
-            tool_count: s.toolCount,
-            active_agents: s.activeAgents,
-            input_tokens: s.inputTokens,
-            output_tokens: s.outputTokens,
-            duration_ms: s.durationMs,
-            started_at: s.startedAt,
-            last_activity: s.lastActivity,
-            label: s.label,
-            files_touched: s.filesTouched,
-            workflow_phase: s.workflowPhase ?? null,
-            workflow_name: s.workflowName ?? null,
-          }));
+          const filtered = fleetState.sessions.filter(
+            (s: fleetMonitor.EnrichedFleetSessionInfo) => allowedStatuses.has(s.status)
+          );
+          const sessions = filtered.map((s: fleetMonitor.EnrichedFleetSessionInfo) => {
+            const filesTouched = s.filesTouched ?? [];
+            const truncated = filesTouched.length > MAX_FILES_TOUCHED;
+            return {
+              session_id: s.sessionId,
+              session_number: s.sessionNumber,
+              status: s.status,
+              workspace: s.workspace,
+              tool_count: s.toolCount,
+              active_agents: s.activeAgents,
+              input_tokens: s.inputTokens,
+              output_tokens: s.outputTokens,
+              duration_ms: s.durationMs,
+              started_at: s.startedAt,
+              last_activity: s.lastActivity,
+              label: s.label,
+              files_touched: filesTouched.slice(0, MAX_FILES_TOUCHED),
+              ...(truncated ? { files_touched_total: filesTouched.length } : {}),
+              workflow_phase: s.workflowPhase ?? null,
+              workflow_name: s.workflowName ?? null,
+            };
+          });
 
           return {
             content: [
@@ -99,6 +113,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   sessions,
                   aggregate: fleetState.aggregate,
+                  filter: { status: Array.from(allowedStatuses), total_in_fleet: fleetState.sessions.length },
                 }, null, 2),
               },
             ],
