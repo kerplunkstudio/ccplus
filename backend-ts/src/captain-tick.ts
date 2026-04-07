@@ -426,9 +426,7 @@ function tick(): void {
 
     // Skip tick if nothing actionable: no active/pending/stuck sessions,
     // no recent completions, and no consolidation hint pending
-    const hasActivity = fleetSummary.activeSessions > 0
-      || fleetSummary.stuckSessions > 0
-      || shouldConsolidate();
+    const hasActivity = fleetSummary.stuckSessions > 0;
 
     if (!hasActivity) {
       log.debug('Tick skipped — nothing actionable', { tickNumber: tickState.tickNumber + 1, fleetSummary });
