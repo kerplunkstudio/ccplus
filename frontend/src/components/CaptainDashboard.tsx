@@ -11,9 +11,10 @@ interface CaptainDashboardProps {
   socket: Socket | null;
   captainState: CaptainSocketState;
   onSessionClick?: (sessionId: string, workspace: string) => void;
+  onLinkClick?: (url: string, text: string) => void;
 }
 
-export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, captainState, onSessionClick }) => {
+export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, captainState, onSessionClick, onLinkClick }) => {
   const { captainSessionId, messages, isStreaming, isThinking, isModelThinking, toolActivity, sendMessage, cancelQuery, archivedConversations, clearHistory, interactiveMessages, respondToInteractive, contextPct } = captainState;
   const { fleetState } = useFleetState(socket);
   const [dividerPosition, setDividerPosition] = useState(50);
@@ -90,6 +91,7 @@ export const CaptainDashboard: React.FC<CaptainDashboardProps> = ({ socket, capt
           onRespondToInteractive={respondToInteractive}
           onCancel={cancelQuery}
           contextPct={contextPct}
+          onLinkClick={onLinkClick}
         />
       </div>
 

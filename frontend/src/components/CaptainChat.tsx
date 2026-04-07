@@ -29,6 +29,7 @@ interface CaptainChatProps {
   onRespondToInteractive: (messageId: string, actionId: string) => void;
   onCancel: () => void;
   contextPct?: number;
+  onLinkClick?: (url: string, text: string) => void;
 }
 
 function formatConversationDate(timestamp: number): string {
@@ -66,6 +67,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
   onRespondToInteractive,
   onCancel,
   contextPct,
+  onLinkClick,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
@@ -129,7 +131,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                 {expandedConvId === conv.id && (
                   <div className="captain-history-messages">
                     {conv.messages.map((msg) => (
-                      <MessageBubble key={msg.id} message={msg} />
+                      <MessageBubble key={msg.id} message={msg} onLinkClick={onLinkClick} />
                     ))}
                   </div>
                 )}
@@ -205,7 +207,7 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
                     />
                   );
                 }
-                return <MessageBubble key={msg.id} message={msg} />;
+                return <MessageBubble key={msg.id} message={msg} onLinkClick={onLinkClick} />;
               } else {
                 // Map InteractiveMessage to InteractiveCard props
                 const { text, actions, responseState, selectedActionId } = item.data;

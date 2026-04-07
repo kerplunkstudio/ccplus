@@ -740,7 +740,7 @@ function AppContent() {
               ) : shouldShowWorkflows ? (
                 <WorkflowsPanel />
               ) : shouldShowCaptain ? (
-                <CaptainDashboard socket={socket} captainState={captainState} onSessionClick={handleFleetSessionClick} />
+                <CaptainDashboard socket={socket} captainState={captainState} onSessionClick={handleFleetSessionClick} onLinkClick={handleOpenBrowserTab} />
               ) : shouldShowSettings ? (
                 <SettingsPage />
               ) : activeProject ? (

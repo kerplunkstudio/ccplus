@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CaptainChat } from './CaptainChat';
 import { Message } from '../types';
 
@@ -8,9 +8,17 @@ window.HTMLElement.prototype.scrollIntoView = jest.fn();
 
 // Mock sub-components to isolate CaptainChat logic
 jest.mock('./MessageBubble', () => ({
-  MessageBubble: ({ message }: any) => (
+  MessageBubble: ({ message, onLinkClick }: any) => (
     <div data-testid="message-bubble" data-role={message.role}>
       {message.content}
+      {onLinkClick && (
+        <button
+          data-testid="mock-link"
+          onClick={() => onLinkClick('https://example.com', 'Example')}
+        >
+          link
+        </button>
+      )}
     </div>
   ),
 }));
@@ -302,6 +310,86 @@ describe('CaptainChat', () => {
 
       render(<CaptainChat {...defaultProps} messages={messages} />);
       expect(screen.queryByText('Captain')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('onLinkClick propagation to MessageBubble (regression)', () => {
+    const messageWithContent: Message = {
+      id: 'msg-link-1',
+      role: 'assistant',
+      content: 'Check [this](https://example.com)',
+      timestamp: Date.now(),
+    };
+
+    it('calls onLinkClick with URL when a link inside MessageBubble is clicked', () => {
+      const onLinkClick = jest.fn();
+
+      render(
+        <CaptainChat
+          {...defaultProps}
+          messages={[messageWithContent]}
+          onLinkClick={onLinkClick}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('mock-link'));
+
+      expect(onLinkClick).toHaveBeenCalledTimes(1);
+      expect(onLinkClick).toHaveBeenCalledWith('https://example.com', 'Example');
+    });
+
+    it('does NOT call onLinkClick when the prop is not provided', () => {
+      // Render without onLinkClick — the mock-link button must not appear because
+      // the mock only renders it when onLinkClick is truthy.
+      render(
+        <CaptainChat
+          {...defaultProps}
+          messages={[messageWithContent]}
+        />
+      );
+
+      expect(screen.queryByTestId('mock-link')).not.toBeInTheDocument();
+    });
+
+    it('passes onLinkClick to MessageBubble in archived conversation history', () => {
+      const onLinkClick = jest.fn();
+      const archivedConv = {
+        id: 'conv-1',
+        messages: [messageWithContent],
+        startedAt: Date.now() - 10000,
+        endedAt: Date.now() - 5000,
+      };
+
+      // Render with archive — show history first by having hasArchive=true and
+      // a current message so the context bar History button is visible
+      const currentMessage: Message = {
+        id: 'current-msg',
+        role: 'user',
+        content: 'Current',
+        timestamp: Date.now(),
+      };
+
+      render(
+        <CaptainChat
+          {...defaultProps}
+          messages={[currentMessage]}
+          archivedConversations={[archivedConv]}
+          onLinkClick={onLinkClick}
+        />
+      );
+
+      // Open history panel via the History button in the context bar
+      fireEvent.click(screen.getByText('History'));
+
+      // Expand the archived conversation
+      fireEvent.click(screen.getByText(/Current/));
+
+      // Now click the link inside the archived MessageBubble
+      // (the first mock-link that appears in the expanded history)
+      const links = screen.getAllByTestId('mock-link');
+      fireEvent.click(links[0]);
+
+      expect(onLinkClick).toHaveBeenCalledWith('https://example.com', 'Example');
     });
   });
 });
