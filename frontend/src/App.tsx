@@ -532,14 +532,22 @@ function AppContent() {
       return;
     }
 
-    // Open URL in system browser (Electron) or new tab (web mode)
+    // Electron: open in system browser
     const windowWithElectron = window as WindowWithElectron;
     if (windowWithElectron.electronAPI?.openExternal) {
       windowWithElectron.electronAPI.openExternal(url);
+      return;
+    }
+
+    // Web mode: open as BrowserTab inside cc+
+    if (activeProject) {
+      const truncatedLabel = label.length > 30 ? label.slice(0, 30) + '…' : label;
+      workspace.addBrowserTab(activeProject.path, url, truncatedLabel);
     } else {
+      // Fallback if no active project
       window.open(url, '_blank', 'noopener,noreferrer');
     }
-  }, []);
+  }, [activeProject, workspace]);
 
   const handleDuplicateTab = useCallback((sessionId: string) => {
     if (!activeProject) return;
