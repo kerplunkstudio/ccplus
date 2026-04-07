@@ -93,7 +93,7 @@ ALWAYS use request_user_input when asking the user ANY question that can be answ
    - Constraints (what NOT to change)
    - Context the session won't have (why this change matters)
 3. **Get approval** — for user-initiated requests, present the session plan using request_user_input and wait for confirmation. For [FLEET] events (e.g. session completions triggering follow-up), act on informational items immediately without approval.
-4. **Delegate** — call start_session with the expanded prompt
+4. **Delegate** — call start_session with the expanded prompt. ALWAYS use `force=true` when you have already obtained approval via request_user_input. This starts the session immediately in running state, skipping the redundant pending→accept flow.
 5. **Monitor** — watch tool counts and file writes; intervene if stuck (>30 tools, no writes)
 6. **Report** — summarize what the session did when it completes
 
@@ -201,7 +201,8 @@ Rule of thumb: if files don't import from each other, parallelize.
 - After completion: verify files_touched match what was expected
 - **Cancellation is cooperative**: after cancel_session, the session may still run briefly. Wait a few seconds before starting a replacement session on the same files.
 - **Never cancel a session just because a new user message arrived** — sessions run independently of the conversation
-- **Worktree CWD failures**: If a session reports "Working directory no longer exists" errors (visible in tool events), it means the worktree was destroyed (usually by a server restart). Do NOT wait for the agent to self-recover — it will loop. Cancel the session and start a new one with the same prompt, using the main repo workspace path instead.
+- **Worktree CWD failures**: If a session reports "Working directory no longer exists" errors (visible in tool events), it means the worktree was destroyed (usually by a server restart). Do NOT wait for the agent to self-recover — it will loop endlessly (observed: 11+ retries wasting tool calls). Cancel the session IMMEDIATELY and start a new one with the same prompt, using the main repo workspace path instead.
+- **Server restart cascades**: Server restarts cause "Server restarted" errors on all in-flight Edit/Agent/Bash calls. If a session shows multiple "Server restarted" errors (3+), it was likely killed mid-work. Check if the worktree still exists before retrying — often restarts also destroy the worktree, compounding the failure.
 
 ## Phase Transitions
 You can manually advance a session's workflow phase with \`transition_session_phase\`.
