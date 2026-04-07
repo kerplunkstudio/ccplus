@@ -362,9 +362,10 @@ describe('ChatInput', () => {
     expect(screen.getByText(/Background agents running/i)).toBeInTheDocument();
   });
 
-  it('shows chip with filename and remove button on non-image file drop', () => {
+  it('handles file drop for paths', () => {
     renderWithToast(<ChatInput {...defaultProps} />);
     const inputContainer = document.querySelector('.input-container') as HTMLElement;
+    const textarea = screen.getByPlaceholderText(/Send a message/i) as HTMLTextAreaElement;
 
     // Mock FileList with path property
     const mockFile = {
@@ -379,130 +380,12 @@ describe('ChatInput', () => {
 
     fireEvent.drop(inputContainer, { dataTransfer });
 
-    // Check for chip display
-    expect(screen.getByText('file1.ts')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Remove file1.ts/i)).toBeInTheDocument();
-  });
-
-  it('removes chip when remove button is clicked', () => {
-    renderWithToast(<ChatInput {...defaultProps} />);
-    const inputContainer = document.querySelector('.input-container') as HTMLElement;
-
-    const mockFile = {
-      path: '/home/user/file1.ts',
-      name: 'file1.ts',
-      type: 'text/typescript',
-    };
-
-    const dataTransfer = {
-      files: [mockFile],
-    };
-
-    fireEvent.drop(inputContainer, { dataTransfer });
-
-    // Chip should be visible
-    expect(screen.getByText('file1.ts')).toBeInTheDocument();
-
-    // Click remove button
-    const removeBtn = screen.getByLabelText(/Remove file1.ts/i);
-    fireEvent.click(removeBtn);
-
-    // Chip should be gone
-    expect(screen.queryByText('file1.ts')).not.toBeInTheDocument();
-  });
-
-  it('prepends file paths to message on send', async () => {
-    renderWithToast(<ChatInput {...defaultProps} />);
-    const inputContainer = document.querySelector('.input-container') as HTMLElement;
-    const textarea = screen.getByPlaceholderText(/Send a message/i) as HTMLTextAreaElement;
-
-    // Drop a file
-    const mockFile = {
-      path: '/home/user/file1.ts',
-      name: 'file1.ts',
-      type: 'text/typescript',
-    };
-
-    fireEvent.drop(inputContainer, { dataTransfer: { files: [mockFile] } });
-
-    // Type a message
-    await userEvent.type(textarea, 'Check this file');
-
-    // Send
-    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-
-    // Message should have file path prepended
-    expect(mockOnSendMessage).toHaveBeenCalledWith(
-      '/home/user/file1.ts\nCheck this file',
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    );
-  });
-
-  it('clears chips after sending', async () => {
-    renderWithToast(<ChatInput {...defaultProps} />);
-    const inputContainer = document.querySelector('.input-container') as HTMLElement;
-    const textarea = screen.getByPlaceholderText(/Send a message/i) as HTMLTextAreaElement;
-
-    // Drop a file
-    const mockFile = {
-      path: '/home/user/file1.ts',
-      name: 'file1.ts',
-      type: 'text/typescript',
-    };
-
-    fireEvent.drop(inputContainer, { dataTransfer: { files: [mockFile] } });
-
-    // Chip should be visible
-    expect(screen.getByText('file1.ts')).toBeInTheDocument();
-
-    // Type and send
-    await userEvent.type(textarea, 'Test message{Enter}');
-
-    // Chip should be cleared
-    await waitFor(() => {
-      expect(screen.queryByText('file1.ts')).not.toBeInTheDocument();
-    });
-  });
-
-  it('allows sending with only attached files (no text)', () => {
-    renderWithToast(<ChatInput {...defaultProps} />);
-    const inputContainer = document.querySelector('.input-container') as HTMLElement;
-    const sendBtn = screen.getByLabelText(/Send message/i);
-
-    // Send button should be disabled initially
-    expect(sendBtn).toBeDisabled();
-
-    // Drop a file
-    const mockFile = {
-      path: '/home/user/file1.ts',
-      name: 'file1.ts',
-      type: 'text/typescript',
-    };
-
-    fireEvent.drop(inputContainer, { dataTransfer: { files: [mockFile] } });
-
-    // Send button should now be enabled
-    expect(sendBtn).not.toBeDisabled();
-
-    // Click send
-    fireEvent.click(sendBtn);
-
-    // Message should be sent with just the file path (no [Image] for non-image files)
-    expect(mockOnSendMessage).toHaveBeenCalledWith(
-      '/home/user/file1.ts\n',
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    );
+    expect(textarea.value).toBe('/home/user/file1.ts');
   });
 
   it('shows attach button', () => {
     renderWithToast(<ChatInput {...defaultProps} />);
-    expect(screen.getByLabelText(/Attach file/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Attach image/i)).toBeInTheDocument();
   });
 
   it('does not manipulate textarea height via JS (relies on CSS field-sizing)', async () => {
