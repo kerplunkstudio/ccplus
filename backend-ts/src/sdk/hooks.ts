@@ -8,6 +8,7 @@ import { evaluatePreToolUse, getPhaseContext, getWorkflowState, inferPhaseFromAg
 import { WORKFLOW_ENABLED } from '../config.js';
 import * as fleetMonitor from '../fleet-monitor.js';
 import { searchMemories, storeMemory } from '../memory-client.js';
+import { updateSessionMergeCommitHash } from '../db/fleet-sessions.js';
 
 export function safeParams(params: Record<string, unknown>): Record<string, unknown> {
   const cleaned: Record<string, unknown> = {};
@@ -214,6 +215,22 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
         database.updateToolEvent(sessionId, actualToolUseId, true, null, durationMs, stopData?.lastMessage ?? null);
       } catch (e) {
         log.error("Database write failed (postToolUse agent)", { sessionId, toolName, toolUseId: actualToolUseId, error: String(e) });
+      }
+
+      // If this is a merge-cleanup agent, extract and persist the merge commit hash
+      // so the diff viewer can retrieve the diff after the worktree is destroyed.
+      const agentTypeForHash = agentTypeByToolUseId.get(actualToolUseId) ?? '';
+      if (agentTypeForHash === 'merge-cleanup' && stopData?.lastMessage) {
+        const hashMatch = stopData.lastMessage.match(/cherry-picked as `([a-f0-9]{7,40})`/) ??
+          stopData.lastMessage.match(/commit\s+([a-f0-9]{7,40})/i);
+        if (hashMatch) {
+          try {
+            updateSessionMergeCommitHash(sessionId, hashMatch[1]);
+            log.info('Stored merge commit hash for session', { sessionId, hash: hashMatch[1] });
+          } catch (e) {
+            log.error('Failed to store merge commit hash', { sessionId, error: String(e) });
+          }
+        }
       }
 
       // Auto-transition workflow after agents complete successfully

@@ -400,6 +400,13 @@ CREATE INDEX IF NOT EXISTS idx_kairos_prompt_changes_applied ON kairos_prompt_ch
 ALTER TABLE fleet_sessions ADD COLUMN workflow_name TEXT;
 `,
   },
+  {
+    version: 20,
+    sql: `
+-- Migration v20: Store merge commit hash for completed sessions diff lookup
+ALTER TABLE fleet_sessions ADD COLUMN merge_commit_hash TEXT;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

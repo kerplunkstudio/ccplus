@@ -1,6 +1,13 @@
 import { getDb } from "./connection.js";
 import type { FleetSessionInfo } from "../fleet-monitor.js";
 
+export function updateSessionMergeCommitHash(sessionId: string, hash: string): void {
+  const d = getDb();
+  d.prepare(`
+    UPDATE fleet_sessions SET merge_commit_hash = ? WHERE session_id = ?
+  `).run(hash, sessionId);
+}
+
 export function getNextSessionNumber(): number {
   const d = getDb();
   const result = d.prepare(`
@@ -63,50 +70,9 @@ export function getAllFleetSessions(limit = 500): FleetSessionInfo[] {
     SELECT * FROM fleet_sessions
     ORDER BY started_at DESC
     LIMIT ?
-  `).all(limit) as Array<{
-    session_id: string;
-    status: string;
-    workspace: string;
-    tool_count: number;
-    active_agents: number;
-    total_agents: number;
-    input_tokens: number;
-    output_tokens: number;
-    duration_ms: number;
-    started_at: string;
-    last_activity: string;
-    label: string;
-    files_touched: string;
-    requested_by_source: string | null;
-    requested_by_source_id: string | null;
-    stuck_detected_at: number | null;
-    description: string | null;
-    session_number: number | null;
-    workflow_name: string | null;
-  }>;
+  `).all(limit) as DbRow[];
 
-  return rows.map((row) => ({
-    sessionId: row.session_id,
-    status: row.status as FleetSessionInfo['status'],
-    workspace: row.workspace,
-    toolCount: row.tool_count,
-    activeAgents: row.active_agents,
-    totalAgents: row.total_agents,
-    inputTokens: row.input_tokens,
-    outputTokens: row.output_tokens,
-    durationMs: row.duration_ms,
-    startedAt: row.started_at,
-    lastActivity: row.last_activity,
-    label: row.label,
-    filesTouched: JSON.parse(row.files_touched) as string[],
-    requestedBy: row.requested_by_source && row.requested_by_source_id
-      ? { source: row.requested_by_source, sourceId: row.requested_by_source_id }
-      : undefined,
-    stuckDetectedAt: row.stuck_detected_at ?? undefined,
-    description: row.description ?? undefined,
-    sessionNumber: row.session_number ?? undefined,
-    workflowName: row.workflow_name ?? undefined,
-  }));
+  return rows.map(rowToFleetSessionInfo);
 }
 
 export function getFleetSession(sessionId: string): FleetSessionInfo | null {
@@ -114,54 +80,13 @@ export function getFleetSession(sessionId: string): FleetSessionInfo | null {
   const row = d.prepare(`
     SELECT * FROM fleet_sessions
     WHERE session_id = ?
-  `).get(sessionId) as {
-    session_id: string;
-    status: string;
-    workspace: string;
-    tool_count: number;
-    active_agents: number;
-    total_agents: number;
-    input_tokens: number;
-    output_tokens: number;
-    duration_ms: number;
-    started_at: string;
-    last_activity: string;
-    label: string;
-    files_touched: string;
-    requested_by_source: string | null;
-    requested_by_source_id: string | null;
-    stuck_detected_at: number | null;
-    description: string | null;
-    session_number: number | null;
-    workflow_name: string | null;
-  } | undefined;
+  `).get(sessionId) as DbRow | undefined;
 
   if (!row) {
     return null;
   }
 
-  return {
-    sessionId: row.session_id,
-    status: row.status as FleetSessionInfo['status'],
-    workspace: row.workspace,
-    toolCount: row.tool_count,
-    activeAgents: row.active_agents,
-    totalAgents: row.total_agents,
-    inputTokens: row.input_tokens,
-    outputTokens: row.output_tokens,
-    durationMs: row.duration_ms,
-    startedAt: row.started_at,
-    lastActivity: row.last_activity,
-    label: row.label,
-    filesTouched: JSON.parse(row.files_touched) as string[],
-    requestedBy: row.requested_by_source && row.requested_by_source_id
-      ? { source: row.requested_by_source, sourceId: row.requested_by_source_id }
-      : undefined,
-    stuckDetectedAt: row.stuck_detected_at ?? undefined,
-    description: row.description ?? undefined,
-    sessionNumber: row.session_number ?? undefined,
-    workflowName: row.workflow_name ?? undefined,
-  };
+  return rowToFleetSessionInfo(row);
 }
 
 export interface FleetSessionFilters {
@@ -199,6 +124,7 @@ type DbRow = {
   description: string | null;
   session_number: number | null;
   workflow_name: string | null;
+  merge_commit_hash: string | null;
 };
 
 function rowToFleetSessionInfo(row: DbRow): FleetSessionInfo {
@@ -223,6 +149,7 @@ function rowToFleetSessionInfo(row: DbRow): FleetSessionInfo {
     description: row.description ?? undefined,
     sessionNumber: row.session_number ?? undefined,
     workflowName: row.workflow_name ?? undefined,
+    mergeCommitHash: row.merge_commit_hash ?? undefined,
   };
 }
 

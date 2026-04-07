@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseUnifiedDiff } from '../git-operations.js';
+import path from 'path';
+import { parseUnifiedDiff, getCommitDiff } from '../git-operations.js';
 
 describe('parseUnifiedDiff', () => {
   it('should return empty array for empty string', () => {
@@ -290,6 +291,24 @@ index 1234567..abcdefg 100644
     expect(result[0].hunks).toHaveLength(0);
   });
 
+  it('should handle missing newline at end of file marker', () => {
+    const diff = `diff --git a/test.txt b/test.txt
+index 1234567..abcdefg 100644
+--- a/test.txt
++++ b/test.txt
+@@ -1,1 +1,1 @@
+-old line
+\\ No newline at end of file
++new line
+\\ No newline at end of file`;
+
+    // Should not throw and should parse the actual diff lines
+    const result = parseUnifiedDiff(diff);
+    expect(result).toHaveLength(1);
+    expect(result[0].additions).toBe(1);
+    expect(result[0].deletions).toBe(1);
+  });
+
   it('should preserve content after leading symbols', () => {
     const diff = `diff --git a/test.txt b/test.txt
 index 1234567..abcdefg 100644
@@ -306,5 +325,68 @@ index 1234567..abcdefg 100644
     expect(result[0].hunks[0].lines[0].content).toBe('normal line');
     expect(result[0].hunks[0].lines[1].content).toBe('  line with spaces');
     expect(result[0].hunks[0].lines[2].content).toBe('  line with different spaces');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression tests for getCommitDiff — the diff-viewer "No changes" bug fix
+// ---------------------------------------------------------------------------
+
+describe('getCommitDiff', () => {
+  it('returns empty DiffResult for an invalid commit hash (does not throw)', () => {
+    // Using the repo root as cwd; the hash is deliberately bogus.
+    const cwd = path.resolve('/Users/matifuentes/Workspace/ccplus');
+    const result = getCommitDiff(cwd, 'deadbeef000000000000000000000000deadbeef');
+
+    expect(result).toMatchObject({
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+    });
+    // No error field expected — the implementation swallows the error and
+    // returns an empty result to keep the diff viewer functional.
+    expect(result.error).toBeUndefined();
+  });
+
+  it('returns empty DiffResult when cwd does not exist (does not throw)', () => {
+    const result = getCommitDiff('/nonexistent/path/that/cannot/exist', 'abc1234');
+
+    expect(result).toMatchObject({
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+    });
+    expect(result.error).toBeUndefined();
+  });
+
+  it('returns a DiffResult with the correct shape for a real commit', () => {
+    // Use a real commit from the repo under test so this stays self-contained.
+    // We only assert the shape — not specific file names — to avoid brittleness.
+    const cwd = path.resolve('/Users/matifuentes/Workspace/ccplus');
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+
+    let headHash: string;
+    try {
+      headHash = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }).trim();
+    } catch {
+      // If git is unavailable (CI without repo), skip gracefully.
+      return;
+    }
+
+    const result = getCommitDiff(cwd, headHash);
+
+    // Shape assertions — files is always an array, counts are non-negative.
+    expect(Array.isArray(result.files)).toBe(true);
+    expect(result.totalAdditions).toBeGreaterThanOrEqual(0);
+    expect(result.totalDeletions).toBeGreaterThanOrEqual(0);
+    for (const file of result.files) {
+      expect(typeof file.path).toBe('string');
+      expect(['added', 'modified', 'deleted', 'renamed']).toContain(file.status);
+      expect(Array.isArray(file.hunks)).toBe(true);
+    }
   });
 });

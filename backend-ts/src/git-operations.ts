@@ -283,6 +283,34 @@ export function parseUnifiedDiff(rawDiff: string): DiffFile[] {
 }
 
 /**
+ * Get diff for a specific commit: git diff <hash>~1..<hash>
+ * Returns empty DiffResult if the hash is invalid or directory does not exist.
+ */
+export function getCommitDiff(cwd: string, commitHash: string): DiffResult {
+  try {
+    const rawDiff = execFileSync(
+      'git',
+      ['diff', `${commitHash}~1..${commitHash}`],
+      {
+        cwd,
+        maxBuffer: MAX_BUFFER,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }
+    );
+
+    const files = parseUnifiedDiff(rawDiff);
+    const limitedFiles = files.slice(0, MAX_FILES);
+    const totalAdditions = limitedFiles.reduce((sum, file) => sum + file.additions, 0);
+    const totalDeletions = limitedFiles.reduce((sum, file) => sum + file.deletions, 0);
+
+    return { files: limitedFiles, totalAdditions, totalDeletions };
+  } catch {
+    return { files: [], totalAdditions: 0, totalDeletions: 0 };
+  }
+}
+
+/**
  * Commit all changes in the working directory
  */
 export function commitChanges(cwd: string, message: string): CommitResult {

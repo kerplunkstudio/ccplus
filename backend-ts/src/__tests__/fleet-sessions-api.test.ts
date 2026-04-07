@@ -12,6 +12,8 @@ import { getDb, close } from '../database.js';
 import {
   getFilteredFleetSessions,
   getFleetFilterValues,
+  getFleetSession,
+  updateSessionMergeCommitHash,
   upsertFleetSession,
   type FleetSessionFilters,
 } from '../db/fleet-sessions.js';
@@ -351,6 +353,57 @@ describe('Fleet Sessions API - Filtered/Paginated Queries', () => {
 
       // Should not match because parameterized query prevents injection
       expect(result.sessions).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression tests for updateSessionMergeCommitHash / getFleetSession
+  // These cover the diff-viewer "No changes" bug fix (migration v20).
+  // -------------------------------------------------------------------------
+
+  describe('updateSessionMergeCommitHash', () => {
+    it('persists the merge commit hash and getFleetSession returns it', () => {
+      createSession({ sessionId: 'merge-sess-1' });
+
+      updateSessionMergeCommitHash('merge-sess-1', 'abc1234');
+
+      const retrieved = getFleetSession('merge-sess-1');
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.mergeCommitHash).toBe('abc1234');
+    });
+
+    it('overwrites a previously stored merge commit hash', () => {
+      createSession({ sessionId: 'merge-sess-2' });
+
+      updateSessionMergeCommitHash('merge-sess-2', 'first111');
+      updateSessionMergeCommitHash('merge-sess-2', 'second22');
+
+      const retrieved = getFleetSession('merge-sess-2');
+      expect(retrieved!.mergeCommitHash).toBe('second22');
+    });
+
+    it('does not affect other session fields when setting hash', () => {
+      createSession({ sessionId: 'merge-sess-3', label: 'keep-me', status: 'completed' });
+
+      updateSessionMergeCommitHash('merge-sess-3', 'deadbeef');
+
+      const retrieved = getFleetSession('merge-sess-3');
+      expect(retrieved!.label).toBe('keep-me');
+      expect(retrieved!.status).toBe('completed');
+      expect(retrieved!.mergeCommitHash).toBe('deadbeef');
+    });
+
+    it('is a no-op for a session that does not exist (no throw)', () => {
+      expect(() => {
+        updateSessionMergeCommitHash('nonexistent-session-id', 'abc1234');
+      }).not.toThrow();
+    });
+
+    it('getFleetSession returns undefined mergeCommitHash when never set', () => {
+      createSession({ sessionId: 'no-hash-sess' });
+
+      const retrieved = getFleetSession('no-hash-sess');
+      expect(retrieved!.mergeCommitHash).toBeUndefined();
     });
   });
 });

@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from 'express';
-import { isGitRepo, getGitDiff, commitChanges, discardChanges } from '../git-operations.js';
+import fs from 'fs';
+import path from 'path';
+import { isGitRepo, getGitDiff, getCommitDiff, commitChanges, discardChanges } from '../git-operations.js';
 import { getFleetSession } from '../db/fleet-sessions.js';
 import type { RouteDependencies } from "./types.js";
 
@@ -41,8 +43,25 @@ export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
   }
 
   /**
+   * Derive the main git repo root from a worktree path.
+   * Worktrees are at <repo>/.claude/worktrees/<name>, so strip that suffix.
+   * Falls back to the worktree path itself if the pattern does not match.
+   */
+  function deriveMainRepoPath(worktreePath: string): string {
+    const worktreesMarker = path.join('.claude', 'worktrees');
+    const idx = worktreePath.indexOf(worktreesMarker);
+    if (idx === -1) {
+      return worktreePath;
+    }
+    return worktreePath.slice(0, idx).replace(/\/$/, '');
+  }
+
+  /**
    * GET /api/sessions/:sessionId/diff
-   * Get git diff for the session's workspace
+   * Get git diff for the session's workspace.
+   * For live sessions: returns uncommitted working-tree diff.
+   * For completed sessions where the worktree no longer exists: falls back to
+   * the merge commit diff stored in merge_commit_hash.
    */
   app.get('/api/sessions/:sessionId/diff', (req: Request, res: Response) => {
     try {
@@ -53,23 +72,54 @@ export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
         return res.status(404).json({ success: false, error: 'Session not found' });
       }
 
+      // Check whether the workspace directory still exists
+      const workspaceExists = fs.existsSync(workspace);
+
+      if (workspaceExists && isGitRepo(workspace)) {
+        const diff = getGitDiff(workspace);
+        if (diff.error) {
+          return res.json({ success: false, error: diff.error });
+        }
+        // If the live diff has content, return it
+        if (diff.files.length > 0) {
+          return res.json({ success: true, data: diff });
+        }
+      }
+
+      // Workspace gone or diff is empty — try the merge commit hash fallback
+      try {
+        const fleetSession = getFleetSession(sessionId);
+        if (fleetSession?.mergeCommitHash) {
+          const mainRepoPath = deriveMainRepoPath(workspace);
+          if (fs.existsSync(mainRepoPath) && isGitRepo(mainRepoPath)) {
+            const commitDiff = getCommitDiff(mainRepoPath, fleetSession.mergeCommitHash);
+            return res.json({ success: true, data: commitDiff });
+          }
+        }
+      } catch {
+        // DB lookup or diff failed — fall through to empty response
+      }
+
+      // No workspace, no commit hash — return empty diff
+      if (!workspaceExists) {
+        return res.json({
+          success: true,
+          data: { files: [], totalAdditions: 0, totalDeletions: 0 }
+        });
+      }
+
+      // Workspace exists but not a git repo
       if (!isGitRepo(workspace)) {
         return res.json({
           success: true,
-          data: {
-            files: [],
-            totalAdditions: 0,
-            totalDeletions: 0
-          }
+          data: { files: [], totalAdditions: 0, totalDeletions: 0 }
         });
       }
 
       const diff = getGitDiff(workspace);
-
       if (diff.error) {
         return res.json({ success: false, error: diff.error });
       }
-
       return res.json({ success: true, data: diff });
     } catch (error) {
       log.error('Failed to get diff', { sessionId: req.params.sessionId, error: String(error) });

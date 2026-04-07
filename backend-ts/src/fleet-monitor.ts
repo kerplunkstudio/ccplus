@@ -25,6 +25,7 @@ export interface FleetSessionInfo {
   description?: string;
   sessionNumber?: number;
   workflowName?: string;
+  mergeCommitHash?: string;
 }
 
 export interface EnrichedFleetSessionInfo extends FleetSessionInfo {
