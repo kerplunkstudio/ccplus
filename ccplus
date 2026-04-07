@@ -302,6 +302,12 @@ start_server() {
     nohup node "$SCRIPT_DIR/backend-ts/dist/server.js" > "$SCRIPT_DIR/logs/server.log" 2>&1 &
     SERVER_PID=$!
 
+    # Prevent macOS idle sleep while server is running (auto-exits when server dies)
+    if command -v caffeinate >/dev/null 2>&1; then
+        caffeinate -i -w $SERVER_PID &
+        info "Sleep prevention active (caffeinate PID: $!)"
+    fi
+
     info "Server starting (PID: $SERVER_PID)"
 
     # Health check
