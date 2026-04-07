@@ -17,6 +17,28 @@ jest.mock('react-markdown', () => {
         });
       }
     }
+    // If components.a is provided, render anchor elements for markdown links
+    if (components?.a && typeof children === 'string') {
+      const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let match;
+      const elements: any[] = [];
+      let lastIndex = 0;
+      let keyIndex = 0;
+      while ((match = linkRegex.exec(children)) !== null) {
+        const [fullMatch, text, href] = match;
+        if (match.index > lastIndex) {
+          elements.push(<span key={`text-${keyIndex++}`}>{children.slice(lastIndex, match.index)}</span>);
+        }
+        elements.push(<span key={`link-${keyIndex++}`}>{components.a({ href, children: text })}</span>);
+        lastIndex = match.index + fullMatch.length;
+      }
+      if (elements.length > 0) {
+        if (lastIndex < children.length) {
+          elements.push(<span key={`text-${keyIndex++}`}>{children.slice(lastIndex)}</span>);
+        }
+        return <div data-testid="markdown">{elements}</div>;
+      }
+    }
     return <div data-testid="markdown">{children}</div>;
   };
 });
@@ -537,6 +559,94 @@ describe('MessageBubble', () => {
       };
       const { container } = render(<MessageBubble message={msg} />);
       expect(container.querySelector('.streaming-cursor')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('markdown link attributes', () => {
+    it('renders external links with target="_blank" and rel="noopener noreferrer"', () => {
+      const messageWithExternalLink: Message = {
+        id: 'link_1',
+        content: '[Visit example](https://example.com)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithExternalLink} />);
+      const anchor = container.querySelector('a[href="https://example.com"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).toHaveAttribute('target', '_blank');
+      expect(anchor).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('renders http links with target="_blank" and rel="noopener noreferrer"', () => {
+      const messageWithHttpLink: Message = {
+        id: 'link_2',
+        content: '[Insecure site](http://example.com)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithHttpLink} />);
+      const anchor = container.querySelector('a[href="http://example.com"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).toHaveAttribute('target', '_blank');
+      expect(anchor).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('does NOT render target="_blank" on file:// links', () => {
+      const messageWithFileLink: Message = {
+        id: 'link_3',
+        content: '[open file](file:///Users/test/project/README.md)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithFileLink} />);
+      const anchor = container.querySelector('a[href="file:///Users/test/project/README.md"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).not.toHaveAttribute('target', '_blank');
+    });
+
+    it('does NOT render rel="noopener noreferrer" on file:// links', () => {
+      const messageWithFileLink: Message = {
+        id: 'link_4',
+        content: '[open file](file:///Users/test/project/README.md)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithFileLink} />);
+      const anchor = container.querySelector('a[href="file:///Users/test/project/README.md"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).not.toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('applies file-path-link class to file:// links', () => {
+      const messageWithFileLink: Message = {
+        id: 'link_5',
+        content: '[open file](file:///Users/test/project/README.md)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithFileLink} />);
+      const anchor = container.querySelector('a[href="file:///Users/test/project/README.md"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).toHaveClass('file-path-link');
+    });
+
+    it('does NOT apply file-path-link class to external links', () => {
+      const messageWithExternalLink: Message = {
+        id: 'link_6',
+        content: '[Visit example](https://example.com)',
+        role: 'assistant',
+        timestamp: Date.now(),
+      };
+
+      const { container } = render(<MessageBubble message={messageWithExternalLink} />);
+      const anchor = container.querySelector('a[href="https://example.com"]');
+      expect(anchor).toBeInTheDocument();
+      expect(anchor).not.toHaveClass('file-path-link');
     });
   });
 

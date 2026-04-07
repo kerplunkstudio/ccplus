@@ -149,6 +149,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         <a
           href={href}
           className={isFilePath ? 'file-path-link' : undefined}
+          {...(!isFilePath && { target: '_blank', rel: 'noopener noreferrer' })}
           {...props}
         >
           {children}
