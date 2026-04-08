@@ -1,4 +1,5 @@
 import { existsSync, statSync } from "fs";
+import { execFileSync } from "child_process";
 import { homedir } from "os";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -8,6 +9,7 @@ import * as fleetMonitor from "./fleet-monitor.js";
 import { log } from "./logger.js";
 import * as config from "./config.js";
 import { loadWorkflow } from "./workflow-config.js";
+import { updateSessionBaseCommitHash } from "./db/fleet-sessions.js";
 
 // ---- Types ----
 
@@ -213,6 +215,18 @@ export function approvePendingSession(
   // Store workspace for this session
   sessionWorkspaces.set(sessionId, pendingData.workspace);
 
+  // Capture base commit hash for precise diff scoping
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: pendingData.workspace,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
+    updateSessionBaseCommitHash(sessionId, head);
+  } catch {
+    // Not a git repo or no commits — skip silently
+  }
+
   // Submit query to SDK (fire-and-forget, same as socket handler)
   sdk.submitQuery(
     sessionId,
@@ -358,6 +372,18 @@ export function startSession(
 
   // Store workspace for this session
   sessionWorkspaces.set(sessionId, resolvedWorkspace);
+
+  // Capture base commit hash for precise diff scoping
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: resolvedWorkspace,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
+    updateSessionBaseCommitHash(sessionId, head);
+  } catch {
+    // Not a git repo or no commits — skip silently
+  }
 
   // If session was requested by Captain, emit session_proposal event to captain chat BEFORE submitQuery
   // (to ensure the proposal card renders before SDK events start arriving)

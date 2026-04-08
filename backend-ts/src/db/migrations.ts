@@ -407,6 +407,14 @@ ALTER TABLE fleet_sessions ADD COLUMN workflow_name TEXT;
 ALTER TABLE fleet_sessions ADD COLUMN merge_commit_hash TEXT;
 `,
   },
+  {
+    version: 21,
+    sql: `
+-- Migration v21: Store base commit hash and diff snapshot for precise session diff scoping
+ALTER TABLE fleet_sessions ADD COLUMN base_commit_hash TEXT;
+ALTER TABLE fleet_sessions ADD COLUMN diff_snapshot TEXT;
+`,
+  },
 ];
 
 export function getCurrentSchemaVersion(database: Database.Database): number {

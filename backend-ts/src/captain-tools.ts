@@ -87,22 +87,19 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             const filesTouched = s.filesTouched ?? [];
             const truncated = filesTouched.length > MAX_FILES_TOUCHED;
             return {
-              session_id: s.sessionId,
-              session_number: s.sessionNumber,
+              id: s.sessionId,
               status: s.status,
-              workspace: s.workspace,
-              tool_count: s.toolCount,
-              active_agents: s.activeAgents,
-              input_tokens: s.inputTokens,
-              output_tokens: s.outputTokens,
-              duration_ms: s.durationMs,
-              started_at: s.startedAt,
-              last_activity: s.lastActivity,
+              tools: s.toolCount,
+              agents: s.activeAgents,
+              in_tok: s.inputTokens,
+              out_tok: s.outputTokens,
+              ms: s.durationMs,
+              last: s.lastActivity,
               label: s.label,
-              files_touched: filesTouched.slice(0, MAX_FILES_TOUCHED),
-              ...(truncated ? { files_touched_total: filesTouched.length } : {}),
-              workflow_phase: s.workflowPhase ?? null,
-              workflow_name: s.workflowName ?? null,
+              files: filesTouched.slice(0, MAX_FILES_TOUCHED),
+              ...(truncated ? { files_total: filesTouched.length } : {}),
+              phase: s.workflowPhase ?? null,
+              wf: s.workflowName ?? null,
             };
           });
 
@@ -114,7 +111,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   sessions,
                   aggregate: fleetState.aggregate,
                   filter: { status: Array.from(allowedStatuses), total_in_fleet: fleetState.sessions.length },
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -125,7 +122,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 type: "text" as const,
                 text: JSON.stringify({
                   error: `Failed to list sessions: ${String(error)}`,
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -157,7 +154,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: false,
                     error: `Unknown workflow '${args.workflow}'. Available workflows: ${availableWorkflows.join(', ')}`,
-                  }, null, 2),
+                  }),
                 },
               ],
             };
@@ -266,7 +263,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                     message: args.force === true
                       ? `Session ${result.sessionId} started successfully`
                       : `Session ${result.sessionId} created in pending state — awaiting user approval`,
-                  }, null, 2),
+                  }),
                 },
               ],
             };
@@ -278,7 +275,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: false,
                     error: result.error,
-                  }, null, 2),
+                  }),
                 },
               ],
             };
@@ -291,7 +288,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   success: false,
                   error: String(error),
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -308,8 +305,8 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       },
       async (args) => {
         try {
-          const messages = deps.database.getConversationHistory(args.session_id, 100);
-          const toolEvents = deps.database.getToolEvents(args.session_id, 200);
+          const messages = deps.database.getConversationHistory(args.session_id, 50);
+          const toolEvents = deps.database.getToolEvents(args.session_id, 100);
 
           const workflow = (() => {
             try {
@@ -344,19 +341,18 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   session_id: args.session_id,
                   messages: messages.map((m) => ({
                     role: m.role,
-                    content: (m.content as string).slice(0, 1500),
+                    content: (m.content as string).slice(0, 500),
                     timestamp: m.timestamp,
                   })),
                   tool_events: toolEvents.map((t) => ({
                     tool_name: t.tool_name,
                     success: t.success,
                     duration_ms: t.duration_ms,
-                    timestamp: t.timestamp,
                     agent_type: t.agent_type,
                   })),
                   workflow,
                   fleet,
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -367,7 +363,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 type: "text" as const,
                 text: JSON.stringify({
                   error: `Failed to get session detail: ${String(error)}`,
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -393,7 +389,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   success: true,
                   message: `Session ${args.session_id} cancellation requested`,
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -405,7 +401,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   success: false,
                   error: String(error),
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -432,7 +428,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: false,
                     error: "Session not found",
-                  }, null, 2),
+                  }),
                 },
               ],
             };
@@ -446,7 +442,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   text: JSON.stringify({
                     success: false,
                     error: "Session already has an active query",
-                  }, null, 2),
+                  }),
                 },
               ],
             };
@@ -472,7 +468,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   success: true,
                   session_id: args.session_id,
                   message: "Session resumed",
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -484,7 +480,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   success: false,
                   error: String(error),
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -513,7 +509,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                     total_tool_events: dbStats.total_tool_events,
                     events_by_tool: dbStats.events_by_tool,
                   },
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -524,7 +520,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 type: "text" as const,
                 text: JSON.stringify({
                   error: `Failed to get fleet stats: ${String(error)}`,
-                }, null, 2),
+                }),
               },
             ],
           };
@@ -567,12 +563,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   name: workflowState.workflowName,
                   phase: workflowState.phase,
                   transitions: workflowState.transitions,
-                  created_at: workflowState.createdAt,
                   phase_rules: phaseRules,
                 },
                 fleet: sessionDetail ? {
                   status: sessionDetail.status,
-                  workspace: sessionDetail.workspace,
                   tool_count: sessionDetail.toolCount,
                   active_agents: sessionDetail.activeAgents,
                   input_tokens: sessionDetail.inputTokens,
@@ -580,10 +574,9 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   files_touched: sessionDetail.filesTouched,
                   duration_ms: sessionDetail.durationMs,
                   label: sessionDetail.label,
-                  started_at: sessionDetail.startedAt,
                   last_activity: sessionDetail.lastActivity,
                 } : null,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
@@ -592,7 +585,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               type: "text" as const,
               text: JSON.stringify({
                 error: `Failed to get session state: ${String(error)}`,
-              }, null, 2),
+              }),
             }],
           };
         }
@@ -634,7 +627,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   error: `Cannot transition from '${currentState.phase}' to '${args.to_phase}'. Current workflow: ${currentState.workflowName}`,
                   current_phase: currentState.phase,
                   valid_phases: validPhases,
-                }, null, 2),
+                }),
               }],
             };
           }
@@ -648,7 +641,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 previous_phase: currentState.phase,
                 current_phase: result.phase,
                 workflow: result.workflowName,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
@@ -658,7 +651,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               text: JSON.stringify({
                 success: false,
                 error: String(error),
-              }, null, 2),
+              }),
             }],
           };
         }
@@ -749,7 +742,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 action_ids: actionIds,
                 action_value: response.actionValue,
                 expired: response.actionId === '__expired__',
-              }, null, 2),
+              }),
             }],
           };
         });
@@ -788,7 +781,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                     type: "text" as const,
                     text: JSON.stringify({
                       error: "Session not found or workspace unavailable",
-                    }, null, 2),
+                    }),
                   }],
                 };
               }
@@ -798,7 +791,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 type: "text" as const,
                 text: JSON.stringify({
                   error: "Session not found",
-                }, null, 2),
+                }),
               }],
             };
           }
@@ -818,7 +811,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   error: "Workspace is not a git repository",
                   workspace,
-                }, null, 2),
+                }),
               }],
             };
           }
@@ -898,7 +891,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 text: JSON.stringify({
                   error: `Git diff failed: ${String(error)}`,
                   workspace,
-                }, null, 2),
+                }),
               }],
             };
           }
@@ -918,7 +911,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 diff: displayDiff,
                 truncated,
                 total_length: totalLength,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
@@ -927,7 +920,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               type: "text" as const,
               text: JSON.stringify({
                 error: `Failed to get session diff: ${String(error)}`,
-              }, null, 2),
+              }),
             }],
           };
         }
@@ -950,7 +943,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 type: "text" as const,
                 text: JSON.stringify({
                   error: "Session not found",
-                }, null, 2),
+                }),
               }],
             };
           }
@@ -980,7 +973,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                   output_cost_usd: parseFloat(outputCost.toFixed(4)),
                 },
                 pricing_note: `Using Sonnet pricing: $${pricing.inputPerMTok}/MTok input, $${pricing.outputPerMTok}/MTok output`,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
@@ -989,7 +982,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               type: "text" as const,
               text: JSON.stringify({
                 error: `Failed to get session cost: ${String(error)}`,
-              }, null, 2),
+              }),
             }],
           };
         }
@@ -1019,14 +1012,14 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 warning: overlaps.length > 0
                   ? `WARNING: ${overlaps.length} running session(s) are touching the same files. Starting a new session on these files risks merge conflicts.`
                   : null,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
           return {
             content: [{
               type: "text" as const,
-              text: JSON.stringify({ error: String(error) }, null, 2),
+              text: JSON.stringify({ error: String(error) }),
             }],
           };
         }
@@ -1051,9 +1044,9 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           const start = Math.max(0, (args.offset ?? 1) - 1);
           const end = Math.min(lines.length, start + Math.min(args.limit ?? 200, 500));
           const numbered = lines.slice(start, end).map((l, i) => `${start + i + 1}: ${l}`).join('\n');
-          return { content: [{ type: "text" as const, text: JSON.stringify({ path: args.path, total_lines: lines.length, showing: `${start+1}-${end}`, content: numbered }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ path: args.path, total_lines: lines.length, showing: `${start+1}-${end}`, content: numbered }) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),
@@ -1077,7 +1070,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           return { content: [{ type: "text" as const, text: result || 'No matches found' }] };
         } catch (error: any) {
           if (error.status === 1) return { content: [{ type: "text" as const, text: 'No matches found' }] };
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),
@@ -1095,10 +1088,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           const searchPath = args.path ?? deps.sessionWorkspaces.values().next().value ?? '.';
           const result = execFileSync('rg', ['--files', '--glob', args.pattern, searchPath], { encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 10000 });
           const files = result.trim().split('\n').filter(Boolean).slice(0, 100);
-          return { content: [{ type: "text" as const, text: JSON.stringify({ count: files.length, files }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ count: files.length, files }) }] };
         } catch (error: any) {
-          if (error.status === 1) return { content: [{ type: "text" as const, text: JSON.stringify({ count: 0, files: [] }, null, 2) }] };
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          if (error.status === 1) return { content: [{ type: "text" as const, text: JSON.stringify({ count: 0, files: [] }) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),
@@ -1116,9 +1109,9 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           const branch = execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
           const status = execFileSync('git', ['status', '--short'], { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
           const lines = status ? status.split('\n') : [];
-          return { content: [{ type: "text" as const, text: JSON.stringify({ branch, clean: lines.length === 0, files: lines.slice(0, 50) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ branch, clean: lines.length === 0, files: lines.slice(0, 50) }) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),
@@ -1140,9 +1133,9 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           if (args.since) gitArgs.push('--since', args.since);
           const result = execFileSync('git', gitArgs, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
           const commits = result ? result.split('\n').map(line => { const [hash, author, date, ...msg] = line.split('|'); return { hash: hash.slice(0,8), author, date, message: msg.join('|') }; }) : [];
-          return { content: [{ type: "text" as const, text: JSON.stringify({ count: commits.length, commits }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ count: commits.length, commits }) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),
@@ -1159,14 +1152,14 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
         try {
           const sessionDetail = fleetMonitor.getSessionDetail(args.session_id);
           if (!sessionDetail) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: "Session not found" }, null, 2) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: "Session not found" }) }] };
           }
 
           if (deps.sdkSession.isActive(args.session_id)) {
             // Inject into active query
             const injected = await deps.sdkSession.injectMessage(args.session_id, args.message);
             if (injected) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "injected", message: "Message injected into active query" }, null, 2) }] };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "injected", message: "Message injected into active query" }) }] };
             }
             // Injection failed (query ended between check and inject), fall through to submitQuery
           }
@@ -1181,9 +1174,9 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
           );
           fleetMonitor.updateSessionStatus(args.session_id, 'running');
 
-          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "new_query", message: "New query started with message" }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, session_id: args.session_id, method: "new_query", message: "New query started with message" }) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ success: false, error: String(error) }) }] };
         }
       }
     ),
@@ -1209,7 +1202,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
                 sleep_ticks: duration,
                 sleep_until_tick: result.sleepUntilTick,
                 remaining_ticks: remaining,
-              }, null, 2),
+              }),
             }],
           };
         } catch (error) {
@@ -1219,7 +1212,7 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
               text: JSON.stringify({
                 success: false,
                 error: String(error),
-              }, null, 2),
+              }),
             }],
           };
         }
@@ -1241,14 +1234,14 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             const output = execFileSync('./ccplus', ['frontend'], {
               cwd: ccplusDir, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
             });
-            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'frontend', message: "Frontend built and deployed. Hard refresh browser to see changes.", output: output.slice(-500) }, null, 2) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'frontend', message: "Frontend built and deployed. Hard refresh browser to see changes.", output: output.slice(-500) }) }] };
           }
 
           if (args.mode === 'backend') {
             const output = execFileSync('npm', ['run', 'build'], {
               cwd: `${ccplusDir}/backend-ts`, encoding: 'utf8', stdio: 'pipe', maxBuffer: 10 * 1024 * 1024, timeout: 120000
             });
-            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'backend', message: "Backend built. Run deploy_ccplus with mode='restart' to apply changes.", output: output.slice(-500) }, null, 2) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'backend', message: "Backend built. Run deploy_ccplus with mode='restart' to apply changes.", output: output.slice(-500) }) }] };
           }
 
           if (args.mode === 'restart') {
@@ -1265,12 +1258,12 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
             });
             child.unref();
 
-            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'restart', message: "Backend built. Server will restart in ~2 seconds. Captain will resume automatically on boot with full conversation history." }, null, 2) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, mode: 'restart', message: "Backend built. Server will restart in ~2 seconds. Captain will resume automatically on boot with full conversation history." }) }] };
           }
 
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown mode" }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Unknown mode" }) }] };
         } catch (error) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }, null, 2) }] };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: String(error) }) }] };
         }
       }
     ),

@@ -8,6 +8,20 @@ export function updateSessionMergeCommitHash(sessionId: string, hash: string): v
   `).run(hash, sessionId);
 }
 
+export function updateSessionBaseCommitHash(sessionId: string, hash: string): void {
+  const d = getDb();
+  d.prepare(`
+    UPDATE fleet_sessions SET base_commit_hash = ? WHERE session_id = ?
+  `).run(hash, sessionId);
+}
+
+export function updateSessionDiffSnapshot(sessionId: string, diff: string): void {
+  const d = getDb();
+  d.prepare(`
+    UPDATE fleet_sessions SET diff_snapshot = ? WHERE session_id = ?
+  `).run(diff, sessionId);
+}
+
 export function getNextSessionNumber(): number {
   const d = getDb();
   const result = d.prepare(`
@@ -125,6 +139,8 @@ type DbRow = {
   session_number: number | null;
   workflow_name: string | null;
   merge_commit_hash: string | null;
+  base_commit_hash: string | null;
+  diff_snapshot: string | null;
 };
 
 function rowToFleetSessionInfo(row: DbRow): FleetSessionInfo {
@@ -150,6 +166,8 @@ function rowToFleetSessionInfo(row: DbRow): FleetSessionInfo {
     sessionNumber: row.session_number ?? undefined,
     workflowName: row.workflow_name ?? undefined,
     mergeCommitHash: row.merge_commit_hash ?? undefined,
+    baseCommitHash: row.base_commit_hash ?? undefined,
+    diffSnapshot: row.diff_snapshot ?? undefined,
   };
 }
 

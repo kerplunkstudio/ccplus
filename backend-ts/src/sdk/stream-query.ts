@@ -2,7 +2,7 @@ import { query, type ModelUsage, type SDKUserMessage } from "@anthropic-ai/claud
 import { existsSync, readdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
-import { exec } from "child_process";
+import { exec, execFileSync } from "child_process";
 import { promisify } from "util";
 import type { ActiveSession } from "./types.js";
 import { sessions, MAX_STREAMING_BUFFER, getSdkSettingsPath, removeSession } from "./session-manager.js";
@@ -19,6 +19,7 @@ import * as fleetMonitor from '../fleet-monitor.js';
 import * as captain from '../captain.js';
 import { getAgent, loadAllAgents, resolveAgentModel, type ResolvedAgent } from '../agent-config.js';
 import { loadWorkflow } from '../workflow-config.js';
+import { getFleetSession, updateSessionDiffSnapshot } from '../db/fleet-sessions.js';
 
 // ---- Internal streaming logic ----
 
@@ -219,6 +220,74 @@ export function copyWorktreeConversation(sdkSessionId: string, workspace: string
     log.debug('No worktree conversation file found for session', { sdkSessionId, pattern: worktreePattern });
   } catch (error) {
     log.error('Failed to copy worktree conversation', { sdkSessionId, error: String(error) });
+  }
+}
+
+/**
+ * Capture a unified diff snapshot for the session before the worktree is cleaned up.
+ * Uses base_commit_hash for precise scoping. Stores in diff_snapshot column.
+ * Best-effort: all errors are swallowed.
+ */
+function captureSessionDiffSnapshot(sessionId: string, workspace: string): void {
+  try {
+    if (!existsSync(workspace)) return;
+
+    const fleetSession = getFleetSession(sessionId);
+    const baseHash = fleetSession?.baseCommitHash;
+    const GIT_MAX_BUFFER = 10 * 1024 * 1024;
+
+    let diffText = '';
+
+    if (baseHash) {
+      // Committed changes since session start
+      try {
+        diffText = execFileSync('git', ['diff', `${baseHash}..HEAD`], {
+          cwd: workspace,
+          encoding: 'utf8',
+          stdio: 'pipe',
+          maxBuffer: GIT_MAX_BUFFER,
+        });
+      } catch {
+        // Branch may have no commits beyond base, or git error — leave diffText empty
+      }
+
+      // Also include uncommitted changes
+      try {
+        const uncommitted = execFileSync('git', ['diff', 'HEAD'], {
+          cwd: workspace,
+          encoding: 'utf8',
+          stdio: 'pipe',
+          maxBuffer: GIT_MAX_BUFFER,
+        });
+        if (uncommitted.trim()) {
+          diffText = diffText ? `${diffText}\n${uncommitted}` : uncommitted;
+        }
+      } catch {
+        // Not fatal
+      }
+    } else {
+      // Fallback: branch diff against main/master
+      const bases = ['main', 'master'];
+      for (const base of bases) {
+        try {
+          diffText = execFileSync('git', ['diff', `${base}...HEAD`], {
+            cwd: workspace,
+            encoding: 'utf8',
+            stdio: 'pipe',
+            maxBuffer: GIT_MAX_BUFFER,
+          });
+          break;
+        } catch {
+          // Try next base
+        }
+      }
+    }
+
+    if (diffText.trim()) {
+      updateSessionDiffSnapshot(sessionId, diffText);
+    }
+  } catch {
+    // Best-effort — never throw
   }
 }
 
@@ -708,6 +777,10 @@ export async function streamQuery(
     // Emit final completion
     if (gotResult && Object.keys(lastCompletionData).length > 0) {
       callbacks.onComplete(lastCompletionData);
+
+      // Capture diff snapshot before session cleanup (workspace may be deleted by SDK worktree GC)
+      captureSessionDiffSnapshot(sessionId, workspace);
+
       const finalStatus = lastCompletionData.is_error ? 'failed' : 'completed';
       fleetMonitor.updateSessionStatus(sessionId, finalStatus);
     }

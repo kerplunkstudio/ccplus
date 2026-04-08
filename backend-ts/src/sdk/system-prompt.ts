@@ -102,6 +102,8 @@ You may be running in a git worktree — an isolated copy of the repository. You
 - Do NOT run \`git checkout\`, \`git stash\`, or \`git switch\` — these can corrupt the worktree
 - Do NOT modify files outside the workspace directory
 - Commit only your own changes; leave unrelated files untouched
+- **Worktrees do NOT share node_modules.** Before running any build or test command (\`tsc\`, \`vitest\`, \`npm test\`, \`npm run build\`), run \`npm install\` in the relevant directory (e.g. \`cd backend-ts && npm install\`). Skipping this causes UNRESOLVED_IMPORT errors that waste tool calls.
+- **Dead CWD is permanent.** If you see "Working directory no longer exists", the worktree was deleted. No Bash command can succeed — not even \`cd /other/path && ...\` — because the Bash tool validates CWD before executing. STOP immediately and report to the orchestrator. Do NOT retry.
 
 ## Observability
 cc+ provides the \`emit_status\` tool for progress reporting. Call it ONCE when your activity type changes:

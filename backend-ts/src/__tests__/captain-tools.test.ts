@@ -326,8 +326,8 @@ describe('captain-tools', () => {
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.sessions).toHaveLength(1);
-      expect(parsed.sessions[0].workflow_phase).toBe('execute');
-      expect(parsed.sessions[0].workflow_name).toBe('feature');
+      expect(parsed.sessions[0].phase).toBe('execute');
+      expect(parsed.sessions[0].wf).toBe('feature');
     });
 
     it('returns null workflow fields for non-running sessions', async () => {
@@ -363,8 +363,8 @@ describe('captain-tools', () => {
       const result = await handler!({});
       const parsed = JSON.parse(result.content[0].text);
 
-      expect(parsed.sessions[0].workflow_phase).toBeNull();
-      expect(parsed.sessions[0].workflow_name).toBeNull();
+      expect(parsed.sessions[0].phase).toBeNull();
+      expect(parsed.sessions[0].wf).toBeNull();
     });
   });
 
@@ -773,8 +773,8 @@ describe('captain-tools', () => {
       const parsed = JSON.parse(result.content[0].text);
 
       expect(parsed.messages).toHaveLength(1);
-      expect(parsed.messages[0].content).toHaveLength(1500);
-      expect(parsed.messages[0].content).toBe('a'.repeat(1500));
+      expect(parsed.messages[0].content).toHaveLength(500);
+      expect(parsed.messages[0].content).toBe('a'.repeat(500));
     });
   });
 

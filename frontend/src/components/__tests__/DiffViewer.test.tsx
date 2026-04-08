@@ -27,10 +27,26 @@ describe('DiffViewer', () => {
 
     render(<DiffViewer sessionId="test-session" />);
 
-    expect(screen.getByText('Loading diff…')).toBeInTheDocument();
+    expect(screen.getByText('Analyzing changes…')).toBeInTheDocument();
   });
 
-  it('renders error state', () => {
+  it('renders loading state skeleton rows', () => {
+    mockUseDiff.mockReturnValue({
+      diffResult: null,
+      loading: true,
+      error: null,
+      selectedFile: null,
+      fetchDiff: jest.fn(),
+      selectFile: jest.fn(),
+    });
+
+    const { container } = render(<DiffViewer sessionId="test-session" />);
+
+    expect(container.querySelector('.diff-state-skeleton')).toBeInTheDocument();
+    expect(container.querySelectorAll('.diff-skeleton-row')).toHaveLength(4);
+  });
+
+  it('renders error state with context message', () => {
     mockUseDiff.mockReturnValue({
       diffResult: null,
       loading: false,
@@ -42,7 +58,27 @@ describe('DiffViewer', () => {
 
     render(<DiffViewer sessionId="test-session" />);
 
+    expect(screen.getByText('Could not load the diff for this session.')).toBeInTheDocument();
     expect(screen.getByText('Failed to fetch diff')).toBeInTheDocument();
+  });
+
+  it('renders error state retry button that calls fetchDiff', () => {
+    const mockFetchDiff = jest.fn();
+    mockUseDiff.mockReturnValue({
+      diffResult: null,
+      loading: false,
+      error: 'Network error',
+      selectedFile: null,
+      fetchDiff: mockFetchDiff,
+      selectFile: jest.fn(),
+    });
+
+    render(<DiffViewer sessionId="test-session" />);
+
+    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    fireEvent.click(retryButton);
+
+    expect(mockFetchDiff).toHaveBeenCalledTimes(2); // once on mount, once on retry
   });
 
   it('renders empty state when no files changed', () => {
@@ -63,7 +99,33 @@ describe('DiffViewer', () => {
 
     render(<DiffViewer sessionId="test-session" />);
 
-    expect(screen.getByText('No changes in this session')).toBeInTheDocument();
+    expect(screen.getByText('No changes detected')).toBeInTheDocument();
+    expect(screen.getByText(/This session may not have modified any files/)).toBeInTheDocument();
+  });
+
+  it('renders empty state refresh button that calls fetchDiff', () => {
+    const mockFetchDiff = jest.fn();
+    const emptyDiffResult: DiffResult = {
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+    };
+
+    mockUseDiff.mockReturnValue({
+      diffResult: emptyDiffResult,
+      loading: false,
+      error: null,
+      selectedFile: null,
+      fetchDiff: mockFetchDiff,
+      selectFile: jest.fn(),
+    });
+
+    render(<DiffViewer sessionId="test-session" />);
+
+    const refreshButton = screen.getByRole('button', { name: 'Refresh' });
+    fireEvent.click(refreshButton);
+
+    expect(mockFetchDiff).toHaveBeenCalledTimes(2); // once on mount, once on refresh
   });
 
   it('renders file sidebar with files', () => {

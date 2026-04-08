@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { isGitRepo, getGitDiff, getCommitDiff, getBranchDiff, commitChanges, discardChanges } from '../git-operations.js';
+import { isGitRepo, isGitWorktree, getGitDiff, getCommitDiff, getBranchDiff, getRangeDiff, parseUnifiedDiff, commitChanges, discardChanges } from '../git-operations.js';
 import { getFleetSession } from '../db/fleet-sessions.js';
 import type { RouteDependencies } from "./types.js";
 
@@ -58,10 +58,16 @@ export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
 
   /**
    * GET /api/sessions/:sessionId/diff
-   * Get git diff for the session's workspace.
-   * For live sessions: returns uncommitted working-tree diff.
-   * For completed sessions where the worktree no longer exists: falls back to
-   * the merge commit diff stored in merge_commit_hash.
+   * Get git diff scoped to this session's changes.
+   *
+   * Priority order:
+   * 1. Stored diff_snapshot (most reliable for completed sessions)
+   * 2. Live range diff using base_commit_hash (workspace exists)
+   * 3. Fallback to uncommitted changes (getGitDiff)
+   * 4. Fallback to branch diff (getBranchDiff)
+   * 5. Range diff using base_commit_hash + merge_commit_hash (workspace gone)
+   * 6. Commit diff using merge_commit_hash only
+   * 7. Empty result
    */
   app.get('/api/sessions/:sessionId/diff', (req: Request, res: Response) => {
     try {
@@ -72,66 +78,75 @@ export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
         return res.status(404).json({ success: false, error: 'Session not found' });
       }
 
-      // Check whether the workspace directory still exists
-      const workspaceExists = fs.existsSync(workspace);
-
-      if (workspaceExists && isGitRepo(workspace)) {
-        const diff = getGitDiff(workspace);
-        if (diff.error) {
-          return res.json({ success: false, error: diff.error });
-        }
-        // If the live diff has content, return it
-        if (diff.files.length > 0) {
-          return res.json({ success: true, data: diff });
-        }
+      // Try to get fleet session data for stored hashes/snapshot
+      let fleetSession: ReturnType<typeof getFleetSession> = null;
+      try {
+        fleetSession = getFleetSession(sessionId);
+      } catch {
+        // DB lookup failed — continue without fleet session data
       }
 
-      // Workspace gone or diff is empty — try the merge commit hash fallback
-      try {
-        const fleetSession = getFleetSession(sessionId);
-        if (fleetSession?.mergeCommitHash) {
-          const mainRepoPath = deriveMainRepoPath(workspace);
-          if (fs.existsSync(mainRepoPath) && isGitRepo(mainRepoPath)) {
-            const commitDiff = getCommitDiff(mainRepoPath, fleetSession.mergeCommitHash);
-            return res.json({ success: true, data: commitDiff });
+      // CASE 1: Stored diff snapshot (most reliable for completed sessions)
+      if (fleetSession?.diffSnapshot) {
+        const files = parseUnifiedDiff(fleetSession.diffSnapshot);
+        const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
+        const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
+        return res.json({ success: true, data: { files, totalAdditions, totalDeletions } });
+      }
+
+      const workspaceExists = fs.existsSync(workspace);
+      const baseHash = fleetSession?.baseCommitHash;
+
+      // CASE 2: Workspace exists — compute live diff
+      if (workspaceExists && isGitRepo(workspace)) {
+        // If we have a base hash, use range diff for precise scoping.
+        // This is authoritative: if empty, the session made no changes.
+        if (baseHash) {
+          const rangeDiff = getRangeDiff(workspace, baseHash);
+          return res.json({ success: true, data: rangeDiff });
+        }
+
+        // No base hash (old session). Unscoped fallbacks only make sense
+        // in worktrees where git state is naturally isolated to this session.
+        // On the main repo, getGitDiff/getBranchDiff would show unrelated changes.
+        if (isGitWorktree(workspace)) {
+          const diff = getGitDiff(workspace);
+          if (diff.error) {
+            return res.json({ success: false, error: diff.error });
+          }
+          if (diff.files.length > 0) {
+            return res.json({ success: true, data: diff });
+          }
+
+          const branchDiff = getBranchDiff(workspace);
+          if (!branchDiff.error && branchDiff.files.length > 0) {
+            return res.json({ success: true, data: branchDiff });
           }
         }
-      } catch {
-        // DB lookup or diff failed — fall through to empty response
+
+        return res.json({ success: true, data: { files: [], totalAdditions: 0, totalDeletions: 0 } });
       }
 
-      // No workspace, no commit hash — return empty diff
-      if (!workspaceExists) {
-        return res.json({
-          success: true,
-          data: { files: [], totalAdditions: 0, totalDeletions: 0 }
-        });
-      }
-
-      // Workspace exists but not a git repo
-      if (!isGitRepo(workspace)) {
-        return res.json({
-          success: true,
-          data: { files: [], totalAdditions: 0, totalDeletions: 0 }
-        });
-      }
-
-      const liveDiff = getGitDiff(workspace);
-
-      if (liveDiff.error) {
-        return res.json({ success: false, error: liveDiff.error });
-      }
-
-      // If no uncommitted changes, check for committed changes in the branch
-      // (handles worktree sessions where the agent has already committed its work)
-      if (liveDiff.files.length === 0) {
-        const branchDiff = getBranchDiff(workspace);
-        if (!branchDiff.error) {
-          return res.json({ success: true, data: branchDiff });
+      // CASE 3: Workspace gone — try merge commit hash with optional base hash range
+      if (fleetSession?.mergeCommitHash) {
+        const mainRepoPath = deriveMainRepoPath(workspace);
+        if (fs.existsSync(mainRepoPath) && isGitRepo(mainRepoPath)) {
+          if (baseHash) {
+            const rangeDiff = getRangeDiff(mainRepoPath, baseHash, fleetSession.mergeCommitHash);
+            if (rangeDiff.files.length > 0) {
+              return res.json({ success: true, data: rangeDiff });
+            }
+          }
+          const commitDiff = getCommitDiff(mainRepoPath, fleetSession.mergeCommitHash);
+          return res.json({ success: true, data: commitDiff });
         }
       }
 
-      return res.json({ success: true, data: liveDiff });
+      // No data available
+      return res.json({
+        success: true,
+        data: { files: [], totalAdditions: 0, totalDeletions: 0 }
+      });
     } catch (error) {
       log.error('Failed to get diff', { sessionId: req.params.sessionId, error: String(error) });
       return res.status(500).json({ success: false, error: 'Internal server error' });

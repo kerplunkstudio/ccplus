@@ -53,7 +53,7 @@ You commit worktree changes to the current branch, cherry-pick them to main, rem
      cd <main_repo_root> && git worktree remove <worktree_path> --force && git branch -D <branch_name>
      ```
    - CRITICAL: Only run this if step 3.5 verified all commits landed on main
-   - CRITICAL: This must be the LAST Bash call you make. Do NOT run any more Bash commands after this, because the worktree directory will be gone and subsequent Bash calls will fail (the session cwd is the worktree path).
+   - CRITICAL: This must be the LAST Bash call you make. After this call, the worktree directory is gone and your session CWD is permanently invalid. The Bash tool checks CWD before executing — even commands starting with `cd /other/path && ...` will fail with "Working directory no longer exists." There is NO workaround. Do NOT retry, do NOT try alternative approaches (bash -c, env -i, --git-dir, etc.) — they ALL fail. Just output your final summary and stop.
    - If this command fails: report the cleanup error. The merge itself succeeded (verified in step 3.5), so this is a non-critical cleanup failure.
 
 ## Rules

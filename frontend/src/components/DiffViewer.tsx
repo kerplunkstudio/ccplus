@@ -44,15 +44,62 @@ export function DiffViewer({ sessionId }: DiffViewerProps) {
   };
 
   if (loading) {
-    return <div className="diff-viewer"><div className="diff-state">Loading diff…</div></div>;
+    return (
+      <div className="diff-viewer">
+        <div className="diff-state diff-state--loading">
+          <p className="diff-state-label">Analyzing changes…</p>
+          <div className="diff-state-skeleton" aria-hidden="true">
+            <div className="diff-skeleton-row">
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-line diff-skeleton-line--long" />
+            </div>
+            <div className="diff-skeleton-row">
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-line diff-skeleton-line--addition diff-skeleton-line--medium" />
+            </div>
+            <div className="diff-skeleton-row">
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-line diff-skeleton-line--deletion diff-skeleton-line--short" />
+            </div>
+            <div className="diff-skeleton-row">
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-num" />
+              <span className="diff-skeleton-line diff-skeleton-line--long" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="diff-viewer"><div className="diff-state diff-state--error">{error}</div></div>;
+    return (
+      <div className="diff-viewer">
+        <div className="diff-state diff-state--error">
+          <p className="diff-state-context">Could not load the diff for this session.</p>
+          <p className="diff-state-message">{error}</p>
+          <button className="diff-state-action" onClick={fetchDiff}>Retry</button>
+        </div>
+      </div>
+    );
   }
 
   if (!diffResult || diffResult.files.length === 0) {
-    return <div className="diff-viewer"><div className="diff-state">No changes in this session</div></div>;
+    return (
+      <div className="diff-viewer">
+        <div className="diff-state diff-state--empty">
+          <span className="diff-state-zero" aria-hidden="true">0</span>
+          <p className="diff-state-heading">No changes detected</p>
+          <p className="diff-state-body">
+            This session may not have modified any files, or changes were already committed and merged.
+          </p>
+          <button className="diff-state-action" onClick={fetchDiff}>Refresh</button>
+        </div>
+      </div>
+    );
   }
 
   return (

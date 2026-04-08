@@ -313,7 +313,7 @@ export function getCommitDiff(cwd: string, commitHash: string): DiffResult {
 /**
  * Detect whether a directory is a git worktree (not the main working tree)
  */
-function isGitWorktree(cwd: string): boolean {
+export function isGitWorktree(cwd: string): boolean {
   try {
     const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], {
       cwd,
@@ -390,6 +390,35 @@ export function getBranchDiff(cwd: string): DiffResult {
       totalDeletions: 0,
       error: String(error)
     };
+  }
+}
+
+/**
+ * Get diff between two refs (or from a ref to the working tree).
+ * When endHash is provided: git diff <startHash>..<endHash>
+ * When endHash is omitted: git diff <startHash> (working tree vs that commit)
+ */
+export function getRangeDiff(cwd: string, startHash: string, endHash?: string): DiffResult {
+  try {
+    const args = endHash
+      ? ['diff', `${startHash}..${endHash}`]
+      : ['diff', startHash];
+
+    const rawDiff = execFileSync('git', args, {
+      cwd,
+      maxBuffer: MAX_BUFFER,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+
+    const files = parseUnifiedDiff(rawDiff);
+    const limitedFiles = files.slice(0, MAX_FILES);
+    const totalAdditions = limitedFiles.reduce((sum, file) => sum + file.additions, 0);
+    const totalDeletions = limitedFiles.reduce((sum, file) => sum + file.deletions, 0);
+
+    return { files: limitedFiles, totalAdditions, totalDeletions };
+  } catch {
+    return { files: [], totalAdditions: 0, totalDeletions: 0 };
   }
 }
 
