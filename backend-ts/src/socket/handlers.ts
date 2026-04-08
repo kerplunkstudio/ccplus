@@ -520,6 +520,21 @@ export function setupSocketHandlers(
       }
     });
 
+    socket.on('captain_cancel', () => {
+      if (!captain.isCaptainAlive()) {
+        socket.emit('captain_error', { message: 'Captain is not active' });
+        return;
+      }
+      try {
+        captain.interruptActiveQuery().catch((error: unknown) => {
+          log.error('Failed to interrupt Captain query', { error: String(error) });
+        });
+        socket.emit('captain_cancelled', { status: 'ok' });
+      } catch (error) {
+        socket.emit('captain_error', { message: String(error) });
+      }
+    });
+
     socket.on('captain_interactive_response', (data: { messageId: string; actionId?: string; actionIds?: string[]; actionValue?: string }) => {
       if (!captain.isCaptainAlive()) {
         socket.emit('captain_error', { message: 'Captain is not active' });

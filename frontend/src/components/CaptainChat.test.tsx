@@ -392,4 +392,35 @@ describe('CaptainChat', () => {
       expect(onLinkClick).toHaveBeenCalledWith('https://example.com', 'Example');
     });
   });
+
+  describe('Escape key cancellation', () => {
+    it('calls onCancel when Escape is pressed while streaming', () => {
+      const onCancel = jest.fn();
+      render(<CaptainChat {...defaultProps} isStreaming={true} onCancel={onCancel} />);
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call onCancel when Escape is pressed while not streaming', () => {
+      const onCancel = jest.fn();
+      render(<CaptainChat {...defaultProps} isStreaming={false} onCancel={onCancel} />);
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(onCancel).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call onCancel when other keys are pressed while streaming', () => {
+      const onCancel = jest.fn();
+      render(<CaptainChat {...defaultProps} isStreaming={true} onCancel={onCancel} />);
+
+      fireEvent.keyDown(document, { key: 'Enter' });
+      fireEvent.keyDown(document, { key: 'ArrowUp' });
+      fireEvent.keyDown(document, { key: 'a' });
+
+      expect(onCancel).not.toHaveBeenCalled();
+    });
+  });
 });

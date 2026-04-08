@@ -257,6 +257,14 @@ export function useCaptainSocket(socket: Socket | null) {
       setIsStreaming(false);
     };
 
+    const handleCaptainCancelled = () => {
+      setToolActivity(null);
+      messageIndexRef.current = -1;
+      clearSafetyTimeout();
+      setIsThinking(false);
+      setIsStreaming(false);
+    };
+
     const handleCaptainError = (data: { message: string }) => {
       setToolActivity(null);
       messageIndexRef.current = -1;
@@ -314,6 +322,7 @@ export function useCaptainSocket(socket: Socket | null) {
     socket.on('captain_tool_use', handleCaptainToolUse);
     socket.on('captain_text', handleCaptainText);
     socket.on('captain_complete', handleCaptainComplete);
+    socket.on('captain_cancelled', handleCaptainCancelled);
     socket.on('captain_error', handleCaptainError);
     socket.on('thinking_status', handleThinkingStatus);
     socket.on('captain_interactive', handleCaptainInteractive);
@@ -324,6 +333,7 @@ export function useCaptainSocket(socket: Socket | null) {
       socket.off('captain_tool_use', handleCaptainToolUse);
       socket.off('captain_text', handleCaptainText);
       socket.off('captain_complete', handleCaptainComplete);
+      socket.off('captain_cancelled', handleCaptainCancelled);
       socket.off('captain_error', handleCaptainError);
       socket.off('thinking_status', handleThinkingStatus);
       socket.off('captain_interactive', handleCaptainInteractive);
@@ -459,6 +469,11 @@ export function useCaptainSocket(socket: Socket | null) {
     socket.emit('captain_cancel');
   }, [socket]);
 
+  const cancelStreaming = useCallback(() => {
+    if (!socket || !captainSessionId) return;
+    socket.emit('captain_cancel', { sessionId: captainSessionId });
+  }, [socket, captainSessionId]);
+
   return {
     captainSessionId,
     messages,
@@ -473,6 +488,7 @@ export function useCaptainSocket(socket: Socket | null) {
     interactiveMessages,
     respondToInteractive,
     contextPct,
+    cancelStreaming,
   };
 }
 

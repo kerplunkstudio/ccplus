@@ -83,6 +83,17 @@ export const CaptainChat: React.FC<CaptainChatProps> = ({
     }
   }, [messages, interactiveMessages]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isStreaming) {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isStreaming, onCancel]);
+
   const handleToggleHistory = () => {
     setShowHistory((prev) => !prev);
     setExpandedConvId(null);

@@ -57,6 +57,7 @@ describe('useCaptainSocket', () => {
         expect(mockSocket.on).toHaveBeenCalledWith('captain_thinking', expect.any(Function));
         expect(mockSocket.on).toHaveBeenCalledWith('captain_text', expect.any(Function));
         expect(mockSocket.on).toHaveBeenCalledWith('captain_complete', expect.any(Function));
+        expect(mockSocket.on).toHaveBeenCalledWith('captain_cancelled', expect.any(Function));
         expect(mockSocket.on).toHaveBeenCalledWith('captain_error', expect.any(Function));
         expect(mockSocket.on).toHaveBeenCalledWith('thinking_status', expect.any(Function));
       });
@@ -67,6 +68,7 @@ describe('useCaptainSocket', () => {
       expect(mockSocket.off).toHaveBeenCalledWith('captain_thinking', expect.any(Function));
       expect(mockSocket.off).toHaveBeenCalledWith('captain_text', expect.any(Function));
       expect(mockSocket.off).toHaveBeenCalledWith('captain_complete', expect.any(Function));
+      expect(mockSocket.off).toHaveBeenCalledWith('captain_cancelled', expect.any(Function));
       expect(mockSocket.off).toHaveBeenCalledWith('captain_error', expect.any(Function));
       expect(mockSocket.off).toHaveBeenCalledWith('thinking_status', expect.any(Function));
     });
@@ -364,6 +366,42 @@ describe('useCaptainSocket', () => {
         expect(result.current.messages[0].content).toBe('Error: Something went wrong');
         expect(result.current.isStreaming).toBe(false);
         expect(result.current.isThinking).toBe(false);
+      });
+    });
+
+    it('should handle captain_cancelled event', async () => {
+      const { result } = renderHook(() => useCaptainSocket(mockSocket as unknown as Socket));
+
+      await waitFor(() => {
+        expect(result.current.captainSessionId).toBe('captain-session-123');
+      });
+
+      const captainTextHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'captain_text'
+      )?.[1];
+      const captainCancelledHandler = mockSocket.on.mock.calls.find(
+        (call) => call[0] === 'captain_cancelled'
+      )?.[1];
+
+      // First start streaming
+      act(() => {
+        captainTextHandler?.({ text: 'Starting response...', message_index: 0 });
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.length).toBe(1);
+        expect(result.current.isStreaming).toBe(true);
+      });
+
+      // Then cancel
+      act(() => {
+        captainCancelledHandler?.();
+      });
+
+      await waitFor(() => {
+        expect(result.current.isStreaming).toBe(false);
+        expect(result.current.isThinking).toBe(false);
+        expect(result.current.toolActivity).toBe(null);
       });
     });
   });

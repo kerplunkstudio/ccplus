@@ -948,6 +948,26 @@ export function getLastQuerySource(): { source: string; sourceId: string } | nul
 }
 
 /**
+ * Interrupt the active Captain query if one is running.
+ * Used when user cancels streaming from the web UI.
+ */
+export async function interruptActiveQuery(): Promise<void> {
+  if (!captainState.activeQuery) {
+    log.info('Captain: no active query to interrupt');
+    return;
+  }
+
+  log.info('Captain: interrupting active query');
+
+  try {
+    await captainState.activeQuery.interrupt();
+  } catch (error) {
+    log.error('Captain: failed to interrupt active query', { error: String(error) });
+    throw error;
+  }
+}
+
+/**
  * Get Captain state for persistence (used during shutdown).
  */
 export function getCaptainStateForPersistence(): { sessionId: string; sdkSessionId: string; workspace: string } | null {
