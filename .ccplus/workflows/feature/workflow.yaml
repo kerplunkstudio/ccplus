@@ -19,9 +19,9 @@ transitions:
   - from: test
     to: execute
   - from: merge
-    to: execute
-  - from: merge
     to: complete
+  - from: merge
+    to: execute
 phases:
   - name: design
     context: >

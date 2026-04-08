@@ -2,10 +2,9 @@ import React from 'react';
 import { ModelsConfig } from '../../hooks/useSettings';
 
 const AVAILABLE_MODELS = [
-  'claude-sonnet-4.5-20250929',
-  'claude-sonnet-4-20250514',
-  'claude-haiku-4.5-20250815',
-  'claude-opus-4-20250514',
+  'claude-opus-4-6',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
 ];
 
 interface ModelsPanelProps {
