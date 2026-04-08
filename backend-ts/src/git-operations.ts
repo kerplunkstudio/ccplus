@@ -311,6 +311,89 @@ export function getCommitDiff(cwd: string, commitHash: string): DiffResult {
 }
 
 /**
+ * Detect whether a directory is a git worktree (not the main working tree)
+ */
+function isGitWorktree(cwd: string): boolean {
+  try {
+    const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd,
+      maxBuffer: MAX_BUFFER,
+      encoding: 'utf8',
+      stdio: 'pipe'
+    }).trim();
+    const gitDir = execFileSync('git', ['rev-parse', '--git-dir'], {
+      cwd,
+      maxBuffer: MAX_BUFFER,
+      encoding: 'utf8',
+      stdio: 'pipe'
+    }).trim();
+    return commonDir !== gitDir;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get git diff comparing the current branch to main/master (for worktrees)
+ * or HEAD~1 (for regular repos). Used when getGitDiff returns no changes
+ * because all changes have already been committed.
+ */
+export function getBranchDiff(cwd: string): DiffResult {
+  try {
+    const worktree = isGitWorktree(cwd);
+    let rawDiff = '';
+
+    if (worktree) {
+      // Worktree: compare branch to main or master
+      const bases = ['main', 'master'];
+      for (const base of bases) {
+        try {
+          rawDiff = execFileSync('git', ['diff', `${base}...HEAD`], {
+            cwd,
+            maxBuffer: MAX_BUFFER,
+            encoding: 'utf8',
+            stdio: 'pipe'
+          });
+          break;
+        } catch {
+          // Try next base branch
+        }
+      }
+    } else {
+      // Regular repo: compare to previous commit
+      try {
+        rawDiff = execFileSync('git', ['diff', 'HEAD~1', 'HEAD'], {
+          cwd,
+          maxBuffer: MAX_BUFFER,
+          encoding: 'utf8',
+          stdio: 'pipe'
+        });
+      } catch {
+        // No previous commit — return empty
+      }
+    }
+
+    const files = parseUnifiedDiff(rawDiff);
+    const limitedFiles = files.slice(0, MAX_FILES);
+    const totalAdditions = limitedFiles.reduce((sum, file) => sum + file.additions, 0);
+    const totalDeletions = limitedFiles.reduce((sum, file) => sum + file.deletions, 0);
+
+    return {
+      files: limitedFiles,
+      totalAdditions,
+      totalDeletions
+    };
+  } catch (error) {
+    return {
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      error: String(error)
+    };
+  }
+}
+
+/**
  * Commit all changes in the working directory
  */
 export function commitChanges(cwd: string, message: string): CommitResult {

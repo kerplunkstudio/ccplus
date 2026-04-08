@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { isGitRepo, getGitDiff, getCommitDiff, commitChanges, discardChanges } from '../git-operations.js';
+import { isGitRepo, getGitDiff, getCommitDiff, getBranchDiff, commitChanges, discardChanges } from '../git-operations.js';
 import { getFleetSession } from '../db/fleet-sessions.js';
 import type { RouteDependencies } from "./types.js";
 
@@ -116,11 +116,22 @@ export function createDiffRoutes(app: Express, deps: RouteDependencies): void {
         });
       }
 
-      const diff = getGitDiff(workspace);
-      if (diff.error) {
-        return res.json({ success: false, error: diff.error });
+      const liveDiff = getGitDiff(workspace);
+
+      if (liveDiff.error) {
+        return res.json({ success: false, error: liveDiff.error });
       }
-      return res.json({ success: true, data: diff });
+
+      // If no uncommitted changes, check for committed changes in the branch
+      // (handles worktree sessions where the agent has already committed its work)
+      if (liveDiff.files.length === 0) {
+        const branchDiff = getBranchDiff(workspace);
+        if (!branchDiff.error) {
+          return res.json({ success: true, data: branchDiff });
+        }
+      }
+
+      return res.json({ success: true, data: liveDiff });
     } catch (error) {
       log.error('Failed to get diff', { sessionId: req.params.sessionId, error: String(error) });
       return res.status(500).json({ success: false, error: 'Internal server error' });
