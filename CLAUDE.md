@@ -4,9 +4,9 @@
 
 ## Project Overview
 
-cc+ is a web UI and observability layer for Claude Code. User messages go straight to the Claude Code SDK via WebSocket. The SDK does the work. cc+ shows you what it is doing.
+cc+ is a fleet-orchestration platform for Claude Code. It provides real-time observability of SDK sessions, a persistent autonomous orchestrator (Captain) that spins up parallel sessions in isolated git worktrees, a self-improving loop (KAIROS) that analyzes completed sessions and evolves agent prompts, a multi-tier self-gardening memory system, and bridges to Telegram and voice. Users can run sessions manually or let Captain drive entire workflows end-to-end.
 
-**Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite
+**Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite / Captain / KAIROS / Fleet / Telegram bot / Memory system
 
 ## Quick Reference
 
@@ -22,6 +22,12 @@ See `.claude/rules/component-locations.md` for comprehensive file reference cove
 - **Database**: See `docs/database.md` for schema and common queries.
 - **Development**: See `docs/development.md` for setup, environment variables, running locally, deploy workflow, HTTP API.
 - **Testing**: See `docs/testing.md` for test commands, coverage targets, and test policy.
+- **Captain**: `backend-ts/src/captain.ts` (orchestrator core), `captain-tools.ts` (MCP fleet-control tools), `captain-router.ts` (message routing), `captain-tick.ts` (periodic tick), `captain-prompt.ts`, `captain-memory.ts`, `captain-auth.ts`.
+- **KAIROS**: `backend-ts/src/kairos-daemon.ts` (tick-triggered batch trigger), `kairos-runner.ts` (session runner), `kairos-prompt.ts`, `kairos-prompt-patcher.ts` (prompt evolution).
+- **Fleet**: `backend-ts/src/fleet-monitor.ts` (session registry + status), `git-operations.ts` (worktree creation), `trust-score.ts`, `circuit-breaker.ts`.
+- **Memory**: `backend-ts/src/memory-client.ts` (MCP client), `memory-distiller.ts`, `memory-gc.ts`, `memory-promotion.ts`.
+- **Bridges**: `backend-ts/src/telegram-bridge.ts` + `telegram-format.ts`, `voice-transcriber.ts` (Whisper), `pty-service.ts`.
+- **Domain modules**: `backend-ts/src/routes/` (HTTP handlers), `backend-ts/src/db/` (SQLite per-domain), `backend-ts/src/sdk/` (SDK hooks).
 
 ## Run Modes
 
@@ -132,5 +138,5 @@ See `.claude/rules/agents.md` for:
 
 ---
 
-**Last Updated**: 2026-03-20
-**Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite
+**Last Updated**: 2026-04-17
+**Stack**: Node.js / Claude Agent SDK / Express + Socket.IO / React 19 + TypeScript / SQLite / Captain / KAIROS / Fleet / Telegram bot / Memory system

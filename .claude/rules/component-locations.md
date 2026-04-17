@@ -15,6 +15,32 @@ Quick reference for finding components in the cc+ codebase.
 | `backend-ts/src/mcp-config.ts` | MCP server configuration |
 | `backend-ts/src/scheduler.ts` | Task scheduling |
 | `backend-ts/src/utils.ts` | Shared utility functions |
+| `backend-ts/src/captain.ts` | Captain orchestrator: persistent SDK session that drives the fleet |
+| `backend-ts/src/captain-tools.ts` | MCP tool definitions for fleet control (start/stop/list sessions, etc.) |
+| `backend-ts/src/captain-router.ts` | Routes incoming messages (web, Telegram, fleet events) to Captain |
+| `backend-ts/src/captain-tick.ts` | Periodic tick: polls projects, triggers KAIROS, monitors sessions |
+| `backend-ts/src/captain-prompt.ts` | Captain system prompt construction |
+| `backend-ts/src/captain-memory.ts` | Memory read/write wrappers for Captain |
+| `backend-ts/src/captain-auth.ts` | Auth/access control for Captain API |
+| `backend-ts/src/fleet-monitor.ts` | Fleet session registry: status, trust scores, Socket.IO broadcast |
+| `backend-ts/src/git-operations.ts` | Git worktree creation and cleanup for isolated fleet sessions |
+| `backend-ts/src/trust-score.ts` | Per-session trust scoring (success rate, error patterns) |
+| `backend-ts/src/circuit-breaker.ts` | Circuit breaker for external service calls |
+| `backend-ts/src/kairos-daemon.ts` | KAIROS tick trigger: batches unanalyzed sessions, notifies Captain |
+| `backend-ts/src/kairos-runner.ts` | Runs KAIROS analysis session and applies patch results |
+| `backend-ts/src/kairos-prompt.ts` | KAIROS system prompt construction |
+| `backend-ts/src/kairos-prompt-patcher.ts` | Applies prompt improvements produced by KAIROS runs |
+| `backend-ts/src/memory-client.ts` | Lightweight MCP client for the memory server (stdio JSON-RPC) |
+| `backend-ts/src/memory-distiller.ts` | Distills session content into memory entries |
+| `backend-ts/src/memory-gc.ts` | Memory garbage collection and deduplication |
+| `backend-ts/src/memory-promotion.ts` | Promotes high-value memories to long-term tier |
+| `backend-ts/src/telegram-bridge.ts` | Telegram bot: forwards messages to Captain, sends replies |
+| `backend-ts/src/telegram-format.ts` | Formats Captain responses for Telegram MarkdownV2 |
+| `backend-ts/src/voice-transcriber.ts` | Transcribes voice messages via whisper-cli |
+| `backend-ts/src/pty-service.ts` | PTY (pseudo-terminal) service for interactive shell sessions |
+| `backend-ts/src/routes/` | Domain-split HTTP route handlers (sessions, projects, memory, etc.) |
+| `backend-ts/src/db/` | Domain-split SQLite modules (sessions, fleet, kairos, memory, etc.) |
+| `backend-ts/src/sdk/hooks.ts` | SDK hook implementations (tool events, cost tracking) |
 
 ## Frontend
 
