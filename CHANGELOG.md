@@ -5,6 +5,27 @@ All notable changes to cc+ (ccplus) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-04-17
+
+### Bug Fixes
+- Fixed workflow merge→complete default ordering issue
+- Fixed phase sequence that incorrectly skipped test phase
+- Fixed merge success and worktree removal ordering race condition
+- Fixed merge-cleanup diff detection logic
+- Scoped session diffs to show only session-specific changes
+- Fixed committed worktree diffs display in session diff API
+
+### Performance
+- Improved KAIROS timing with tick-to-captain decoupling
+- Optimized captain tick frequency to only check stuck sessions
+
+### Documentation
+- Completely rewrote CLAUDE.md to reflect Captain/KAIROS/fleet platform architecture
+
+### Maintenance
+- Reconciled all version files to 1.8.0 baseline
+- Pruned 41 stale worktrees and 9 dead branches from repository
+
 ## [1.0.0] - 2026-03-16
 
 **First stable release** of cc+ (ccplus), a web UI and observability layer for Claude Code.
