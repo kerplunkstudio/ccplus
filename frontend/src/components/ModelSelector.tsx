@@ -2,9 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './ModelSelector.css';
 
 const MODELS = [
-  { id: 'claude-sonnet-4-6', label: 'Sonnet' },
-  { id: 'claude-opus-4-6', label: 'Opus' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku' },
+  { id: 'claude-fable-5', label: 'Fable 5' },
+  { id: 'claude-opus-4-8', label: 'Opus 4.8' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { id: 'claude-opus-4-6', label: 'Opus 4.6' },
+  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
 ];
 
 interface ModelSelectorProps {

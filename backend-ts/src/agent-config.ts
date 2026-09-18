@@ -28,7 +28,7 @@ export const AgentConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   icon: z.string().optional(),
-  model: z.enum(['sonnet', 'opus', 'haiku']).optional(),
+  model: z.enum(['sonnet', 'opus', 'haiku', 'sonnet5', 'opus48', 'fable5']).optional(),
   maxTurns: z.number().int().min(1).max(10000).optional(),
   personality: z.string().optional(),
   system_prompt: z.string().optional(),
@@ -275,11 +275,14 @@ export async function deleteAgent(workspacePath: string, id: string): Promise<bo
 /**
  * Resolve short model name to full SDK model ID
  */
-export function resolveAgentModel(shortModel: 'sonnet' | 'opus' | 'haiku'): string {
+export function resolveAgentModel(shortModel: 'sonnet' | 'opus' | 'haiku' | 'sonnet5' | 'opus48' | 'fable5'): string {
   const map: Record<string, string> = {
     sonnet: 'claude-sonnet-4-6',
     opus: 'claude-opus-4-6',
     haiku: 'claude-haiku-4-5-20251001',
+    sonnet5: 'claude-sonnet-5',
+    opus48: 'claude-opus-4-8',
+    fable5: 'claude-fable-5',
   };
   return map[shortModel] ?? 'claude-sonnet-4-6';
 }

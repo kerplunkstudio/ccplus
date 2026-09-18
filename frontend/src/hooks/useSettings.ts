@@ -56,8 +56,8 @@ export interface AppConfig {
 
 const DEFAULT_CONFIG: AppConfig = {
   models: {
-    defaultModel: 'claude-sonnet-4.5-20250929',
-    captainModel: 'claude-sonnet-4.5-20250929',
+    defaultModel: 'claude-sonnet-4-6',
+    captainModel: 'claude-opus-4-6',
   },
   sessions: {
     workspacePath: '~/Workspace',

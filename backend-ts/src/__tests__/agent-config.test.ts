@@ -187,5 +187,17 @@ skills:
     it('resolves haiku to claude-haiku-4-5-20251001', () => {
       expect(resolveAgentModel('haiku')).toBe('claude-haiku-4-5-20251001');
     });
+
+    it('resolves sonnet5 to claude-sonnet-5', () => {
+      expect(resolveAgentModel('sonnet5')).toBe('claude-sonnet-5');
+    });
+
+    it('resolves opus48 to claude-opus-4-8', () => {
+      expect(resolveAgentModel('opus48')).toBe('claude-opus-4-8');
+    });
+
+    it('resolves fable5 to claude-fable-5', () => {
+      expect(resolveAgentModel('fable5')).toBe('claude-fable-5');
+    });
   });
 });
