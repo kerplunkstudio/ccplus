@@ -73,11 +73,8 @@ export function buildSignalServer(sessionId: string, callbacks: SessionCallbacks
                 },
                 {
                   type: "image" as const,
-                  source: {
-                    type: "base64" as const,
-                    media_type: "image/png" as const,
-                    data: result.image,
-                  },
+                  data: result.image,
+                  mimeType: "image/png" as const,
                 },
               ],
             };

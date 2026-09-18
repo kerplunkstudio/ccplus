@@ -971,7 +971,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_update');
       const result = await handler!({ label: 'user', old_content: 'old text', new_content: 'Updated user content' });
 
-      expect(result).toBe('Updated "user" block. [20 chars used]');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Updated "user" block. [20 chars used]' }] });
       expect(vi.mocked(captainMemory.updateCoreMemoryBlock)).toHaveBeenCalledWith('user', 'old text', 'Updated user content');
     });
 
@@ -984,7 +984,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_update');
       const result = await handler!({ label: 'project', old_content: 'missing text', new_content: 'replacement' });
 
-      expect(result).toBe('Error: Text not found in block');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Error: Text not found in block' }] });
     });
   });
 
@@ -1003,7 +1003,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_append');
       const result = await handler!({ label: 'project', content: 'new line' });
 
-      expect(result).toBe('Appended to "project" block. [17 chars used]');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Appended to "project" block. [17 chars used]' }] });
       expect(vi.mocked(captainMemory.appendCoreMemory)).toHaveBeenCalledWith('project', 'new line');
     });
 
@@ -1016,7 +1016,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_append');
       const result = await handler!({ label: 'lessons', content: 'some text' });
 
-      expect(result).toBe('Error: Block not found');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Error: Block not found' }] });
     });
   });
 
@@ -1035,7 +1035,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_rethink');
       const result = await handler!({ label: 'lessons', content: 'Brand new lessons content here.' });
 
-      expect(result).toBe('Rewrote "lessons" block. [31 chars used]');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Rewrote "lessons" block. [31 chars used]' }] });
       expect(vi.mocked(captainMemory.rethinkCoreMemory)).toHaveBeenCalledWith('lessons', 'Brand new lessons content here.');
     });
 
@@ -1048,7 +1048,7 @@ describe('captain-tools', () => {
       const handler = toolHandlers.get('memory_rethink');
       const result = await handler!({ label: 'user', content: 'x'.repeat(10000) });
 
-      expect(result).toBe('Error: Content exceeds max size');
+      expect(result).toEqual({ content: [{ type: 'text', text: 'Error: Content exceeds max size' }] });
     });
   });
 });

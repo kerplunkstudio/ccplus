@@ -1,4 +1,4 @@
-import type { HookCallback, HookCallbackMatcher } from "@anthropic-ai/claude-agent-sdk";
+import type { HookCallback, HookCallbackMatcher, HookEvent } from "@anthropic-ai/claude-agent-sdk";
 import path from "path";
 import { sessions } from "./session-manager.js";
 import * as database from "../database.js";
@@ -23,7 +23,7 @@ export function safeParams(params: Record<string, unknown>): Record<string, unkn
   return cleaned;
 }
 
-export function buildHooks(sessionId: string, workspace: string = process.cwd()): Record<string, HookCallbackMatcher[]> {
+export function buildHooks(sessionId: string, workspace: string = process.cwd()): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
   const toolTimers = new Map<string, number>();
   const agentIdToToolUseId = new Map<string, string>();
   const agentStopData = new Map<string, { transcriptPath?: string; lastMessage?: string }>();
@@ -41,7 +41,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     }
   };
 
-  const preToolUse: HookCallback = async (hookInput, toolUseId) => {
+  const preToolUse: HookCallback = async (hookInput, toolUseId, _options) => {
     const input = hookInput as Record<string, unknown>;
     const toolName = (input.tool_name as string) ?? "unknown";
     const actualToolUseId = toolUseId ?? (input.tool_use_id as string) ?? `tu_${Date.now()}`;
@@ -168,7 +168,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     return { continue: true };
   };
 
-  const postToolUse: HookCallback = async (hookInput, toolUseId) => {
+  const postToolUse: HookCallback = async (hookInput, toolUseId, _options) => {
     const input = hookInput as Record<string, unknown>;
     const toolName = (input.tool_name as string) ?? "unknown";
     const actualToolUseId = toolUseId ?? (input.tool_use_id as string) ?? "";
@@ -392,7 +392,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     return {};
   };
 
-  const postToolUseFailure: HookCallback = async (hookInput, toolUseId) => {
+  const postToolUseFailure: HookCallback = async (hookInput, toolUseId, _options) => {
     const input = hookInput as Record<string, unknown>;
     const toolName = (input.tool_name as string) ?? "unknown";
     const actualToolUseId = toolUseId ?? (input.tool_use_id as string) ?? "";
@@ -492,7 +492,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     return {};
   };
 
-  const subagentStart: HookCallback = async (hookInput) => {
+  const subagentStart: HookCallback = async (hookInput, _toolUseId, _options) => {
     const input = hookInput as Record<string, unknown>;
     const agentId = input.agent_id as string;
     if (agentId && pendingAgentToolUseIds.length > 0) {
@@ -639,7 +639,7 @@ export function buildHooks(sessionId: string, workspace: string = process.cwd())
     return {};
   };
 
-  const subagentStop: HookCallback = async (hookInput) => {
+  const subagentStop: HookCallback = async (hookInput, _toolUseId, _options) => {
     const input = hookInput as Record<string, unknown>;
     const agentId = input.agent_id as string;
     if (agentId) {

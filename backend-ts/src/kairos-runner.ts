@@ -186,13 +186,10 @@ export async function runKairosAnalysis(
         model: config.KAIROS_MODEL,
         cwd: config.CAPTAIN_WORKSPACE,
         settingSources: [],
-        systemPrompt: {
-          type: "text",
-          text: systemPrompt,
-        } as any,
+        systemPrompt,
         maxTurns: config.KAIROS_MAX_ANALYSIS_TURNS,
         includePartialMessages: false,
-        permissionMode: config.BYPASS_PERMISSIONS ? ("bypassPermissions" as any) : undefined,
+        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" : undefined,
         allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
       },
     });

@@ -1280,10 +1280,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       async ({ label, old_content, new_content }) => {
         const result = updateCoreMemoryBlock(label, old_content, new_content);
         if (!result.success) {
-          return `Error: ${result.error}`;
+          return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
         }
         invalidatePromptCache();
-        return `Updated "${label}" block. ${renderBlockStatus(result.block, label)}`;
+        return { content: [{ type: "text" as const, text: `Updated "${label}" block. ${renderBlockStatus(result.block, label)}` }] };
       }
     ),
 
@@ -1298,10 +1298,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       async ({ label, content }) => {
         const result = appendCoreMemory(label, content);
         if (!result.success) {
-          return `Error: ${result.error}`;
+          return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
         }
         invalidatePromptCache();
-        return `Appended to "${label}" block. ${renderBlockStatus(result.block, label)}`;
+        return { content: [{ type: "text" as const, text: `Appended to "${label}" block. ${renderBlockStatus(result.block, label)}` }] };
       }
     ),
 
@@ -1316,10 +1316,10 @@ export function buildFleetMcpTools(deps: CaptainToolDependencies) {
       async ({ label, content }) => {
         const result = rethinkCoreMemory(label, content);
         if (!result.success) {
-          return `Error: ${result.error}`;
+          return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
         }
         invalidatePromptCache();
-        return `Rewrote "${label}" block. ${renderBlockStatus(result.block, label)}`;
+        return { content: [{ type: "text" as const, text: `Rewrote "${label}" block. ${renderBlockStatus(result.block, label)}` }] };
       }
     ),
   ];

@@ -1,4 +1,4 @@
-import { query, type ModelUsage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type ModelUsage, type SDKUserMessage, type AgentDefinition } from "@anthropic-ai/claude-agent-sdk";
 import { existsSync, readdirSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import path from "path";
@@ -25,7 +25,7 @@ import { getFleetSession, updateSessionDiffSnapshot } from '../db/fleet-sessions
 
 const execAsync = promisify(exec);
 
-type SdkAgentMap = Record<string, { description: string; prompt: string; tools?: string[]; model?: string; maxTurns?: number }>;
+type SdkAgentMap = Record<string, AgentDefinition>;
 
 // Cached built-in agents (loaded once at startup, reused across sessions)
 let builtInSdkAgents: SdkAgentMap | null = null;
@@ -366,10 +366,11 @@ export async function streamQuery(
     const sdkSettingsPath = getSdkSettingsPath();
 
     // Build can_use_tool for AskUserQuestion handling
-    const canUseTool = async (
-      toolName: string,
-      toolInput: Record<string, unknown>,
-    ): Promise<{ behavior: "allow"; updatedInput?: Record<string, unknown> }> => {
+    const canUseTool: import("@anthropic-ai/claude-agent-sdk").CanUseTool = async (
+      toolName,
+      toolInput,
+      _options,
+    ) => {
       if (toolName === "AskUserQuestion") {
         const questions = (toolInput.questions as unknown[]) ?? [];
         const toolUseIdLocal = `perm_${Date.now()}`;
@@ -496,26 +497,26 @@ export async function streamQuery(
         model: effectiveModel,
         cwd: workspace,
         settingSources: ['user', 'project'],
-        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" as any : undefined,
+        permissionMode: config.BYPASS_PERMISSIONS ? "bypassPermissions" : undefined,
         allowDangerouslySkipPermissions: config.BYPASS_PERMISSIONS,
         env: cleanEnv,
-        hooks: hooks as any,
+        hooks,
         plugins: [
           { type: 'local' as const, path: config.PROJECT_ROOT },
           ...installedPlugins,
-        ] as any,
+        ],
         mcpServers: {
           "ccplus-signals": signalServer,
           ...userMcpServers,
-        } as any,
+        },
         resume: resumeId ?? undefined,
-        agents: sdkAgents as any,
+        agents: sdkAgents as Record<string, import("@anthropic-ai/claude-agent-sdk").AgentDefinition>,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
           append: await buildSystemPrompt(workspace, prompt, sessionId, agentConfig ?? undefined, workflow),
-        } as any,
-        canUseTool: canUseTool as any,
+        },
+        canUseTool,
         maxTurns: effectiveMaxTurns,
         includePartialMessages: true,
         promptSuggestions: true,
