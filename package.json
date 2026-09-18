@@ -49,6 +49,7 @@
       "backend-ts/package.json",
       "static/chat/**/*",
       ".ccplus/agents/**/*",
+      ".ccplus/workflows/**/*",
       "VERSION"
     ],
     "asarUnpack": [
@@ -57,6 +58,7 @@
       "backend-ts/package.json",
       "static/chat/**/*",
       ".ccplus/agents/**/*",
+      ".ccplus/workflows/**/*",
       "VERSION"
     ],
     "directories": {

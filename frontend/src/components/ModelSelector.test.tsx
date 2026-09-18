@@ -17,7 +17,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    expect(screen.getByText('Sonnet')).toBeInTheDocument();
+    expect(screen.getByText('Sonnet 4.6')).toBeInTheDocument();
   });
 
   it('shows the full model ID as title on trigger', () => {
@@ -28,7 +28,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     expect(trigger).toHaveAttribute('title', 'claude-sonnet-4-6');
   });
 
@@ -40,12 +40,12 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
     expect(screen.getByRole('listbox')).toBeInTheDocument();
-    expect(screen.getByText('Opus')).toBeInTheDocument();
-    expect(screen.getByText('Haiku')).toBeInTheDocument();
+    expect(screen.getByText('Opus 4.6')).toBeInTheDocument();
+    expect(screen.getByText('Haiku 4.5')).toBeInTheDocument();
   });
 
   it('closes dropdown when clicking outside', async () => {
@@ -59,7 +59,7 @@ describe('ModelSelector', () => {
       </div>
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
     expect(screen.getByRole('listbox')).toBeInTheDocument();
@@ -80,10 +80,10 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
-    const opusOption = screen.getByText('Opus').closest('button');
+    const opusOption = screen.getByText('Opus 4.6').closest('button');
     expect(opusOption).toBeInTheDocument();
 
     fireEvent.click(opusOption!);
@@ -99,10 +99,10 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
-    const haikuOption = screen.getByText('Haiku').closest('button');
+    const haikuOption = screen.getByText('Haiku 4.5').closest('button');
     fireEvent.click(haikuOption!);
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Opus \(session override\)/i });
+    const trigger = screen.getByRole('button', { name: /Model: Opus 4\.6 \(session override\)/i });
     expect(trigger).toHaveClass('overridden');
   });
 
@@ -132,7 +132,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Opus \(session override\)/i });
+    const trigger = screen.getByRole('button', { name: /Model: Opus 4\.6 \(session override\)/i });
     expect(trigger).toHaveAttribute('title', 'Session: claude-opus-4-6\nDefault: claude-sonnet-4-6');
   });
 
@@ -145,7 +145,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     expect(trigger).not.toHaveClass('overridden');
   });
 
@@ -157,14 +157,14 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Haiku/i });
+    const trigger = screen.getByRole('button', { name: /Model: Haiku 4\.5/i });
     fireEvent.click(trigger);
 
-    const haikuOption = screen.getByRole('option', { name: /Haiku/i });
+    const haikuOption = screen.getByRole('option', { name: /Haiku 4\.5/i });
     expect(haikuOption).toHaveClass('active');
 
-    const sonnetOption = screen.getByRole('option', { name: /Sonnet/i });
-    expect(sonnetOption).not.toHaveClass('active');
+    const fableOption = screen.getByRole('option', { name: /Fable 5/i });
+    expect(fableOption).not.toHaveClass('active');
   });
 
   it('supports keyboard navigation (ArrowDown to open)', () => {
@@ -175,7 +175,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     trigger.focus();
 
     fireEvent.keyDown(trigger, { key: 'ArrowDown' });
@@ -191,7 +191,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
     expect(screen.getByRole('listbox')).toBeInTheDocument();
@@ -209,10 +209,10 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
-    // ArrowDown to focus next item (Opus)
+    // ArrowDown to focus next item (Opus 4.6)
     fireEvent.keyDown(trigger.parentElement!, { key: 'ArrowDown' });
 
     // Enter to select
@@ -229,16 +229,16 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
     const container = trigger.parentElement!;
 
-    // Start focused on Sonnet (index 0)
-    // Press ArrowDown -> Opus (index 1)
+    // Start focused on Sonnet 4.6 (index 3)
+    // Press ArrowDown -> Opus 4.6 (index 4)
     fireEvent.keyDown(container, { key: 'ArrowDown' });
 
-    const opusOption = screen.getByText('Opus').closest('button');
+    const opusOption = screen.getByText('Opus 4.6').closest('button');
     expect(opusOption).toHaveClass('focused');
   });
 
@@ -250,7 +250,7 @@ describe('ModelSelector', () => {
       />
     );
 
-    const trigger = screen.getByRole('button', { name: /Model: Sonnet/i });
+    const trigger = screen.getByRole('button', { name: /Model: Sonnet 4\.6/i });
     fireEvent.click(trigger);
 
     expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument();
