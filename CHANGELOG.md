@@ -5,6 +5,21 @@ All notable changes to cc+ (ccplus) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-09-18
+
+### Added
+- New `./ccplus package` CLI command for building distributable Electron desktop app
+- Updated model list to current Claude lineup (Fable 5.1, Opus 5, Sonnet 5, Haiku 4.5)
+
+### Bug Fixes
+- Fixed ModelSelector tests for updated model labels
+- Included workflow files in production build
+- Fixed Fleet Monitor tiles to show full session IDs instead of truncated ones
+- Fixed Electron desktop app startup issues
+
+### Maintenance
+- Upgraded @anthropic-ai/claude-agent-sdk from 0.2.76 to 0.3.276
+
 ## [1.9.0] - 2026-04-17
 
 ### Bug Fixes
