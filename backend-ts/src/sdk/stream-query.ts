@@ -46,6 +46,7 @@ function toSdkAgents(agents: ResolvedAgent[]): SdkAgentMap {
       ...(agent.tools?.allowed ? { tools: agent.tools.allowed } : {}),
       ...(agent.model ? { model: agent.model } : {}),
       ...(agent.maxTurns ? { maxTurns: agent.maxTurns } : {}),
+      ...(config.BYPASS_PERMISSIONS ? { permissionMode: "bypassPermissions" as const } : {}),
     };
   }
 

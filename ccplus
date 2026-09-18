@@ -450,14 +450,22 @@ package_desktop_app() {
     fi
     ok "Electron app packaged"
 
-    # Step 5: Quit running instance if any
+    # Step 5: Quit running instance and kill orphaned backend
     if pgrep -f "${APP_NAME}.app/Contents/MacOS" >/dev/null 2>&1; then
         info "Quitting running ${APP_NAME}..."
         osascript -e "tell application \"${APP_NAME}\" to quit" 2>/dev/null || true
         sleep 2
-        # Force kill if still running
         pkill -f "${APP_NAME}.app/Contents/MacOS" 2>/dev/null || true
         sleep 1
+    fi
+    # Kill orphaned backend that may survive the Electron quit
+    local port_pid
+    port_pid=$(lsof -ti:${PORT:-4000} 2>/dev/null || true)
+    if [ -n "$port_pid" ]; then
+        info "Killing orphaned backend on port ${PORT:-4000} (PID $port_pid)..."
+        kill "$port_pid" 2>/dev/null || true
+        sleep 1
+        kill -9 "$port_pid" 2>/dev/null || true
     fi
 
     # Step 6: Install to /Applications
@@ -465,17 +473,41 @@ package_desktop_app() {
     rm -rf "$APP_PATH"
     cp -R "$DIST_APP" "$APP_PATH"
 
-    # Step 7: Clear quarantine and re-register
+    # Step 7: Clear quarantine, unregister stale build path, register installed path
     xattr -cr "$APP_PATH" 2>/dev/null || true
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$DIST_APP" 2>/dev/null || true
     /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_PATH" 2>/dev/null || true
 
     ok "CC+ installed to /Applications"
 
-    # Step 8: Add to Dock if not already there
+    # Step 8: Add to Dock if not already there (with proper bookmark via Swift)
     if ! defaults read com.apple.dock persistent-apps 2>/dev/null | grep -q "CC+.app"; then
         info "Adding CC+ to Dock..."
-        defaults write com.apple.dock persistent-apps -array-add \
-            "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>file:///Applications/${APP_NAME}.app/</string><key>_CFURLStringType</key><integer>15</integer></dict></dict></dict>"
+        swift - "$APP_PATH" <<'SWIFT_EOF'
+import Foundation
+import Cocoa
+let appPath = CommandLine.arguments[1]
+let appURL = URL(fileURLWithPath: appPath)
+let bookmarkData = try appURL.bookmarkData(options: [.suitableForBookmarkFile], includingResourceValuesForKeys: nil, relativeTo: nil)
+let dockPlistURL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Preferences/com.apple.dock.plist")
+guard var plist = NSDictionary(contentsOf: dockPlistURL) as? [String: Any],
+      var apps = plist["persistent-apps"] as? [[String: Any]] else { exit(1) }
+let tileData: [String: Any] = [
+    "file-label": "CC+",
+    "bundle-identifier": "com.ccplus.desktop",
+    "file-type": 41,
+    "file-mod-date": 0,
+    "parent-mod-date": 0,
+    "dock-extra": false,
+    "is-beta": false,
+    "book": bookmarkData,
+    "file-data": ["_CFURLString": appURL.absoluteString, "_CFURLStringType": 15] as [String : Any]
+]
+apps.append(["GUID": ProcessInfo.processInfo.globallyUniqueString, "tile-data": tileData, "tile-type": "file-tile"])
+plist["persistent-apps"] = apps
+let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+try data.write(to: dockPlistURL)
+SWIFT_EOF
         killall Dock
         ok "CC+ added to Dock"
     fi

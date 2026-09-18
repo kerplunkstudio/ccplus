@@ -8,8 +8,10 @@ import { log } from "./logger.js";
 dotenvConfig({ path: path.resolve(import.meta.dirname, "../../.env") });
 
 export const PROJECT_ROOT = path.resolve(import.meta.dirname, "../..");
-export const DATA_DIR = path.join(PROJECT_ROOT, "data");
-export const LOG_DIR = path.join(PROJECT_ROOT, "logs");
+const IS_PACKAGED = PROJECT_ROOT.includes("app.asar");
+const APP_SUPPORT_DIR = IS_PACKAGED ? path.join(homedir(), "Library", "Application Support", "ccplus") : "";
+export const DATA_DIR = IS_PACKAGED ? path.join(APP_SUPPORT_DIR, "data") : path.join(PROJECT_ROOT, "data");
+export const LOG_DIR = IS_PACKAGED ? path.join(APP_SUPPORT_DIR, "logs") : path.join(PROJECT_ROOT, "logs");
 export const WORKFLOWS_DIR = path.join(DATA_DIR, "workflows");
 export const STATIC_DIR = path.join(PROJECT_ROOT, "static", "chat");
 

@@ -11,6 +11,26 @@ const isDev = process.env.ELECTRON_IS_DEV === '1';
 // Set app name
 app.name = 'CC+';
 
+// Resolve node binary — Dock launches have a minimal PATH missing homebrew/nvm
+const resolveNodeBin = () => {
+  const { execFileSync } = require('child_process');
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    path.join(process.env.HOME || '', '.nvm/current/bin/node'),
+    path.join(process.env.HOME || '', '.fnm/aliases/default/bin/node'),
+    path.join(process.env.HOME || '', '.asdf/shims/node'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  try {
+    return execFileSync('/bin/sh', ['-l', '-c', 'which node'], { encoding: 'utf8' }).trim();
+  } catch {
+    return 'node';
+  }
+};
+
 // Configuration
 const SERVER_PORT = process.env.PORT || 4000;
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
@@ -74,7 +94,9 @@ async function startBackend() {
     const serverScript = path.join(PROJECT_ROOT, 'backend-ts', 'dist', 'server.js');
     console.log('[Server] Starting Node.js server from:', serverScript);
 
-    serverProcess = spawn('node', [serverScript], {
+    const nodeBin = resolveNodeBin();
+    console.log('[Server] Using node binary:', nodeBin);
+    serverProcess = spawn(nodeBin, [serverScript], {
       cwd: PROJECT_ROOT,
       env: {
         ...process.env,
