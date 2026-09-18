@@ -479,16 +479,6 @@ export async function streamQuery(
       }
     }
 
-    // Disable worktree for non-git workspaces
-    if (worktreeEnabled) {
-      try {
-        await execAsync('git rev-parse --is-inside-work-tree', { cwd: workspace });
-      } catch (error) {
-        log.info('Worktree disabled: could not verify git repository', { workspace, sessionId, reason: String(error) });
-        worktreeEnabled = false;
-      }
-    }
-
     // Ensure workspace is on latest main before SDK creates worktree
     if (worktreeEnabled && !resumeId) {
       await ensureWorkspaceUpToDate(workspace, sessionId);
