@@ -60,7 +60,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
   }, [session.status, session.startedAt, session.durationMs]);
 
   const statusClass = `status-${session.status}`;
-  const label = session.label || session.sessionId.slice(0, 12);
+  const label = session.label || session.sessionId;
   const truncatedLabel = label.length > 80 ? label.slice(0, 80) + '…' : label;
   const totalTokens = session.inputTokens + session.outputTokens;
   const projectName = getProjectName(session.workspace);
@@ -87,7 +87,7 @@ export const FleetSessionCard: React.FC<FleetSessionCardProps> = ({ session, onC
         </div>
       </div>
 
-      <div className="fleet-card-label">{primaryText}</div>
+      <div className="fleet-card-label" title={primaryText}>{primaryText}</div>
 
       {showWorkflow && (
         <div className="fleet-card-workflow">{session.workflowName}</div>
