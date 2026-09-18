@@ -56,3 +56,4 @@ coverage.xml
 # Test artifacts
 backend-ts/test-ccplus.db*
 backend-ts/coverage/
+.vercel

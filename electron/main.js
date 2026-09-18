@@ -108,7 +108,7 @@ async function startBackend() {
       console.log(`[Server] ${output.trim()}`);
 
       // Look for server ready indicator on stdout
-      if (output.includes('ccplus server listening on')) {
+      if (output.includes('ccplus server listening on') || output.includes('Server ready')) {
         clearTimeout(serverTimeout);
         onServerReady();
       }
@@ -455,6 +455,9 @@ app.on('activate', async () => {
       await startBackend();
     }
     createWindow();
+  } else if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 

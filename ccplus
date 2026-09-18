@@ -418,6 +418,74 @@ launch_desktop_parallel() {
     PORT=4001 npm run electron:dev
 }
 
+# Package desktop app: build everything, run electron-builder, install to /Applications
+package_desktop_app() {
+    header "Packaging CC+ desktop app"
+
+    local APP_NAME="CC+"
+    local APP_PATH="/Applications/${APP_NAME}.app"
+    local DIST_APP="$SCRIPT_DIR/dist/mac-arm64/${APP_NAME}.app"
+
+    # Step 1: Build backend
+    build_backend
+
+    # Step 2: Build and deploy frontend
+    build_frontend
+    deploy_static
+
+    # Step 3: Install root deps (electron + electron-builder)
+    if [ ! -d "$SCRIPT_DIR/node_modules/electron" ]; then
+        run_with_spinner "Installing Electron dependencies..." "cd '$SCRIPT_DIR' && npm install --silent" || { error "npm install failed"; exit 1; }
+    fi
+
+    # Step 4: Package with electron-builder
+    info "Running electron-builder..."
+    cd "$SCRIPT_DIR"
+    npx electron-builder --mac 2>&1 | while IFS= read -r line; do
+        echo "  $line"
+    done
+    if [ ! -d "$DIST_APP" ]; then
+        error "electron-builder failed — $DIST_APP not found"
+        exit 1
+    fi
+    ok "Electron app packaged"
+
+    # Step 5: Quit running instance if any
+    if pgrep -f "${APP_NAME}.app/Contents/MacOS" >/dev/null 2>&1; then
+        info "Quitting running ${APP_NAME}..."
+        osascript -e "tell application \"${APP_NAME}\" to quit" 2>/dev/null || true
+        sleep 2
+        # Force kill if still running
+        pkill -f "${APP_NAME}.app/Contents/MacOS" 2>/dev/null || true
+        sleep 1
+    fi
+
+    # Step 6: Install to /Applications
+    info "Installing to ${APP_PATH}..."
+    rm -rf "$APP_PATH"
+    cp -R "$DIST_APP" "$APP_PATH"
+
+    # Step 7: Clear quarantine and re-register
+    xattr -cr "$APP_PATH" 2>/dev/null || true
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_PATH" 2>/dev/null || true
+
+    ok "CC+ installed to /Applications"
+
+    # Step 8: Add to Dock if not already there
+    if ! defaults read com.apple.dock persistent-apps 2>/dev/null | grep -q "CC+.app"; then
+        info "Adding CC+ to Dock..."
+        defaults write com.apple.dock persistent-apps -array-add \
+            "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>file:///Applications/${APP_NAME}.app/</string><key>_CFURLStringType</key><integer>15</integer></dict></dict></dict>"
+        killall Dock
+        ok "CC+ added to Dock"
+    fi
+
+    echo ""
+    ok "CC+ packaged and installed"
+    echo "  Click the Dock icon or run: ${BOLD}open /Applications/CC+.app${RESET}"
+    echo ""
+}
+
 # Check if setup is needed
 needs_setup() {
     [ ! -f ".env" ] || [ ! -d "backend-ts/node_modules" ]
@@ -1237,6 +1305,7 @@ Commands:
   backend          Build TypeScript backend only (no server restart)
   desktop          Launch Electron desktop app (stops existing services)
   desktop-parallel Launch desktop app in parallel with web server
+  package          Build + package + install CC+.app to /Applications
   stop             Stop Node.js server
   restart          Restart the server (graceful shutdown + start)
   setup            Force re-run setup
@@ -1244,9 +1313,10 @@ Commands:
   help             Show this help message
 
 Building Desktop Apps:
-  macOS:   npm run package:mac    # Build .dmg and .zip
-  Linux:   npm run package:linux  # Build AppImage and .deb
-  Windows: npm run package:win    # Build installer and portable
+  ./ccplus package                 # Build + install CC+.app (recommended)
+  npm run package:mac              # Build .dmg and .zip only
+  npm run package:linux            # Build AppImage and .deb
+  npm run package:win              # Build installer and portable
 
 Installation:
   One-line installer (clones repo, runs setup, starts server):
@@ -1365,6 +1435,9 @@ case "$COMMAND" in
         ;;
     desktop-parallel)
         launch_desktop_parallel
+        ;;
+    package)
+        package_desktop_app
         ;;
     stop)
         kill_server

@@ -80,7 +80,7 @@ Quick reference for finding components in the cc+ codebase.
 | `data/ccplus.db` | SQLite database (runtime, gitignored) |
 | `logs/server.log` | Application log (runtime, gitignored) |
 | `backend-ts/src/__tests__/` | Vitest test suite for backend |
-| `ccplus` | Unified launcher and deployment tool |
+| `ccplus` | Unified launcher and deployment tool (`./ccplus package` builds + installs CC+.app) |
 | `ccplus-desktop` | Desktop app launcher (delegates to ./ccplus desktop) |
 
 ## Configuration Constants (config.ts)
