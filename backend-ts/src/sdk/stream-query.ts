@@ -483,8 +483,8 @@ export async function streamQuery(
     if (worktreeEnabled) {
       try {
         await execAsync('git rev-parse --is-inside-work-tree', { cwd: workspace });
-      } catch {
-        log.info('Worktree disabled: workspace is not a git repository', { workspace, sessionId });
+      } catch (error) {
+        log.info('Worktree disabled: could not verify git repository', { workspace, sessionId, reason: String(error) });
         worktreeEnabled = false;
       }
     }
